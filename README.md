@@ -64,3 +64,13 @@ Keyboard: Ctrl/Command Z undo; Ctrl/Command Shift Z redo; Delete/Backspace remov
 - `docs/ORIGINAL-HANDOFF.md`: original requirements. Primary design references were inspected from the owner-supplied ZIP.
 
 The project does not need the reference PNGs at runtime. Do not replace the scene with the generated concept images.
+
+## Tent and surroundings update
+
+In **Layout**, enable the canopy and choose Classic pop-up, High peak, Barrel roof (TrimLine-inspired), or Soft dome. Each uses a deeper fabric valance, hem details, poles, braces and roof ribs. These are visual approximations, not manufacturer-certified equipment dimensions.
+
+Choose **Ground** (studio, grass, concrete, asphalt), **Horizon** (studio, open sky, park, urban plaza), and **Surround with other booths** independently. These are procedural materials and simplified scenery, not photographic environments. The same geometry appears in PNG exports. Settings save with the project and older backups remain supported.
+
+Use **+ / −** at the bottom of the 3D viewport to zoom; Reset restores the overview. Perspective and orthographic wall/plan views are supported. Photo mode retains its existing editing behavior.
+
+For a new editing conversation, start with `HANDOFF.md`. Run the added checks with `node tests/environment.mjs` (the same `BOOTH_TEST_CHROMIUM` override is supported).

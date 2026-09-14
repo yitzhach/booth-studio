@@ -12,6 +12,10 @@ export function blankProject() {
       depth: 120,
       height: 96,
       tent: false,
+      tentStyle: "classic",
+      ground: "studio",
+      horizon: "studio",
+      neighbors: false,
       color: "#45474a",
       walls: {
         back: { enabled: true, width: 120, height: 96 },
@@ -136,6 +140,10 @@ export function validateProject(p) {
     typeof p.booth.tent !== "boolean"
   )
     fail();
+  for (const [key, values] of Object.entries({tentStyle:["classic","peak","barrel","dome"],ground:["studio","grass","concrete","asphalt"],horizon:["studio","open","park","urban"]})) {
+    if (p.booth[key] !== undefined && !values.includes(p.booth[key])) fail();
+  }
+  if (p.booth.neighbors !== undefined && typeof p.booth.neighbors !== "boolean") fail();
   for (const wall of ["back", "left", "right"]) {
     let w = p.booth.walls?.[wall];
     if (

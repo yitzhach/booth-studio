@@ -84,3 +84,10 @@ test("guide escapes titles and documents wall reference coordinates", () => {
   assert.match(g, /bottom-left/);
   assert.match(g, /not hook positions/);
 });
+test('environment settings round trip; legacy projects and invalid options',()=>{
+ const p=blankProject();p.booth.tentStyle='barrel';p.booth.ground='grass';p.booth.horizon='park';p.booth.neighbors=true;
+ assert.deepEqual(validateProject(JSON.parse(JSON.stringify(p))),p);
+ for(const key of ['tentStyle','ground','horizon','neighbors'])delete p.booth[key];
+ assert.deepEqual(validateProject(p),p);
+ p.booth.tentStyle='unknown';assert.throws(()=>validateProject(p));
+});

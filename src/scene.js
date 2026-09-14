@@ -1,5 +1,6 @@
 import * as T from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { makeTent, environment } from "./environment.js";
 import { IN, constrain } from "./model.js";
 export function temperature(k) {
   const t = (k - 2700) / 3800;
@@ -28,6 +29,7 @@ export class BoothScene {
     });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
     this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.autoUpdate = false;
     this.renderer.shadowMap.type = T.PCFSoftShadowMap;
     this.renderer.toneMapping = T.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
@@ -157,6 +159,7 @@ export class BoothScene {
     return job;
   }
   update(p, selected) {
+    this.renderer.shadowMap.needsUpdate = true;
     this.p = p;
     this.selected = selected;
     this.revision = (this.revision || 0) + 1;
@@ -169,8 +172,7 @@ export class BoothScene {
       H = p.booth.height * IN;
     const rough = (c) =>
       new T.MeshStandardMaterial({ color: c, roughness: 0.92 });
-    this.box(30, 0.05, 30, 0, -0.08, 0, rough("#a9a6a0"));
-    this.box(W, 0.035, D, 0, -0.026, 0, rough("#aaa79e"));
+    environment(this.scene, this.group, p.booth);
     const ambient = new T.HemisphereLight("#e9f1ff", "#858079", p.ambient);
     this.group.add(ambient);
     const fill = new T.DirectionalLight("#fff4df", 0.6);
@@ -331,66 +333,7 @@ export class BoothScene {
       this.group.add(glow);
     }
     this.box(W, 0.025, 0.025, 0, H - 0.025, D * 0.2, rough("#2e3032"));
-    if (p.booth.tent) {
-      const poleMat = rough("#eeeae1"),
-        roofMat = new T.MeshStandardMaterial({
-          color: "#f4f0e6",
-          roughness: 0.9,
-          side: T.DoubleSide,
-        });
-      for (const x of [-W / 2, W / 2])
-        for (const z of [-D / 2, D / 2])
-          this.box(0.035, H + 0.14, 0.035, x, (H + 0.14) / 2, z, poleMat);
-      const vertices = new Float32Array([
-        -W / 2,
-        H + 0.14,
-        -D / 2,
-        W / 2,
-        H + 0.14,
-        -D / 2,
-        0,
-        H + 0.75,
-        0,
-        W / 2,
-        H + 0.14,
-        -D / 2,
-        W / 2,
-        H + 0.14,
-        D / 2,
-        0,
-        H + 0.75,
-        0,
-        W / 2,
-        H + 0.14,
-        D / 2,
-        -W / 2,
-        H + 0.14,
-        D / 2,
-        0,
-        H + 0.75,
-        0,
-        -W / 2,
-        H + 0.14,
-        D / 2,
-        -W / 2,
-        H + 0.14,
-        -D / 2,
-        0,
-        H + 0.75,
-        0,
-      ]);
-      const geom = new T.BufferGeometry();
-      geom.setAttribute("position", new T.BufferAttribute(vertices, 3));
-      geom.computeVertexNormals();
-      const roof = new T.Mesh(geom, roofMat);
-      roof.castShadow = true;
-      roof.receiveShadow = true;
-      this.group.add(roof);
-      for (const z of [-D / 2, D / 2])
-        this.box(W, 0.08, 0.04, 0, H + 0.1, z, poleMat);
-      for (const x of [-W / 2, W / 2])
-        this.box(0.04, 0.08, D, x, H + 0.1, 0, poleMat);
-    }
+    if (p.booth.tent) this.group.add(makeTent(W,D,H,p.booth.tentStyle || "classic"));
     if (!this.initialized) {
       this.initialized = true;
       this.setView("perspective");
@@ -410,8 +353,8 @@ export class BoothScene {
     this.camera.up.set(0, 1, 0);
     if (perspective) {
       this.fitAspectFactor = 1;
-      this.camera.position.set(0.25, H * 0.88, D / 2 + Math.max(W, D) * 1.65);
-      this.controls.target.set(0, H * 0.46, -D * 0.2);
+      this.camera.position.set(0.25, H * 1.1, D / 2 + Math.max(W, D) * 1.85);
+      this.controls.target.set(0, H * 0.62, -D * 0.2);
     } else if (view === "plan") {
       this.camera.position.set(0, 12, 0);
       this.camera.up.set(0, 0, -1);
@@ -439,6 +382,14 @@ export class BoothScene {
     }
     this.controls.update();
     this.resize();
+  }
+  zoom(factor) {
+    if (this.camera.isPerspectiveCamera) {
+      const offset=this.camera.position.clone().sub(this.controls.target);
+      offset.setLength(Math.max(this.controls.minDistance,Math.min(this.controls.maxDistance,offset.length()/factor)));
+      this.camera.position.copy(this.controls.target).add(offset);
+    } else { this.camera.zoom=Math.max(.3,Math.min(8,this.camera.zoom*factor));this.camera.updateProjectionMatrix(); }
+    this.controls.update();
   }
   point(e) {
     const r = this.renderer.domElement.getBoundingClientRect();

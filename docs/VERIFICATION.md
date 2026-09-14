@@ -39,3 +39,9 @@ npm run build
 ```
 
 `BOOTH_TEST_CHROMIUM` may point at a compatible browser executable when the standard Playwright download is unavailable. Generated screenshots, exports, and test backups go into ignored `test-results/`.
+
+## Tent/environment update
+- Seven model tests and production build pass.
+- Added browser test passes for four canopy styles; ground options; neighboring booths; perspective and orthographic zoom; persistence after reload; 2048 PNG export; tablet and phone controls without horizontal overflow.
+- Reviewed actual rendered tent previews. Adjusted default camera to include taller roofs and added missing minus icon.
+- Scenery uses procedural textures and simplified geometry. No physical device performance certification.

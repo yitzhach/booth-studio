@@ -1272,3 +1272,7 @@ dialog li {
     width: 40px;
   }
 }
+.setting-label { display:block; margin:14px 0; font-size:12px; color:var(--muted); }
+.setting-label select { margin-top:7px; width:100%; }
+.zoom-controls { display:flex; gap:4px; padding:3px; border-radius:8px; background:#20252aee; }
+@media(max-width:700px) { .viewport-bottom {flex-wrap:wrap; justify-content:center;} .zoom-controls {margin-left:auto;} }
