@@ -1,36 +1,53 @@
 ## Goal
-- Continue Artist OS Booth Studio; existing app, not a rebuild.
+- Continue Artist OS Booth Studio. Preserve implementation; never rebuild.
 ## Now
-- Repo: https://github.com/yitzhach/booth-studio ; production branch main.
+- Repo: https://github.com/yitzhach/booth-studio ; production: main.
 - Live: https://booth-studio.bobdylan2000.workers.dev
+- New features prepared on work/wall-assets-surroundings; NOT merged/deployed.
+- Main remains at 2eb798c5c0958fde57a7768074b4a3b4ad07a61f.
 - Cloudflare builds main: npm run build ; npx wrangler deploy.
 ## Done
-- Measured artwork placement, lighting, photo overlays, backups, exports.
-- Four canopy styles: classic, high peak, barrel (TrimLine-inspired), soft dome.
-- Deeper ~12-inch fabric valances, hems, frame braces, roof ribs.
-- Ground: studio, grass, concrete, asphalt. Horizon: studio, open sky, park, urban.
-- Optional neighboring booths. Settings autosave, undo and backup with project.
-- Visible zoom +/- for perspective and orthographic views; reset restores overview.
+- Existing: measured original art, lighting, photo overlays, backups, guides, exports.
+- Existing: four canopy shapes, procedural environments, zoom +/-.
+- Draft: inline/corner-left/corner-right/island; side and rear spacing, rear-booth toggle.
+- Draft: outside back/left/right wall faces, exterior camera view, face-specific guides.
+- Draft: library drag/drop to picked wall face; touch Place on wall fallback.
+- Draft: double-click proportional corner handles; scale buttons; click-off deselect.
+- Draft: editable artist signs and small title/medium/price labels.
+- Draft: tent fabric weave/sheen, ground bump, urban facade details.
+- Draft: optional uploaded 2:1 panorama and seamless ground photo; rotation/tile controls.
+- Draft: larger zoom targets, desktop Zoom label.
+- 11 model/guide tests passed in JS isolate using UUID/clone shims.
+- 24 inspector template smoke cases passed with mock DOM; syntax checks passed.
+- NO npm build or browser/WebGL tests run for this update.
 ## Decisions (keep)
-- Original artwork images preserved; geometry determines perspective.
-- No AI artwork generation; no paid APIs, backend, accounts or cloud sync.
-- Tent shapes are inspired approximations, not exact branded equipment models.
-- Procedural grounds and simplified scenery; not photographic environments.
-- Photo mode uses overlays; existing photographed objects remain baked in.
-- New optional booth fields remain compatible with schema-1 older backups.
-- Commission repository is separate and must remain untouched.
+- Original artwork untouched; measured geometry determines perspective.
+- No paid APIs, backend, accounts, cloud sync, or AI-generated artwork.
+- Tent styles are inspired approximations, not certified brand models.
+- Photo surround is a backdrop, not reconstructed 3D or HDR lighting.
+- User supplies panorama/ground photography; no stock/photo assets bundled.
+- Signs/labels are 3D-only; labels independent, not live-linked.
+- Neighbor gaps use nominal footprint edges; overhang/art can intrude into gaps.
+- Optional schema-1 fields preserve existing backup compatibility.
+- Commission repository must remain untouched.
 ## Dead ends (do not retry)
-- Terminal GitHub authentication previously failed; use connected GitHub tools.
-- Browser binary may require fresh extraction from retained Chromium archive in this environment.
+- Terminal GitHub auth previously failed: use connected GitHub tools.
+- This session exposes no terminal/browser tools; do not claim runtime verification.
 ## Next (numbered)
-1. Ask for the user's next specific edits; do not add unrequested features.
-2. Inspect README.md and relevant source only.
-3. Verify actual artwork and physical Mac/iPhone during real-world trial.
-4. Test changes; push authorized updates; confirm Cloudflare build status.
+1. Read README and review branch diff, do not restart.
+2. Run npm ci, npm test, npm run build.
+3. Run npm run test:browser, node tests/environment.mjs, node tests/wall-assets.mjs.
+4. Verify actual 3D picking, proportional handles, exterior text orientation and exports.
+5. Verify photographic materials and mobile/tablet overflow; physical Mac/iPhone trial.
+6. Fix findings, then merge authorized changes and confirm Cloudflare status.
 ## Files
-- src/environment.js: canopy geometry, procedural ground and scenery.
-- src/scene.js: Three.js scene, camera zoom, lighting, export.
-- src/main.js: UI and project actions; src/model.js: project validation.
-- tests/environment.mjs: new styles, settings, zoom, persistence, export, responsive checks.
-- tests/model.test.js: data, geometry and backward compatibility.
-- docs/CONTINUE.md and docs/VERIFICATION.md: earlier implementation notes.
+- src/model.js: validation, neighbor placement, proportional scaling.
+- src/scene.js: exterior frames, wall picking, resize handles, photo maps.
+- src/main.js: UI, asset actions, drop/tap placement, material upload.
+- src/signage.js: editable sign/label canvas textures.
+- src/environment.js: tent materials, procedural floor/scenery, neighbors.
+- src/guide.js: separate inside/outside hanging guides.
+- src/style.css: assets, drag states and zoom targets.
+- tests/model.test.js: 11 data/geometry/guide tests.
+- tests/wall-assets.mjs: new browser regression script (unrun).
+- tests/environment.mjs: existing environment/zoom browser checks.

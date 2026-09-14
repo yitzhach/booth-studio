@@ -74,3 +74,21 @@ Choose **Ground** (studio, grass, concrete, asphalt), **Horizon** (studio, open 
 Use **+ / −** at the bottom of the 3D viewport to zoom; Reset restores the overview. Perspective and orthographic wall/plan views are supported. Photo mode retains its existing editing behavior.
 
 For a new editing conversation, start with `HANDOFF.md`. Run the added checks with `node tests/environment.mjs` (the same `BOOTH_TEST_CHROMIUM` override is supported).
+
+## Wall assets and surroundings — review-branch update
+
+- Layout → Surroundings: inline, left corner, right corner, or island; side spacing and an optional booth behind with a separate rear gap. Gaps measure nominal footprint edges in inches; neighboring booths are 10 × 10 ft. Corners are named as seen from the entrance.
+- Artwork → Placement: choose Inside/Outside for any back/side wall. Coordinates refer to the selected face's bottom-left corner. Changing face mirrors the horizontal coordinate to preserve physical position. View wall face gives an unobstructed straight-on editing view; orbit to inspect placement in context.
+- Drag a panel from the library onto a booth wall to move it there (not duplicate it). The picked wall face controls inside/outside placement. On touch, select an asset, choose Place on wall, then tap its destination. Escape cancels.
+- Double-click artwork to expose four proportional scale handles. Scale ±10% and numeric dimensions remain available on touch. Click an empty wall or background to deselect. Move mode still drags along the current wall.
+- Booth assets: Artist sign (name, city/state, medium), and Artwork label (title, medium, price/detail). These editable text panels use the same placement/dimensions as art; default sign is 30 × 12 in and label 4 × 2.5 in. They work in measured 3D mode, not Photo mode. Labels are independent, not live-linked to their source artwork.
+- Ground bump detail, tent fabric weave/sheen, and urban windows/cornices improve procedural surfaces. For photographic surroundings, upload your own 2:1 full-sphere panorama and a top-down seamless ground texture. Ground tile size and panorama rotation are adjustable. Source images remain local, are embedded in backups, and render in PNG exports. Photographs are not reconstructed 3D, and the panorama does not supply physically based scene lighting.
+- Existing zoom ± and reset are retained, with larger hit targets and a visible Zoom label on desktop.
+- Hanging guides separate inside/outside faces. Schema remains 1; optional fields keep older backups compatible.
+
+### Verification status for this update
+
+Prepared through connected GitHub tools; no terminal or browser runtime was available in this session.
+11 model/guide tests passed in a JavaScript isolate with deterministic UUID and JSON-clone shims. 24 inspector-template cases passed using a mock DOM. JavaScript syntax checks passed after removing module declarations. These do **not** certify a Vite build or browser/WebGL behavior.
+
+Before merging/deploying: run `npm ci`, `npm test`, `npm run build`, `npm run test:browser`, `node tests/environment.mjs`, and `node tests/wall-assets.mjs`. Review exterior drops/scaling, real photo materials and PNGs on desktop and touch; test 4096 exports where supported.

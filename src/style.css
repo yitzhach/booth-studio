@@ -1276,3 +1276,27 @@ dialog li {
 .setting-label select { margin-top:7px; width:100%; }
 .zoom-controls { display:flex; gap:4px; padding:3px; border-radius:8px; background:#20252aee; }
 @media(max-width:700px) { .viewport-bottom {flex-wrap:wrap; justify-content:center;} .zoom-controls {margin-left:auto;} }
+
+/* Wall assets and touch-friendly stage controls. */
+.asset-tools {padding:14px 0; border-top:1px solid var(--line); margin-top:14px;}
+.asset-tools h3 {font-size:12px; margin:0 0 8px;}
+.asset-tools .button-row {flex-wrap:wrap;}
+.sign-thumb {width:100%;height:100%;background:#faf8f2;color:#252521;display:flex;flex-direction:column;justify-content:center;padding:4px;overflow:hidden;text-align:center;}
+.sign-thumb strong {font:600 8px sans-serif!important;white-space:normal;}
+.sign-thumb span {font:6px sans-serif!important;color:#555!important;}
+.setting-label input[type="text"] {display:block;width:100%;margin-top:7px;}
+.art-card[draggable="true"] {cursor:grab;}
+.art-card img {pointer-events:none;}
+#scene.drop-ready {outline:3px solid var(--blue);outline-offset:-3px;}
+#scene.placing canvas {cursor:crosshair;}
+.zoom-controls {align-items:center;}
+.zoom-controls .icon-only {width:42px;min-height:42px;}
+.zoom-label {font-size:11px;color:#d8e1ea;padding:0 5px;}
+.zoom-controls[hidden] {display:none!important;}
+@media(max-width:700px) {
+ .asset-tools .button-row button {min-height:44px;}
+ .viewport-bottom {gap:5px;}
+ .zoom-controls {margin-left:0;}
+ .zoom-label {display:none;}
+ .zoom-controls .icon-only {width:40px;min-height:40px;}
+}

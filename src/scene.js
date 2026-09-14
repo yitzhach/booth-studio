@@ -1,7 +1,8 @@
 import * as T from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { makeTent, environment } from "./environment.js";
-import { IN, constrain } from "./model.js";
+import { signTexture } from "./signage.js";
+import { IN, constrain, scalePanel } from "./model.js";
 export function temperature(k) {
   const t = (k - 2700) / 3800;
   return new T.Color().setRGB(
@@ -95,7 +96,7 @@ export class BoothScene {
       o.geometry?.dispose();
       if (o.material) {
         (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) =>
-          m.dispose(),
+          { if (m.userData.ownedMap) m.map?.dispose(); m.dispose(); },
         );
       }
       if (o.isLight) o.shadow?.dispose();
@@ -162,10 +163,13 @@ export class BoothScene {
     this.renderer.shadowMap.needsUpdate = true;
     this.p = p;
     this.selected = selected;
+    if (this.scaleId !== selected) this.scaleId = null;
     this.revision = (this.revision || 0) + 1;
     const rev = this.revision;
     this.disposeGroup();
     this.artObjects = [];
+    this.wallObjects = [];
+    this.resizeHandles = [];
     this.frames = {};
     const W = p.booth.width * IN,
       D = p.booth.depth * IN,
@@ -173,6 +177,25 @@ export class BoothScene {
     const rough = (c) =>
       new T.MeshStandardMaterial({ color: c, roughness: 0.92 });
     environment(this.scene, this.group, p.booth);
+    if (p.booth.surroundAsset) this.texture(p.booth.surroundAsset).then(t => {
+      if (this.revision !== rev) return;
+      t.mapping = T.EquirectangularReflectionMapping;
+      this.scene.background = t;
+      this.scene.backgroundRotation.y = (p.booth.surroundRotation || 0) * Math.PI / 180;
+      this.scene.fog = null;
+    }).catch(() => {});
+    else this.scene.backgroundRotation.set(0, 0, 0);
+    if (p.booth.groundAsset) this.texture(p.booth.groundAsset).then(t => {
+      if (this.revision !== rev) return;
+      const floor = this.group.getObjectByName("environment-ground"), map = t.clone();
+      map.mapping = T.UVMapping;
+      map.wrapS = map.wrapT = T.RepeatWrapping;
+      map.repeat.setScalar(180 / ((p.booth.groundTile || 48) * IN));
+      map.needsUpdate = true;
+      floor.material.map = map; floor.material.color.set("#ffffff");
+      floor.material.bumpMap = null; floor.material.userData.ownedMap = true;
+      floor.material.needsUpdate = true;
+    }).catch(() => {});
     const ambient = new T.HemisphereLight("#e9f1ff", "#858079", p.ambient);
     this.group.add(ambient);
     const fill = new T.DirectionalLight("#fff4df", 0.6);
@@ -193,7 +216,7 @@ export class BoothScene {
         width = config.width * IN,
         height = config.height * IN;
       if (!config.enabled) continue;
-      this.box(
+      const wallMesh = this.box(
         width,
         height,
         0.055,
@@ -203,6 +226,13 @@ export class BoothScene {
         rough(p.booth.color),
         g,
       );
+      wallMesh.userData.wall = wall;
+      this.wallObjects.push(wallMesh);
+      const exterior = new T.Group();
+      exterior.position.set(width, 0, -0.063);
+      exterior.rotation.y = Math.PI;
+      g.add(exterior);
+      this.frames[wall + "-outside"] = exterior;
       const count = Math.ceil(width / (30 * IN));
       for (let i = 0; i <= count; i++) {
         const x = Math.min(width, i * 30 * IN);
@@ -221,7 +251,7 @@ export class BoothScene {
       this.box(width, 0.025, 0.08, width / 2, height, 0.0, rough("#26292b"), g);
     }
     for (const a of p.art) {
-      const frame = this.frames[a.wall];
+      const frame = this.frames[a.wall + (a.face === "outside" ? "-outside" : "")];
       if (!p.booth.walls[a.wall].enabled) continue;
       const art = new T.Group();
       art.position.set(
@@ -270,7 +300,11 @@ export class BoothScene {
       plane.userData.artId = a.id;
       art.add(plane);
       this.artObjects.push(plane);
-      if (a.asset)
+      if (a.kind === "sign" || a.kind === "label") {
+        plane.material.color.set("#ffffff");
+        plane.material.map = signTexture(a);
+        plane.material.userData.ownedMap = true;
+      } else if (a.asset)
         this.texture(a.asset)
           .then((t) => {
             if (this.revision === rev) {
@@ -287,6 +321,15 @@ export class BoothScene {
         edge.scale.set(1.007, 1.007, 1.007);
         art.add(edge);
         this.selectionEdge = edge;
+        if (this.scaleId === a.id) {
+          for (const [sx, sy] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
+            const handle = new T.Mesh(new T.SphereGeometry(.025, 12, 8),
+              new T.MeshBasicMaterial({color:"#91beff"}));
+            handle.position.set(sx*a.w*IN/2, sy*a.h*IN/2, a.thickness*IN/2 + .008);
+            handle.userData = {artId:a.id, editorOnly:true};
+            handle.renderOrder = 10; art.add(handle); this.resizeHandles.push(handle);
+          }
+        }
       }
     }
     for (const l of p.lights) {
@@ -399,83 +442,102 @@ export class BoothScene {
     );
     this.ray.setFromCamera(this.pointer, this.camera);
   }
+  artFrame(a) {
+    return this.frames[a.wall + (a.face === "outside" ? "-outside" : "")];
+  }
+  pickArt() {
+    this.group.updateMatrixWorld(true);
+    const hits = this.ray.intersectObjects([...this.artObjects, ...this.wallObjects], false);
+    return hits[0]?.object.userData.artId ? hits[0] : null;
+  }
+  wallDrop(e, a) {
+    this.point(e); this.group.updateMatrixWorld(true);
+    const hit = this.ray.intersectObjects(this.wallObjects, false)[0];
+    if (!hit || Math.abs(hit.face.normal.z) < .9) return null;
+    const wall = hit.object.userData.wall, face = hit.face.normal.z > 0 ? "inside" : "outside";
+    const frame = this.frames[wall + (face === "outside" ? "-outside" : "")];
+    const local = frame.worldToLocal(hit.point.clone());
+    const grid = this.snap ? 1 : .01;
+    return constrain(this.p, {...a, wall, face,
+      x:Math.round((local.x/IN-a.w/2)/grid)*grid,
+      y:Math.round((local.y/IN-a.h/2)/grid)*grid});
+  }
+  focusWall(wall, face = "inside") {
+    this.setView(wall);
+    if (face !== "outside") return;
+    const f = this.frames[wall + "-outside"];
+    if (!f) return;
+    f.updateWorldMatrix(true, false);
+    const w = this.p.booth.walls[wall];
+    const target = f.localToWorld(new T.Vector3(w.width*IN/2, w.height*IN/2, 0));
+    const normal = new T.Vector3(0,0,1).applyQuaternion(f.getWorldQuaternion(new T.Quaternion()));
+    this.controls.target.copy(target);
+    this.camera.position.copy(target).addScaledVector(normal, 5);
+    this.controls.update();
+  }
   bind() {
     const c = this.renderer.domElement;
-    c.addEventListener(
-      "pointerdown",
-      (e) => {
-        if (e.button !== 0) return;
-        this.point(e);
-        const hit = this.ray.intersectObjects(this.artObjects)[0];
-        this.down = [e.clientX, e.clientY];
-        if (hit && this.move) {
-          const id = hit.object.userData.artId,
-            a = this.p.art.find((x) => x.id === id),
-            frame = this.frames[a.wall];
-          frame.updateWorldMatrix(true, false);
-          const local = frame.worldToLocal(hit.point.clone());
-          const normal = new T.Vector3(0, 0, 1).applyQuaternion(
-            frame.getWorldQuaternion(new T.Quaternion()),
-          );
-          const plane = new T.Plane().setFromNormalAndCoplanarPoint(
-            normal,
-            hit.point,
-          );
-          this.drag = {
-            id,
-            frame,
-            plane,
-            dx: local.x / IN - a.x,
-            dy: local.y / IN - a.y,
-          };
-          this.controls.enabled = false;
-          this.onStart();
-          c.setPointerCapture(e.pointerId);
-          this.onSelect(id);
-        }
-      },
-      true,
-    );
-    c.addEventListener("pointermove", (e) => {
+    c.addEventListener("dblclick", e => {
+      this.point(e);
+      const hit = this.pickArt();
+      if (!hit) return;
+      this.scaleId = hit.object.userData.artId;
+      this.onSelect(this.scaleId);
+    });
+    c.addEventListener("pointerdown", e => {
+      if (e.button !== 0 || this.drag) return;
+      this.point(e); this.group.updateMatrixWorld(true);
+      this.down = [e.clientX, e.clientY];
+      const nearest = this.ray.intersectObjects([...this.resizeHandles, ...this.wallObjects, ...this.artObjects], false)[0];
+      const handle = nearest?.object.userData.editorOnly ? nearest : null;
+      const hit = handle || this.pickArt();
+      if (!hit || (!handle && !this.move)) return;
+      const id = hit.object.userData.artId, a = this.p.art.find(x => x.id === id);
+      const frame = this.artFrame(a);
+      frame.updateWorldMatrix(true, false);
+      const local = frame.worldToLocal(hit.point.clone());
+      const normal = new T.Vector3(0,0,1).applyQuaternion(frame.getWorldQuaternion(new T.Quaternion()));
+      const plane = new T.Plane().setFromNormalAndCoplanarPoint(normal, hit.point);
+      this.drag = {id, frame, plane, initial:{...a}, resizing:!!handle,
+        dx:local.x/IN-a.x, dy:local.y/IN-a.y,
+        radius:Math.hypot(local.x/IN-a.x-a.w/2, local.y/IN-a.y-a.h/2)};
+      this.controls.enabled = false;
+      this.onStart();
+      c.setPointerCapture(e.pointerId);
+      this.onSelect(id);
+    }, true);
+    c.addEventListener("pointermove", e => {
       if (!this.drag) return;
       this.point(e);
-      const point = this.ray.ray.intersectPlane(
-        this.drag.plane,
-        new T.Vector3(),
-      );
+      const point = this.ray.ray.intersectPlane(this.drag.plane, new T.Vector3());
       if (!point) return;
-      const local = this.drag.frame.worldToLocal(point),
-        a = this.p.art.find((x) => x.id === this.drag.id);
-      const grid = this.snap ? 1 : 0.01;
-      this.onMove(
-        constrain(this.p, {
-          ...a,
-          x: Math.round((local.x / IN - this.drag.dx) / grid) * grid,
-          y: Math.round((local.y / IN - this.drag.dy) / grid) * grid,
-        }),
-      );
+      const d = this.drag, local = d.frame.worldToLocal(point);
+      if (d.resizing) {
+        const a = d.initial;
+        const radius = Math.hypot(local.x/IN-a.x-a.w/2, local.y/IN-a.y-a.h/2);
+        this.onMove(scalePanel(this.p, a, radius / Math.max(.01,d.radius)));
+      } else {
+        const a = this.p.art.find(x => x.id === d.id), grid = this.snap ? 1 : .01;
+        this.onMove(constrain(this.p, {...a,
+          x:Math.round((local.x/IN-d.dx)/grid)*grid,
+          y:Math.round((local.y/IN-d.dy)/grid)*grid}));
+      }
     });
-    const end = (e) => {
+    c.addEventListener("pointerup", e => {
       if (this.drag) {
-        this.drag = null;
-        this.controls.enabled = true;
+        this.drag = null; this.down = null; this.controls.enabled = true;
+        if (c.hasPointerCapture(e.pointerId)) c.releasePointerCapture(e.pointerId);
         return;
       }
-      if (
-        this.down &&
-        Math.hypot(e.clientX - this.down[0], e.clientY - this.down[1]) < 5
-      ) {
+      if (this.down && Math.hypot(e.clientX-this.down[0], e.clientY-this.down[1]) < 5) {
         this.point(e);
-        const hit = this.ray.intersectObjects(this.artObjects)[0];
-        if (hit) this.onSelect(hit.object.userData.artId);
+        const hit = this.pickArt();
+        this.onSelect(hit?.object.userData.artId || null);
       }
       this.down = null;
-    };
-    c.addEventListener("pointerup", end);
+    });
     c.addEventListener("pointercancel", () => {
-      this.drag = null;
-      this.controls.enabled = true;
-      this.down = null;
+      this.drag = null; this.controls.enabled = true; this.down = null;
     });
   }
   async export(width) {
@@ -492,7 +554,7 @@ export class BoothScene {
     const pixel = this.renderer.getPixelRatio();
     const hidden = [];
     this.group.traverse((o) => {
-      if (o.isLineSegments) {
+      if (o.isLineSegments || o.userData.editorOnly) {
         hidden.push(o);
         o.visible = false;
       }
