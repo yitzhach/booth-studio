@@ -8,6 +8,9 @@
 - Cloudflare builds main with npm run build ; npx wrangler deploy.
 
 ## Done
+- Fixed edited artwork flashing white on selection: cache textures by source + normalized edits and bind ready maps synchronously.
+- Shared artwork textures survive scene rebuilds; obsolete/replaced textures are released and failed loads can retry.
+- 21 Node tests pass, including edited texture reuse, invalidation and pending-load cleanup.
 - New: middle-edge stretch handles and stretch-to-panel checkbox; corners remain proportional.
 - New: live scale slider with native 1% keyboard steps, no full scene rebuild during input.
 - New: plain/concrete/wood grain/metal edge materials with color picker.

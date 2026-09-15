@@ -3,6 +3,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { makeTent, environment } from "./environment.js";
 import { signTexture } from "./signage.js";
 import { edgeMaterial } from "./edge-material.js";
+import { TextureCache } from "./texture-cache.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
 import { IN, constrain, scalePanel } from "./model.js";
 export function temperature(k) {
@@ -24,7 +25,7 @@ export class BoothScene {
     this.view = "perspective";
     this.move = false;
     this.snap = false;
-    this.tex = new Map();
+    this.textureCache = new TextureCache();
     this.scene = new T.Scene();
     this.scene.background = new T.Color("#b5b4b0");
     this.renderer = new T.WebGLRenderer({
@@ -134,11 +135,11 @@ export class BoothScene {
   }
   async texture(id, edits = null) {
     const edited = hasImageEdits(edits);
-    if (!edited && this.tex.has(id)) return this.tex.get(id);
     const asset = this.p.assets[id];
-    const job = new Promise((resolve, reject) => {
+    return this.textureCache.get(id, edits, asset.data, () => new Promise((resolve, reject) => {
       const im = new Image();
       im.onload = () => {
+        try {
         let src = im;
         if (Math.max(im.width, im.height) > 2048) {
           const canvas = document.createElement("canvas"),
@@ -157,20 +158,11 @@ export class BoothScene {
         );
         texture.needsUpdate = true;
         resolve(texture);
+        } catch (error) { reject(error); }
       };
       im.onerror = reject;
       im.src = asset.data;
-    });
-    if (!edited) this.tex.set(id, job);
-    else {
-      this.pendingTextures ||= new Set();
-      this.pendingTextures.add(job);
-      job.then(
-        () => this.pendingTextures.delete(job),
-        () => this.pendingTextures.delete(job),
-      );
-    }
-    return job;
+    }));
   }
   update(p, selected) {
     this.renderer.shadowMap.needsUpdate = true;
@@ -180,6 +172,11 @@ export class BoothScene {
     this.revision = (this.revision || 0) + 1;
     const rev = this.revision;
     this.disposeGroup();
+    this.textureCache.retain([
+      ...p.art.filter(a => a.asset).map(a => ({ id: a.asset, edits: a.edits, data: p.assets[a.asset]?.data })),
+      ...[p.booth.surroundAsset, p.booth.groundAsset].filter(Boolean)
+        .map(id => ({ id, edits: null, data: p.assets[id]?.data })),
+    ]);
     this.artObjects = [];
     this.artGroups = new Map();
     this.wallObjects = [];
@@ -320,16 +317,19 @@ export class BoothScene {
         plane.material.color.set("#ffffff");
         plane.material.map = signTexture(a);
         plane.material.userData.ownedMap = true;
-      } else if (a.asset)
+      } else if (a.asset) {
+        // Bind completed textures synchronously: never render a white placeholder
+        // during selection, deselection, or handle activation.
+        plane.material.map = this.textureCache.peek(a.asset, a.edits, asset?.data) || null;
         this.texture(a.asset, a.edits)
           .then((t) => {
             if (this.revision === rev) {
               plane.material.map = t;
-              plane.material.userData.ownedMap = hasImageEdits(a.edits);
               plane.material.needsUpdate = true;
-            } else if (hasImageEdits(a.edits)) t.dispose();
+            }
           })
           .catch(() => {});
+      }
       if (a.id === selected) {
         const edge = new T.LineSegments(
           new T.EdgesGeometry(box.geometry),
@@ -602,7 +602,7 @@ export class BoothScene {
     });
   }
   async export(width) {
-    await Promise.allSettled([...this.tex.values(), ...(this.pendingTextures || [])]);
+    await Promise.allSettled(this.textureCache.pending());
     const canvas = this.renderer.domElement,
       w = canvas.width,
       h = canvas.height,

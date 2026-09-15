@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { TextureCache } from "../src/texture-cache.js";
 import { normalizeImageEdits, hasImageEdits, DEFAULT_IMAGE_EDITS } from "../src/image-edit.js";
 
 test("null and omitted edits preserve unedited images", () => {
@@ -21,7 +22,7 @@ test("unedited image texture loads with the default null adjustment argument", a
   const make = new Function("Image", "T", "hasImageEdits",
     "return {" + method.replace("async texture", "async texture") + "};");
   const scene = make(ImageStub, { Texture: TextureStub, SRGBColorSpace: "srgb" }, hasImageEdits);
-  scene.tex = new Map();
+  scene.textureCache = new TextureCache();
   scene.p = { assets: { original: { data: "data:image/png;base64,test" } } };
   scene.renderer = { capabilities: { getMaxAnisotropy: () => 8 } };
   const texture = await scene.texture("original");
