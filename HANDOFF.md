@@ -8,6 +8,11 @@
 - Cloudflare builds main with npm run build ; npx wrangler deploy.
 
 ## Done
+- Hotfix: null image edits no longer break original texture loading (white panels).
+- Hotfix: drag/scale update artwork transforms in place; no full scene/sidebar rebuild per movement.
+- Hotfix: free movement by default; optional Snap 1″ remains available.
+- Hotfix: image-editor preview caches resized sources and coalesces slider input per animation frame; booth updates on Save.
+- 16 Node tests pass, including null texture loading and in-place transform regression tests.
 - Existing: measured original art, lighting, photo overlays, backups, guides, exports.
 - Existing: four canopy shapes, procedural environments, zoom +/-.
 - Live: inline/corner-left/corner-right/island; side and rear spacing, rear-booth toggle.

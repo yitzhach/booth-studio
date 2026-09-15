@@ -143,11 +143,14 @@ async function boot() {
         const index = p.art.findIndex((x) => x.id === a.id);
         if (index < 0) return;
         p.art[index] = a;
-        refreshScene();
-        scheduleSave();
-        renderInspector();
+        scene.updateArtwork(a);
       },
       checkpoint,
+      () => {
+        refreshScene();
+        renderInspector();
+        scheduleSave();
+      },
     );
   } catch (err) {
     document.querySelector("#scene").innerHTML =
@@ -172,6 +175,8 @@ async function boot() {
     history.push(JSON.stringify(p));
     if (history.length > 35) history.shift();
     future = [];
+    document.querySelector('[data-action="undo"]').disabled = false;
+    document.querySelector('[data-action="redo"]').disabled = true;
   }
   function mutate(fn) {
     checkpoint();
@@ -427,6 +432,7 @@ async function boot() {
     renderLibrary();
     renderInspector();
     refreshScene();
+    document.querySelector('[data-action="snap"]').classList.toggle("active", !!scene?.snap);
     scene?.resize();
   }
   function confirmAction(title, text, run) {
@@ -504,9 +510,14 @@ async function boot() {
   function scaleSelected(factor) {
     const index=p.art.findIndex(a=>a.id===selected);
     if(index<0)return;
-    mutate(()=>{p.art[index]=scalePanel(p,p.art[index],factor);});
+    checkpoint();
+    p.art[index]=scalePanel(p,p.art[index],factor);
+    scene?.updateArtwork(p.art[index]);
+    renderInspector();
+    scheduleSave();
   }
   let editPreviewRevision = 0;
+  const editPreviewSources = new WeakMap();
   function currentArtwork() {
     return p.art.find((item) => item.id === selected);
   }
@@ -515,14 +526,8 @@ async function boot() {
     const asset = p.assets[a.asset];
     if (!preview || !asset) return;
     const revision = ++editPreviewRevision;
-    const image = new Image();
-    image.onload = () => {
+    const paint = (source) => {
       if (revision !== editPreviewRevision || !document.querySelector("#image-editor").open) return;
-      const scale = Math.min(1, 720 / Math.max(image.width, image.height));
-      const source = document.createElement("canvas");
-      source.width = Math.max(1, Math.round(image.width * scale));
-      source.height = Math.max(1, Math.round(image.height * scale));
-      source.getContext("2d").drawImage(image, 0, 0, source.width, source.height);
       const edited = applyImageEdits(source, a.edits);
       const box = preview.getBoundingClientRect();
       const pixelRatio = Math.min(devicePixelRatio, 2);
@@ -534,6 +539,18 @@ async function boot() {
       const fit = Math.min(preview.width / edited.width, preview.height / edited.height) * 0.92;
       const width = edited.width * fit, height = edited.height * fit;
       ctx.drawImage(edited, (preview.width - width) / 2, (preview.height - height) / 2, width, height);
+    };
+    const cached = editPreviewSources.get(asset);
+    if (cached) { paint(cached); return; }
+    const image = new Image();
+    image.onload = () => {
+      const scale = Math.min(1, 720 / Math.max(image.width, image.height));
+      const source = document.createElement("canvas");
+      source.width = Math.max(1, Math.round(image.width * scale));
+      source.height = Math.max(1, Math.round(image.height * scale));
+      source.getContext("2d").drawImage(image, 0, 0, source.width, source.height);
+      editPreviewSources.set(asset, source);
+      paint(source);
     };
     image.src = asset.data;
   }
@@ -572,9 +589,8 @@ async function boot() {
   function scheduleEditedPreview() {
     const a = currentArtwork();
     if (!a) return;
-    drawImageEditorPreview(a);
-    clearTimeout(scheduleEditedPreview.timer);
-    scheduleEditedPreview.timer = setTimeout(() => refreshScene(), 90);
+    cancelAnimationFrame(scheduleEditedPreview.frame);
+    scheduleEditedPreview.frame = requestAnimationFrame(() => drawImageEditorPreview(a));
   }
   function updateEditorEdits(run) {
     const a = currentArtwork();
@@ -582,8 +598,6 @@ async function boot() {
     a.edits = normalizeImageEdits(a.edits);
     run(a.edits);
     renderImageEditor();
-    clearTimeout(scheduleEditedPreview.timer);
-    scheduleEditedPreview.timer = setTimeout(() => refreshScene(), 40);
   }
   const actions = {
     "edit-image": () => {

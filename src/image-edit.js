@@ -13,6 +13,7 @@ const finite = (value, min, max) =>
   typeof value === "number" && Number.isFinite(value) && value >= min && value <= max;
 
 export function normalizeImageEdits(value = {}) {
+  value = value && typeof value === "object" ? value : {};
   return {
     exposure: finite(value.exposure, -2, 2) ? value.exposure : 0,
     contrast: finite(value.contrast, -100, 100) ? value.contrast : 0,

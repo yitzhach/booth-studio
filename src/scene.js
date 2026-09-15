@@ -14,14 +14,15 @@ export function temperature(k) {
   );
 }
 export class BoothScene {
-  constructor(host, onSelect, onMove, onStart) {
+  constructor(host, onSelect, onMove, onStart, onEnd = () => {}) {
     this.host = host;
     this.onSelect = onSelect;
     this.onMove = onMove;
     this.onStart = onStart;
+    this.onEnd = onEnd;
     this.view = "perspective";
     this.move = false;
-    this.snap = true;
+    this.snap = false;
     this.tex = new Map();
     this.scene = new T.Scene();
     this.scene.background = new T.Color("#b5b4b0");
@@ -179,6 +180,7 @@ export class BoothScene {
     const rev = this.revision;
     this.disposeGroup();
     this.artObjects = [];
+    this.artGroups = new Map();
     this.wallObjects = [];
     this.resizeHandles = [];
     this.frames = {};
@@ -265,6 +267,7 @@ export class BoothScene {
       const frame = this.frames[a.wall + (a.face === "outside" ? "-outside" : "")];
       if (!p.booth.walls[a.wall].enabled) continue;
       const art = new T.Group();
+      this.artGroups.set(a.id, { group: art, initial: { ...a } });
       art.position.set(
         (a.x + a.w / 2) * IN,
         (a.y + a.h / 2) * IN,
@@ -393,6 +396,15 @@ export class BoothScene {
       this.initialized = true;
       this.setView("perspective");
     }
+  }
+  updateArtwork(a) {
+    const entry = this.artGroups.get(a.id);
+    if (!entry) return;
+    const { group, initial } = entry;
+    group.position.set((a.x + a.w / 2) * IN, (a.y + a.h / 2) * IN,
+      (a.offset + a.thickness / 2) * IN + 0.003);
+    group.scale.set(a.w / initial.w, a.h / initial.h, a.thickness / initial.thickness);
+    this.renderer.shadowMap.needsUpdate = true;
   }
   setView(view) {
     this.view = view;
@@ -543,6 +555,7 @@ export class BoothScene {
       if (this.drag) {
         this.drag = null; this.down = null; this.controls.enabled = true;
         if (c.hasPointerCapture(e.pointerId)) c.releasePointerCapture(e.pointerId);
+        this.onEnd();
         return;
       }
       if (this.down && Math.hypot(e.clientX-this.down[0], e.clientY-this.down[1]) < 7) {
@@ -567,6 +580,7 @@ export class BoothScene {
     });
     c.addEventListener("pointercancel", () => {
       this.drag = null; this.controls.enabled = true; this.down = null;
+      this.onEnd();
     });
   }
   async export(width) {
