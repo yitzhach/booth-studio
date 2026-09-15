@@ -16,6 +16,10 @@ export function blankProject() {
       ground: "studio",
       horizon: "studio",
       neighbors: false,
+      neighborLayout: "inline",
+      neighborGap: 24,
+      neighborRear: false,
+      rearGap: 24,
       color: "#45474a",
       walls: {
         back: { enabled: true, width: 120, height: 96 },
@@ -154,6 +158,13 @@ export function validateProject(p) {
     )
       fail();
   }
+  if (p.booth.neighborLayout !== undefined && !["inline","corner-left","corner-right","island"].includes(p.booth.neighborLayout)) fail();
+  for (const key of ["neighborGap", "rearGap"]) if (p.booth[key] !== undefined && !finite(p.booth[key], 0, 240)) fail();
+  if (p.booth.neighborRear !== undefined && typeof p.booth.neighborRear !== "boolean") fail();
+  if (p.booth.surroundAsset != null && (typeof p.booth.surroundAsset !== "string" || !p.assets[p.booth.surroundAsset])) fail();
+  if (p.booth.surroundRotation !== undefined && !finite(p.booth.surroundRotation, -180, 180)) fail();
+  if (p.booth.groundAsset != null && (typeof p.booth.groundAsset !== "string" || !p.assets[p.booth.groundAsset])) fail();
+  if (p.booth.groundTile !== undefined && !finite(p.booth.groundTile, 12, 240)) fail();
   const ids = new Set();
   for (const a of p.art) {
     if (
@@ -170,6 +181,10 @@ export function validateProject(p) {
       !finite(a.offset, 0, 12)
     )
       fail();
+    if (a.face !== undefined && !["inside", "outside"].includes(a.face)) fail();
+    if (a.kind !== undefined && !["art", "sign", "label"].includes(a.kind)) fail();
+    for (const key of ["artistName", "city", "medium", "price"])
+      if (a[key] !== undefined && (typeof a[key] !== "string" || a[key].length > 200)) fail();
     ids.add(a.id);
     if (a.asset && !p.assets[a.asset]) fail();
   }
@@ -266,4 +281,26 @@ export function convex(q) {
       (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]) > 0.00001
     );
   });
+}
+
+/** Neighbors use nominal footprint-edge gaps in inches, not center spacing. */
+export function neighborPlacements(b) {
+  if (!b.neighbors) return [];
+  const layout = b.neighborLayout || "inline", gap = b.neighborGap ?? 24;
+  const result = [], size = 120;
+  if (layout !== "island") {
+    if (layout !== "corner-left") result.push({side:"left", x:-(b.width/2 + gap + size/2), z:0});
+    if (layout !== "corner-right") result.push({side:"right", x:b.width/2 + gap + size/2, z:0});
+  }
+  if (b.neighborRear && layout !== "island") result.push({side:"rear", x:0, z:-(b.depth/2 + (b.rearGap ?? gap) + size/2)});
+  return result;
+}
+/** Uniform size adjustment preserves image proportions and the panel's center. */
+export function scalePanel(p, a, factor) {
+  const wall = p.booth.walls[a.wall];
+  const low = Math.max(1 / a.w, 1 / a.h);
+  const high = Math.max(low, Math.min(360 / a.w, 360 / a.h, wall.width / a.w, wall.height / a.h));
+  const f = Math.max(low, Math.min(high, Number.isFinite(factor) ? factor : 1));
+  const w = a.w * f, h = a.h * f;
+  return constrain(p, {...a, w, h, x:a.x + (a.w-w)/2, y:a.y + (a.h-h)/2});
 }
