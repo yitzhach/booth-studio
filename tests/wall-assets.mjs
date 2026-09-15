@@ -24,7 +24,7 @@ try {
  for(const [label,value] of [['Artist name','Isaac Anderson'],['City / State','Somerset, KY'],['Medium','Mixed media']]){
    await page.getByLabel(label,{exact:true}).fill(value);await page.getByLabel(label,{exact:true}).press('Tab');
  }
- await page.getByLabel('Wall face',{exact:true}).selectOption('outside');
+ await page.getByLabel('Wall location',{exact:true}).selectOption('back-outside');
  await page.getByRole('button',{name:'View wall face',exact:true}).click();
  const id=await page.evaluate(()=>window.__booth.project.art.at(-1).id);
  const panelPoint=()=>page.evaluate(id=>{
