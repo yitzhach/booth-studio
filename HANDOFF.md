@@ -1,37 +1,34 @@
 ## Goal
-- Continue Artist OS Booth Studio. Preserve implementation; never rebuild.
+- Continue Artist OS Booth Studio. Preserve the implementation; never rebuild.
+
 ## Now
 - Repo: https://github.com/yitzhach/booth-studio ; production: main.
 - Live: https://booth-studio.bobdylan2000.workers.dev
-- Exterior wall/assets update merged to main at fdae8a63e04a51aeb02e88e210b4470afe99c797.
-- Cloudflare production build succeeded; live URL verified with all six wall locations.
-- Cloudflare builds main: npm run build ; npx wrangler deploy.
-- Reusable originals/direct editing work is on work/reusable-panels-image-editor; not merged yet.
+- Reusable originals/direct image editing merged through PR #2 at d8dc7fb9ecd2553a4b8354cb1552963e2b1d8df9.
+- Cloudflare builds main with npm run build ; npx wrangler deploy.
+
 ## Done
 - Existing: measured original art, lighting, photo overlays, backups, guides, exports.
 - Existing: four canopy shapes, procedural environments, zoom +/-.
 - Live: inline/corner-left/corner-right/island; side and rear spacing, rear-booth toggle.
-- Live: outside back/left/right wall faces, exterior camera view, face-specific guides.
-- Live: library drag/drop to picked wall face; touch Place on wall fallback.
-- Live: double-click proportional corner handles; scale buttons; click-off deselect.
+- Live: artwork on all six back/left/right interior and exterior wall faces, exterior camera view, face-specific guides.
 - Live: editable artist signs and small title/medium/price labels.
 - Live: tent fabric weave/sheen, ground bump, urban facade details.
 - Live: optional uploaded 2:1 panorama and seamless ground photo; rotation/tile controls.
-- Live: larger zoom targets, desktop Zoom label.
-- 11 model/guide tests passed in JS isolate using UUID/clone shims.
-- 24 inspector template smoke cases passed with mock DOM; syntax checks passed.
-- Cloudflare production build passed.
-- Live DOM verified Back/Left/Right Interior and Exterior choices; all three exterior selections update correctly.
-- Cloud browser lacked WebGL; physical rendering, drag handles and export remain to verify.
-- Draft: Original panels catalog is separate from placements; every click/drop adds a copy.
-- Draft: double-click/double-tap activates direct body drag + proportional corner scaling.
-- Draft: removed Place on wall tool.
-- Draft: non-destructive flip/90° rotate/exposure/contrast/saturation/temperature/tint.
-- Draft: project-persisted copy/paste adjustment recipe; new catalog copies start unedited.
-- Draft: source assets retain roles; deleting last placement keeps the original catalog item.
-- 13 model/guide/image-edit tests passed in JS isolate; production/browser tests pending.
+- Live: Original panels catalog is separate from placements; every click/drop creates another copy and deleting a placement keeps the original.
+- Live: double-click/double-tap activates direct body drag and proportional blue-corner scaling; click-off deselects.
+- Live: old Place on wall tool removed.
+- Live: non-destructive horizontal/vertical flip, 90° rotation, exposure, contrast, saturation, temperature and tint editor.
+- Live: project-persisted copy/paste adjustment recipe; new catalog copies start unedited.
+- Source assets retain artwork/photo/surround/ground roles.
+- 13 model/guide/image-edit tests passed in the JS isolate; modified JavaScript syntax checks passed.
+- Cloudflare branch preview succeeded.
+- Preview DOM confirmed repeated catalog clicks create copies while the original remains; all six wall locations present.
+- Cloud browser lacks WebGL, so physical 3D gestures and rendering still need a WebGL-capable device check.
+
 ## Decisions (keep)
-- Original artwork untouched; measured geometry determines perspective.
+- Original artwork stays untouched; edits are per-placement and non-destructive.
+- Measured geometry determines perspective.
 - No paid APIs, backend, accounts, cloud sync, or AI-generated artwork.
 - Tent styles are inspired approximations, not certified brand models.
 - Photo surround is a backdrop, not reconstructed 3D or HDR lighting.
@@ -40,24 +37,27 @@
 - Neighbor gaps use nominal footprint edges; overhang/art can intrude into gaps.
 - Optional schema-1 fields preserve existing backup compatibility.
 - Commission repository must remain untouched.
+
 ## Dead ends (do not retry)
 - Terminal GitHub auth previously failed: use connected GitHub tools.
 - Cloud browser may lack WebGL; do not treat DOM checks as full 3D rendering verification.
+
 ## Next (numbered)
-1. Run Cloudflare/Vite production build on review branch.
-2. Verify Original panels catalog, repeated drops, double-tap move/scale and image editor in browser.
-3. Run npm test plus wall-assets/environment/e2e browser tests where WebGL works.
-4. Inspect edited orientation, exterior faces, clean 2048/4096 export and physical Mac/iPhone.
-5. Merge only after fixing concrete findings; update this handoff.
+1. Verify the production Cloudflare build and live URL.
+2. On a WebGL-capable Mac/iPhone, verify repeated inside/outside drops and direct double-tap move/scale.
+3. Check edited orientation and adjustment preview on all wall faces.
+4. Inspect clean 2048/4096 export after rotated/flipped/color-adjusted placements.
+5. Continue with the next requested Booth Studio feature without rebuilding.
+
 ## Files
-- src/model.js: validation, neighbor placement, proportional scaling, edit data.
+- src/model.js: validation, neighbor placement, proportional scaling and edit data.
 - src/image-edit.js: adjustment defaults, validation and Canvas processing.
-- src/scene.js: exterior frames, wall picking, resize handles, photo maps.
-- src/main.js: reusable catalog, copy-on-drop, direct editing modal and edit clipboard.
+- src/scene.js: exterior frames, wall picking, direct resize/drag and edited textures.
+- src/main.js: reusable catalog, copy-on-drop, image editor and edit clipboard.
 - src/signage.js: editable sign/label canvas textures.
-- src/environment.js: tent materials, procedural floor/scenery, neighbors.
+- src/environment.js: tent materials, procedural floor/scenery and neighbors.
 - src/guide.js: separate inside/outside hanging guides.
-- src/style.css: assets, drag states and zoom targets.
-- tests/model.test.js: 11 data/geometry/guide tests.
-- tests/wall-assets.mjs: new browser regression script (unrun).
-- tests/environment.mjs: existing environment/zoom browser checks.
+- src/style.css: assets, drag states, image editor and zoom targets.
+- tests/model.test.js: 13 data/geometry/guide/edit tests.
+- tests/wall-assets.mjs: browser regression script prepared for WebGL-capable environment.
+- tests/environment.mjs: environment/zoom browser checks.
