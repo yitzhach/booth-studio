@@ -1,3 +1,4 @@
+import { editedAspect, validImageEdits } from "./image-edit.js";
 export const IN = 0.0254;
 export const uid = () => globalThis.crypto.randomUUID();
 export function blankProject() {
@@ -55,6 +56,7 @@ export function blankProject() {
       },
     ],
     photo: { asset: null, layers: [], lights: [], exposure: 0 },
+    editClipboard: null,
   };
 }
 export function demoProject() {
@@ -108,8 +110,8 @@ export function mismatch(p, a) {
   const asset = p.assets[a.asset];
   return (
     !!asset &&
-    Math.abs(a.w / a.h - asset.width / asset.height) /
-      (asset.width / asset.height) >
+    Math.abs(a.w / a.h - editedAspect(asset, a.edits)) /
+      editedAspect(asset, a.edits) >
       0.015
   );
 }
@@ -185,15 +187,19 @@ export function validateProject(p) {
     if (a.kind !== undefined && !["art", "sign", "label"].includes(a.kind)) fail();
     for (const key of ["artistName", "city", "medium", "price"])
       if (a[key] !== undefined && (typeof a[key] !== "string" || a[key].length > 200)) fail();
+    if (a.sourceId !== undefined && (typeof a.sourceId !== "string" || a.sourceId.length > 200)) fail();
+    if (a.edits !== undefined && !validImageEdits(a.edits)) fail();
     ids.add(a.id);
     if (a.asset && !p.assets[a.asset]) fail();
   }
+  if (p.editClipboard !== undefined && p.editClipboard !== null && !validImageEdits(p.editClipboard)) fail();
   if (Object.keys(p.assets).length > 250) fail();
   for (const asset of Object.values(p.assets)) {
     if (
       !asset ||
       !finite(asset.width, 1, 30000) ||
       !finite(asset.height, 1, 30000) ||
+      (asset.role !== undefined && !["artwork", "photo", "surround", "ground"].includes(asset.role)) ||
       typeof asset.data !== "string" ||
       !/^data:image\/(png|jpeg);base64,/.test(asset.data) ||
       asset.data.length > 40000000

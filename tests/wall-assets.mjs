@@ -44,11 +44,39 @@ try {
  pt=await panelPoint();await page.mouse.click(pt.x,pt.y);
  assert.equal(await page.evaluate(id=>window.__booth.project.art.find(a=>a.id===id).face,id),'outside');
  // Native library drop onto a measured wall.
- const data=await page.evaluateHandle(id=>{const d=new DataTransfer();d.setData('application/x-booth-panel',id);return d;},id);
+ const sourceKey=await page.locator('#library [data-source]').first().getAttribute('data-source');
+ const beforeDrop=await page.evaluate(()=>window.__booth.project.art.length);
+ const data=await page.evaluateHandle(sourceKey=>{const d=new DataTransfer();d.setData('application/x-booth-original',sourceKey);return d;},sourceKey);
  await page.locator('#scene canvas').dispatchEvent('drop',{dataTransfer:data,clientX:pt.x,clientY:pt.y});
- assert.equal(await page.evaluate(id=>window.__booth.project.art.find(a=>a.id===id).face,id),'outside');
+ assert.equal(await page.evaluate(()=>window.__booth.project.art.length),beforeDrop+1);
+ assert.equal(await page.evaluate(()=>window.__booth.project.art.at(-1).face),'outside');
+ assert.ok(await page.locator('#library [data-source]').first().isVisible());
  await page.locator('#library [data-action="add-label"]').click();
  assert.equal(await page.evaluate(()=>window.__booth.project.art.at(-1).w),4);
+ // Reusable original and non-destructive edit/copy/paste behavior.
+ await page.evaluate(()=>{
+   const p=window.__booth.project;
+   p.assets['test-image']={name:'test.png',width:1,height:1,role:'artwork',data:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='};
+   p.art[0].asset='test-image';p.art[0].title='Reusable original';
+   window.__booth.mutate(()=>{});
+ });
+ await page.locator('[data-source="asset:test-image"]').click();
+ const editedId=await page.evaluate(()=>window.__booth.project.art.at(-1).id);
+ await page.getByRole('button',{name:'Edit image',exact:true}).click();
+ await page.getByLabel('Exposure',{exact:true}).fill('0.7');
+ await page.getByRole('button',{name:'Rotate 90° clockwise',exact:true}).click();
+ await page.getByRole('button',{name:'Flip horizontal',exact:true}).click();
+ await page.getByRole('button',{name:'Save edits',exact:true}).click();
+ assert.equal(await page.evaluate(id=>window.__booth.project.art.find(a=>a.id===id).edits.exposure,editedId),.7);
+ assert.equal(await page.evaluate(id=>window.__booth.project.art.find(a=>a.id===id).edits.rotation,editedId),90);
+ await page.getByRole('button',{name:'Copy edits',exact:true}).click();
+ await page.locator('[data-source="asset:test-image"]').click();
+ const pastedId=await page.evaluate(()=>window.__booth.project.art.at(-1).id);
+ assert.equal(await page.evaluate(id=>window.__booth.project.art.find(a=>a.id===id).edits,id),undefined);
+ await page.getByRole('button',{name:'Paste edits',exact:true}).click();
+ assert.deepEqual(await page.evaluate(id=>window.__booth.project.art.find(a=>a.id===id).edits,pastedId),
+   await page.evaluate(id=>window.__booth.project.art.find(a=>a.id===id).edits,editedId));
+ assert.ok((await page.evaluate(()=>window.__booth.project.assets['test-image'].data)).startsWith('data:image/png;base64,'));
  // Clicking a blank wall deselects instead of leaving hidden handles.
  await page.evaluate(()=>{
    const s=window.__booth.scene,r=s.renderer.domElement.getBoundingClientRect();
@@ -69,5 +97,5 @@ try {
    await page.getByRole('button',{name:'Zoom out',exact:true}).click();
  }
  assert.deepEqual(errors,[]);
- console.log('PASS neighboring booth controls, exterior signs, labels, select/scale, placement, persistence, export and responsive zoom.');
+ console.log('PASS neighboring booths, reusable original copies, exterior signs, labels, select/scale, persistence, export and responsive zoom.');
 }finally{await browser.close();await server.close();}
