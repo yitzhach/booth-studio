@@ -1300,3 +1300,17 @@ dialog li {
  .zoom-label {display:none;}
  .zoom-controls .icon-only {width:40px;min-height:40px;}
 }
+
+.exterior-callout {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0 0 13px;
+  padding: 10px 11px;
+  border: 1px solid #52749b;
+  border-radius: 6px;
+  background: #233448;
+  color: #e8f2ff;
+}
+.exterior-callout strong { font-size: 12px; font-weight: 600; }
+.exterior-callout span { font-size: 11px; color: #b9cee7; line-height: 1.35; }
