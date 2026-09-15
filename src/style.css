@@ -1352,6 +1352,9 @@ dialog li {
   flex-direction: column;
 }
 #image-edit-preview {
+  display: block;
+  height: 380px;
+  min-width: 0;
   width: 100%;
   flex: 1;
   min-height: 300px;
@@ -1391,7 +1394,7 @@ dialog li {
     overflow-y: auto;
   }
   .image-preview-wrap { min-height: 250px; padding: 12px; }
-  #image-edit-preview { min-height: 210px; }
+  #image-edit-preview { min-height: 210px; height: 250px; flex: none; }
   .image-adjustments {
     overflow: visible;
     border-left: 0;

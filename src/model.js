@@ -189,6 +189,9 @@ export function validateProject(p) {
       if (a[key] !== undefined && (typeof a[key] !== "string" || a[key].length > 200)) fail();
     if (a.sourceId !== undefined && (typeof a.sourceId !== "string" || a.sourceId.length > 200)) fail();
     if (a.edits !== undefined && !validImageEdits(a.edits)) fail();
+    if (a.stretch !== undefined && typeof a.stretch !== "boolean") fail();
+    if (a.edgeTexture !== undefined && !["plain", "concrete", "wood", "metal"].includes(a.edgeTexture)) fail();
+    if (a.edgeColor !== undefined && !/^#[0-9a-f]{6}$/i.test(a.edgeColor)) fail();
     ids.add(a.id);
     if (a.asset && !p.assets[a.asset]) fail();
   }

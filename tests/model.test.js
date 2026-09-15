@@ -166,3 +166,14 @@ test("an original asset remains available after its last wall placement is remov
   assert.ok(p.assets.original);
   assert.equal(validateProject(p),p);
 });
+
+test("stretch and colored edge materials survive backups and reject invalid data", () => {
+  const p = demoProject();
+  Object.assign(p.art[0], { stretch: true, edgeColor: "#2356ab", edgeTexture: "concrete" });
+  assert.deepEqual(validateProject(JSON.parse(JSON.stringify(p))), p);
+  for (const [key, value] of [["stretch", "yes"], ["edgeColor", "red"], ["edgeTexture", "unknown"]]) {
+    const bad = structuredClone(p);
+    bad.art[0][key] = value;
+    assert.throws(() => validateProject(bad));
+  }
+});

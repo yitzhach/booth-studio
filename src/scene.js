@@ -2,6 +2,7 @@ import * as T from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { makeTent, environment } from "./environment.js";
 import { signTexture } from "./signage.js";
+import { edgeMaterial } from "./edge-material.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
 import { IN, constrain, scalePanel } from "./model.js";
 export function temperature(k) {
@@ -281,7 +282,7 @@ export class BoothScene {
         0,
         0,
         0,
-        rough("#b7a68b"),
+        edgeMaterial(a),
         art,
       );
       box.userData.artId = a.id;
@@ -289,7 +290,7 @@ export class BoothScene {
       let iw = a.w,
         ih = a.h;
       const asset = p.assets[a.asset];
-      if (asset) {
+      if (asset && !a.stretch) {
         const ratio = editedAspect(asset, a.edits);
         if (iw / ih > ratio) iw = ih * ratio;
         else ih = iw / ratio;
@@ -313,6 +314,7 @@ export class BoothScene {
       plane.receiveShadow = true;
       plane.userData.artId = a.id;
       art.add(plane);
+      Object.assign(this.artGroups.get(a.id), { plane, imageWidth: iw, imageHeight: ih });
       this.artObjects.push(plane);
       if (a.kind === "sign" || a.kind === "label") {
         plane.material.color.set("#ffffff");
@@ -337,11 +339,11 @@ export class BoothScene {
         art.add(edge);
         this.selectionEdge = edge;
         if (this.scaleId === a.id) {
-          for (const [sx, sy] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
+          for (const [sx, sy] of [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]]) {
             const handle = new T.Mesh(new T.SphereGeometry(.045, 16, 10),
               new T.MeshBasicMaterial({color:"#91beff"}));
             handle.position.set(sx*a.w*IN/2, sy*a.h*IN/2, a.thickness*IN/2 + .008);
-            handle.userData = {artId:a.id, editorOnly:true};
+            handle.userData = {artId:a.id, editorOnly:true, sx, sy, stretch: sx === 0 || sy === 0};
             handle.renderOrder = 10; art.add(handle); this.resizeHandles.push(handle);
           }
         }
@@ -404,6 +406,9 @@ export class BoothScene {
     group.position.set((a.x + a.w / 2) * IN, (a.y + a.h / 2) * IN,
       (a.offset + a.thickness / 2) * IN + 0.003);
     group.scale.set(a.w / initial.w, a.h / initial.h, a.thickness / initial.thickness);
+    if (a.stretch && entry.plane) {
+      entry.plane.scale.set(initial.w / entry.imageWidth, initial.h / entry.imageHeight, 1);
+    }
     this.renderer.shadowMap.needsUpdate = true;
   }
   setView(view) {
@@ -527,6 +532,8 @@ export class BoothScene {
       const normal = new T.Vector3(0,0,1).applyQuaternion(frame.getWorldQuaternion(new T.Quaternion()));
       const plane = new T.Plane().setFromNormalAndCoplanarPoint(normal, hit.point);
       this.drag = {id, frame, plane, initial:{...a}, resizing:!!handle,
+        stretch: handle?.object.userData.stretch,
+        sx: handle?.object.userData.sx, sy: handle?.object.userData.sy,
         dx:local.x/IN-a.x, dy:local.y/IN-a.y,
         radius:Math.hypot(local.x/IN-a.x-a.w/2, local.y/IN-a.y-a.h/2)};
       this.controls.enabled = false;
@@ -542,6 +549,17 @@ export class BoothScene {
       const d = this.drag, local = d.frame.worldToLocal(point);
       if (d.resizing) {
         const a = d.initial;
+        if (d.stretch) {
+          const horizontal = d.sx !== 0;
+          const width = this.p.booth.walls[a.wall].width;
+          const height = this.p.booth.walls[a.wall].height;
+          const x = horizontal && d.sx < 0 ? Math.max(0, Math.min(a.x+a.w-1, local.x/IN)) : a.x;
+          const y = !horizontal && d.sy < 0 ? Math.max(0, Math.min(a.y+a.h-1, local.y/IN)) : a.y;
+          const w = horizontal ? d.sx < 0 ? a.x+a.w-x : Math.max(1,Math.min(360,width-a.x,local.x/IN-a.x)) : a.w;
+          const h = !horizontal ? d.sy < 0 ? a.y+a.h-y : Math.max(1,Math.min(360,height-a.y,local.y/IN-a.y)) : a.h;
+          this.onMove({...a,x,y,w,h,stretch:true});
+          return;
+        }
         const radius = Math.hypot(local.x/IN-a.x-a.w/2, local.y/IN-a.y-a.h/2);
         this.onMove(scalePanel(this.p, a, radius / Math.max(.01,d.radius)));
       } else {

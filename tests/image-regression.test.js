@@ -43,3 +43,26 @@ test("artwork transforms reuse scene objects without disposing textures", () => 
   assert.equal(position[0], 30 * 0.0254);
   assert.equal(scene.artGroups.get("art").group, group);
 });
+
+test("image editor uses the browser Image loader, not the imported icon", () => {
+  const source = readFileSync(new URL("../src/main.js", import.meta.url), "utf8");
+  const imports = source.slice(source.indexOf("import {"), source.indexOf('} from "lucide"'));
+  assert.match(imports, /Image as ImageIcon/);
+  assert.doesNotMatch(imports, /\n\s*Image,/);
+  const preview = source.slice(source.indexOf("  function drawImageEditorPreview"), source.indexOf("  function editRange"));
+  let draws = 0;
+  const ctx = { drawImage: () => draws++, fillRect() {} };
+  const canvas = { width: 600, height: 400, getContext: () => ctx,
+    getBoundingClientRect: () => ({ width: 600, height: 400 }) };
+  const document = { querySelector: s => s === "#image-editor" ? { open: true } : canvas,
+    createElement: () => ({ getContext: () => ctx }) };
+  class ImageStub {
+    width = 600; height = 400;
+    set src(v) { this.onload(); }
+  }
+  const run = new Function("document", "Image", "applyImageEdits", "p", "devicePixelRatio",
+    "let editPreviewRevision=0; const editPreviewSources=new WeakMap(); const toast=()=>{};" +
+    preview + "; return drawImageEditorPreview;");
+  run(document, ImageStub, s => s, { assets: { a: { data: "fixture" } } }, 1)({ asset: "a" });
+  assert.equal(draws, 2, "source and visible preview must both be drawn before saving");
+});

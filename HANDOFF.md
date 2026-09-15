@@ -8,6 +8,11 @@
 - Cloudflare builds main with npm run build ; npx wrangler deploy.
 
 ## Done
+- New: middle-edge stretch handles and stretch-to-panel checkbox; corners remain proportional.
+- New: live scale slider with native 1% keyboard steps, no full scene rebuild during input.
+- New: plain/concrete/wood grain/metal edge materials with color picker.
+- Fixed image-editor preview: Lucide Image icon aliased so browser Image constructor loads art.
+- 18 Node regression tests pass; AI_EXPORT_PHASE.md records the proposed paid BFL integration.
 - Hotfix: null image edits no longer break original texture loading (white panels).
 - Hotfix: drag/scale update artwork transforms in place; no full scene/sidebar rebuild per movement.
 - Hotfix: free movement by default; optional Snap 1″ remains available.
@@ -34,7 +39,8 @@
 ## Decisions (keep)
 - Original artwork stays untouched; edits are per-placement and non-destructive.
 - Measured geometry determines perspective.
-- No paid APIs, backend, accounts, cloud sync, or AI-generated artwork.
+- Current editor remains local; paid BFL AI export authorized for planning as a future phase only.
+- AI_EXPORT_PHASE.md: backend/credits, protected artwork compositing, 1K–4K output plan.
 - Tent styles are inspired approximations, not certified brand models.
 - Photo surround is a backdrop, not reconstructed 3D or HDR lighting.
 - User supplies panorama/ground photography; no stock/photo assets bundled.
@@ -48,7 +54,7 @@
 - Cloud browser may lack WebGL; do not treat DOM checks as full 3D rendering verification.
 
 ## Next (numbered)
-1. Verify the production Cloudflare build and live URL.
+1. Verify newest production build; test edge stretches, scale slider and image preview on devices.
 2. On a WebGL-capable Mac/iPhone, verify repeated inside/outside drops and direct double-tap move/scale.
 3. Check edited orientation and adjustment preview on all wall faces.
 4. Inspect clean 2048/4096 export after rotated/flipped/color-adjusted placements.
