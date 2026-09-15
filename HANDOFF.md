@@ -6,6 +6,7 @@
 - Exterior wall/assets update merged to main at fdae8a63e04a51aeb02e88e210b4470afe99c797.
 - Cloudflare production build succeeded; live URL verified with all six wall locations.
 - Cloudflare builds main: npm run build ; npx wrangler deploy.
+- Reusable originals/direct editing work is on work/reusable-panels-image-editor; not merged yet.
 ## Done
 - Existing: measured original art, lighting, photo overlays, backups, guides, exports.
 - Existing: four canopy shapes, procedural environments, zoom +/-.
@@ -22,6 +23,13 @@
 - Cloudflare production build passed.
 - Live DOM verified Back/Left/Right Interior and Exterior choices; all three exterior selections update correctly.
 - Cloud browser lacked WebGL; physical rendering, drag handles and export remain to verify.
+- Draft: Original panels catalog is separate from placements; every click/drop adds a copy.
+- Draft: double-click/double-tap activates direct body drag + proportional corner scaling.
+- Draft: removed Place on wall tool.
+- Draft: non-destructive flip/90° rotate/exposure/contrast/saturation/temperature/tint.
+- Draft: project-persisted copy/paste adjustment recipe; new catalog copies start unedited.
+- Draft: source assets retain roles; deleting last placement keeps the original catalog item.
+- 13 model/guide/image-edit tests passed in JS isolate; production/browser tests pending.
 ## Decisions (keep)
 - Original artwork untouched; measured geometry determines perspective.
 - No paid APIs, backend, accounts, cloud sync, or AI-generated artwork.
@@ -36,15 +44,16 @@
 - Terminal GitHub auth previously failed: use connected GitHub tools.
 - Cloud browser may lack WebGL; do not treat DOM checks as full 3D rendering verification.
 ## Next (numbered)
-1. Read README and current main; do not restart.
-2. Verify physical Mac/iPhone WebGL rendering and exterior Back/Left/Right placement.
-3. Run npm test, npm run build, npm run test:browser, node tests/environment.mjs, node tests/wall-assets.mjs when terminal/browser runtime is available.
-4. Inspect proportional handles, exterior text orientation, photo materials and 2048/4096 exports.
-5. Fix only concrete findings; keep HANDOFF.md current.
+1. Run Cloudflare/Vite production build on review branch.
+2. Verify Original panels catalog, repeated drops, double-tap move/scale and image editor in browser.
+3. Run npm test plus wall-assets/environment/e2e browser tests where WebGL works.
+4. Inspect edited orientation, exterior faces, clean 2048/4096 export and physical Mac/iPhone.
+5. Merge only after fixing concrete findings; update this handoff.
 ## Files
-- src/model.js: validation, neighbor placement, proportional scaling.
+- src/model.js: validation, neighbor placement, proportional scaling, edit data.
+- src/image-edit.js: adjustment defaults, validation and Canvas processing.
 - src/scene.js: exterior frames, wall picking, resize handles, photo maps.
-- src/main.js: UI, asset actions, drop/tap placement, material upload.
+- src/main.js: reusable catalog, copy-on-drop, direct editing modal and edit clipboard.
 - src/signage.js: editable sign/label canvas textures.
 - src/environment.js: tent materials, procedural floor/scenery, neighbors.
 - src/guide.js: separate inside/outside hanging guides.

@@ -92,3 +92,13 @@ Prepared through connected GitHub tools; no terminal or browser runtime was avai
 11 model/guide tests passed in a JavaScript isolate with deterministic UUID and JSON-clone shims. 24 inspector-template cases passed using a mock DOM. JavaScript syntax checks passed after removing module declarations. These do **not** certify a Vite build or browser/WebGL behavior.
 
 Before merging/deploying: run `npm ci`, `npm test`, `npm run build`, `npm run test:browser`, `node tests/environment.mjs`, and `node tests/wall-assets.mjs`. Review exterior drops/scaling, real photo materials and PNGs on desktop and touch; test 4096 exports where supported.
+
+## Reusable originals and direct image editing
+
+The left pane is a catalog of **Original panels**, separate from wall placements. Click an original to add a placement near the selected wall work, or drag it directly onto any enabled inside/outside wall. Every click or drop creates a new placement and leaves the source original in the catalog. The same original can appear many times with different dimensions, locations and image adjustments. Existing projects are migrated in place; source image data remains unchanged.
+
+Double-click or double-tap a wall image to enter direct adjustment. Drag the image body along its current wall and drag any blue corner to scale proportionally. Click empty space to deselect. The toolbar Move mode remains available for one-click positioning, and Wall location moves selected work among Back/Left/Right Interior/Exterior faces. The earlier Place on wall tool has been removed.
+
+For a selected image, choose **Edit image**. The modal provides 90-degree rotation, horizontal/vertical flip, exposure, contrast, saturation, temperature and tint. The preview and 3D panel update without changing the original file. **Save edits** commits one undoable change; Cancel restores the prior state. **Copy edits** stores an adjustment recipe in the project, and **Paste edits** applies it to another placement. A newly dragged catalog copy starts from the unchanged original; Duplicate preserves the current placement's edits.
+
+Image adjustments are real-time Canvas/WebGL preview operations rather than RAW development. They do not recover clipped highlights or missing source detail. Full source image data stays embedded in backups; the adjusted 2048-pixel preview texture is used for 3D rendering and PNG export.

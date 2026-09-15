@@ -2,6 +2,7 @@ import * as T from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { makeTent, environment } from "./environment.js";
 import { signTexture } from "./signage.js";
+import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
 import { IN, constrain, scalePanel } from "./model.js";
 export function temperature(k) {
   const t = (k - 2700) / 3800;
@@ -129,34 +130,44 @@ export class BoothScene {
     }
     return g;
   }
-  async texture(id) {
-    if (this.tex.has(id)) return this.tex.get(id);
-    const a = this.p.assets[id];
+  async texture(id, edits = null) {
+    const edited = hasImageEdits(edits);
+    if (!edited && this.tex.has(id)) return this.tex.get(id);
+    const asset = this.p.assets[id];
     const job = new Promise((resolve, reject) => {
       const im = new Image();
       im.onload = () => {
         let src = im;
         if (Math.max(im.width, im.height) > 2048) {
-          const c = document.createElement("canvas"),
-            s = 2048 / Math.max(im.width, im.height);
-          c.width = im.width * s;
-          c.height = im.height * s;
-          c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
-          src = c;
+          const canvas = document.createElement("canvas"),
+            scale = 2048 / Math.max(im.width, im.height);
+          canvas.width = Math.round(im.width * scale);
+          canvas.height = Math.round(im.height * scale);
+          canvas.getContext("2d").drawImage(im, 0, 0, canvas.width, canvas.height);
+          src = canvas;
         }
-        const t = new T.Texture(src);
-        t.colorSpace = T.SRGBColorSpace;
-        t.anisotropy = Math.min(
+        if (edited) src = applyImageEdits(src, edits);
+        const texture = new T.Texture(src);
+        texture.colorSpace = T.SRGBColorSpace;
+        texture.anisotropy = Math.min(
           8,
           this.renderer.capabilities.getMaxAnisotropy(),
         );
-        t.needsUpdate = true;
-        resolve(t);
+        texture.needsUpdate = true;
+        resolve(texture);
       };
       im.onerror = reject;
-      im.src = a.data;
+      im.src = asset.data;
     });
-    this.tex.set(id, job);
+    if (!edited) this.tex.set(id, job);
+    else {
+      this.pendingTextures ||= new Set();
+      this.pendingTextures.add(job);
+      job.then(
+        () => this.pendingTextures.delete(job),
+        () => this.pendingTextures.delete(job),
+      );
+    }
     return job;
   }
   update(p, selected) {
@@ -276,7 +287,7 @@ export class BoothScene {
         ih = a.h;
       const asset = p.assets[a.asset];
       if (asset) {
-        const ratio = asset.width / asset.height;
+        const ratio = editedAspect(asset, a.edits);
         if (iw / ih > ratio) iw = ih * ratio;
         else ih = iw / ratio;
       }
@@ -305,12 +316,13 @@ export class BoothScene {
         plane.material.map = signTexture(a);
         plane.material.userData.ownedMap = true;
       } else if (a.asset)
-        this.texture(a.asset)
+        this.texture(a.asset, a.edits)
           .then((t) => {
             if (this.revision === rev) {
               plane.material.map = t;
+              plane.material.userData.ownedMap = hasImageEdits(a.edits);
               plane.material.needsUpdate = true;
-            }
+            } else if (hasImageEdits(a.edits)) t.dispose();
           })
           .catch(() => {});
       if (a.id === selected) {
@@ -323,7 +335,7 @@ export class BoothScene {
         this.selectionEdge = edge;
         if (this.scaleId === a.id) {
           for (const [sx, sy] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
-            const handle = new T.Mesh(new T.SphereGeometry(.025, 12, 8),
+            const handle = new T.Mesh(new T.SphereGeometry(.045, 16, 10),
               new T.MeshBasicMaterial({color:"#91beff"}));
             handle.position.set(sx*a.w*IN/2, sy*a.h*IN/2, a.thickness*IN/2 + .008);
             handle.userData = {artId:a.id, editorOnly:true};
@@ -477,12 +489,16 @@ export class BoothScene {
   }
   bind() {
     const c = this.renderer.domElement;
+    const activateTransform = (id) => {
+      this.scaleId = id;
+      this.onSelect(id);
+    };
     c.addEventListener("dblclick", e => {
       this.point(e);
       const hit = this.pickArt();
       if (!hit) return;
-      this.scaleId = hit.object.userData.artId;
-      this.onSelect(this.scaleId);
+      e.preventDefault();
+      activateTransform(hit.object.userData.artId);
     });
     c.addEventListener("pointerdown", e => {
       if (e.button !== 0 || this.drag) return;
@@ -491,7 +507,7 @@ export class BoothScene {
       const nearest = this.ray.intersectObjects([...this.resizeHandles, ...this.wallObjects, ...this.artObjects], false)[0];
       const handle = nearest?.object.userData.editorOnly ? nearest : null;
       const hit = handle || this.pickArt();
-      if (!hit || (!handle && !this.move)) return;
+      if (!hit || (!handle && !this.move && this.scaleId !== hit.object.userData.artId)) return;
       const id = hit.object.userData.artId, a = this.p.art.find(x => x.id === id);
       const frame = this.artFrame(a);
       frame.updateWorldMatrix(true, false);
@@ -529,10 +545,23 @@ export class BoothScene {
         if (c.hasPointerCapture(e.pointerId)) c.releasePointerCapture(e.pointerId);
         return;
       }
-      if (this.down && Math.hypot(e.clientX-this.down[0], e.clientY-this.down[1]) < 5) {
+      if (this.down && Math.hypot(e.clientX-this.down[0], e.clientY-this.down[1]) < 7) {
         this.point(e);
         const hit = this.pickArt();
-        this.onSelect(hit?.object.userData.artId || null);
+        const id = hit?.object.userData.artId || null;
+        const now = performance.now();
+        if (
+          id &&
+          this.lastTap?.id === id &&
+          now - this.lastTap.time < 380 &&
+          Math.hypot(e.clientX - this.lastTap.x, e.clientY - this.lastTap.y) < 24
+        ) {
+          this.lastTap = null;
+          activateTransform(id);
+        } else {
+          this.lastTap = id ? { id, time: now, x: e.clientX, y: e.clientY } : null;
+          this.onSelect(id);
+        }
       }
       this.down = null;
     });
@@ -541,7 +570,7 @@ export class BoothScene {
     });
   }
   async export(width) {
-    await Promise.all([...this.tex.values()]);
+    await Promise.allSettled([...this.tex.values(), ...(this.pendingTextures || [])]);
     const canvas = this.renderer.domElement,
       w = canvas.width,
       h = canvas.height,

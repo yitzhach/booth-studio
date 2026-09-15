@@ -14,6 +14,7 @@ import {
   scalePanel,
 } from "../src/model.js";
 import { hangingGuide } from "../src/guide.js";
+import { DEFAULT_IMAGE_EDITS, editedAspect, hasImageEdits, normalizeImageEdits } from "../src/image-edit.js";
 test("measured units: a 36 × 48 panel has 3:4 geometry in metres", () => {
   assert.equal(36 * IN, 0.9144);
   assert.equal(48 * IN, 1.2191999999999998);
@@ -140,4 +141,28 @@ test("hanging guide separates inside and outside wall coordinates and escapes la
   assert.match(g,/facing the wall from outside/);
   assert.ok(g.includes("&lt;b&gt;Outside title&lt;/b&gt;"));
   assert.ok(!g.includes("<b>Outside title</b>"));
+});
+
+test("non-destructive image adjustments validate and rotated aspect follows the source", () => {
+  const p=demoProject();
+  p.assets.test={data:"data:image/png;base64,eA==",width:300,height:400,role:"artwork"};
+  p.art[0].asset="test";
+  p.art[0].edits={...DEFAULT_IMAGE_EDITS,exposure:.5,contrast:12,saturation:-8,temperature:18,tint:-4,rotation:90,flipX:true};
+  p.editClipboard=structuredClone(p.art[0].edits);
+  assert.equal(validateProject(p),p);
+  assert.equal(editedAspect(p.assets.test,p.art[0].edits),400/300);
+  assert.equal(hasImageEdits(p.art[0].edits),true);
+  assert.deepEqual(normalizeImageEdits(),DEFAULT_IMAGE_EDITS);
+  for(const [key,value] of [["exposure",3],["contrast",-101],["rotation",45],["flipY","yes"]]){
+    const bad=structuredClone(p);bad.art[0].edits={...bad.art[0].edits,[key]:value};assert.throws(()=>validateProject(bad));
+  }
+  const badRole=structuredClone(p);badRole.assets.test.role="secret";assert.throws(()=>validateProject(badRole));
+});
+test("an original asset remains available after its last wall placement is removed", () => {
+  const p=demoProject();
+  p.assets.original={data:"data:image/png;base64,eA==",width:600,height:400,role:"artwork",name:"work.png"};
+  p.art.push({...p.art[0],id:"placed-original",asset:"original"});
+  p.art=p.art.filter(a=>a.asset!=="original");
+  assert.ok(p.assets.original);
+  assert.equal(validateProject(p),p);
 });
