@@ -146,7 +146,7 @@ export function validateProject(p) {
     typeof p.booth.tent !== "boolean"
   )
     fail();
-  for (const [key, values] of Object.entries({tentStyle:["classic","peak","barrel","dome"],ground:["studio","grass","concrete","asphalt"],horizon:["studio","open","park","urban"]})) {
+  for (const [key, values] of Object.entries({tentStyle:["classic","peak","barrel","dome"],ground:["studio","grass","concrete","asphalt","carpet","wood"],horizon:["studio","open","park","urban"]})) {
     if (p.booth[key] !== undefined && !values.includes(p.booth[key])) fail();
   }
   if (p.booth.neighbors !== undefined && typeof p.booth.neighbors !== "boolean") fail();

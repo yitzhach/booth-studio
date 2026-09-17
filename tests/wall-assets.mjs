@@ -35,14 +35,20 @@ try {
    return {x:r.left+(pt.x+1)*r.width/2,y:r.top+(1-pt.y)*r.height/2};
  },id);
  let pt=await panelPoint();await page.mouse.dblclick(pt.x,pt.y);
- assert.equal(await page.evaluate(()=>window.__booth.scene.resizeHandles.length),4);
+ // Four corner handles scale proportionally, four middle-edge handles stretch.
+ assert.equal(await page.evaluate(()=>window.__booth.scene.resizeHandles.length),8);
  const before=await page.evaluate(id=>window.__booth.project.art.find(a=>a.id===id).w,id);
- await page.getByRole('button',{name:'Scale +10%',exact:true}).click();
- assert.ok(await page.evaluate(id=>window.__booth.project.art.find(a=>a.id===id).w,id)>before);
- // Place-on-wall works without native drag on touch devices.
- await page.getByRole('button',{name:'Place on wall',exact:true}).click();
- pt=await panelPoint();await page.mouse.click(pt.x,pt.y);
- assert.equal(await page.evaluate(id=>window.__booth.project.art.find(a=>a.id===id).face,id),'outside');
+ // Scaling is the slider now; 100% is the size the controls opened at.
+ await page.getByLabel('Artwork scale',{exact:true}).fill('110');
+ await page.getByLabel('Artwork scale',{exact:true}).dispatchEvent('input');
+ assert.ok(await page.evaluate(id=>window.__booth.project.art.find(a=>a.id===id).w,id)>before,'the scale slider resizes the placement');
+ // Adding a placement without native drag, which is the only route on touch:
+ // clicking a library card is the affordance that replaced the old button.
+ const beforeClick=await page.evaluate(()=>window.__booth.project.art.length);
+ await page.locator('#library [data-source]').first().click();
+ assert.equal(await page.evaluate(()=>window.__booth.project.art.length),beforeClick+1,'clicking an original adds a placement');
+ assert.equal(await page.evaluate(id=>window.__booth.project.art.find(a=>a.id===id).face,id),'outside','the exterior placement is untouched by it');
+ pt=await panelPoint();
  // Native library drop onto a measured wall.
  const sourceKey=await page.locator('#library [data-source]').first().getAttribute('data-source');
  const beforeDrop=await page.evaluate(()=>window.__booth.project.art.length);
@@ -60,7 +66,7 @@ try {
    p.art[0].asset='test-image';p.art[0].title='Reusable original';
    window.__booth.mutate(()=>{});
  });
- await page.locator('[data-source="asset:test-image"]').click();
+ await page.locator('#library [data-source="asset:test-image"]').click();
  const editedId=await page.evaluate(()=>window.__booth.project.art.at(-1).id);
  await page.getByRole('button',{name:'Edit image',exact:true}).click();
  await page.getByLabel('Exposure',{exact:true}).fill('0.7');
@@ -70,7 +76,7 @@ try {
  assert.equal(await page.evaluate(id=>window.__booth.project.art.find(a=>a.id===id).edits.exposure,editedId),.7);
  assert.equal(await page.evaluate(id=>window.__booth.project.art.find(a=>a.id===id).edits.rotation,editedId),90);
  await page.getByRole('button',{name:'Copy edits',exact:true}).click();
- await page.locator('[data-source="asset:test-image"]').click();
+ await page.locator('#library [data-source="asset:test-image"]').click();
  const pastedId=await page.evaluate(()=>window.__booth.project.art.at(-1).id);
  assert.equal(await page.evaluate(id=>window.__booth.project.art.find(a=>a.id===id).edits,id),undefined);
  await page.getByRole('button',{name:'Paste edits',exact:true}).click();

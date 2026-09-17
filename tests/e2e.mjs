@@ -133,7 +133,7 @@ try {
     () => window.__booth.project.art.filter((a) => a.asset).length === 6,
   );
   await page.locator('[data-tab="art"]').click();
-  await page.getByLabel("Artwork wall").selectOption("left");
+  await page.getByLabel("Wall location").selectOption("left-inside");
   await page.getByLabel("Left edge", { exact: true }).fill("18");
   await page.getByLabel("Left edge", { exact: true }).press("Tab");
   await page.getByLabel("Bottom edge", { exact: true }).fill("24");
@@ -236,7 +236,7 @@ try {
       buffer: fixture,
     });
   await page.waitForFunction(() => !!window.__booth.project.photo.asset);
-  await page.locator(".library [data-art]").first().click();
+  await page.locator(".library [data-source]").first().click();
   await page.waitForFunction(
     () => window.__booth.project.photo.layers.length === 1,
   );

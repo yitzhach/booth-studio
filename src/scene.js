@@ -4,6 +4,8 @@ import { makeTent, environment } from "./environment.js";
 import { signTexture } from "./signage.js";
 import { edgeMaterial } from "./edge-material.js";
 import { TextureCache } from "./texture-cache.js";
+import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY } from "./lighting.js";
+import { SurfaceTextures } from "./surfaces.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
 import { IN, constrain, scalePanel } from "./model.js";
 // The orbit camera may drop below the booth's centre of interest to give a
@@ -30,7 +32,10 @@ export class BoothScene {
     this.onEnd = onEnd;
     this.view = "perspective";
     this.move = false;
-    this.snap = false;
+    // On by default, matching the toolbar button's own initial state: this is a
+    // measured planning tool, and a drag that lands at 23.59 inches is not a
+    // measurement. The button turns it off for fine placement.
+    this.snap = true;
     this.textureCache = new TextureCache();
     this.scene = new T.Scene();
     this.scene.background = new T.Color("#b5b4b0");
@@ -44,6 +49,8 @@ export class BoothScene {
     this.renderer.shadowMap.type = T.PCFSoftShadowMap;
     this.renderer.toneMapping = T.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
+    this.lighting = new EnvironmentLighting(this.renderer);
+    this.surfaces = new SurfaceTextures(this.renderer);
     host.append(this.renderer.domElement);
     this.renderer.domElement.setAttribute(
       "aria-label",
@@ -206,6 +213,23 @@ export class BoothScene {
     const rough = (c) =>
       new T.MeshStandardMaterial({ color: c, roughness: 0.92 });
     environment(this.scene, this.group, p.booth);
+    // environment() has just put the procedural sky back on the scene, so the
+    // backdrop settings it knows nothing about are reset here, before anything
+    // that loads an image can claim them. Resetting afterwards would undo the
+    // rotation a still-loaded preset backdrop re-applies synchronously.
+    this.scene.backgroundRotation.set(0, 0, 0);
+    this.scene.backgroundIntensity = 1;
+    // The preset only supplies image-based lighting and a backdrop; the
+    // procedural horizon above stays in place when its assets are missing.
+    this.lighting
+      .apply(this.scene, p.booth.envPreset, {
+        background: !p.booth.surroundAsset,
+        rotation: p.booth.surroundRotation || 0,
+      })
+      .then(() => {
+        if (this.revision === rev) this.renderer.shadowMap.needsUpdate = true;
+      })
+      .catch(() => {});
     if (p.booth.surroundAsset) this.texture(p.booth.surroundAsset).then(t => {
       if (this.revision !== rev) return;
       t.mapping = T.EquirectangularReflectionMapping;
@@ -213,7 +237,14 @@ export class BoothScene {
       this.scene.backgroundRotation.y = (p.booth.surroundRotation || 0) * Math.PI / 180;
       this.scene.fog = null;
     }).catch(() => {});
-    else this.scene.backgroundRotation.set(0, 0, 0);
+    // A photographed ground surface, when its files are present. The user's own
+    // ground photo outranks it, exactly as a user panorama outranks a preset
+    // backdrop, and with no files the procedural canvas above stays.
+    if (!p.booth.groundAsset) this.surfaces.load(p.booth.ground).then(set => {
+      if (this.revision !== rev || !set) return;
+      const floor = this.group.getObjectByName("environment-ground");
+      if (this.surfaces.applyTo(floor, set)) this.renderer.shadowMap.needsUpdate = true;
+    }).catch(() => {});
     if (p.booth.groundAsset) this.texture(p.booth.groundAsset).then(t => {
       if (this.revision !== rev) return;
       const floor = this.group.getObjectByName("environment-ground"), map = t.clone();
@@ -324,6 +355,9 @@ export class BoothScene {
                 "#8b8277",
               ][p.art.indexOf(a) % 6],
         ),
+      );
+      plane.material.envMapIntensity = artEnvIntensity(
+        p.booth.artFidelity || DEFAULT_FIDELITY,
       );
       plane.position.z = (a.thickness * IN) / 2 + 0.0005;
       plane.receiveShadow = true;
