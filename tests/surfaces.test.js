@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import * as T from "three";
 import {
+  GROUND_CONSUMER,
   GROUND_METRES,
   MAP_FILES,
   SURFACE_SETS,
@@ -20,6 +21,9 @@ const fakeTexture = (name) => ({
   repeat: { value: 1, setScalar(v) { this.value = v; } },
   disposed: false,
   dispose() { this.disposed = true; },
+  // Real clones share their image source and carry their own repeat, which is
+  // the whole reason two consumers can hold one set.
+  clone() { return { ...this, repeat: { ...this.repeat }, source: this, clone() { return fakeTexture(name); } }; },
 });
 // A stand-in for the rebuilt ground mesh: a real material would work, but the
 // rules under test are about which slots get set, not about shading.
@@ -75,7 +79,7 @@ test("a ground kind with no files falls back rather than failing", async () => {
   const surfaces = new SurfaceTextures(fakeRenderer(), loaders([]));
   assert.equal(await surfaces.load("concrete"), null);
   assert.equal(await surfaces.load("studio"), null);
-  assert.equal(surfaces.loaded, null);
+  assert.equal(surfaces.sets.size, 0);
 });
 
 test("a colour map alone is enough; the rest are optional", async () => {
@@ -101,12 +105,14 @@ test("every map repeats and filters the same way", async () => {
   const set = await surfaces.load("concrete");
   const mesh = fakeMesh();
   assert.equal(surfaces.applyTo(mesh, set), true);
-  for (const [slot, texture] of Object.entries(set.maps)) {
+  for (const slot of Object.keys(set.maps)) {
+    const texture = mesh.material[slot];
+    assert.ok(texture, `${slot} is bound to the material`);
     assert.equal(texture.wrapS, T.RepeatWrapping, `${slot} wrapS`);
     assert.equal(texture.wrapT, T.RepeatWrapping, `${slot} wrapT`);
     assert.equal(texture.anisotropy, 8, `${slot} anisotropy`);
     assert.equal(texture.repeat.value, repeatFor(set.tileMetres), `${slot} repeat`);
-    assert.equal(mesh.material[slot], texture, `${slot} is bound to the material`);
+    assert.equal(texture.source, set.maps[slot], `${slot} shares the loaded map's source`);
   }
 });
 
@@ -116,7 +122,7 @@ test("meta.json can override the tile size", async () => {
   assert.equal(set.tileMetres, 4);
   const mesh = fakeMesh();
   surfaces.applyTo(mesh, set);
-  assert.equal(set.maps.map.repeat.value, 45);
+  assert.equal(mesh.material.map.repeat.value, 45);
 });
 
 test("applying a set drops the procedural tint and bump", async () => {
@@ -163,19 +169,18 @@ test("an unchanged ground kind reuses its maps", async () => {
   // A new material on the rebuilt mesh still gets the cached maps.
   const mesh = fakeMesh();
   assert.equal(surfaces.applyTo(mesh, again), true);
-  assert.equal(mesh.material.map, first.maps.map);
+  assert.equal(mesh.material.map.source, first.maps.map);
 });
 
 test("swapping ground kinds releases the previous maps", async () => {
   const surfaces = new SurfaceTextures(fakeRenderer(), loaders());
   const grass = await surfaces.load("grass");
-  await surfaces.load("concrete");
+  const concrete = await surfaces.load("concrete");
   assert.ok(Object.values(grass.maps).every((t) => t.disposed), "grass maps released");
-  assert.ok(Object.values(surfaces.loaded.maps).every((t) => !t.disposed), "concrete maps kept");
+  assert.ok(Object.values(concrete.maps).every((t) => !t.disposed), "concrete maps kept");
   // The studio floor has no set at all, and must not leave one on the GPU.
-  const concrete = surfaces.loaded;
   await surfaces.load("studio");
-  assert.equal(surfaces.loaded, null);
+  assert.equal(surfaces.sets.size, 0);
   assert.ok(Object.values(concrete.maps).every((t) => t.disposed), "concrete maps released");
 });
 
@@ -187,4 +192,109 @@ test("applying nothing is a no-op, not a crash", async () => {
 
 test("the ground plane the app builds is the one repeat assumes", () => {
   assert.equal(GROUND_METRES, 180);
+});
+
+// The reason for per-consumer clones. A tent panel tiles far more finely than
+// a 180 m floor, and `repeat` lives on the texture: one shared object and
+// whichever rebuilt last would set the scale for both.
+test("two consumers share one set without fighting over its scale", async () => {
+  let loads = 0;
+  const base = loaders();
+  const surfaces = new SurfaceTextures(fakeRenderer(), {
+    ...base,
+    loadTexture: (url) => { loads++; return base.loadTexture(url); },
+  });
+  const ground = await surfaces.load("carpet", GROUND_CONSUMER);
+  const tent = await surfaces.load("carpet", "tent");
+  assert.equal(tent, ground, "one set, loaded once");
+  assert.equal(loads, 4, "the second consumer costs no fetch");
+
+  const floor = fakeMesh(), panel = fakeMesh();
+  surfaces.applyTo(floor, ground);
+  surfaces.applyTo(panel, tent, { planeMetres: 3, consumer: "tent" });
+  assert.equal(floor.material.map.repeat.value, repeatFor(ground.tileMetres));
+  assert.equal(panel.material.map.repeat.value, repeatFor(tent.tileMetres, 3));
+  assert.notEqual(floor.material.map, panel.material.map, "each consumer binds its own copy");
+  assert.equal(floor.material.map.source, panel.material.map.source, "sharing one upload");
+});
+
+test("a set outlives one consumer letting go and dies with the last", async () => {
+  const surfaces = new SurfaceTextures(fakeRenderer(), loaders());
+  const set = await surfaces.load("wood", GROUND_CONSUMER);
+  await surfaces.load("wood", "tent");
+  const floor = fakeMesh(), panel = fakeMesh();
+  surfaces.applyTo(floor, set);
+  surfaces.applyTo(panel, set, { consumer: "tent" });
+
+  surfaces.release(GROUND_CONSUMER);
+  assert.ok(floor.material.map.disposed, "the ground's copy goes");
+  assert.ok(!panel.material.map.disposed, "the tent's copy stays");
+  assert.ok(Object.values(set.maps).every((t) => !t.disposed), "the set is still in use");
+
+  surfaces.release("tent");
+  assert.ok(panel.material.map.disposed, "the last copy goes");
+  assert.ok(Object.values(set.maps).every((t) => t.disposed), "and the set with it");
+  assert.equal(surfaces.sets.size, 0);
+});
+
+// A consumer switching away must not strand the set it was holding, however
+// the switch happens: the studio floor has no set at all, and the user's own
+// ground photograph outranks one.
+test("releasing is what frees a set, whichever way a consumer leaves", async () => {
+  const surfaces = new SurfaceTextures(fakeRenderer(), loaders());
+  const grass = await surfaces.load("grass");
+  surfaces.applyTo(fakeMesh(), grass);
+  surfaces.release(GROUND_CONSUMER);
+  assert.ok(Object.values(grass.maps).every((t) => t.disposed));
+  assert.equal(surfaces.sets.size, 0);
+  // Releasing twice, or a consumer that never held anything, is a no-op.
+  surfaces.release(GROUND_CONSUMER);
+  surfaces.release("nobody");
+});
+
+// update() fires on every edit, so two loads of different kinds can be in the
+// air at once. The one the user ended on must be the one left holding a set.
+test("a load that lands late does not strand a set on the GPU", async () => {
+  const base = loaders();
+  const gates = {};
+  const surfaces = new SurfaceTextures(fakeRenderer(), {
+    ...base,
+    loadTexture: (url) => {
+      const id = url.split("/")[2];
+      return new Promise((resolve, reject) => {
+        (gates[id] ||= []).push(() => base.loadTexture(url).then(resolve, reject));
+      });
+    },
+  });
+  // load() reads meta.json before it asks for a single map, so each set's
+  // loaders only exist a few microtasks in.
+  const opened = async (id) => {
+    for (let i = 0; i < 50 && (gates[id]?.length || 0) < 4; i++) await Promise.resolve();
+    gates[id].forEach((open) => open());
+  };
+  const slow = surfaces.load("grass");
+  const fast = surfaces.load("concrete");
+  await opened("concrete");
+  const concrete = await fast;
+  await opened("grass");
+  const grass = await slow;
+  // Grass is what the ground ended up claiming, because it answered last.
+  assert.equal(surfaces.sets.size, 1);
+  assert.ok(Object.values(grass.maps).every((t) => !t.disposed), "the last answer is held");
+  assert.ok(Object.values(concrete.maps).every((t) => t.disposed), "the overtaken one is freed");
+});
+
+test("dispose drops every set and every consumer's copies", async () => {
+  const surfaces = new SurfaceTextures(fakeRenderer(), loaders());
+  const carpet = await surfaces.load("carpet", GROUND_CONSUMER);
+  const wood = await surfaces.load("wood", "tent");
+  const floor = fakeMesh(), panel = fakeMesh();
+  surfaces.applyTo(floor, carpet);
+  surfaces.applyTo(panel, wood, { consumer: "tent" });
+  surfaces.dispose();
+  for (const set of [carpet, wood])
+    assert.ok(Object.values(set.maps).every((t) => t.disposed), `${set.id} released`);
+  assert.ok(floor.material.map.disposed && panel.material.map.disposed, "copies released");
+  assert.equal(surfaces.sets.size, 0);
+  assert.equal(surfaces.claims.size, 0);
 });

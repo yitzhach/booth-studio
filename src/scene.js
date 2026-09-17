@@ -5,7 +5,7 @@ import { signTexture } from "./signage.js";
 import { edgeMaterial } from "./edge-material.js";
 import { TextureCache } from "./texture-cache.js";
 import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY } from "./lighting.js";
-import { SurfaceTextures } from "./surfaces.js";
+import { GROUND_CONSUMER, SurfaceTextures } from "./surfaces.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
 import { IN, constrain, scalePanel } from "./model.js";
 // The orbit camera may drop below the booth's centre of interest to give a
@@ -245,6 +245,9 @@ export class BoothScene {
       const floor = this.group.getObjectByName("environment-ground");
       if (this.surfaces.applyTo(floor, set)) this.renderer.shadowMap.needsUpdate = true;
     }).catch(() => {});
+    // The user's own photograph wins, so the texture set the ground was holding
+    // is handed back rather than left on the GPU behind it.
+    if (p.booth.groundAsset) this.surfaces.release(GROUND_CONSUMER);
     if (p.booth.groundAsset) this.texture(p.booth.groundAsset).then(t => {
       if (this.revision !== rev) return;
       const floor = this.group.getObjectByName("environment-ground"), map = t.clone();

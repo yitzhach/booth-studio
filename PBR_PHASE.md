@@ -191,10 +191,23 @@ Original scope, for reference:
 - Contact-shadow / shadow-bias tuning under IBL; verify the 2048/4096 export
   path still renders the env and background correctly.
 - Reuse `src/surfaces.js` rather than writing a second material factory: it
-  already loads, caches, colour-spaces and disposes a set. Two things need
-  adding first — sets are currently keyed by ground kind and only one is cached
-  at a time, and a texture's `repeat` is mutated in place, so a tent and a floor
-  sharing one set would fight over it. Cache per id and clone per consumer.
+  already loads, caches, colour-spaces and disposes a set. **The two things
+  that needed adding first are done.** `SurfaceTextures` now caches per id and
+  hands each consumer its own clones:
+  - `load(id, consumer)` and `applyTo(mesh, set, {consumer, planeMetres})`.
+    `GROUND_CONSUMER` is the ground; name the tent something else and it gets
+    its own `repeat` over the same upload, because clones share a `source`.
+  - Loading is what claims a set, not applying it. A load that lands after the
+    user has moved on would otherwise cache a set nothing ever binds — there is
+    a test for exactly that race.
+  - A set lives while at least one consumer claims it, so `release(consumer)`
+    is how a consumer leaves: the studio floor and a user's own ground
+    photograph both go through it. Forget that call and the set stays on the
+    GPU with nothing drawing it.
+  - Sets are still evicted the moment nobody holds them, so swapping ground
+    kinds back and forth reloads, exactly as before. If that becomes annoying,
+    a bounded idle cache is the change — it was left out deliberately, since
+    five sets of four 1K maps is real memory on a phone.
 - Tiling repetition on the 180 m ground plane is visible at a low camera. If it
   bothers you before the tent does, that is the polish to do first.
 
