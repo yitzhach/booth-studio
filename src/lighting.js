@@ -1,0 +1,163 @@
+import * as T from "three";
+
+// Image-based lighting layer.
+//
+// A preset names an HDRI (lighting), a backdrop image, a ground surface and an
+// exposure. Every asset reference is optional: with `public/assets` empty the
+// app must still run, so a preset whose files are missing falls back silently
+// to the procedural environment in environment.js. That is why nothing here
+// throws on a failed load.
+//
+// Two files per environment, not one: a small .hdr drives `scene.environment`
+// (lighting and reflections) while a tonemapped .jpg drives `scene.background`
+// (what the camera sees). A single 4K HDR serving both costs roughly ten times
+// the bytes for no visible gain — see PBR_PHASE.md.
+
+export const ENV_PRESETS = {
+  studio: {
+    label: "Studio · neutral",
+    hdri: null,
+    ground: "studio",
+    horizon: "studio",
+    exposure: 1.15,
+    envIntensity: 1,
+  },
+  tradeshow: {
+    label: "Trade show · exhibition hall",
+    hdri: "tradeshow",
+    ground: "concrete",
+    horizon: "studio",
+    exposure: 1.0,
+    envIntensity: 1,
+  },
+  artfair: {
+    label: "Art fair · outdoor",
+    hdri: "artfair",
+    ground: "grass",
+    horizon: "open",
+    exposure: 1.1,
+    envIntensity: 1,
+  },
+  home: {
+    label: "Home · interior",
+    hdri: "home",
+    ground: "studio",
+    horizon: "studio",
+    exposure: 0.9,
+    envIntensity: 0.9,
+  },
+};
+export const DEFAULT_PRESET = "studio";
+
+// Artwork fidelity. "accurate" keeps the environment out of the artwork's
+// shading so uploaded colour reads true; the lighting studio's own spotlights
+// still fall on it, which a MeshBasicMaterial would discard. "scene" lets the
+// HDRI tint the art the way the surrounding booth is tinted.
+export const ART_FIDELITY = {
+  accurate: "Accurate colour",
+  scene: "Scene lighting",
+};
+export const DEFAULT_FIDELITY = "accurate";
+
+export const resolvePreset = (id) =>
+  ENV_PRESETS[id] ? { id, ...ENV_PRESETS[id] } : { id: DEFAULT_PRESET, ...ENV_PRESETS[DEFAULT_PRESET] };
+
+export const artEnvIntensity = (mode) => (mode === "scene" ? 1 : 0);
+
+export const presetPaths = (preset) =>
+  preset.hdri
+    ? {
+        light: `assets/hdri/${preset.hdri}/light.hdr`,
+        background: `assets/hdri/${preset.hdri}/bg.jpg`,
+      }
+    : null;
+
+// Both the dev server and the deployed Worker answer a missing asset with
+// index.html and a 200, so "did it load" cannot be left to the loaders:
+// RGBELoader parses that HTML into undefined and throws from inside its own
+// callback, outside any promise we could catch. Check the response first.
+async function requireAsset(url) {
+  const res = await fetch(url, { method: "HEAD" });
+  if (!res.ok) throw new Error(`missing asset: ${url}`);
+  if ((res.headers.get("content-type") || "").includes("text/html"))
+    throw new Error(`missing asset (fell through to the app shell): ${url}`);
+}
+async function loadHDR(url) {
+  await requireAsset(url);
+  const { RGBELoader } = await import("three/addons/loaders/RGBELoader.js");
+  return new RGBELoader().loadAsync(url);
+}
+async function loadBackground(url) {
+  await requireAsset(url);
+  return new T.TextureLoader().loadAsync(url);
+}
+
+export class EnvironmentLighting {
+  // `loaders` is injected so tests can exercise the swap and disposal rules
+  // without a GPU or any asset files on disk.
+  constructor(renderer, loaders = {}) {
+    this.renderer = renderer;
+    this.loadHDR = loaders.loadHDR || loadHDR;
+    this.loadBackground = loaders.loadBackground || loadBackground;
+    this.makePMREM = loaders.makePMREM || ((r) => new T.PMREMGenerator(r));
+    this.revision = 0;
+  }
+  // Applies exposure and intensity synchronously, then resolves once the HDRI
+  // has landed. `background: false` leaves scene.background alone, so a user's
+  // own uploaded panorama always outranks the preset's backdrop.
+  async apply(scene, presetId, { background = true } = {}) {
+    const preset = resolvePreset(presetId);
+    const rev = ++this.revision;
+    this.renderer.toneMappingExposure = preset.exposure;
+    scene.environmentIntensity = preset.envIntensity;
+    const paths = presetPaths(preset);
+    if (!paths) {
+      this.clear(scene);
+      return { preset, environment: false, background: false };
+    }
+    const [light, backdrop] = await Promise.all([
+      this.loadHDR(paths.light).catch(() => null),
+      background ? this.loadBackground(paths.background).catch(() => null) : null,
+    ]);
+    if (this.revision !== rev) {
+      light?.dispose();
+      backdrop?.dispose();
+      return { preset, environment: false, background: false, stale: true };
+    }
+    let applied = false;
+    if (light) {
+      this.pmrem ||= this.makePMREM(this.renderer);
+      const target = this.pmrem.fromEquirectangular(light);
+      light.dispose();
+      this.target?.dispose();
+      this.target = target;
+      scene.environment = target.texture;
+      applied = true;
+    } else this.clear(scene);
+    if (backdrop) {
+      backdrop.mapping = T.EquirectangularReflectionMapping;
+      backdrop.colorSpace = T.SRGBColorSpace;
+      this.backdrop?.dispose();
+      this.backdrop = backdrop;
+      scene.background = backdrop;
+      scene.fog = null;
+    }
+    return { preset, environment: applied, background: !!backdrop };
+  }
+  // Drops the environment map without touching the background, so the
+  // procedural horizon keeps whatever environment.js gave it.
+  clear(scene) {
+    scene.environment = null;
+    this.target?.dispose();
+    this.target = null;
+  }
+  dispose() {
+    this.revision++;
+    this.target?.dispose();
+    this.target = null;
+    this.backdrop?.dispose();
+    this.backdrop = null;
+    this.pmrem?.dispose();
+    this.pmrem = null;
+  }
+}

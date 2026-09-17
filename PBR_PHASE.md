@@ -42,8 +42,22 @@ Artwork colour fidelity must survive it.
 
 ## Phases
 
-### Phase 1 — IBL plumbing, no assets
-Code-only, mergeable on its own, no binaries in the repo.
+### Phase 1 — IBL plumbing, no assets — **DONE**
+Shipped in `src/lighting.js` + wiring. What exists now:
+- `ENV_PRESETS` (`studio`, `tradeshow`, `artfair`, `home`), `EnvironmentLighting`
+  (PMREM, revision-guarded swaps, disposal), `artEnvIntensity`.
+- Layout → Surroundings gains **Environment** and **Artwork colour** selects;
+  `booth.envPreset` / `booth.artFidelity`, both defaulted, so old backups load.
+- Picking a preset also moves `ground` and `horizon` to its defaults.
+- `requireAsset()` HEADs every asset first: a missing file is answered with
+  index.html and a 200 by both vite and the Worker, and RGBELoader throws from
+  inside its own callback on that HTML. Do not remove this guard.
+- Artwork fidelity is `envMapIntensity` 0/1, not MeshBasicMaterial: Basic would
+  also discard the lighting studio's spotlights.
+- Tests: `tests/lighting.test.js` (10 node tests), `tests/view-lighting.mjs`
+  (browser; now part of `npm run test:view`).
+
+Original scope, for reference:
 - `src/lighting.js` (new): PMREM generator, `applyEnvironment(scene, source)`,
   dispose of the previous env RT on every swap.
 - Preset registry `{ id, label, hdri, background, ground, exposure,

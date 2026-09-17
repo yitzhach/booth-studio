@@ -4,6 +4,7 @@ import { makeTent, environment } from "./environment.js";
 import { signTexture } from "./signage.js";
 import { edgeMaterial } from "./edge-material.js";
 import { TextureCache } from "./texture-cache.js";
+import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY } from "./lighting.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
 import { IN, constrain, scalePanel } from "./model.js";
 // The orbit camera may drop below the booth's centre of interest to give a
@@ -44,6 +45,7 @@ export class BoothScene {
     this.renderer.shadowMap.type = T.PCFSoftShadowMap;
     this.renderer.toneMapping = T.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
+    this.lighting = new EnvironmentLighting(this.renderer);
     host.append(this.renderer.domElement);
     this.renderer.domElement.setAttribute(
       "aria-label",
@@ -206,6 +208,14 @@ export class BoothScene {
     const rough = (c) =>
       new T.MeshStandardMaterial({ color: c, roughness: 0.92 });
     environment(this.scene, this.group, p.booth);
+    // The preset only supplies image-based lighting and a backdrop; the
+    // procedural horizon above stays in place when its assets are missing.
+    this.lighting
+      .apply(this.scene, p.booth.envPreset, { background: !p.booth.surroundAsset })
+      .then(() => {
+        if (this.revision === rev) this.renderer.shadowMap.needsUpdate = true;
+      })
+      .catch(() => {});
     if (p.booth.surroundAsset) this.texture(p.booth.surroundAsset).then(t => {
       if (this.revision !== rev) return;
       t.mapping = T.EquirectangularReflectionMapping;
@@ -324,6 +334,9 @@ export class BoothScene {
                 "#8b8277",
               ][p.art.indexOf(a) % 6],
         ),
+      );
+      plane.material.envMapIntensity = artEnvIntensity(
+        p.booth.artFidelity || DEFAULT_FIDELITY,
       );
       plane.position.z = (a.thickness * IN) / 2 + 0.0005;
       plane.receiveShadow = true;
