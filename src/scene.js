@@ -6,6 +6,12 @@ import { edgeMaterial } from "./edge-material.js";
 import { TextureCache } from "./texture-cache.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
 import { IN, constrain, scalePanel } from "./model.js";
+// The orbit camera may drop below the booth's centre of interest to give a
+// low, looking-up perspective. It is stopped by the ground, not by a fixed
+// angle: MIN_CAMERA_Y keeps the eye just above the floor plane, and
+// MAX_POLAR avoids the up-vector flip OrbitControls suffers near 180 degrees.
+const MIN_CAMERA_Y = 0.12;
+const MAX_POLAR = Math.PI * 0.82;
 export function temperature(k) {
   const t = (k - 2700) / 3800;
   return new T.Color().setRGB(
@@ -46,7 +52,7 @@ export class BoothScene {
     this.camera = new T.PerspectiveCamera(44, 1, 0.02, 100);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
-    this.controls.maxPolarAngle = Math.PI / 2 - 0.02;
+    this.controls.maxPolarAngle = MAX_POLAR;
     this.controls.minDistance = 1;
     this.controls.maxDistance = 18;
     this.ray = new T.Raycaster();
@@ -58,10 +64,22 @@ export class BoothScene {
     this.bind();
     this.renderer.setAnimationLoop(() => {
       if (!this.host.hidden) {
+        this.clampToGround();
         this.controls.update();
         this.renderer.render(this.scene, this.camera);
       }
     });
+  }
+  // Allow the lowest polar angle that still keeps the camera above the floor
+  // at its current distance, so orbiting down slides along the ground instead
+  // of stopping at eye level or punching through the ground plane.
+  clampToGround() {
+    if (!this.camera.isPerspectiveCamera || !this.controls.enableRotate) return;
+    const radius = this.camera.position.distanceTo(this.controls.target);
+    if (!(radius > 0)) return;
+    const cos = (MIN_CAMERA_Y - this.controls.target.y) / radius;
+    const limit = Math.acos(Math.max(-1, Math.min(1, cos)));
+    this.controls.maxPolarAngle = Math.min(MAX_POLAR, limit);
   }
   resize() {
     const w = this.host.clientWidth,
@@ -461,6 +479,7 @@ export class BoothScene {
       offset.setLength(Math.max(this.controls.minDistance,Math.min(this.controls.maxDistance,offset.length()/factor)));
       this.camera.position.copy(this.controls.target).add(offset);
     } else { this.camera.zoom=Math.max(.3,Math.min(8,this.camera.zoom*factor));this.camera.updateProjectionMatrix(); }
+    this.clampToGround();
     this.controls.update();
   }
   point(e) {
