@@ -4,7 +4,16 @@ export const TENTS = {classic:'Classic pop-up', peak:'High peak', barrel:'Barrel
 const material = (color, extra={}) => new T.MeshStandardMaterial({color,roughness:.85,...extra});
 function mesh(g,geo,mat) { const m=new T.Mesh(geo,mat);m.castShadow=true;m.receiveShadow=true;g.add(m);return m; }
 function rod(g,a,b,r,mat) {a=new T.Vector3(...a);b=new T.Vector3(...b);const m=mesh(g,new T.CylinderGeometry(r,r,a.distanceTo(b),8),mat);m.position.copy(a).add(b).multiplyScalar(.5);m.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),b.sub(a).normalize());return m;}
-function surface(g,fn,mat,nu=40,nv=24) {const pts=[],uv=[],idx=[];for(let j=0;j<=nv;j++)for(let i=0;i<=nu;i++){pts.push(...fn(i/nu,j/nv));uv.push(i/nu,j/nv);}for(let j=0;j<nv;j++)for(let i=0;i<nu;i++){const a=j*(nu+1)+i,b=a+nu+1;idx.push(a,b,a+1,b,b+1,a+1);}const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(pts,3));geo.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geo.setIndex(idx);geo.computeVertexNormals();return mesh(g,geo,mat);}
+// UVs are laid out in metres, not 0..1. A tent's roof is about three metres
+// across and its valance twelve inches deep; with UVs spanning 0..1 on both,
+// one weave or one canvas texture would be stretched ten times further on the
+// valance than on the roof. In metres, one repeat is one real distance
+// everywhere, and a texture converts with a single repeat of 1/tileMetres —
+// the same rule the ground already follows through repeatFor().
+function surface(g,fn,mat,nu=40,nv=24,metres=[1,1]) {const pts=[],uv=[],idx=[];for(let j=0;j<=nv;j++)for(let i=0;i<=nu;i++){pts.push(...fn(i/nu,j/nv));uv.push(i/nu*metres[0],j/nv*metres[1]);}for(let j=0;j<nv;j++)for(let i=0;i<nu;i++){const a=j*(nu+1)+i,b=a+nu+1;idx.push(a,b,a+1,b,b+1,a+1);}const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(pts,3));geo.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geo.setIndex(idx);geo.computeVertexNormals();const m=mesh(g,geo,mat);
+ // Marks the panels a canvas texture belongs on. scene.js looks for this;
+ // the frame, feet and seam rods must keep their metal and stitching.
+ m.userData.fabric=true;return m;}
 export function makeTent(W,D,H,style='classic') {
  const g=new T.Group();g.name='tent-'+style;
  const steel=material('#c0c4c5',{metalness:.65,roughness:.32}),fabric=new T.MeshPhysicalMaterial({color:'#f7f6f0',roughness:.88,side:T.DoubleSide,sheen:.35,sheenColor:new T.Color('#fff9e9'),bumpMap:fabricWeave(),bumpScale:.0015}),seam=material('#deddd5');
@@ -12,8 +21,8 @@ export function makeTent(W,D,H,style='classic') {
  const height=(u,v)=>{const x=2*u-1,z=2*v-1;
  let h=style==='barrel'?Math.sqrt(Math.max(0,1-x*x)) : style==='dome'?Math.sqrt(Math.max(0,1-x*x))*Math.sqrt(Math.max(0,1-z*z)) : Math.pow(1-Math.max(Math.abs(x),Math.abs(z)),style==='peak'?1.55:1.15);
  return eave+rise*h + .006*Math.sin(u*95+v*7)*Math.sin(Math.PI*u)*Math.sin(Math.PI*v);};
- surface(g,(u,v)=>[(u-.5)*(W+.08),height(u,v),(v-.5)*(D+.08)],fabric);
- if(style==='barrel') for(const v of [0,1]) surface(g,(u,t)=>[(u-.5)*(W+.08),eave+(height(u,v)-eave)*t,(v-.5)*(D+.08)],fabric,40,12);
+ surface(g,(u,v)=>[(u-.5)*(W+.08),height(u,v),(v-.5)*(D+.08)],fabric,40,24,[W+.08,D+.08]);
+ if(style==='barrel') for(const v of [0,1]) surface(g,(u,t)=>[(u-.5)*(W+.08),eave+(height(u,v)-eave)*t,(v-.5)*(D+.08)],fabric,40,12,[W+.08,rise]);
  for(const x of [-W/2,W/2])for(const z of [-D/2,D/2]){
  rod(g,[x,.02,z],[x,eave,z],.021,steel);
  const foot=mesh(g,new T.BoxGeometry(.12,.015,.12),steel);foot.position.set(x,.005,z);
@@ -22,7 +31,7 @@ export function makeTent(W,D,H,style='classic') {
  // Deep fabric valances with soft folds and raised stitched hems.
  for(let side=0;side<4;side++){
  const alongX=side<2,sign=side%2?1:-1,L=alongX?W+.08:D+.08;
- surface(g,(u,v)=>{const fold=.008*Math.sin(u*65)*Math.sin(Math.PI*v),a=(u-.5)*L,b=sign*((alongX?D:W)/2+.04+fold);return alongX?[a,eave-v*drop,b]:[b,eave-v*drop,a];},fabric,48,6);
+ surface(g,(u,v)=>{const fold=.008*Math.sin(u*65)*Math.sin(Math.PI*v),a=(u-.5)*L,b=sign*((alongX?D:W)/2+.04+fold);return alongX?[a,eave-v*drop,b]:[b,eave-v*drop,a];},fabric,48,6,[L,drop]);
  for(const y of [eave-.015,eave-drop+.012]) rod(g,alongX?[-L/2,y,sign*(D/2+.045)]:[sign*(W/2+.045),y,-L/2],alongX?[L/2,y,sign*(D/2+.045)]:[sign*(W/2+.045),y,L/2],.007,seam);
  const z=sign*(alongX?D:W)/2;
  const pt=(a,y)=>alongX?[a,y,z]:[z,y,a];
@@ -41,7 +50,9 @@ function fabricWeave() {
  const c=document.createElement('canvas'); c.width=c.height=128;
  const ctx=c.getContext('2d'); ctx.fillStyle='#888'; ctx.fillRect(0,0,128,128);
  for(let i=0;i<128;i+=4){ctx.fillStyle='#aaa';ctx.fillRect(i,0,1,128);ctx.fillStyle='#666';ctx.fillRect(0,i,128,1);}
- weave=new T.CanvasTexture(c); weave.wrapS=weave.wrapT=T.RepeatWrapping; weave.repeat.set(12,12); return weave;
+ // Per metre, now that UVs are in metres: about what twelve repeats used to
+ // give across a three-metre roof, and the same weave on a 12" valance.
+ weave=new T.CanvasTexture(c); weave.wrapS=weave.wrapT=T.RepeatWrapping; weave.repeat.set(4,4); return weave;
 }
 // ---- City backdrop -------------------------------------------------------
 // Facades are a tiled canvas texture rather than thousands of window meshes:

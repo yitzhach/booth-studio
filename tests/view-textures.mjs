@@ -37,6 +37,15 @@ await writeFile(join(setDir, 'rough.jpg'), swatch(64, () => [160, 160, 160]));
 await writeFile(join(setDir, 'ao.jpg'), swatch(64, (x, y) => (x + y) % 16 < 8 ? [255, 255, 255] : [180, 180, 180]));
 await writeFile(join(setDir, 'meta.json'), JSON.stringify({ tileMetres: 2, normalMap: 'GL', credit: 'synthetic fixture' }));
 
+// The tent's canvas, at a 1 m tile. Its UVs are in metres, so this must come
+// out at repeat 1 while the 2 m ground set on its 180 m plane comes out at 90 —
+// the same rule, told the real size of what it is covering.
+const canvasDir = join(publicDir, 'assets', 'textures', 'canvas');
+await mkdir(canvasDir, { recursive: true });
+await writeFile(join(canvasDir, 'color.jpg'), swatch(64, (x, y) => ((x >> 2) + (y >> 2)) % 2 ? [245, 243, 236] : [228, 226, 218]));
+await writeFile(join(canvasDir, 'normal.jpg'), swatch(64, () => [128, 128, 255]));
+await writeFile(join(canvasDir, 'meta.json'), JSON.stringify({ tileMetres: 1, normalMap: 'GL', credit: 'synthetic fixture' }));
+
 const server = await createServer({ root, publicDir, server: { host: '127.0.0.1', port: 5192 } });
 await server.listen();
 const browser = await chromium.launch({
@@ -59,6 +68,28 @@ const groundState = (page) => page.evaluate(() => {
     uv1: !!floor.geometry.attributes.uv1,
   };
 });
+// The tent's fabric panels, the meshes makeTent marks; the frame must be left
+// alone. Reported with the UV range, which is what carries the real size.
+const tentState = (page) => page.evaluate(() => {
+  const panels = [], frame = [];
+  window.__booth.scene.group.traverse((o) => {
+    if (!o.isMesh || !o.material) return;
+    if (o.userData?.fabric) {
+      const uv = o.geometry.attributes.uv.array;
+      let u = 0, v = 0;
+      for (let i = 0; i < uv.length; i += 2) { u = Math.max(u, uv[i]); v = Math.max(v, uv[i + 1]); }
+      panels.push({
+        map: o.material.map ? { repeat: o.material.map.repeat.x, colorSpace: o.material.map.colorSpace } : null,
+        normal: !!o.material.normalMap,
+        bump: !!o.material.bumpMap,
+        color: o.material.color.getHexString(),
+        u, v,
+      });
+    } else if (o.material.metalness > 0.5) frame.push({ map: !!o.material.map });
+  });
+  return { panels, frame };
+});
+
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const errors = [];
@@ -97,7 +128,12 @@ try {
   // An unrelated edit rebuilds the whole scene; the maps must survive it.
   await page.fill('input[aria-label="Wall height"]', '84');
   await page.locator('input[aria-label="Wall height"]').dispatchEvent('change');
-  await page.waitForTimeout(400);
+  // Waiting for the rebuilt mesh rather than for a fixed 400ms: the maps are
+  // re-applied from a promise, and a loaded machine misses that deadline.
+  await page.waitForFunction(() => {
+    const floor = window.__booth.scene.group.getObjectByName('environment-ground');
+    return !!(floor && floor.material.map && floor.material.normalMap);
+  }, null, { timeout: 15000 });
   const rebuilt = await groundState(page);
   assert.ok(rebuilt.map && rebuilt.normal, 'the set survives a scene rebuild');
   assert.equal(rebuilt.map.repeat, 90, 'repeat survives a scene rebuild');
@@ -109,8 +145,49 @@ try {
   assert.equal(studio.map, null, 'the studio floor has no texture set');
   assert.equal(studio.normal, null);
 
+  // ---- The tent canvas ---------------------------------------------------
+  await page.check('input[data-field="tent"]');
+  await page.waitForFunction(() => {
+    let found = false;
+    window.__booth.scene.group.traverse((o) => { if (o.userData?.fabric && o.material.map) found = true; });
+    return found;
+  }, null, { timeout: 15000 });
+  const tent = await tentState(page);
+  assert.ok(tent.panels.length >= 5, 'a roof and four valances at least');
+  for (const panel of tent.panels) {
+    assert.ok(panel.map, 'every fabric panel is textured');
+    assert.equal(panel.map.repeat, 1, 'a 1 m tile over UVs in metres repeats once per metre');
+    assert.equal(panel.map.colorSpace, 'srgb', 'canvas colour is sRGB');
+    assert.equal(panel.color, 'ffffff', 'a photographed canvas is not tinted');
+    assert.equal(panel.bump, false, 'the procedural weave would fight the normal map');
+    assert.ok(panel.normal, 'the canvas normal map is applied');
+  }
+  // UVs in metres are the whole mechanism, and the valance is what proves it:
+  // a 10 ft panel three metres wide and twelve inches deep must carry UVs of
+  // about 3 by 0.3, not 1 by 1. With 0..1 UVs the weave on it would be
+  // stretched ten times further down than across.
+  assert.ok(tent.panels.some((p) => p.u > 2 && p.v > 2), 'the roof spans its real width and depth');
+  const valance = tent.panels.filter((p) => p.v < 1);
+  assert.ok(valance.length >= 4, 'four valances, each far shallower than it is wide');
+  for (const p of valance) {
+    assert.ok(p.v > 0.2 && p.v < 0.5, `a 12" valance is about 0.3 m deep, got ${p.v}`);
+    assert.ok(p.u > 2, 'and as wide as the booth');
+  }
+  assert.ok(tent.frame.length > 0, 'the frame was found');
+  assert.ok(tent.frame.every((f) => !f.map), 'the steel frame keeps its metal');
+
+  // And the fallback: with the files gone, the procedural weave comes back.
+  await page.uncheck('input[data-field="tent"]');
+  await rm(canvasDir, { recursive: true, force: true });
+  await page.check('input[data-field="tent"]');
+  await page.waitForTimeout(600);
+  const bare = await tentState(page);
+  assert.ok(bare.panels.length >= 5, 'the tent still builds');
+  assert.ok(bare.panels.every((p) => !p.map), 'no canvas texture without files');
+  assert.ok(bare.panels.every((p) => p.bump), 'the procedural weave is still there');
+
   assert.deepEqual(errors, [], 'no page errors');
-  console.log('PASS PBR ground: maps, colour space, repeat from tile size, occlusion UVs, fallback.');
+  console.log('PASS PBR ground and tent canvas: maps, colour space, repeat from tile size, UVs in metres, fallback.');
 } finally {
   await browser.close();
   await server.close();

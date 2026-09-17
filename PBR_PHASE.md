@@ -186,8 +186,20 @@ Original scope, for reference:
 - Dispose every map on preset swap.
 
 ### Phase 4 — Tent, walls, polish
-- PBR canvas on the tent fabric (replaces the procedural `fabricWeave` bump),
-  brick/plaster options for the `home` preset walls.
+- **PBR canvas on the tent fabric is done.** `public/assets/textures/canvas/`
+  textures the roof and valances, replacing the procedural `fabricWeave` bump
+  when the files are there; `docs/TEXTURE-ASSETS.md` says which asset to get.
+  What made it work is worth keeping in mind for the walls:
+  - Tent geometry now lays its **UVs out in metres**, not 0..1. Every panel is
+    a different real size — a roof is ~3 m across, a valance 12 inches deep —
+    so 0..1 UVs stretched one weave ten times further on the valance than on
+    the roof. In metres, `repeatFor(tileMetres, 1)` is the whole conversion,
+    which is the same rule the ground uses with a span of 180 instead of 1.
+  - `surface()` marks its meshes `userData.fabric`, which is how scene.js
+    finds the panels and leaves the steel frame alone.
+  - The procedural weave moved to 4 repeats per metre to match, so the
+    asset-free tent looks as it did but with a consistent weave everywhere.
+- Still to do: brick/plaster options for the `home` preset walls.
 - Contact-shadow / shadow-bias tuning under IBL; verify the 2048/4096 export
   path still renders the env and background correctly.
 - Reuse `src/surfaces.js` rather than writing a second material factory: it

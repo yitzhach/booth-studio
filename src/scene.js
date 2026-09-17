@@ -5,7 +5,7 @@ import { signTexture } from "./signage.js";
 import { edgeMaterial } from "./edge-material.js";
 import { TextureCache } from "./texture-cache.js";
 import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY } from "./lighting.js";
-import { GROUND_CONSUMER, SurfaceTextures } from "./surfaces.js";
+import { GROUND_CONSUMER, TENT_CONSUMER, UV_METRE, SurfaceTextures } from "./surfaces.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
 import { IN, constrain, scalePanel } from "./model.js";
 // The orbit camera may drop below the booth's centre of interest to give a
@@ -449,6 +449,23 @@ export class BoothScene {
     }
     this.box(W, 0.025, 0.025, 0, H - 0.025, D * 0.2, rough("#2e3032"));
     if (p.booth.tent) this.group.add(makeTent(W,D,H,p.booth.tentStyle || "classic"));
+    // Photographed canvas on every fabric panel in the scene, when its files
+    // are present. Asked of the whole group rather than of the tent just added,
+    // because the neighbouring booths environment() built are canopies too and
+    // a textured tent beside two procedural ones looks worse than three
+    // procedural ones. The panels carry their UVs in metres, so one UV unit is
+    // one metre: the same repeatFor() the ground uses, with a span of one
+    // instead of 180.
+    const fabric = [];
+    this.group.traverse(o => { if (o.userData?.fabric) fabric.push(o); });
+    if (!fabric.length) this.surfaces.release(TENT_CONSUMER);
+    else this.surfaces.load("canvas", TENT_CONSUMER).then(set => {
+      if (this.revision !== rev || !set) return;
+      let applied = false;
+      for (const panel of fabric)
+        applied = this.surfaces.applyTo(panel, set, { planeMetres: UV_METRE, consumer: TENT_CONSUMER }) || applied;
+      if (applied) this.renderer.shadowMap.needsUpdate = true;
+    }).catch(() => {});
     if (!this.initialized) {
       this.initialized = true;
       this.setView("perspective");

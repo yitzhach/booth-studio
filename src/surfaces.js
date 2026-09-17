@@ -27,14 +27,25 @@ export const GROUND_METRES = 180;
 
 // Consumers are named, not counted, so a release can name the one it means.
 export const GROUND_CONSUMER = "ground";
+export const TENT_CONSUMER = "tent";
 
+// The ground kinds, plus the tent's canvas. `canvas` is not a ground: the
+// Ground control in main.js lists its own options and does not read this.
 export const SURFACE_SETS = {
   grass: { label: "Grass", tileMetres: 2 },
   concrete: { label: "Concrete", tileMetres: 2 },
   asphalt: { label: "Asphalt", tileMetres: 2 },
   carpet: { label: "Carpet", tileMetres: 2 },
   wood: { label: "Wood floor", tileMetres: 2 },
+  // Woven polyester at a metre or two per tile; a canvas photographed at four
+  // metres would put a weave on the roof you could see from across the hall.
+  canvas: { label: "Tent canvas", tileMetres: 1 },
 };
+
+// Tent geometry carries its UVs in metres, so one UV unit is one metre and the
+// repeat is simply 1/tileMetres. The ground plane spans GROUND_METRES over the
+// same 0..1, which is the other end of the same rule.
+export const UV_METRE = 1;
 
 // meta.json may rename these; these are the defaults tools/texture-prep.mjs
 // writes and the names to use when placing files by hand.

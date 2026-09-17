@@ -25,6 +25,9 @@ public/assets/textures/concrete/meta.json    written by the tool
 Folder names are the ground kinds, fixed: `concrete`, `asphalt`, `grass`,
 `carpet`, `wood`. (`studio` is the texture-free default floor.)
 
+One more folder, `canvas`, is not a ground: it is the tent's fabric, and it
+works exactly the same way. See **The tent canvas** below.
+
 Only `color.jpg` is required. A colour-only set already beats procedural noise;
 each of the other three is applied if present and skipped if not. The normal map
 is the one that earns its download — it is what makes light rake across the
@@ -43,6 +46,7 @@ surface instead of sliding over a flat plane.
 | `grass` | `Grass004` | *grass*, *lawn* |
 | `carpet` | `Carpet013` | *carpet* — this is what trade show halls actually are |
 | `wood` | `WoodFloor051` | *wood floor*, *planks* |
+| `canvas` | `Fabric063` | *canvas*, *fabric*, *tarp* — the tent, not the floor |
 
 Pick seamless, evenly-lit, low-contrast surfaces. A texture with a distinctive
 mark or a strong light gradient in it will visibly repeat across a 180 m floor.
@@ -148,7 +152,34 @@ happening rather than an error.
 
 ---
 
-## 7. Budget and licensing
+## 7. The tent canvas
+
+`public/assets/textures/canvas/` textures the tent's roof and valances, and
+takes the same four maps under the same names. Two things differ.
+
+**Tile size is 1 m by default, not 2.** Tent canvas is woven polyester; a weave
+photographed at four metres and tiled onto a three-metre roof reads as a
+bedsheet. Pass the asset's real `--tile` as always, but prefer a source in the
+half-metre to two-metre range.
+
+**Pick a plain one.** The roof is the largest single surface in the scene and
+the most directly lit. A canvas with a printed pattern, a logo, or heavy
+weathering repeats across it three times and reads as wallpaper. An evenly-lit
+off-white or light grey weave is what you want; the material keeps its sheen,
+so it will not look flat.
+
+```sh
+node tools/texture-prep.mjs ~/Downloads/Fabric063_1K-JPG canvas \
+  --tile 1 --credit "Fabric063 (ambientCG)"
+```
+
+Check it under **Layout** → **Footprint** → **White canopy & frame**. The weave
+should be the same size on the 12-inch valance as on the roof — that is the
+thing worth looking at, because it is what the geometry's UVs are there to
+guarantee. If the valance weave looks stretched downward, the UVs are wrong,
+not the texture.
+
+## 8. Budget and licensing
 
 - 1K-JPG, five kinds: well under 10 MB in total.
 - Keep all of `public/assets` (HDRIs included) under about 50 MB.
