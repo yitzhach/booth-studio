@@ -70,7 +70,57 @@ Original scope, for reference:
 - Tests: preset resolution, fallback when an asset 404s, exposure applied,
   no env leak across swaps. Must pass with zero binary assets present.
 
-### Phase 2 — HDRI backdrops
+### Phase 2 — HDRI backdrops — **DONE** (code; assets still to supply)
+Everything that can be built without downloading a binary is shipped and
+tested. **The only thing left is the user dropping real HDRIs into
+`public/assets/hdri/<preset>/` — see `docs/HDRI-ASSETS.md`.** Until then every
+preset still falls back to the procedural sky, exactly as in Phase 1.
+
+What exists now:
+- `tools/hdri-prep.mjs`: `node tools/hdri-prep.mjs <source.hdr|.exr> <preset>`
+  → `light.hdr` (1K RGBE, run-length encoded by hand), `bg.jpg` and
+  `meta.json`. Reads `.hdr`/`.exr` through three's loaders in Node, area-average
+  downsample, no native dependencies (`jpeg-js`, not `sharp` — pure JS installs
+  reliably in the sandbox and only the encoder was ever needed).
+- `docs/HDRI-ASSETS.md` and `public/assets/hdri/README.md`: what to download
+  from Poly Haven, where it goes, the size budget.
+- `presetPaths()` gained `meta`; the backdrop's rotation and headroom are wired.
+- Tests: `tests/hdri-prep.test.js` (14 node tests, including an RGBE round-trip
+  back through three's own loader), `tests/view-hdri.mjs` (browser, generates
+  fixture assets with the tool and drives the full path with assets present —
+  the one thing `view-lighting.mjs` structurally cannot cover). Added to
+  `npm run test:view`.
+
+Discovered here, do not re-derive:
+- **three tone-maps `scene.background`.** The background shaders include
+  `<tonemapping_fragment>`, so an already tone-mapped JPEG (what Poly Haven
+  ships, what any normal image viewer wants) goes through ACES twice and reads
+  flat. `hdri-prep` therefore writes *linear* radiance divided by a measured
+  headroom `K`, records `K` in `meta.json`, and the app multiplies it back
+  through `scene.backgroundIntensity` — which the shader applies *before* tone
+  mapping, so the division cancels exactly. No `meta.json` ⇒ `K = 1` ⇒ the
+  ordinary double-tone-mapped backdrop. Never "fix" this by pre-tone-mapping.
+- **`RGBELoader` is deprecated in three r180** and warns on every construction.
+  `HDRLoader` is the same parser under a new name; the app uses it.
+- **`apply()` used to reload on every `update()`.** Harmless with no assets (a
+  404 HEAD), a stall once real ones exist: PMREM on every slider tick. It now
+  short-circuits an unchanged preset and just re-seats the background, which
+  `environment()` overwrites on each update.
+- Reset `backgroundRotation`/`backgroundIntensity` *before* the loaders run,
+  not after: the cached path applies rotation synchronously and a later reset
+  would wipe it.
+- The rotation control is shown for `surroundAsset || preset.hdri`, so a preset
+  backdrop turns with the same field a user panorama uses.
+- three's `EXRExporter` → `EXRLoader` round-trip only agrees with itself under
+  `ZIPS`; the exporter's default `ZIP` does not read back. That is a test-fixture
+  detail — real Poly Haven EXRs go through the loader, which is fine.
+- `tests/e2e.mjs` is **already red before any of this** (re-verified by stashing
+  and re-running): it still selects the label `"Artwork wall"`, renamed to
+  `"Wall location"` long ago. HANDOFF documents it. Not a regression.
+- The sandbox's Chromium (1194) is older than the pinned Playwright wants, so
+  every browser test needs `BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium`.
+
+Original scope, for reference:
 - User supplies per preset, from polyhaven.com (CC0):
   `light.hdr` at **1K** and `bg.jpg` at **2K or 4K**.
   Sample already uploaded: `industrial_pipe_and_valve_01` (4K EXR) — re-download

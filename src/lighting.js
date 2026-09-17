@@ -69,12 +69,13 @@ export const presetPaths = (preset) =>
     ? {
         light: `assets/hdri/${preset.hdri}/light.hdr`,
         background: `assets/hdri/${preset.hdri}/bg.jpg`,
+        meta: `assets/hdri/${preset.hdri}/meta.json`,
       }
     : null;
 
 // Both the dev server and the deployed Worker answer a missing asset with
 // index.html and a 200, so "did it load" cannot be left to the loaders:
-// RGBELoader parses that HTML into undefined and throws from inside its own
+// HDRLoader parses that HTML into undefined and throws from inside its own
 // callback, outside any promise we could catch. Check the response first.
 async function requireAsset(url) {
   const res = await fetch(url, { method: "HEAD" });
@@ -84,13 +85,31 @@ async function requireAsset(url) {
 }
 async function loadHDR(url) {
   await requireAsset(url);
-  const { RGBELoader } = await import("three/addons/loaders/RGBELoader.js");
-  return new RGBELoader().loadAsync(url);
+  // HDRLoader, not RGBELoader: three r180 deprecated the latter and warns on
+  // every construction. Same parser, same .hdr files.
+  const { HDRLoader } = await import("three/addons/loaders/HDRLoader.js");
+  return new HDRLoader().loadAsync(url);
 }
 async function loadBackground(url) {
   await requireAsset(url);
   return new T.TextureLoader().loadAsync(url);
 }
+// tools/hdri-prep.mjs writes the backdrop as linear radiance divided by a
+// headroom factor, because three tone-maps scene.background with the same ACES
+// curve as the booth and an already tone-mapped JPEG would go through it
+// twice. Multiplying the factor back in through backgroundIntensity undoes the
+// division inside the shader, before tone mapping. A hand-dropped Poly Haven
+// JPEG has no meta.json, so the factor is 1 and nothing changes.
+async function loadMeta(url) {
+  await requireAsset(url);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`missing asset: ${url}`);
+  return res.json();
+}
+const backgroundIntensityOf = (meta) => {
+  const value = Number(meta?.backgroundIntensity);
+  return Number.isFinite(value) && value > 0 ? value : 1;
+};
 
 export class EnvironmentLighting {
   // `loaders` is injected so tests can exercise the swap and disposal rules
@@ -99,25 +118,42 @@ export class EnvironmentLighting {
     this.renderer = renderer;
     this.loadHDR = loaders.loadHDR || loadHDR;
     this.loadBackground = loaders.loadBackground || loadBackground;
+    this.loadMeta = loaders.loadMeta || loadMeta;
     this.makePMREM = loaders.makePMREM || ((r) => new T.PMREMGenerator(r));
     this.revision = 0;
+    this.applied = null;
+    this.backgroundIntensity = 1;
   }
   // Applies exposure and intensity synchronously, then resolves once the HDRI
   // has landed. `background: false` leaves scene.background alone, so a user's
-  // own uploaded panorama always outranks the preset's backdrop.
-  async apply(scene, presetId, { background = true } = {}) {
+  // own uploaded panorama always outranks the preset's backdrop. `rotation` is
+  // the same degrees the panorama uses, so turning the backdrop works whether
+  // it came from a preset or an upload.
+  async apply(scene, presetId, { background = true, rotation = 0 } = {}) {
     const preset = resolvePreset(presetId);
-    const rev = ++this.revision;
     this.renderer.toneMappingExposure = preset.exposure;
     scene.environmentIntensity = preset.envIntensity;
+    // Re-fetching and re-filtering on every edit would stall a slider drag:
+    // the scene calls this on each update, and PMREM is not cheap. Keep what
+    // is already loaded and just re-seat it on the scene, since the procedural
+    // environment rewrites scene.background underneath us every time.
+    if (this.applied && this.applied.id === preset.id && this.applied.background === background) {
+      if (this.target) scene.environment = this.target.texture;
+      if (this.applied.backdrop) this.seatBackdrop(scene, rotation);
+      return { preset, environment: !!this.target, background: this.applied.backdrop, cached: true };
+    }
+    const rev = ++this.revision;
     const paths = presetPaths(preset);
     if (!paths) {
       this.clear(scene);
+      scene.backgroundIntensity = 1;
+      this.applied = { id: preset.id, background, backdrop: false };
       return { preset, environment: false, background: false };
     }
-    const [light, backdrop] = await Promise.all([
+    const [light, backdrop, meta] = await Promise.all([
       this.loadHDR(paths.light).catch(() => null),
       background ? this.loadBackground(paths.background).catch(() => null) : null,
+      background ? this.loadMeta(paths.meta).catch(() => null) : null,
     ]);
     if (this.revision !== rev) {
       light?.dispose();
@@ -139,10 +175,20 @@ export class EnvironmentLighting {
       backdrop.colorSpace = T.SRGBColorSpace;
       this.backdrop?.dispose();
       this.backdrop = backdrop;
-      scene.background = backdrop;
-      scene.fog = null;
-    }
-    return { preset, environment: applied, background: !!backdrop };
+      this.backgroundIntensity = backgroundIntensityOf(meta);
+      this.seatBackdrop(scene, rotation);
+    } else scene.backgroundIntensity = 1;
+    this.applied = { id: preset.id, background, backdrop: !!backdrop };
+    return { preset, environment: applied, background: !!backdrop, intensity: this.backgroundIntensity };
+  }
+  // Puts the loaded backdrop back on the scene at the requested rotation. The
+  // fog belongs to the procedural horizon and would sit in front of a real
+  // photograph, so it goes.
+  seatBackdrop(scene, rotation = 0) {
+    scene.background = this.backdrop;
+    scene.backgroundIntensity = this.backgroundIntensity;
+    scene.backgroundRotation.set(0, (rotation * Math.PI) / 180, 0);
+    scene.fog = null;
   }
   // Drops the environment map without touching the background, so the
   // procedural horizon keeps whatever environment.js gave it.
@@ -153,6 +199,7 @@ export class EnvironmentLighting {
   }
   dispose() {
     this.revision++;
+    this.applied = null;
     this.target?.dispose();
     this.target = null;
     this.backdrop?.dispose();

@@ -208,10 +208,19 @@ export class BoothScene {
     const rough = (c) =>
       new T.MeshStandardMaterial({ color: c, roughness: 0.92 });
     environment(this.scene, this.group, p.booth);
+    // environment() has just put the procedural sky back on the scene, so the
+    // backdrop settings it knows nothing about are reset here, before anything
+    // that loads an image can claim them. Resetting afterwards would undo the
+    // rotation a still-loaded preset backdrop re-applies synchronously.
+    this.scene.backgroundRotation.set(0, 0, 0);
+    this.scene.backgroundIntensity = 1;
     // The preset only supplies image-based lighting and a backdrop; the
     // procedural horizon above stays in place when its assets are missing.
     this.lighting
-      .apply(this.scene, p.booth.envPreset, { background: !p.booth.surroundAsset })
+      .apply(this.scene, p.booth.envPreset, {
+        background: !p.booth.surroundAsset,
+        rotation: p.booth.surroundRotation || 0,
+      })
       .then(() => {
         if (this.revision === rev) this.renderer.shadowMap.needsUpdate = true;
       })
@@ -223,7 +232,6 @@ export class BoothScene {
       this.scene.backgroundRotation.y = (p.booth.surroundRotation || 0) * Math.PI / 180;
       this.scene.fog = null;
     }).catch(() => {});
-    else this.scene.backgroundRotation.set(0, 0, 0);
     if (p.booth.groundAsset) this.texture(p.booth.groundAsset).then(t => {
       if (this.revision !== rev) return;
       const floor = this.group.getObjectByName("environment-ground"), map = t.clone();

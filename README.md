@@ -23,6 +23,7 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 ## Current behavior
 
 - Booth sizes, back/left/right walls, four tent forms, lighting and procedural/photo surroundings.
+- Environment presets light the booth from an HDRI and can supply a photographed backdrop; without those files a preset keeps the procedural surroundings. See `docs/HDRI-ASSETS.md`.
 - Perspective orbit reaches ground level for low looking-up views; the floor plane, not a fixed angle, is the limit.
 - Urban horizon builds a seeded three-ring skyline with textured facades, lit windows, setbacks and rooftop clutter.
 - Neighbor layouts: inline, either corner, or island, with side/rear spacing.
@@ -49,7 +50,7 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 - Preview artwork textures are capped at 2048 px for device stability.
 - 4096 export depends on the device GPU/canvas limit.
 - Tent and environment models are visual approximations, not certified products.
-- Photo panoramas are backdrops, not reconstructed geometry or HDR lighting.
+- Photo panoramas are backdrops, not reconstructed geometry. Environment presets do light the booth from an HDRI, when its files are present.
 - Limits: 200 placements, 250 assets, 25 MB/image, 200 MB imported backup.
 
 ## Architecture
@@ -57,6 +58,7 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 - `src/main.js`: interface, actions, inspector and undo/redo.
 - `src/model.js`: schema validation, geometry and wall constraints.
 - `src/scene.js`: Three.js booth, artwork interaction, lighting and export.
+- `src/lighting.js`: environment presets, HDRI image-based lighting and backdrops.
 - `src/texture-cache.js`: source/edit-keyed GPU texture reuse.
 - `src/image-edit.js`: non-destructive Canvas adjustments.
 - `src/edge-material.js`: procedural artwork-edge finishes.
@@ -65,10 +67,11 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 - `src/storage.js`: IndexedDB, image loading and downloads.
 - `src/signage.js`: sign/label textures.
 - `src/guide.js`: printable inside/outside hanging guides.
+- `tools/hdri-prep.mjs`: converts an HDRI into a preset's `light.hdr`/`bg.jpg`.
 - `tests/`: Node and browser regression checks.
 
 ## Verification
 
 Run `npm test` and `npm run build` for every change. When a WebGL-capable browser is available, also run `npm run test:browser`, `npm run test:view`, and `node tests/wall-assets.mjs`. Test desktop plus iPhone/iPad interaction and a 4096 export.
 
-For a new development chat, read only `HANDOFF.md` first. Read this file when commands or architecture are needed. Read `AI_EXPORT_PHASE.md` only when implementing the paid AI export phase. `docs/ORIGINAL-HANDOFF.md` is historical reference, not current instructions.
+For a new development chat, read only `HANDOFF.md` first. Read this file when commands or architecture are needed. Read `PBR_PHASE.md` when working on HDRI lighting or PBR surfaces, and `AI_EXPORT_PHASE.md` only when implementing the paid AI export phase. `docs/ORIGINAL-HANDOFF.md` is historical reference, not current instructions.

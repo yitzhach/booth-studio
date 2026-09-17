@@ -5,11 +5,14 @@
 ## Now
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
-- Active branch: `claude/youthful-euler-42nv82`, head `4b50dd7`, 2 commits ahead of `main`.
-- Open PR: https://github.com/yitzhach/booth-studio/pull/3 — green, no conflict, no reviews, **unmerged**.
-- `main` is still `0121919` (Sep 15). Production therefore serves the Sep 15 build.
-- **Merging PR #3 is the next action.** Nothing else moves production.
-- Verification on `4b50dd7`: `npm test` 21/21, `npm run build` clean, `npm run test:view` passing.
+- Active branch: `claude/stoic-goodall-26lt81`, carrying the photoreal phase
+  (`PBR_PHASE.md`): Phase 1 (image-based lighting plumbing) and Phase 2 (HDRI
+  backdrops) are done in code. PR #3 has merged.
+- **Nothing here is live until this branch merges to `main`.**
+- The environment presets still show the procedural sky, because no HDRI files
+  are committed yet. That is the outstanding user task — see `docs/HDRI-ASSETS.md`.
+- Verification on this branch: `npm test` 49/49, `npm run build` clean,
+  `npm run test:view` 3/3 passing (see Testing for the browser flag).
 
 ## How deployment actually works
 Read this before debugging any "my change isn't live" report. It cost hours once.
@@ -47,6 +50,8 @@ Read this before debugging any "my change isn't live" report. It cost hours once
 - Orbit reaches ground level for low looking-up views (`clampToGround` in `src/scene.js`): the limit is the floor plane at the camera's current distance, not a fixed angle. Closer in permits lower angles.
 - Urban horizon is a seeded three-ring skyline at 40/56/72 m: varied footprints, setbacks, cornices, storefront bases, rooftop tanks/HVAC/antennae. One shared tiled canvas facade texture with an emissive map for lit windows; per-face UV scaling keeps window spacing constant in metres, so it costs no more draw calls than the nine boxes it replaced. Backdrop is excluded from shadow passes.
 - Gradient sky on all outdoor horizons, fog colour matched to the horizon band so the skyline and ground-plane edge dissolve into haze.
+- Environment presets (studio / trade show / art fair / home): image-based lighting from an HDRI, a photographed backdrop, per-preset exposure, and an artwork-colour toggle that keeps uploaded art out of the environment's shading by default. With `public/assets` empty every preset falls back to the procedural sky, so the app never depends on a binary being there.
+- `tools/hdri-prep.mjs` converts an HDRI into the 1K `light.hdr` + `bg.jpg` + `meta.json` a preset wants, with no native image tooling.
 - Footer build stamp (see above).
 
 ## Keep
@@ -62,13 +67,13 @@ Read this before debugging any "my change isn't live" report. It cost hours once
 ## Testing
 ```sh
 npm ci
-npm test                 # 21 Node tests, all passing
+npm test                 # 49 Node tests, all passing
 npm run build            # clean
-npm run test:view        # browser: camera range + city backdrop
+npm run test:view        # browser: camera range, city backdrop, env presets, HDRI
 ```
 - The cloud sandbox **does** have WebGL via swiftshader. Earlier notes claiming otherwise were wrong. Pass the preinstalled browser explicitly, because the pinned Playwright expects a newer build than is present:
   ```sh
-  BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium-1194/chrome-linux/chrome npm run test:view
+  BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium npm run test:view
   ```
 - **`tests/e2e.mjs` and `tests/wall-assets.mjs` are broken on `main`**, unrelated to any current work (verified by reverting and re-running):
   - `e2e.mjs:136` selects label `"Artwork wall"`, renamed to `"Wall location"` (values are now `<wall>-<face>`, e.g. `left-inside`); then `:179` expects `24`, gets `23.59`.
@@ -85,8 +90,11 @@ npm run test:view        # browser: camera range + city backdrop
 - Account ID: `8e38cda861b39784706d53545a0a435f`. Worker: `booth-studio`.
 
 ## Next
-1. Merge PR #3 so production stops serving the Sep 15 build.
-2. Confirm on the user's Mac/iPhone/iPad: low looking-up orbit, the city backdrop, and the footer stamp showing the merged commit.
+1. Supply the HDRI files (`docs/HDRI-ASSETS.md`) — download on your own machine,
+   the sandbox cannot reach Poly Haven. Everything else in Phase 2 is shipped.
+2. Merge this branch so the environment work reaches production, then confirm on
+   the user's Mac/iPhone/iPad: low looking-up orbit, the city backdrop, the
+   environment presets, and the footer stamp showing the merged commit.
 3. Test stretch handles, scale slider keyboard steps and live editor preview on touch.
 4. Test interior/exterior edited artwork and clean 2048/4096 exports.
 5. Optional, ask first: repair the two stale browser suites; surface the build stamp on mobile.
@@ -95,5 +103,6 @@ npm run test:view        # browser: camera range + city backdrop
 ## Read map
 - Start every new chat with this file only.
 - Read `README.md` for commands, architecture or stable behavior.
+- Read `PBR_PHASE.md` for HDRI lighting and PBR surfaces; it is self-contained.
 - Read `AI_EXPORT_PHASE.md` only for AI-export implementation.
 - Ignore `docs/ORIGINAL-HANDOFF.md` unless historical requirements are needed.

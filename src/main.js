@@ -362,10 +362,11 @@ async function boot() {
     return `${b.neighbors ? `<label class="setting-label">Booth position<select aria-label="Booth position" data-field="neighborLayout" data-scope="booth">${Object.entries({inline:"Inline · both sides","corner-left":"Left corner · left side open","corner-right":"Right corner · right side open",island:"Island · no adjoining booths"}).map(([k,v])=>`<option value="${k}" ${(b.neighborLayout||"inline")===k?"selected":""}>${v}</option>`).join("")}</select></label>${field("Side spacing","neighborGap",b.neighborGap ?? 24,0,240,1,"in","booth")}${(b.neighborLayout||"inline") !== "island" ? `<label class="check-field"><input type="checkbox" data-field="neighborRear" data-scope="booth" ${b.neighborRear?"checked":""}/>Booth behind</label>${b.neighborRear ? field("Rear spacing","rearGap",b.rearGap ?? 24,0,240,1,"in","booth") : ""}` : ""}<p class="muted">Gaps are between nominal footprint edges. Left/right are viewed from the entrance. Tent overhangs and artwork can extend into the gap.</p>` : ""}
       <h4>Photographic materials</h4>
       ${btn("upload-surround",b.surroundAsset?"Replace panorama":"Upload 360° panorama","image-plus","wide")}
-      ${b.surroundAsset ? `${field("Panorama rotation","surroundRotation",b.surroundRotation||0,-180,180,1,"°","booth")}${btn("clear-surround","Remove panorama",null,"wide")}` : ""}
+      ${b.surroundAsset || resolvePreset(b.envPreset).hdri ? field("Backdrop rotation","surroundRotation",b.surroundRotation||0,-180,180,1,"°","booth") : ""}
+      ${b.surroundAsset ? btn("clear-surround","Remove panorama",null,"wide") : ""}
       ${btn("upload-ground",b.groundAsset?"Replace ground texture":"Upload ground texture","image-plus","wide")}
       ${b.groundAsset ? `${field("Ground tile size","groundTile",b.groundTile||48,12,240,1,"in","booth")}${btn("clear-ground","Remove ground texture",null,"wide")}` : ""}
-      <p class="muted">Panorama: 2:1 full-sphere JPG/PNG, not an ordinary flat photo. Ground: a top-down, ideally seamless photograph. Images stay on this device and enter backups/exports. Scenery is a backdrop, not reconstructed 3D.</p>`;
+      <p class="muted">Panorama: 2:1 full-sphere JPG/PNG, not an ordinary flat photo. Your own panorama replaces the environment preset's backdrop; rotation turns whichever of the two is showing. Ground: a top-down, ideally seamless photograph. Images stay on this device and enter backups/exports. Scenery is a backdrop, not reconstructed 3D.</p>`;
   }
   function renderInspector() {
     const root = document.querySelector("#inspector-content"),
