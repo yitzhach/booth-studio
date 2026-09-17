@@ -1,9 +1,13 @@
-// Covers the environment presets in a real browser: with public/assets empty
-// every preset must still render, keep the procedural surroundings, and leave
-// uploaded artwork colour untouched by image-based lighting.
+// Covers the environment presets in a real browser: every preset must render
+// and keep the procedural surroundings whether or not its HDRI is committed,
+// and leave uploaded artwork colour untouched by image-based lighting.
 import {chromium} from '@playwright/test';
 import {createServer} from 'vite';
 import assert from 'node:assert/strict';
+import {existsSync} from 'node:fs';
+// Presets light from an HDRI only when its file is actually committed; with
+// public/assets empty every one of them must still fall back procedurally.
+const hasHdri=p=>existsSync(new URL(`../public/assets/hdri/${p}/light.hdr`,import.meta.url));
 const server=await createServer({server:{host:'127.0.0.1',port:5190}});
 await server.listen();
 const browser=await chromium.launch({headless:true,...(process.env.BOOTH_TEST_CHROMIUM?{executablePath:process.env.BOOTH_TEST_CHROMIUM}:{}),
@@ -24,11 +28,17 @@ try {
  for (const preset of options.slice(1)) {
   await page.selectOption('select[aria-label="Environment"]',preset);
   await page.waitForTimeout(150);
+  // The HDRI loads and is filtered asynchronously, so a preset that ships one
+  // needs waiting for rather than a fixed pause. A timeout here falls through
+  // to the assertion below, which names the preset.
+  if (hasHdri(preset)) await page.waitForFunction(
+    ()=>!!window.__booth.scene.scene.environment,{timeout:20000}).catch(()=>{});
   const state=await page.evaluate(()=>{
     const s=window.__booth.scene.scene;
     return {env:!!s.environment,background:!!s.background,exposure:window.__booth.scene.renderer.toneMappingExposure};
   });
-  assert.equal(state.env,false,`${preset}: no environment map without assets`);
+  assert.equal(state.env,hasHdri(preset),
+    `${preset}: environment map present exactly when its HDRI is`);
   assert.equal(state.background,true,`${preset}: keeps a visible backdrop`);
   assert.ok(state.exposure>0,`${preset}: exposure applied`);
  }
