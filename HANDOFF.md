@@ -1,130 +1,128 @@
-## Goal
-- Continue Artist OS Booth Studio without rebuilding it.
-- Keep measured artwork faithful, reusable and responsive on desktop/mobile.
+# Booth Studio — handoff
+
+Start a new chat with **this file only**. It is written to be enough on its own.
+
+Artist OS Booth Studio: measured 3D art-show booth planning in the browser.
+Extend it; do not rebuild it.
 
 ## Now
+
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
-- Active branch: `claude/stoic-goodall-26lt81`, carrying the photoreal phase
-  (`PBR_PHASE.md`). Phases 1–3 are **done in code**: image-based lighting,
-  HDRI backdrops, and PBR ground surfaces. Phase 4 (tent/walls) is next and
-  `PBR_PHASE.md` says exactly where to start. PR #3 has merged.
-- **Nothing here is live until this branch merges to `main`.**
-- Presets still show the procedural sky and the procedural floor, because no
-  asset files are committed yet. That is the outstanding *user* task, and the
-  only one: `docs/HDRI-ASSETS.md` and `docs/TEXTURE-ASSETS.md` are step-by-step.
-  The sandbox proxy blocks polyhaven.com and ambientcg.com, so no agent session
-  can do it.
-- Verification on this branch: `npm test` 80/80, `npm run build` clean,
-  `npm run test:view` 4/4, `npm run test:browser` and `node tests/wall-assets.mjs`
-  green (see Testing for the browser flag).
+- Branch: `claude/stoic-goodall-26lt81`, ahead of `main`. **Nothing on it is
+  live until it merges.**
+- The photoreal phase (`PBR_PHASE.md`) is **done in code through Phase 3**:
+  image-based lighting, HDRI backdrops, PBR ground surfaces. Phase 4 is tent
+  fabric and wall materials.
+- Presets still show the procedural sky and floor because **no asset files are
+  committed yet**. That is the one outstanding user task, and only the user can
+  do it: the sandbox proxy blocks polyhaven.com and ambientcg.com.
+  `docs/HDRI-ASSETS.md` and `docs/TEXTURE-ASSETS.md` are step-by-step.
+- Green on this branch: `npm test` 80/80, `npm run build`, `npm run test:view`
+  4/4, `npm run test:browser`, `node tests/wall-assets.mjs`.
 
-## How deployment actually works
-Read this before debugging any "my change isn't live" report. It cost hours once.
+## Next
+
+1. **User:** download the HDRIs and ground textures (the two docs above).
+   Nothing else in Phases 1–3 is outstanding.
+2. Merge to `main` so the environment work reaches production. Then confirm on
+   Mac/iPhone/iPad: low looking-up orbit, city backdrop, environment presets,
+   ground surfaces, footer stamp showing the merged commit.
+3. Touch testing: stretch handles, scale-slider keyboard steps, live editor
+   preview. Interior/exterior edited artwork and clean 2048/4096 exports.
+4. Phase 4 of `PBR_PHASE.md`, once assets are in and you can see what still
+   looks wrong. That file says where to start and what to change first.
+5. On request only: paid AI export, from `AI_EXPORT_PHASE.md`.
+
+## Deployment — read before debugging "my change isn't live"
 
 | Push target | Cloudflare result |
 | - | - |
 | `main` | **production** → `booth-studio.bobdylan2000.workers.dev` |
 | any other branch | **preview only** → separate URL, production untouched |
 
-- Branch preview: https://claude-youthful-euler-42nv82-booth-studio.bobdylan2000.workers.dev
-- Workers Builds runs on **every** push and posts a bot comment on the PR carrying the preview URLs. A successful branch build does **not** change production.
-- A worker's `modified_on` timestamp bumps for preview deployments too, so it **cannot** distinguish production from preview. Do not use it as evidence. Use the footer version stamp or the bot comment.
-- A manual dashboard upload is overwritten by the next `main` build. Merge instead.
-- There is no GitHub Actions workflow. Workers Builds is a Cloudflare-side Git integration and appears only as a GitHub *check*, which is why `actions_list` shows zero runs. The pipeline is not broken.
+- Workers Builds runs on every push and comments the preview URL on the PR.
+  Preview URLs follow `claude-<branch-with-dashes>-booth-studio.…workers.dev`.
+- A worker's `modified_on` bumps for previews too, so it **cannot** tell
+  production from preview. Use the footer stamp or the bot comment instead.
+- A manual dashboard upload is overwritten by the next `main` build. Merge.
+- There is no GitHub Actions workflow — Workers Builds is a Cloudflare-side Git
+  integration that appears only as a GitHub *check*. `actions_list` showing zero
+  runs is not a broken pipeline.
+- `wrangler deploy` without credentials opens an **interactive browser login and
+  hangs forever** in a headless session. For non-interactive deploys set
+  `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` and `CI=true`.
+- Account `8e38cda861b39784706d53545a0a435f`, worker `booth-studio`.
 
-## Telling what is live
-- Footer, bottom-left: `v0.1.0 · <build time> UTC · <commit>`.
-- Any device/console: `window.BOOTH_BUILD` → `{version, commit, time, short}`.
-- `window.__booth` is DEV-only; `window.BOOTH_BUILD` exists in production.
-- Values are injected by `vite.config.js` at build time: commit from `WORKERS_CI_COMMIT_SHA` in CI, else `git`, else `"local"`.
-- The footer is `display: none` under the mobile breakpoint, so use `window.BOOTH_BUILD` on a phone.
-
-## Done
-- Measured booth geometry, lighting, photo mode, guides, backups and high-res PNG export.
-- Tents, ground/horizon options, neighbor layouts and spacing.
-- Artwork on all three inside and outside wall faces.
-- Reusable Original Panels: each click/drop creates a copy; sources remain.
-- Double-click/tap selection, direct wall movement and click-off deselection.
-- Corner handles scale proportionally; middle-edge handles stretch width/height.
-- Live scale slider with 1% arrow-key increments.
-- Artwork thickness plus colored plain/concrete/wood/metal edges.
-- Live non-destructive image editor; copy/paste edits.
-- Artist signs and artwork labels.
-- Edited textures cached across selection rebuilds; no white flash.
-- Orbit reaches ground level for low looking-up views (`clampToGround` in `src/scene.js`): the limit is the floor plane at the camera's current distance, not a fixed angle. Closer in permits lower angles.
-- Urban horizon is a seeded three-ring skyline at 40/56/72 m: varied footprints, setbacks, cornices, storefront bases, rooftop tanks/HVAC/antennae. One shared tiled canvas facade texture with an emissive map for lit windows; per-face UV scaling keeps window spacing constant in metres, so it costs no more draw calls than the nine boxes it replaced. Backdrop is excluded from shadow passes.
-- Gradient sky on all outdoor horizons, fog colour matched to the horizon band so the skyline and ground-plane edge dissolve into haze.
-- Environment presets (studio / trade show / art fair / home): image-based lighting from an HDRI, a photographed backdrop, per-preset exposure, and an artwork-colour toggle that keeps uploaded art out of the environment's shading by default. With `public/assets` empty every preset falls back to the procedural sky, so the app never depends on a binary being there.
-- `tools/hdri-prep.mjs` converts an HDRI into the 1K `light.hdr` + `bg.jpg` + `meta.json` a preset wants, with no native image tooling.
-- PBR ground surfaces (`src/surfaces.js`): colour/normal/roughness/occlusion sets per ground kind, tiled from the surface's real-world size so every floor stays the same scale, anisotropic at grazing angles, released on swap. Ground kinds now include carpet and wood. With no files, the procedural canvas floor stays.
-- `tools/texture-prep.mjs` turns an unzipped ambientCG folder into that set by copying, not re-encoding, and records the tile size and normal-map convention.
-- Drag snapping defaults to 1 inch, matching the toolbar button that always claimed it was on.
-- Footer build stamp (see above).
-
-## Keep
-- Preserve existing implementation and schema-1 backup compatibility.
-- Never alter stored original image data; edits belong to placements.
-- The city skyline must stay **seeded**, never `Math.random`: it rebuilds on every `update()` and would reshuffle on each edit. `tests/view-city.mjs` guards this.
-- Commission repo remains untouched.
-- Current app is local-first: no accounts, backend, payments, sync or active AI API.
-- AI export is future paid work; read `AI_EXPORT_PHASE.md` only for that phase.
-- BFL AI output must preserve art via protected compositing, not prompt promises.
-- Tent/environment photography remains approximate unless user supplies images.
+**Telling what is live:** footer bottom-left reads `v0.1.0 · <time> UTC ·
+<commit>`; `window.BOOTH_BUILD` works anywhere including production
+(`window.__booth` is dev-only). The footer is hidden under the mobile
+breakpoint, so use `window.BOOTH_BUILD` on a phone.
 
 ## Testing
+
 ```sh
 npm ci
-npm test                 # 80 Node tests, all passing
-npm run build            # clean
-npm run test:view        # browser: camera range, city, env presets, HDRI, PBR ground
-npm run test:browser     # browser: the full editor end-to-end
+npm test                 # 80 Node tests
+npm run build
+npm run test:view        # browser: camera, city, env presets, HDRI, PBR ground
+npm run test:browser     # browser: full editor end-to-end
 node tests/wall-assets.mjs
 ```
-- The cloud sandbox **does** have WebGL via swiftshader. Earlier notes claiming otherwise were wrong. Pass the preinstalled browser explicitly, because the pinned Playwright expects a newer build than is present:
-  ```sh
-  BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium npm run test:view
-  ```
-- **Both stale browser suites were repaired in Phase 3 and are green.** What they
-  had drifted from: `"Artwork wall"` → `"Wall location"` (values `<wall>-<face>`),
-  `[data-art]` → `[data-source]`, 4 resize handles → 8 (edge-stretch shipped),
-  the `"Scale +10%"` button → the Artwork scale slider, `"Place on wall"` →
-  clicking a library card. The inspector renders a second, mobile copy of the
-  library, so a `[data-source=…]` locator must be scoped to `#library`.
-- One of those failures was a real bug, not drift: the Snap 1″ button rendered
-  active while `scene.snap` was `false`, so drags landed at 23.59″ in a measured
-  planning tool. Snapping now defaults **on**, matching the button.
+
+The cloud sandbox **does** have WebGL via swiftshader, but the pinned Playwright
+expects a newer Chromium than is installed, so pass the browser explicitly:
+
+```sh
+BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium npm run test:view
+```
+
+All five suites are green. If one fails, it is a regression — the two that were
+long-abandoned were repaired in Phase 3.
+
+## Rules that are easy to break
+
+- Preserve the implementation and schema-1 backup compatibility. Adding optional
+  fields and widening enums is fine; changing meaning is not.
+- **Never alter stored original image data.** Edits belong to placements.
+- The city skyline must stay **seeded**, never `Math.random`: it rebuilds on
+  every `update()` and would reshuffle on each edit. `tests/view-city.mjs`
+  guards this.
+- The app must run with `public/assets` empty. Every HDRI and texture path falls
+  back to procedural; keep it that way.
+- Local-first: no accounts, backend, payments, sync or live AI calls.
+- Do not modify the separate `yitzhach/commission` repo.
+
+## Recently landed, worth knowing
+
+- Environment presets (studio / trade show / art fair / home): HDRI lighting, a
+  photographed backdrop with rotation, per-preset exposure, and an artwork-colour
+  toggle that keeps uploaded art out of the environment's shading by default.
+- PBR ground per kind (now including carpet and wood), tiled from the surface's
+  real-world size so every floor stays the same scale.
+- `tools/hdri-prep.mjs` and `tools/texture-prep.mjs` build those asset sets with
+  no native image tooling.
+- **Drag snapping now defaults to 1 inch.** The toolbar button had always
+  rendered as active while snapping was off, so drags landed at 23.59″ in a
+  measured tool. Behaviour change worth eyeballing.
 
 ## Known limits
+
 - 4096 export depends on device GPU/canvas limits.
 - Image editor is Canvas adjustment, not RAW development.
-- Local browser data can be evicted; keep downloadable backups.
-- The sandbox egress proxy blocks `*.workers.dev`, so no agent session can load the live or preview site. Screenshots must come from a local `vite` server driven by Playwright.
-- `wrangler deploy` with no credentials falls into an **interactive browser login and hangs forever** in a headless session. `wrangler login` state lives on the user's own machine, not in a container. For non-interactive deploys set `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`, and `CI=true` so it errors instead of blocking.
-- Account ID: `8e38cda861b39784706d53545a0a435f`. Worker: `booth-studio`.
-
-## Next
-1. Supply the asset files on your own machine — the sandbox cannot reach either
-   source. `docs/HDRI-ASSETS.md` (Poly Haven) and `docs/TEXTURE-ASSETS.md`
-   (ambientCG) are written as step-by-step, including what to pick for testing
-   versus shipping. Everything else in Phases 1–3 is shipped.
-2. Merge this branch so the environment work reaches production, then confirm on
-   the user's Mac/iPhone/iPad: low looking-up orbit, the city backdrop, the
-   environment presets, the ground surfaces, and the footer stamp showing the
-   merged commit.
-3. Test stretch handles, scale slider keyboard steps and live editor preview on touch.
-4. Test interior/exterior edited artwork and clean 2048/4096 exports.
-5. Phase 4 of `PBR_PHASE.md` (tent fabric, wall materials, shadow tuning under
-   IBL) when the asset files are in and you can see what still looks wrong.
-6. Optional, ask first: surface the build stamp on mobile.
-7. When requested, begin paid AI export from `AI_EXPORT_PHASE.md`.
+- Local browser storage can be evicted; keep downloadable backups.
+- The sandbox proxy blocks `*.workers.dev`, so no agent session can load the
+  live or preview site. Screenshots must come from a local `vite` server driven
+  by Playwright.
+- Tent and environment models are visual approximations, not certified products.
 
 ## Read map
-- Start every new chat with this file only.
-- Read `README.md` for commands, architecture or stable behavior.
-- Read `PBR_PHASE.md` for HDRI lighting and PBR surfaces; it is self-contained
-  and records what each phase discovered, so a fresh chat can take Phase 4
-  without re-reading the codebase.
-- Read `docs/HDRI-ASSETS.md` / `docs/TEXTURE-ASSETS.md` only to add asset files.
-- Read `AI_EXPORT_PHASE.md` only for AI-export implementation.
-- Ignore `docs/ORIGINAL-HANDOFF.md` unless historical requirements are needed.
+
+- `README.md` — commands, architecture, stable behavior.
+- `PBR_PHASE.md` — HDRI lighting and PBR surfaces. Self-contained, and records
+  what each phase discovered, so a fresh chat can take Phase 4 without reading
+  the codebase first.
+- `docs/HDRI-ASSETS.md`, `docs/TEXTURE-ASSETS.md` — only to add asset files.
+- `AI_EXPORT_PHASE.md` — only for AI-export implementation.
+- `docs/ORIGINAL-HANDOFF.md` — historical; ignore unless you need old
+  requirements.
