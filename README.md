@@ -23,6 +23,8 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 ## Current behavior
 
 - Booth sizes, back/left/right walls, four tent forms, lighting and procedural/photo surroundings.
+- Perspective orbit reaches ground level for low looking-up views; the floor plane, not a fixed angle, is the limit.
+- Urban horizon builds a seeded three-ring skyline with textured facades, lit windows, setbacks and rooftop clutter.
 - Neighbor layouts: inline, either corner, or island, with side/rear spacing.
 - Original Panels is a reusable source library. Clicking or dropping creates another placement; the original remains.
 - Artwork can hang on all six back/left/right interior and exterior faces.
@@ -58,7 +60,7 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 - `src/texture-cache.js`: source/edit-keyed GPU texture reuse.
 - `src/image-edit.js`: non-destructive Canvas adjustments.
 - `src/edge-material.js`: procedural artwork-edge finishes.
-- `src/environment.js`: tents, ground, horizon and neighboring booths.
+- `src/environment.js`: tents, ground, sky, city backdrop and neighboring booths.
 - `src/photo.js`: 2D booth-photo composition.
 - `src/storage.js`: IndexedDB, image loading and downloads.
 - `src/signage.js`: sign/label textures.
@@ -67,6 +69,6 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 
 ## Verification
 
-Run `npm test` and `npm run build` for every change. When a WebGL-capable browser is available, also run `npm run test:browser`, `node tests/environment.mjs`, and `node tests/wall-assets.mjs`. Test desktop plus iPhone/iPad interaction and a 4096 export.
+Run `npm test` and `npm run build` for every change. When a WebGL-capable browser is available, also run `npm run test:browser`, `npm run test:view`, and `node tests/wall-assets.mjs`. Test desktop plus iPhone/iPad interaction and a 4096 export.
 
 For a new development chat, read only `HANDOFF.md` first. Read this file when commands or architecture are needed. Read `AI_EXPORT_PHASE.md` only when implementing the paid AI export phase. `docs/ORIGINAL-HANDOFF.md` is historical reference, not current instructions.

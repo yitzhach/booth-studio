@@ -796,6 +796,12 @@ footer {
   border-radius: 3px;
   color: #95a6b8;
 }
+#build-stamp {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: #1f2d3d;
+  color: #9dc2e2;
+  white-space: nowrap;
+}
 #photo-empty {
   position: absolute;
   inset: 0;
