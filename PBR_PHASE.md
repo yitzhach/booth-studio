@@ -93,9 +93,9 @@ What exists now:
 
 Discovered here, do not re-derive:
 - **three tone-maps `scene.background`.** The background shaders include
-  `<tonemapping_fragment>`, so an already tone-mapped JPEG (what Poly Haven
-  ships, what any normal image viewer wants) goes through ACES twice and reads
-  flat. `hdri-prep` therefore writes *linear* radiance divided by a measured
+  `<tonemapping_fragment>`, so an already tone-mapped JPEG — which is what any
+  ordinary image viewer wants, and what a downloaded backdrop JPG is — goes
+  through ACES twice and reads flat. `hdri-prep` therefore writes *linear* radiance divided by a measured
   headroom `K`, records `K` in `meta.json`, and the app multiplies it back
   through `scene.backgroundIntensity` — which the shader applies *before* tone
   mapping, so the division cancels exactly. No `meta.json` ⇒ `K = 1` ⇒ the
@@ -114,9 +114,8 @@ Discovered here, do not re-derive:
 - three's `EXRExporter` → `EXRLoader` round-trip only agrees with itself under
   `ZIPS`; the exporter's default `ZIP` does not read back. That is a test-fixture
   detail — real Poly Haven EXRs go through the loader, which is fine.
-- `tests/e2e.mjs` is **already red before any of this** (re-verified by stashing
-  and re-running): it still selects the label `"Artwork wall"`, renamed to
-  `"Wall location"` long ago. HANDOFF documents it. Not a regression.
+- `tests/e2e.mjs` was red before any of this, for stale selectors. Repaired in
+  Phase 3 along with `tests/wall-assets.mjs`; both are green now.
 - The sandbox's Chromium (1194) is older than the pinned Playwright wants, so
   every browser test needs `BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium`.
 
@@ -135,7 +134,45 @@ Original scope, for reference:
 - Presets to start: `tradeshow` (warehouse/studio), `artfair` (park/urban),
   `home` (interior).
 
-### Phase 3 — PBR ground and surfaces
+### Phase 3 — PBR ground — **DONE** (code; assets still to supply)
+Same shape as Phase 2: everything buildable without downloading a binary is
+shipped and tested. **What is left is dropping ambientCG sets into
+`public/assets/textures/<kind>/` — see `docs/TEXTURE-ASSETS.md`.**
+
+What exists now:
+- `src/surfaces.js`: `SURFACE_SETS`, `SurfaceTextures` (load, cache, apply,
+  dispose), `repeatFor()`. Colour is the only sRGB map; normal/rough/ao stay
+  linear; every map shares one repeat and anisotropy; `uv1` is added to the
+  ground geometry when an `aoMap` is bound.
+- `tools/texture-prep.mjs`: points at an unzipped ambientCG folder, picks the
+  four maps out by their own naming, **copies** them (no re-encode, no quality
+  loss) under `color/normal/rough/ao`, and writes `meta.json` with the tile
+  size, the normal convention and the credit. `--size` resamples, JPEG only.
+- Ground kinds `carpet` and `wood` added (model enum widened — adding values
+  keeps old backups valid). Trade show halls are carpeted; the option was
+  missing.
+- `docs/TEXTURE-ASSETS.md`.
+- Tests: `tests/surfaces.test.js` (15), `tests/texture-prep.test.js` (16),
+  `tests/view-textures.mjs` (browser, generates a real set and drives the real
+  ground mesh). All three suites in `npm test` / `npm run test:view`.
+
+Decisions worth keeping:
+- **JPG, not WebP.** The phase notes called for WebP, but nothing in the sandbox
+  can encode it (no native tooling, and a pure-JS encoder is not worth writing),
+  while ambientCG ships JPG directly. A 1K-JPG set is 1–2 MB, which fits the
+  budget with room to spare. `meta.json` names the files, so a `.webp` set
+  converted on the user's Mac drops in without a code change.
+- **Tile size lives in `meta.json`, not in the UI.** `repeat` is computed as
+  `180 / tileMetres`, so surfaces stay the same scale as each other. The
+  existing "Ground tile size" control stays a user-upload feature; exposing it
+  for PBR sets would invite exactly the mistake the physical size prevents.
+- A DX normal map is flipped with `normalScale.y = -1` rather than rejected or
+  re-encoded. That is the entire DX→GL conversion, and it is free.
+- The cache owns its maps and sets `material.userData.ownedMap = false`, because
+  `disposeGroup()` in `scene.js` disposes a material's `map` when that flag is
+  set — and these outlive every rebuild.
+
+Original scope, for reference:
 - ambientCG (CC0), 1K or 2K, **NormalGL not NormalDX**, converted to WebP:
   `Concrete034`, `Asphalt026`, `Grass004`, `Carpet013`, `WoodFloor051`,
   `Fabric063`, `Bricks075`.
@@ -153,6 +190,13 @@ Original scope, for reference:
   brick/plaster options for the `home` preset walls.
 - Contact-shadow / shadow-bias tuning under IBL; verify the 2048/4096 export
   path still renders the env and background correctly.
+- Reuse `src/surfaces.js` rather than writing a second material factory: it
+  already loads, caches, colour-spaces and disposes a set. Two things need
+  adding first — sets are currently keyed by ground kind and only one is cached
+  at a time, and a texture's `repeat` is mutated in place, so a tent and a floor
+  sharing one set would fight over it. Cache per id and clone per consumer.
+- Tiling repetition on the 180 m ground plane is visible at a low camera. If it
+  bothers you before the tent does, that is the polish to do first.
 
 ### Phase 5 — Budget and licensing
 - Resolution tiers: 1K env + 2K bg on mobile, 2K/4K on desktop; lazy-load

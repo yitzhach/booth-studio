@@ -1,68 +1,117 @@
-# HDRI assets for environment presets
+# HDRI assets — step by step
 
-The app ships with no HDRIs. Every environment preset falls back to the
-procedural sky and ground when its files are absent, so this is optional work
-that improves realism rather than something the app needs to run.
+The app ships with no HDRIs, and runs perfectly without them: a preset whose
+files are missing keeps the procedural sky and ground. Adding them is what turns
+"a 3D booth" into "a booth photographed in a place".
 
-## What each preset needs
+Everything below happens on **your** machine. Agent sessions cannot reach
+polyhaven.com — the sandbox proxy refuses the connection — so the downloads are
+yours to do, and the files get committed to the repo.
+
+---
+
+## 1. What you are producing
+
+Three presets take assets. Each one is a folder with two or three files:
 
 ```
-public/assets/hdri/<preset>/light.hdr    1K equirectangular .hdr   ~1–3 MB
-public/assets/hdri/<preset>/bg.jpg       2K or 4K .jpg             ~0.5–2 MB
-public/assets/hdri/<preset>/meta.json    written by the tool       <1 KB
+public/assets/hdri/tradeshow/light.hdr     1K equirectangular HDR   ~1–3 MB
+public/assets/hdri/tradeshow/bg.jpg        2K or 4K JPG             ~0.5–2 MB
+public/assets/hdri/tradeshow/meta.json     written by the tool      <1 KB
+
+public/assets/hdri/artfair/…               same three files
+public/assets/hdri/home/…                  same three files
 ```
 
-`<preset>` is the preset's `hdri` name in `src/lighting.js`: `tradeshow`,
-`artfair`, `home`. The `studio` preset deliberately has none — it is the
-zero-asset default.
+The folder names are fixed — `tradeshow`, `artfair`, `home` — and so are the
+file names. The `studio` preset deliberately has none; it is the default and the
+zero-asset fallback.
 
-Two files, not one. `light.hdr` is only ever filtered into a reflection probe
-(PMREM); nobody sees its pixels, so 1K is plenty. `bg.jpg` is what the camera
-actually looks at and wants resolution. A single 4K `.hdr` doing both jobs
-costs roughly ten times the bytes for no visible gain.
+**Why two files rather than one.** `light.hdr` is only ever filtered into a
+reflection probe. Nobody sees its pixels, so 1K is plenty and 4K is waste.
+`bg.jpg` is what the camera actually looks at, so it wants resolution. Using one
+4K HDR for both jobs costs roughly ten times the bytes for no visible gain.
 
-Only `light.hdr` and `bg.jpg` are required. A preset with just `light.hdr`
-lights the booth and keeps the procedural sky behind it.
+Only `light.hdr` is really required. A folder with just `light.hdr` lights the
+booth from the HDRI and keeps the procedural sky behind it — which is a
+perfectly good look, and half the download.
 
-## Where to get them
+---
 
-[Poly Haven](https://polyhaven.com/hdris) publishes CC0 HDRIs and offers both
-files on the same download page. Suggested starting points:
+## 2. Which HDRIs to get
 
-| Preset | Look to search for |
-| - | - |
-| `tradeshow` | warehouse, exhibition hall, large interior |
-| `artfair` | park, urban plaza, open sky |
-| `home` | living room, interior with windows |
+[polyhaven.com/hdris](https://polyhaven.com/hdris) — everything there is CC0
+(free, commercial use, no attribution required).
 
-Download the **1K HDR** for `light.hdr` and the **2K or 4K JPG** for `bg.jpg`,
-rename them, and commit them at the paths above. That is the shortest route and
-needs no tooling.
+| Folder | Search for | What you want to see |
+| - | - | - |
+| `tradeshow` | *warehouse*, *exhibition*, *hangar*, *studio* | a large indoor space with overhead lighting, no strong sun |
+| `artfair` | *park*, *plaza*, *courtyard*, *market* | open sky, soft daylight, ideally overcast |
+| `home` | *living room*, *interior*, *apartment* | windows on one side, warm interior light |
 
-Downloads have to happen on your machine: the sandbox agent sessions run in
-blocks `polyhaven.com` and `ambientcg.com` outright.
+Two things to avoid:
 
-### The brightness caveat
+- **Hard midday sun.** It throws a single black shadow across the booth and the
+  artwork. Overcast or open shade flatters artwork and is what a real fair tent
+  gets anyway.
+- **Anything with strong colour casts** (sunset, neon). It tints the booth
+  walls, and though the artwork is protected by the Artwork colour setting, the
+  surroundings will look wrong to you.
 
-three.js tone-maps `scene.background` with the same ACES curve it applies to the
-booth. A JPG downloaded from Poly Haven has already been tone-mapped once, so it
-goes through the curve twice and looks flatter and dimmer than the HDRI it came
-from. It still looks like the place; it just loses highlight punch.
+---
 
-`tools/hdri-prep.mjs` avoids that by writing linear radiance divided by a
-measured headroom factor and recording the factor in `meta.json`. The app
-multiplies it back in through `scene.backgroundIntensity`, inside the shader and
-before tone mapping, so the renderer's single ACES pass lands where it should.
-A hand-dropped JPG has no `meta.json`, the factor is 1, and you get the
-ordinary tone-mapped-twice backdrop.
+## 3. Pick a resolution
 
-## Converting your own HDRI
+On an asset page, the download panel offers resolutions (1K, 2K, 4K, 8K…) and
+formats (HDR, EXR, and on many assets a tone-mapped JPG). You need:
+
+| | For `light.hdr` | For `bg.jpg` |
+| - | - | - |
+| **Testing / first try** | 1K HDR | 2K |
+| **Shipping** | 1K HDR | 4K, or 2K if the backdrop is mostly out of frame |
+| **Never** | 4K or 8K HDR — ten times the bytes, zero visible gain | 8K — past the point a browser wants to decode |
+
+1K is the right answer for `light.hdr` at *every* stage. Image-based lighting is
+blurred into a probe before it is used; the resolution does nothing.
+
+For the backdrop, start at 2K. Go to 4K only if you orbit low and wide and find
+the horizon looking soft. 4K doubles the download for detail that is usually
+behind the booth.
+
+---
+
+## 4. Get the files into place
+
+### Route A — download only (fastest)
+
+1. Download the **1K HDR**. Rename it `light.hdr`.
+2. If the asset page offers a **tone-mapped JPG** at 2K or 4K, download that and
+   rename it `bg.jpg`. If it does not, skip to Route B, or skip `bg.jpg`
+   entirely and let the procedural sky stand behind the HDRI lighting.
+3. Put both in `public/assets/hdri/<preset>/`.
+4. No `meta.json`. The app defaults to a headroom of 1 and everything works.
+
+The catch, stated plainly: a tone-mapped JPG has already had a tone curve baked
+into it, and three.js applies its own ACES curve to the background as well. The
+backdrop therefore reads flatter and dimmer than the HDRI it came from. It still
+looks like the place. Route B fixes it.
+
+### Route B — the tool (best quality, one command)
+
+1. Download **one** file: the 1K HDR, or a 4K HDR/EXR if you want a 4K backdrop
+   from the same source.
+2. Run:
 
 ```sh
-node tools/hdri-prep.mjs ~/Downloads/warehouse_4k.exr tradeshow
+node tools/hdri-prep.mjs ~/Downloads/warehouse_4k.exr tradeshow --bg 4096 \
+  --credit "Warehouse by Sergej Majboroda (Poly Haven)"
 ```
 
-Writes all three files into `public/assets/hdri/tradeshow/`. Options:
+That writes all three files into `public/assets/hdri/tradeshow/`, correctly
+named, with the headroom measured and recorded in `meta.json` so the backdrop's
+brightness comes out right.
+
+Options:
 
 ```
 --light <px>      width of light.hdr           (default 1024)
@@ -75,16 +124,46 @@ Writes all three files into `public/assets/hdri/tradeshow/`. Options:
 ```
 
 It reads `.hdr` and `.exr`, requires a 2:1 equirectangular source, and will not
-stretch a backdrop past the source's own width. A 4096x2048 source takes about
+stretch a backdrop past the source's own width. A 4096×2048 source takes about
 three seconds and peaks near 450 MB of memory — the price of resampling in plain
 JavaScript rather than depending on native image tooling. Typical output from a
 4K source: `light.hdr` about 1.6 MB at 1K, `bg.jpg` about 1.2 MB at 4K.
 
-## Budget
+---
+
+## 5. Check that it worked
+
+```sh
+npm run dev
+```
+
+Open the app → **Layout** → **Surroundings** → **Environment**, and pick the
+preset you just filled in.
+
+You should see:
+
+- the booth's shading change — reflections and fill light now come from the
+  HDRI, not from a flat hemisphere;
+- a photographed backdrop behind the booth instead of the grey studio wall or
+  the procedural skyline;
+- a **Backdrop rotation** field appear under Photographic materials. Drag it and
+  the backdrop turns; use it to put the interesting part of the room behind the
+  booth's open side.
+
+If nothing changes, the files are not where the app looks. Check in the browser
+devtools Network tab for `assets/hdri/<preset>/light.hdr` — a **200 that returns
+HTML** means the path is wrong and the dev server answered with the app itself.
+That case is handled (the app falls back silently rather than crashing), which
+is exactly why a silent fallback can look like "nothing happened".
+
+---
+
+## 6. Budget and licensing
 
 - Cloudflare Workers caps a single asset at 25 MiB. Nothing here comes close.
-- Keep the whole of `public/assets` under about 50 MB. Past that, move the
-  files to R2 and load them by URL instead of committing them.
+- Keep all of `public/assets` under about 50 MB. Three presets at 1K HDR + 4K JPG
+  is roughly 8–9 MB, so there is plenty of room. Past 50 MB, move the files to
+  R2 and load them by URL instead of committing them.
 - Mention any asset over ~4 MB in its commit message.
-- Both Poly Haven and ambientCG are CC0 and need no attribution, but record
-  what you used: pass `--credit` so `meta.json` carries it.
+- Poly Haven is CC0: no attribution required. Record it anyway — pass `--credit`
+  so `meta.json` carries the asset name and author.

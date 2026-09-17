@@ -6,13 +6,18 @@
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - Active branch: `claude/stoic-goodall-26lt81`, carrying the photoreal phase
-  (`PBR_PHASE.md`): Phase 1 (image-based lighting plumbing) and Phase 2 (HDRI
-  backdrops) are done in code. PR #3 has merged.
+  (`PBR_PHASE.md`). Phases 1–3 are **done in code**: image-based lighting,
+  HDRI backdrops, and PBR ground surfaces. Phase 4 (tent/walls) is next and
+  `PBR_PHASE.md` says exactly where to start. PR #3 has merged.
 - **Nothing here is live until this branch merges to `main`.**
-- The environment presets still show the procedural sky, because no HDRI files
-  are committed yet. That is the outstanding user task — see `docs/HDRI-ASSETS.md`.
-- Verification on this branch: `npm test` 49/49, `npm run build` clean,
-  `npm run test:view` 3/3 passing (see Testing for the browser flag).
+- Presets still show the procedural sky and the procedural floor, because no
+  asset files are committed yet. That is the outstanding *user* task, and the
+  only one: `docs/HDRI-ASSETS.md` and `docs/TEXTURE-ASSETS.md` are step-by-step.
+  The sandbox proxy blocks polyhaven.com and ambientcg.com, so no agent session
+  can do it.
+- Verification on this branch: `npm test` 80/80, `npm run build` clean,
+  `npm run test:view` 4/4, `npm run test:browser` and `node tests/wall-assets.mjs`
+  green (see Testing for the browser flag).
 
 ## How deployment actually works
 Read this before debugging any "my change isn't live" report. It cost hours once.
@@ -52,6 +57,9 @@ Read this before debugging any "my change isn't live" report. It cost hours once
 - Gradient sky on all outdoor horizons, fog colour matched to the horizon band so the skyline and ground-plane edge dissolve into haze.
 - Environment presets (studio / trade show / art fair / home): image-based lighting from an HDRI, a photographed backdrop, per-preset exposure, and an artwork-colour toggle that keeps uploaded art out of the environment's shading by default. With `public/assets` empty every preset falls back to the procedural sky, so the app never depends on a binary being there.
 - `tools/hdri-prep.mjs` converts an HDRI into the 1K `light.hdr` + `bg.jpg` + `meta.json` a preset wants, with no native image tooling.
+- PBR ground surfaces (`src/surfaces.js`): colour/normal/roughness/occlusion sets per ground kind, tiled from the surface's real-world size so every floor stays the same scale, anisotropic at grazing angles, released on swap. Ground kinds now include carpet and wood. With no files, the procedural canvas floor stays.
+- `tools/texture-prep.mjs` turns an unzipped ambientCG folder into that set by copying, not re-encoding, and records the tile size and normal-map convention.
+- Drag snapping defaults to 1 inch, matching the toolbar button that always claimed it was on.
 - Footer build stamp (see above).
 
 ## Keep
@@ -67,19 +75,25 @@ Read this before debugging any "my change isn't live" report. It cost hours once
 ## Testing
 ```sh
 npm ci
-npm test                 # 49 Node tests, all passing
+npm test                 # 80 Node tests, all passing
 npm run build            # clean
-npm run test:view        # browser: camera range, city backdrop, env presets, HDRI
+npm run test:view        # browser: camera range, city, env presets, HDRI, PBR ground
+npm run test:browser     # browser: the full editor end-to-end
+node tests/wall-assets.mjs
 ```
 - The cloud sandbox **does** have WebGL via swiftshader. Earlier notes claiming otherwise were wrong. Pass the preinstalled browser explicitly, because the pinned Playwright expects a newer build than is present:
   ```sh
   BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium npm run test:view
   ```
-- **`tests/e2e.mjs` and `tests/wall-assets.mjs` are broken on `main`**, unrelated to any current work (verified by reverting and re-running):
-  - `e2e.mjs:136` selects label `"Artwork wall"`, renamed to `"Wall location"` (values are now `<wall>-<face>`, e.g. `left-inside`); then `:179` expects `24`, gets `23.59`.
-  - `wall-assets.mjs:38` expects 4 resize handles, now 8 since edge-stretch shipped; then it clicks a `"Scale +10%"` button that no longer exists.
-  - Repairing them means reconstructing intent across several shipped features. Do not treat their failure as a regression. Ask before taking it on.
-- `README.md`'s verification section still references `node tests/environment.mjs`, which does not exist.
+- **Both stale browser suites were repaired in Phase 3 and are green.** What they
+  had drifted from: `"Artwork wall"` → `"Wall location"` (values `<wall>-<face>`),
+  `[data-art]` → `[data-source]`, 4 resize handles → 8 (edge-stretch shipped),
+  the `"Scale +10%"` button → the Artwork scale slider, `"Place on wall"` →
+  clicking a library card. The inspector renders a second, mobile copy of the
+  library, so a `[data-source=…]` locator must be scoped to `#library`.
+- One of those failures was a real bug, not drift: the Snap 1″ button rendered
+  active while `scene.snap` was `false`, so drags landed at 23.59″ in a measured
+  planning tool. Snapping now defaults **on**, matching the button.
 
 ## Known limits
 - 4096 export depends on device GPU/canvas limits.
@@ -90,19 +104,27 @@ npm run test:view        # browser: camera range, city backdrop, env presets, HD
 - Account ID: `8e38cda861b39784706d53545a0a435f`. Worker: `booth-studio`.
 
 ## Next
-1. Supply the HDRI files (`docs/HDRI-ASSETS.md`) — download on your own machine,
-   the sandbox cannot reach Poly Haven. Everything else in Phase 2 is shipped.
+1. Supply the asset files on your own machine — the sandbox cannot reach either
+   source. `docs/HDRI-ASSETS.md` (Poly Haven) and `docs/TEXTURE-ASSETS.md`
+   (ambientCG) are written as step-by-step, including what to pick for testing
+   versus shipping. Everything else in Phases 1–3 is shipped.
 2. Merge this branch so the environment work reaches production, then confirm on
    the user's Mac/iPhone/iPad: low looking-up orbit, the city backdrop, the
-   environment presets, and the footer stamp showing the merged commit.
+   environment presets, the ground surfaces, and the footer stamp showing the
+   merged commit.
 3. Test stretch handles, scale slider keyboard steps and live editor preview on touch.
 4. Test interior/exterior edited artwork and clean 2048/4096 exports.
-5. Optional, ask first: repair the two stale browser suites; surface the build stamp on mobile.
-6. When requested, begin paid AI export from `AI_EXPORT_PHASE.md`.
+5. Phase 4 of `PBR_PHASE.md` (tent fabric, wall materials, shadow tuning under
+   IBL) when the asset files are in and you can see what still looks wrong.
+6. Optional, ask first: surface the build stamp on mobile.
+7. When requested, begin paid AI export from `AI_EXPORT_PHASE.md`.
 
 ## Read map
 - Start every new chat with this file only.
 - Read `README.md` for commands, architecture or stable behavior.
-- Read `PBR_PHASE.md` for HDRI lighting and PBR surfaces; it is self-contained.
+- Read `PBR_PHASE.md` for HDRI lighting and PBR surfaces; it is self-contained
+  and records what each phase discovered, so a fresh chat can take Phase 4
+  without re-reading the codebase.
+- Read `docs/HDRI-ASSETS.md` / `docs/TEXTURE-ASSETS.md` only to add asset files.
 - Read `AI_EXPORT_PHASE.md` only for AI-export implementation.
 - Ignore `docs/ORIGINAL-HANDOFF.md` unless historical requirements are needed.

@@ -5,6 +5,7 @@ import { signTexture } from "./signage.js";
 import { edgeMaterial } from "./edge-material.js";
 import { TextureCache } from "./texture-cache.js";
 import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY } from "./lighting.js";
+import { SurfaceTextures } from "./surfaces.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
 import { IN, constrain, scalePanel } from "./model.js";
 // The orbit camera may drop below the booth's centre of interest to give a
@@ -31,7 +32,10 @@ export class BoothScene {
     this.onEnd = onEnd;
     this.view = "perspective";
     this.move = false;
-    this.snap = false;
+    // On by default, matching the toolbar button's own initial state: this is a
+    // measured planning tool, and a drag that lands at 23.59 inches is not a
+    // measurement. The button turns it off for fine placement.
+    this.snap = true;
     this.textureCache = new TextureCache();
     this.scene = new T.Scene();
     this.scene.background = new T.Color("#b5b4b0");
@@ -46,6 +50,7 @@ export class BoothScene {
     this.renderer.toneMapping = T.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
     this.lighting = new EnvironmentLighting(this.renderer);
+    this.surfaces = new SurfaceTextures(this.renderer);
     host.append(this.renderer.domElement);
     this.renderer.domElement.setAttribute(
       "aria-label",
@@ -231,6 +236,14 @@ export class BoothScene {
       this.scene.background = t;
       this.scene.backgroundRotation.y = (p.booth.surroundRotation || 0) * Math.PI / 180;
       this.scene.fog = null;
+    }).catch(() => {});
+    // A photographed ground surface, when its files are present. The user's own
+    // ground photo outranks it, exactly as a user panorama outranks a preset
+    // backdrop, and with no files the procedural canvas above stays.
+    if (!p.booth.groundAsset) this.surfaces.load(p.booth.ground).then(set => {
+      if (this.revision !== rev || !set) return;
+      const floor = this.group.getObjectByName("environment-ground");
+      if (this.surfaces.applyTo(floor, set)) this.renderer.shadowMap.needsUpdate = true;
     }).catch(() => {});
     if (p.booth.groundAsset) this.texture(p.booth.groundAsset).then(t => {
       if (this.revision !== rev) return;
