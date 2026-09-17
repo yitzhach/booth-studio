@@ -366,7 +366,7 @@ async function boot() {
       ${b.surroundAsset ? btn("clear-surround","Remove panorama",null,"wide") : ""}
       ${btn("upload-ground",b.groundAsset?"Replace ground texture":"Upload ground texture","image-plus","wide")}
       ${b.groundAsset ? `${field("Ground tile size","groundTile",b.groundTile||48,12,240,1,"in","booth")}${btn("clear-ground","Remove ground texture",null,"wide")}` : ""}
-      <p class="muted">Panorama: 2:1 full-sphere JPG/PNG, not an ordinary flat photo. Your own panorama replaces the environment preset's backdrop; rotation turns whichever of the two is showing. Ground: a top-down, ideally seamless photograph. Images stay on this device and enter backups/exports. Scenery is a backdrop, not reconstructed 3D.</p>`;
+      <p class="muted">Panorama: 2:1 full-sphere JPG/PNG, not an ordinary flat photo. Your own panorama replaces the environment preset's backdrop; rotation turns whichever of the two is showing, and has nothing to turn while a preset's image files are missing. Ground: a top-down, ideally seamless photograph. Images stay on this device and enter backups/exports. Scenery is a backdrop, not reconstructed 3D.</p>`;
   }
   function renderInspector() {
     const root = document.querySelector("#inspector-content"),
