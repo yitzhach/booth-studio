@@ -35,7 +35,9 @@ try {
   page.on('pageerror', (e) => errors.push(e.stack || e.message));
   await page.goto('http://127.0.0.1:5196');
   await page.waitForFunction(() => !!window.__booth?.scene);
-  await page.click('[data-tab="layout"]');
+  // Free-standing walls moved out of Layout into the Walls tool when the
+  // art-show booth arrived; the controls themselves are unchanged.
+  await page.click('[data-tab="walls"]');
 
   // No panels to begin with, and a fresh project says so in its schema.
   assert.deepEqual(await page.evaluate(() => window.__booth.project.booth.panels), [],
@@ -109,7 +111,7 @@ try {
   assert.ok(hung[0] < -24 * IN, 'art on the back face hangs behind the panel');
 
   // --- Clicking and dragging a free-standing wall in the viewport.
-  await page.click('[data-tab="layout"]');
+  await page.click('[data-tab="walls"]');
   // Stand it square in the middle of the booth so it is unmistakably in frame.
   for (const [label, value] of [['Position X', '0'], ['Position Z', '0'], ['Rotation', '0']]) {
     await page.fill(`input[aria-label="Panel 1 ${label}"]`, value);
@@ -137,7 +139,7 @@ try {
   assert.equal(await page.evaluate(() => window.__booth.scene.selectedPanel), key,
     'and the scene outlines the one that is selected');
   assert.ok(await page.locator('.wall-setting.selected').count(),
-    'its Layout controls say which wall the sliders are about to move');
+    'its Walls controls say which wall the sliders are about to move');
 
   // Drag it. A selected wall follows the pointer across the floor.
   [px, py] = await screenPoint(key);
@@ -178,7 +180,7 @@ try {
     'and the mesh goes with it');
 
   // Removing the panel keeps the placement, on the back wall.
-  await page.click('[data-tab="layout"]');
+  await page.click('[data-tab="walls"]');
   await page.locator('[data-action^="delete-panel-"]').click();
   await page.waitForTimeout(500);
   assert.equal(await page.evaluate(() => window.__booth.project.art[0].wall), 'back',

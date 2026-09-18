@@ -1,0 +1,191 @@
+// The art-show booth: its venue switch, its panel module, its pedestals and
+// the schema promise that none of it breaks a backup written before it
+// existed. The renderer is tests/view-artshow.mjs; this is the arithmetic.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import {
+  ART_SHOW,
+  MAX_PEDESTALS,
+  OUTDOOR,
+  PEDESTAL,
+  applyVenue,
+  artShowPanel,
+  blankProject,
+  constrainPedestal,
+  hallSpec,
+  isArtShow,
+  lightBarSpec,
+  panelCount,
+  relinkArtShowWalls,
+  uid,
+  validateProject,
+} from "../src/model.js";
+import { fixtureShare, lightBarFixtures } from "../src/lightbar.js";
+
+const artShow = () => applyVenue(blankProject(), "artshow");
+
+test("a new project is the outdoor booth it has always been", () => {
+  const p = blankProject();
+  assert.equal(isArtShow(p), false);
+  assert.equal(p.booth.width, OUTDOOR.width);
+  assert.equal(p.booth.walls.back.height, OUTDOOR.wallHeight);
+  assert.deepEqual(p.booth.pedestals, []);
+});
+
+test("the art-show venue is the booth that was asked for", () => {
+  const p = artShow();
+  assert.equal(p.booth.venue, "artshow");
+  assert.equal(p.booth.walls.back.width, 144, "144in back wall");
+  assert.equal(p.booth.walls.left.width, 120, "120in side walls");
+  assert.equal(p.booth.walls.right.width, 120);
+  for (const wall of ["back", "left", "right"])
+    assert.equal(p.booth.walls[wall].height, 144, wall + " wall is 144in tall");
+  assert.equal(p.booth.tent, false, "no canopy indoors");
+  assert.equal(p.booth.color, ART_SHOW.color, "white walls");
+  assert.equal(lightBarSpec(p.booth).on, true, "the light bar is on");
+  assert.equal(lightBarSpec(p.booth).count, 9, "nine fixtures");
+  assert.equal(hallSpec(p.booth).on, true, "standing in a hall");
+  assert.equal(hallSpec(p.booth).ceiling, 360, "30 foot ceilings");
+  assert.equal(hallSpec(p.booth).showCeiling, false, "which is not drawn by default");
+  validateProject(p);
+});
+
+test("switching back to the outdoor booth leaves nothing of the art show", () => {
+  const p = applyVenue(artShow(), "outdoor");
+  assert.equal(p.booth.width, OUTDOOR.width);
+  assert.equal(p.booth.walls.back.height, OUTDOOR.wallHeight);
+  assert.equal(lightBarSpec(p.booth).on, false);
+  assert.equal(hallSpec(p.booth).on, false);
+  validateProject(p);
+});
+
+test("a venue switch keeps artwork on its wall and inside it", () => {
+  const p = artShow();
+  p.art.push({ id: uid(), asset: null, title: "Tall", wall: "back", x: 100, y: 120,
+    w: 40, h: 20, thickness: 1.5, offset: 0.75 });
+  applyVenue(p, "outdoor");
+  const a = p.art.at(-1);
+  assert.equal(a.wall, "back", "it is still on the back wall");
+  assert.ok(a.x + a.w <= p.booth.walls.back.width + 1e-9, "and no longer hangs off it");
+  assert.ok(a.y + a.h <= p.booth.walls.back.height + 1e-9);
+  validateProject(p);
+});
+
+test("the individual panel defaults to 38 inches and counts out each wall", () => {
+  const p = artShow();
+  assert.equal(artShowPanel(p.booth).width, 38);
+  // 144 / 38 is 3.79: the nearest whole number of panels, not a fraction.
+  assert.equal(panelCount(p, "back"), 4);
+  assert.equal(panelCount(p, "left"), 3);
+});
+
+test("rebuilding from the panel module snaps each wall to whole panels", () => {
+  const p = artShow();
+  p.booth.artShow = { ...artShowPanel(p.booth), width: 30, height: 96 };
+  relinkArtShowWalls(p);
+  // Each wall keeps the number of 30in panels it is nearest to — 144 is 4.8
+  // of them, so five — rather than the count it had at the old width. A
+  // rebuild is meant to leave the booth about the size it already was.
+  assert.equal(p.booth.walls.back.width, 150, "5 panels of 30in");
+  assert.equal(p.booth.walls.left.width, 120, "4 panels of 30in");
+  assert.equal(p.booth.walls.back.height, 96);
+  assert.equal(p.booth.width, 150, "the footprint follows the back wall");
+  assert.equal(p.booth.depth, 120, "and the depth follows a side wall");
+  validateProject(p);
+});
+
+test("a wider panel cannot push a wall past the schema's limit", () => {
+  const p = artShow();
+  p.booth.artShow = { ...artShowPanel(p.booth), width: 200 };
+  relinkArtShowWalls(p);
+  for (const wall of ["back", "left", "right"])
+    assert.ok(p.booth.walls[wall].width <= 360);
+  validateProject(p);
+});
+
+test("nine fixtures are shared three to a wall, and remainders go to the back", () => {
+  assert.deepEqual(fixtureShare(9), { left: 3, back: 3, right: 3 });
+  assert.deepEqual(fixtureShare(8), { left: 3, back: 3, right: 2 });
+  assert.deepEqual(fixtureShare(7), { left: 2, back: 3, right: 2 });
+  assert.deepEqual(fixtureShare(1), { left: 0, back: 1, right: 0 });
+});
+
+test("every fixture hangs on the bar and is aimed at its own wall", () => {
+  const p = artShow();
+  const fixtures = lightBarFixtures(p);
+  assert.equal(fixtures.length, 9);
+  const bar = lightBarSpec(p.booth);
+  for (const f of fixtures) {
+    assert.equal(f.y, bar.height, "every head hangs at the bar's height");
+    assert.ok(f.z > 0, "the bar is at the front of the booth");
+    assert.ok(Math.abs(f.x) <= p.booth.width / 2, "and no head hangs off its end");
+    if (f.wall === "back") assert.equal(f.tz, -p.booth.depth / 2);
+    if (f.wall === "left") assert.equal(f.tx, -p.booth.width / 2);
+    if (f.wall === "right") assert.equal(f.tx, p.booth.width / 2);
+    assert.ok(f.ty > 0 && f.ty < p.booth.walls.back.height, "aimed at the wall's face");
+  }
+  // Left to right along the bar, and never two heads in one place.
+  const xs = fixtures.map((f) => f.x);
+  assert.deepEqual(xs, [...xs].sort((a, b) => a - b));
+  assert.equal(new Set(xs).size, xs.length);
+});
+
+test("a hidden wall is given no fixtures, and its share is not handed on", () => {
+  const p = artShow();
+  p.booth.walls.left.enabled = false;
+  const fixtures = lightBarFixtures(p);
+  assert.equal(fixtures.filter((f) => f.wall === "left").length, 0);
+  assert.equal(fixtures.length, 6, "six heads, not nine crowded onto two walls");
+});
+
+test("a bar that is off hangs nothing", () => {
+  const p = artShow();
+  p.booth.lightBar = { ...lightBarSpec(p.booth), on: false };
+  assert.deepEqual(lightBarFixtures(p), []);
+});
+
+test("a pedestal is 44 by 12 by 12 with a solid top", () => {
+  assert.deepEqual(PEDESTAL, { width: 12, depth: 12, height: 44, color: PEDESTAL.color });
+});
+
+test("a pedestal is pulled back inside the footprint, the way a panel is", () => {
+  const p = artShow();
+  const ped = constrainPedestal(p, { id: "a", ...PEDESTAL, x: 400, z: -400, rotation: 0 });
+  assert.equal(ped.x, p.booth.width / 2);
+  assert.equal(ped.z, -p.booth.depth / 2);
+});
+
+test("pedestals validate, and there is a limit", () => {
+  const p = artShow();
+  p.booth.pedestals = [{ id: "one", name: "Cards", ...PEDESTAL, x: 10, z: 10, rotation: 15 }];
+  validateProject(p);
+  p.booth.pedestals = Array.from({ length: MAX_PEDESTALS + 1 }, (_, i) => ({
+    id: "p" + i, ...PEDESTAL, x: 0, z: 0, rotation: 0,
+  }));
+  assert.throws(() => validateProject(p));
+  p.booth.pedestals = [{ id: "dup", ...PEDESTAL, x: 0, z: 0, rotation: 0 },
+    { id: "dup", ...PEDESTAL, x: 0, z: 0, rotation: 0 }];
+  assert.throws(() => validateProject(p), "two pedestals may not share an id");
+  p.booth.pedestals = [{ id: "bad", ...PEDESTAL, height: 400, x: 0, z: 0, rotation: 0 }];
+  assert.throws(() => validateProject(p), "a 400in pedestal is not a pedestal");
+});
+
+test("a backup written before any of this still opens", () => {
+  // Exactly the shape a schema-1 backup had: no venue, no artShow, no
+  // lightBar, no hall, no pedestals — and, as before, no panels either.
+  const p = blankProject();
+  for (const key of ["venue", "artShow", "lightBar", "hall", "pedestals", "panels"])
+    delete p.booth[key];
+  validateProject(p);
+  assert.equal(isArtShow(p), false, "it is the outdoor booth it was");
+  assert.equal(artShowPanel(p.booth).width, 38, "and reads the defaults for the rest");
+  assert.equal(lightBarSpec(p.booth).on, true);
+  assert.equal(hallSpec(p.booth).on, false);
+  assert.deepEqual(lightBarFixtures(p).length, 9, "a light bar it never asked for is not drawn");
+});
+
+test("a booth is not both venues: an unknown venue is refused", () => {
+  const p = blankProject();
+  p.booth.venue = "gallery";
+  assert.throws(() => validateProject(p));
+});

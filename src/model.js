@@ -14,6 +14,12 @@ export function blankProject() {
       height: 96,
       tent: false,
       tentStyle: "classic",
+      // Which kind of show this booth is for. "outdoor" is the pop-up canopy
+      // this app has always drawn; "artshow" is an indoor convention booth:
+      // seamless white pro-panel walls, a light bar instead of a canopy, and
+      // an exhibition hall around it. Optional, so a schema-1 backup written
+      // before it existed loads as the outdoor booth it was.
+      venue: "outdoor",
       ground: "studio",
       horizon: "studio",
       neighbors: false,
@@ -52,6 +58,21 @@ export function blankProject() {
       // x/z are inches from the booth centre (+x right, +z toward the
       // entrance), rotation is degrees about the vertical axis.
       panels: [],
+      // The modular panel an art-show wall is built from. The walls keep
+      // their own authoritative width and height; this is the module they
+      // can be rebuilt from, and `linked` is what says they should be.
+      artShow: { ...ART_SHOW_PANEL },
+      // A light bar across the booth with directional heads spotting each
+      // wall. Derived scenery, not spotlights in `p.lights`: nine fixtures
+      // would fill that list four times over, and their aim is a consequence
+      // of the booth's own measurements rather than something to type.
+      lightBar: { ...LIGHT_BAR },
+      // The white exhibition hall an indoor booth stands in.
+      hall: { ...HALL },
+      // Free-standing pedestals: a plinth with a solid top for cards, a
+      // tablet or a guest book. Placed and dragged the way a free-standing
+      // wall is, and like `panels` absent from every older backup.
+      pedestals: [],
     },
     art: [],
     assets: {},
@@ -108,6 +129,138 @@ export function demoProject() {
     }),
   );
   return p;
+}
+/**
+ * The art-show booth, as asked for and as measured: a 144″ wide back wall and
+ * 120″ side walls, all 144″ tall, in white, with no seams. These are the
+ * defaults the venue switch writes; every one of them stays editable
+ * afterwards, which is what "custom booth dimensions" means here.
+ */
+export const ART_SHOW = {
+  width: 144,
+  depth: 120,
+  height: 144,
+  backWidth: 144,
+  sideWidth: 120,
+  wallHeight: 144,
+  color: "#f4f3f0",
+};
+/** The outdoor pop-up this app has always opened with. */
+export const OUTDOOR = {
+  width: 120,
+  depth: 120,
+  height: 96,
+  backWidth: 120,
+  sideWidth: 120,
+  wallHeight: 96,
+  color: "#45474a",
+};
+/** The individual display panel an art-show wall is built from. */
+export const ART_SHOW_PANEL = { width: 38, height: 144, linked: false };
+export const LIGHT_BAR = {
+  on: true,
+  height: 132,
+  count: 9,
+  power: 60,
+  kelvin: 3500,
+};
+// 30 foot ceilings, as asked. The ceiling itself is off by default: it is
+// almost always out of frame, and drawing it puts a grey wash over the booth.
+export const HALL = { on: false, ceiling: 360, showCeiling: false };
+export const VENUES = { outdoor: "Outdoor · pop-up canopy", artshow: "Art show · indoor booth" };
+/** Accepts a project or a booth: the scene has one, the environment the other. */
+export const isArtShow = (p) => ((p?.booth || p)?.venue || "outdoor") === "artshow";
+/** Defaults filled in, so a backup written before these existed reads whole. */
+export const artShowPanel = (b) => ({ ...ART_SHOW_PANEL, ...(b.artShow || {}) });
+export const lightBarSpec = (b) => ({ ...LIGHT_BAR, ...(b.lightBar || {}) });
+export const hallSpec = (b) => ({ ...HALL, ...(b.hall || {}) });
+/**
+ * Switch a booth between the two venues. Everything it writes is a default a
+ * user can then change; what it must not do is leave a booth in a state its
+ * own venue cannot describe — an art show with a canopy over it, or an
+ * outdoor pop-up with 12ft walls it never asked for.
+ */
+export function applyVenue(p, venue) {
+  const spec = venue === "artshow" ? ART_SHOW : OUTDOOR;
+  const b = p.booth;
+  b.venue = venue === "artshow" ? "artshow" : "outdoor";
+  b.width = spec.width;
+  b.depth = spec.depth;
+  b.height = spec.height;
+  b.color = spec.color;
+  b.walls.back = { ...b.walls.back, width: spec.backWidth, height: spec.wallHeight };
+  b.walls.left = { ...b.walls.left, width: spec.sideWidth, height: spec.wallHeight };
+  b.walls.right = { ...b.walls.right, width: spec.sideWidth, height: spec.wallHeight };
+  if (venue === "artshow") {
+    // A hall has a roof of its own; a canopy indoors is a contradiction.
+    b.tent = false;
+    b.ground = "studio";
+    b.horizon = "studio";
+    b.wallFinish = "smooth";
+    b.artShow = { ...artShowPanel(b), height: spec.wallHeight };
+    b.lightBar = { ...lightBarSpec(b), on: true };
+    b.hall = { ...hallSpec(b), on: true };
+  } else {
+    b.hall = { ...hallSpec(b), on: false };
+    b.lightBar = { ...lightBarSpec(b), on: false };
+  }
+  // Art already hanging is measured against walls that just changed size.
+  p.art = p.art.map((a) => constrain(p, a));
+  p.booth.panels = boothPanels(p).map((panel) => constrainPanel(p, panel));
+  p.booth.pedestals = boothPedestals(p).map((ped) => constrainPedestal(p, ped));
+  return p;
+}
+/**
+ * How many whole panels of the current module a wall is, and what it would
+ * measure if it were built from them. Nothing is rewritten here: the readout
+ * is what makes the module mean something on a wall whose width is its own.
+ */
+export function panelCount(p, key) {
+  const spec = wallSpec(p, key), module = artShowPanel(p.booth);
+  if (!spec || !(module.width > 0)) return 0;
+  return Math.max(1, Math.round(spec.width / module.width));
+}
+/**
+ * Rebuild the three perimeter walls from the panel module: each takes the
+ * whole number of panels its current width is nearest to, at the module's
+ * width and height — so a rebuild leaves the booth about the size it already
+ * was, snapped to panels, rather than to whatever count it happened to have
+ * at the old width. The footprint follows, because a wall wider than the
+ * booth is not a booth anyone can build.
+ */
+export function relinkArtShowWalls(p) {
+  const module = artShowPanel(p.booth);
+  const counts = {};
+  for (const key of ["back", "left", "right"]) counts[key] = panelCount(p, key);
+  for (const key of ["back", "left", "right"]) {
+    const width = Math.max(12, Math.min(360, counts[key] * module.width));
+    p.booth.walls[key] = {
+      ...p.booth.walls[key],
+      width: Math.round(width * 100) / 100,
+      height: module.height,
+    };
+  }
+  p.booth.width = Math.max(48, Math.min(360, p.booth.walls.back.width));
+  p.booth.depth = Math.max(48, Math.min(360, p.booth.walls.left.width));
+  p.booth.height = Math.max(48, Math.min(144, module.height));
+  p.art = p.art.map((a) => constrain(p, a));
+  return p;
+}
+export const PEDESTAL_PREFIX = "pedestal:";
+export const MAX_PEDESTALS = 8;
+/** The pedestal asked for: 44″ tall, 12 × 12, with a solid top. */
+export const PEDESTAL = { width: 12, depth: 12, height: 44, color: "#f4f3f0" };
+export const boothPedestals = (p) => p.booth.pedestals || [];
+export const findPedestal = (p, id) =>
+  boothPedestals(p).find((ped) => ped.id === id) || null;
+/** A pedestal with its X/Z pulled back inside the footprint. Same rule a panel gets. */
+export function constrainPedestal(p, ped) {
+  const r = panelRange(p);
+  return {
+    ...ped,
+    x: Math.max(-r.x, Math.min(r.x, ped.x)),
+    z: Math.max(-r.z, Math.min(r.z, ped.z)),
+  };
 }
 export const PANEL_PREFIX = "panel:";
 export const panelKey = (id) => PANEL_PREFIX + id;
@@ -235,6 +388,64 @@ export function validateProject(p) {
     if (p.booth[key] !== undefined && !values.includes(p.booth[key])) fail();
   }
   if (p.booth.neighbors !== undefined && typeof p.booth.neighbors !== "boolean") fail();
+  if (p.booth.venue !== undefined && !["outdoor", "artshow"].includes(p.booth.venue)) fail();
+  // The panel module, the light bar and the hall are all optional records.
+  // Undefined means "the defaults above", which is exactly what every backup
+  // written before this release says.
+  if (p.booth.artShow !== undefined) {
+    const a = p.booth.artShow;
+    if (
+      !a ||
+      typeof a !== "object" ||
+      !finite(a.width, 6, 360) ||
+      !finite(a.height, 24, 144) ||
+      (a.linked !== undefined && typeof a.linked !== "boolean")
+    )
+      fail();
+  }
+  if (p.booth.lightBar !== undefined) {
+    const l = p.booth.lightBar;
+    if (
+      !l ||
+      typeof l !== "object" ||
+      typeof l.on !== "boolean" ||
+      !finite(l.height, 24, 240) ||
+      !finite(l.count, 1, 24) ||
+      l.count !== Math.round(l.count) ||
+      !finite(l.power, 0, 300) ||
+      !finite(l.kelvin, 2700, 6500)
+    )
+      fail();
+  }
+  if (p.booth.hall !== undefined) {
+    const h = p.booth.hall;
+    if (!h || typeof h !== "object" || typeof h.on !== "boolean" || !finite(h.ceiling, 96, 720))
+      fail();
+    if (h.showCeiling !== undefined && typeof h.showCeiling !== "boolean") fail();
+  }
+  if (p.booth.pedestals !== undefined) {
+    if (!Array.isArray(p.booth.pedestals) || p.booth.pedestals.length > MAX_PEDESTALS) fail();
+    const seen = new Set();
+    for (const ped of p.booth.pedestals) {
+      if (
+        !ped ||
+        typeof ped.id !== "string" ||
+        !ped.id ||
+        ped.id.length > 200 ||
+        seen.has(ped.id) ||
+        !finite(ped.width, 4, 96) ||
+        !finite(ped.depth, 4, 96) ||
+        !finite(ped.height, 6, 96) ||
+        !finite(ped.x, -360, 360) ||
+        !finite(ped.z, -360, 360) ||
+        !finite(ped.rotation, -180, 180)
+      )
+        fail();
+      if (ped.name !== undefined && (typeof ped.name !== "string" || ped.name.length > 200)) fail();
+      if (ped.color !== undefined && !/^#[0-9a-f]{6}$/i.test(ped.color)) fail();
+      seen.add(ped.id);
+    }
+  }
   for (const wall of ["back", "left", "right"]) {
     let w = p.booth.walls?.[wall];
     if (

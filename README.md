@@ -23,6 +23,8 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 ## Current behavior
 
 - Booth sizes, back/left/right walls, free-standing interior walls you can click and drag across the floor, four tent forms, lighting and procedural/photo surroundings.
+- Two booth venues. The **Art show** tool switches the booth to an indoor convention booth: seamless white pro-panel walls (144″ back, 120″ sides, 144″ tall by default), no canopy, a light bar across the front carrying nine directional heads that spot each wall, and an optional white exhibition hall with 30 ft ceilings and neighbouring booths. Booth dimensions, wall dimensions and the individual display panel (38″ by default) are all typed in inches, and the walls can be rebuilt from the panel module. See `ART_SHOW_PHASE.md`.
+- The **Walls** tool holds everything that stands on the booth floor: free-standing display walls, and pedestals (44″ × 12″ × 12″ by default, solid top, for cards, a tablet or a guest book). Double-click a pedestal in the booth to pick it up, then drag it across the floor or use its sliders. Both are measured in inches from the centre of the floor.
 - Environment presets light the booth from an HDRI and can supply a photographed backdrop; without those files a preset keeps the procedural surroundings. See `docs/HDRI-ASSETS.md`.
 - Ground surfaces (studio, grass, concrete, asphalt, carpet, wood) use real PBR texture sets when their files are present, tiled from the surface's real-world size; otherwise the procedural canvas ground. See `docs/TEXTURE-ASSETS.md`.
 - Dragging artwork snaps to 1 inch by default; the Snap 1″ toolbar button turns it off for fine placement.
@@ -38,7 +40,7 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 - Non-destructive rotate, flip, exposure, contrast, saturation, temperature and tint.
 - Image-edit preview is live; edits can be copied and pasted between placements.
 - Artist signs and small artwork labels use the same wall-placement system.
-- PNG exports at 2048/4096 px and printable measured hanging guides.
+- PNG exports at 2048/4096 px and printable measured hanging guides. A guide also lists any pedestals and, for an art-show booth, every light-bar fixture and what it is aimed at.
 - Custom video mode: a timeline of your own keyframes, each captured from the viewport, with per-keyframe time, hold and ramp, fade in and out, and an optional lens flare that tracks the camera. It renders through the same `(t) -> pose` contract the fixed moves do, so the encoder and the muxer are untouched; see `CUSTOM_VIDEO_PHASE.md`.
 - MP4 video export: four eased camera moves (orbit, push in, reveal, survey) at 720p/1080p/1440p and 24/30/60 fps. Frames are rendered offline and encoded with WebCodecs, so the clip runs at the chosen frame rate regardless of how fast the machine renders. H.264 where the browser encodes it — with the level derived from the frame size and rate — and VP9 in MP4 where it does not; see `src/video.js`.
 - The export panel probes and states which codec the browser will use *before* rendering, and warns when it falls back to VP9, which QuickTime Player cannot open.

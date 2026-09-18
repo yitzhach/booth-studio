@@ -34,6 +34,17 @@ Extend it; do not rebuild it.
 - **The backdrop is aimed from the Layout panel.** Layout → Surroundings →
   Backdrop: a zoom slider with -/+/reset buttons, plus pan (horizontal) and
   tilt (vertical). `+`/`-` on the keyboard zoom the viewport camera.
+- **The indoor art-show booth is done.** Two new inspector tabs. **Art show**
+  switches `booth.venue` to `"artshow"`: seamless white walls (144″ back, 120″
+  sides, 144″ tall), no canopy, a light bar across the front with nine
+  directional heads spotting the three walls, and a white exhibition hall with
+  30 ft ceilings around it. Booth dimensions, wall dimensions and the
+  individual display panel (38″ default) are all typed in inches; `Rebuild
+  walls from this panel` snaps the walls to whole panels. **Walls** holds the
+  free-standing walls — moved out of Layout — and the new pedestals (44 × 12 ×
+  12 by default, solid top, double-click in the booth to pick one up and drag
+  it). `src/lightbar.js` derives the nine fixtures from the booth's own
+  measurements; `ART_SHOW_PHASE.md` is the record of what was decided.
 - **Free-standing interior walls are done.** Layout → Free-standing walls: add
   a panel, type its width, height, X/Z position and rotation in inches, and
   hang art on either face through the usual Location dropdown. `booth.panels`
@@ -63,6 +74,14 @@ Extend it; do not rebuild it.
    play, start here.
 3. **Unverified on real hardware** — things no one has confirmed by eye,
    because no agent session can load the live site:
+   - **Nobody has looked at an art-show booth.** The measurements are pinned by
+     tests that read the meshes back, and the nine spotlights are checked
+     against the arithmetic that placed them — but whether a nine-head wall
+     wash reads as an art-show booth, whether the hall reads as a hall rather
+     than a grey room, whether a seamless white wall wants the fabric finish
+     on, and whether nine shadow-casting spots are affordable on a real
+     machine are all judgements that need eyes. `ART_SHOW_PHASE.md` lists
+     them and says which knob to turn first.
    - **Nobody has looked at a booth with free-standing walls in it.** Where a
      panel stands is pinned by a test that reads the mesh's world matrix back,
      so that is not a guess, and a click-and-drag in a real browser is covered
@@ -98,8 +117,8 @@ Extend it; do not rebuild it.
    started.
 
 Free-standing walls — placement, art on both faces, and now click-and-drag
-with sliders — and custom video mode are **done** and are no longer on this
-list; see Now.
+with sliders — custom video mode, and the indoor art-show booth are **done**
+and are no longer on this list; see Now.
 
 ## Diagnosing "the texture isn't showing"
 
@@ -179,7 +198,7 @@ this and neither is visible from the repository.
 npm ci
 npm test                 # 162 Node tests
 npm run build
-npm run test:view        # camera, city, env presets, HDRI, ground, tent, walls, video, timeline, panels
+npm run test:view        # camera, city, env presets, HDRI, ground, tent, walls, video, timeline, panels, art show
 npm run test:browser     # 19 end-to-end checks
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
 ```
@@ -199,7 +218,11 @@ hidden a failure once. Run each suite directly.
 
 - Preserve schema-1 backup compatibility. Optional fields and widened enums are
   fine; changed meaning is not. `booth.panels` and the widened `a.wall` are the
-  worked example; `WALLS_PHASE.md` explains how it was kept.
+  worked example; `WALLS_PHASE.md` explains how it was kept. The art-show
+  booth added five more optional keys — `venue`, `artShow`, `lightBar`, `hall`
+  and `pedestals` — the same way, and `artShowPanel()` / `lightBarSpec()` /
+  `hallSpec()` are the only things that read them, so `undefined` means the
+  defaults everywhere.
 - **Never alter stored original image data.** Edits belong to placements.
 - The city skyline must stay **seeded**, never `Math.random`: it rebuilds on
   every `update()` and would reshuffle on each edit. `tests/view-city.mjs`
@@ -283,6 +306,13 @@ hidden a failure once. Run each suite directly.
   claim their set under `wall:<key>`, and the three perimeter walls are
   forever. A panel is not, so `surfaces.releaseMatching()` now hands back every
   `wall:` claim that is not in the current wall list on each rebuild.
+- **`tests/view-video.mjs`, `tests/view-timeline.mjs` and `tests/environment.mjs`
+  are flaky in this sandbox**, and it is not a regression to chase. All three
+  have assertions timed against wall clock — a preview must report progress, a
+  4096px export must finish inside 30s — and swiftshader is slow enough to
+  miss them at random. `view-video` and `environment` fail on `main` as well;
+  `view-timeline` passed and then failed on two consecutive runs of the same
+  commit. Re-run before believing any of the three.
 - **The tent weave is exaggerated 3x** over its literal depth. A true-depth
   weave on a white, brightly lit, tone-mapped roof is invisible. That is a
   rendering choice, not a measurement, and it is commented as one.
@@ -293,6 +323,9 @@ hidden a failure once. Run each suite directly.
 - `PBR_PHASE.md` — HDRI lighting and PBR surfaces, and what each phase found.
 - `WALLS_PHASE.md` — free-standing interior walls: the schema-compatibility
   problem and every decision taken around it.
+- `ART_SHOW_PHASE.md` — the indoor art-show booth: the venue switch, why the
+  light bar is scenery rather than spotlights, why the panel module does not
+  own the walls, and what still needs eyes.
 - `src/camera-path.js`, `src/video.js` — the camera moves and the MP4 writer.
   Both carry their reasoning in comments; neither needs a phase document.
 - `CUSTOM_VIDEO_PHASE.md` — custom video mode: the keyframe model, why speed is

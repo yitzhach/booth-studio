@@ -7,7 +7,8 @@ import { TextureCache } from "./texture-cache.js";
 import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY } from "./lighting.js";
 import { GROUND_CONSUMER, TENT_CONSUMER, TENT_WEAVE, WALL_CONSUMER, WALL_SET, UV_METRE, SurfaceTextures } from "./surfaces.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
-import { IN, constrain, constrainPanel, findPanel, isPanelKey, scalePanel, wallKeys, wallSpec } from "./model.js";
+import { IN, PEDESTAL, boothPedestals, constrain, constrainPanel, constrainPedestal, findPanel, findPedestal, isArtShow, isPanelKey, scalePanel, wallKeys, wallSpec } from "./model.js";
+import { lightBarFixtures, lightBarRail } from "./lightbar.js";
 import { frameTimes, resolveMove, samplePath } from "./camera-path.js";
 import { fadeAt, isTimeline, timelineSeconds } from "./timeline.js";
 import { flareGhosts, flareSource } from "./flare.js";
@@ -144,6 +145,17 @@ function placePanelFrame(g, panel) {
   g.rotation.y = r;
   return g;
 }
+/**
+ * Stand a pedestal where its measurements say. Unlike a wall, a pedestal's
+ * X/Z is its own centre in plan and there is no frame-plane offset to undo,
+ * so this is the whole of it — but it is still one function the build and a
+ * drag both go through, for the same reason `placePanelFrame` is.
+ */
+function placePedestal(g, ped) {
+  g.position.set(ped.x * IN, 0, ped.z * IN);
+  g.rotation.y = ((ped.rotation || 0) * Math.PI) / 180;
+  return g;
+}
 export class BoothScene {
   constructor(
     host,
@@ -158,6 +170,13 @@ export class BoothScene {
     // the tests among them — still constructs a scene.
     onSelectPanel = () => {},
     onMovePanel = () => {},
+    // A pedestal is placed and dragged exactly the way a free-standing wall
+    // is, but it is not a wall: nothing hangs on it, it has no face, and its
+    // controls are their own. Two more callbacks rather than overloading the
+    // panel pair with a kind argument every existing caller would have to
+    // start passing.
+    onSelectPedestal = () => {},
+    onMovePedestal = () => {},
   ) {
     this.host = host;
     this.onSelect = onSelect;
@@ -166,7 +185,12 @@ export class BoothScene {
     this.onEnd = onEnd;
     this.onSelectPanel = onSelectPanel;
     this.onMovePanel = onMovePanel;
+    this.onSelectPedestal = onSelectPedestal;
+    this.onMovePedestal = onMovePedestal;
     this.selectedPanel = null;
+    this.selectedPedestal = null;
+    this.pedestalObjects = [];
+    this.pedestalFrames = {};
     this.view = "perspective";
     this.move = false;
     // On by default, matching the toolbar button's own initial state: this is a
@@ -490,11 +514,12 @@ export class BoothScene {
       im.src = asset.data;
     }));
   }
-  update(p, selected, selectedPanel = null) {
+  update(p, selected, selectedPanel = null, selectedPedestal = null) {
     this.renderer.shadowMap.needsUpdate = true;
     this.p = p;
     this.selected = selected;
     this.selectedPanel = findPanel(p, selectedPanel) ? selectedPanel : null;
+    this.selectedPedestal = findPedestal(p, selectedPedestal) ? selectedPedestal : null;
     if (this.scaleId !== selected) this.scaleId = null;
     this.revision = (this.revision || 0) + 1;
     const rev = this.revision;
@@ -507,6 +532,8 @@ export class BoothScene {
     this.artObjects = [];
     this.artGroups = new Map();
     this.wallObjects = [];
+    this.pedestalObjects = [];
+    this.pedestalFrames = {};
     this.resizeHandles = [];
     this.frames = {};
     const W = p.booth.width * IN,
@@ -643,6 +670,11 @@ export class BoothScene {
       exterior.rotation.y = Math.PI;
       g.add(exterior);
       this.frames[wall + "-outside"] = exterior;
+      // An art-show wall is one continuous surface — that is what a
+      // pro-panel wall is, and "no seams on these walls" is a measurement of
+      // the thing being planned, not a finish. The outdoor pop-up keeps its
+      // 30″ seam posts, feet and cap rail, because that is what it is made of.
+      if (isArtShow(p)) continue;
       const count = Math.ceil(width / (30 * IN));
       for (let i = 0; i <= count; i++) {
         const x = Math.min(width, i * 30 * IN);
@@ -795,7 +827,12 @@ export class BoothScene {
         );
       this.group.add(glow);
     }
-    this.box(W, 0.025, 0.025, 0, H - 0.025, D * 0.2, rough("#2e3032"));
+    // The pop-up's front header rail. An art-show booth has no canopy frame
+    // to carry one; it gets the light bar below instead.
+    if (!isArtShow(p))
+      this.box(W, 0.025, 0.025, 0, H - 0.025, D * 0.2, rough("#2e3032"));
+    this.buildLightBar(p, rough);
+    this.buildPedestals(p);
     if (p.booth.tent) this.group.add(makeTent(W,D,H,p.booth.tentStyle || "classic"));
     // Photographed canvas on every fabric panel in the scene, when its files
     // are present. Asked of the whole group rather than of the tent just added,
@@ -825,6 +862,159 @@ export class BoothScene {
       this.initialized = true;
       this.setView("perspective");
     }
+  }
+  /**
+   * The light bar and its heads. Nine directional fixtures spotting the three
+   * walls is what an art-show booth is lit with, and none of them is a
+   * spotlight anyone wants in the four-light list: where each one points is
+   * computed from the booth's measurements by `lightBarFixtures`, so the bar
+   * is described by five numbers and rebuilt whenever those change.
+   */
+  buildLightBar(p, rough) {
+    const rail = lightBarRail(p);
+    if (!rail.on) return;
+    const fixtures = lightBarFixtures(p);
+    if (!fixtures.length) return;
+    const bar = new T.Group();
+    bar.name = "light-bar";
+    this.group.add(bar);
+    const metal = new T.MeshStandardMaterial({
+      color: "#2b2e31",
+      roughness: 0.42,
+      metalness: 0.6,
+    });
+    // The rail itself, plus a drop at each end back to the booth's top rail.
+    this.box(rail.width * IN, 0.035, 0.035, 0, rail.y * IN, rail.z * IN, metal, bar);
+    // A short bracket at each end, running back toward the booth, so the bar
+    // reads as hung rather than floating.
+    for (const side of [-1, 1])
+      this.box(0.03, 0.03, 0.09, (side * rail.width * IN) / 2, rail.y * IN, rail.z * IN - 0.06, metal, bar);
+    for (const f of fixtures) {
+      const from = new T.Vector3(f.x * IN, f.y * IN, f.z * IN);
+      const to = new T.Vector3(f.tx * IN, f.ty * IN, f.tz * IN);
+      const light = new T.SpotLight(
+        temperature(f.kelvin),
+        f.power,
+        // Reach far enough to cross the booth diagonally and land on the wall.
+        26,
+        // Narrower than a floor-standing spot: a wall washer on a bar is aimed
+        // at one section of one wall, not at the room.
+        Math.PI / 8,
+        0.55,
+        2,
+      );
+      light.position.copy(from);
+      light.target.position.copy(to);
+      light.castShadow = true;
+      // Nine shadow-casting spots is nine shadow passes. Half the map size of
+      // a hand-placed spotlight keeps that affordable; a wall wash is a soft
+      // edge anyway, so there is nothing in it to see.
+      light.shadow.mapSize.set(512, 512);
+      light.shadow.bias = -0.00008;
+      light.shadow.normalBias = 0.004;
+      light.shadow.camera.near = 0.1;
+      light.shadow.camera.far = 26;
+      bar.add(light, light.target);
+      const head = new T.Mesh(new T.CylinderGeometry(0.035, 0.042, 0.12, 14), metal);
+      head.position.copy(from);
+      head.quaternion.setFromUnitVectors(
+        new T.Vector3(0, -1, 0),
+        to.clone().sub(from).normalize(),
+      );
+      head.castShadow = true;
+      bar.add(head);
+      const glow = new T.Mesh(
+        new T.SphereGeometry(0.024, 10, 8),
+        new T.MeshBasicMaterial({ color: temperature(f.kelvin) }),
+      );
+      glow.position.copy(from).addScaledVector(to.clone().sub(from).normalize(), 0.062);
+      bar.add(glow);
+    }
+  }
+  /**
+   * Pedestals: a plinth with a solid top for cards, a tablet or a guest book.
+   * Each is its own group so `movePedestal` can restand one without the scene
+   * rebuild `update()` performs, exactly as a free-standing wall's frame does.
+   */
+  buildPedestals(p) {
+    for (const ped of boothPedestals(p)) {
+      const g = new T.Group();
+      g.name = "pedestal:" + ped.id;
+      placePedestal(g, ped);
+      this.group.add(g);
+      this.pedestalFrames[ped.id] = g;
+      const color = ped.color || PEDESTAL.color;
+      const body = new T.MeshStandardMaterial({ color, roughness: 0.78 });
+      const w = ped.width * IN, d = ped.depth * IN, h = ped.height * IN;
+      // The top is a separate slab, slightly proud of the body on every side:
+      // a solid top is the point of the thing, and the reveal is what stops it
+      // reading as a plain extruded box.
+      const TOP = 0.02;
+      const column = this.box(w, h - TOP, d, 0, (h - TOP) / 2, 0, body, g);
+      column.userData.pedestal = ped.id;
+      this.pedestalObjects.push(column);
+      const top = this.box(
+        w + 0.01,
+        TOP,
+        d + 0.01,
+        0,
+        h - TOP / 2,
+        0,
+        new T.MeshStandardMaterial({ color, roughness: 0.55 }),
+        g,
+      );
+      top.userData.pedestal = ped.id;
+      this.pedestalObjects.push(top);
+      if (ped.id === this.selectedPedestal) {
+        const edge = new T.LineSegments(
+          new T.EdgesGeometry(new T.BoxGeometry(w, h, d)),
+          new T.LineBasicMaterial({ color: "#78b4ff" }),
+        );
+        edge.position.set(0, h / 2, 0);
+        edge.scale.setScalar(1.02);
+        edge.userData.editorOnly = true;
+        g.add(edge);
+      }
+    }
+  }
+  /**
+   * Restand one pedestal without a rebuild — the drag counterpart of
+   * `movePanel`, and the reason a pedestal is a group of its own.
+   */
+  movePedestal(ped) {
+    const list = this.p.booth.pedestals || [];
+    const index = list.findIndex((x) => x.id === ped.id);
+    if (index < 0) return;
+    list[index] = ped;
+    const g = this.pedestalFrames[ped.id];
+    if (!g) return;
+    placePedestal(g, ped);
+    this.renderer.shadowMap.needsUpdate = true;
+  }
+  /** The pedestal under the pointer, or null. Artwork and walls win the pick. */
+  pickPedestal() {
+    this.group.updateMatrixWorld(true);
+    const hit = this.ray.intersectObjects(
+      [...this.artObjects, ...this.wallObjects, ...this.pedestalObjects],
+      false,
+    )[0];
+    return hit?.object.userData.pedestal ? hit : null;
+  }
+  /**
+   * A dragged pedestal's new position, measured on the floor plane the same
+   * way a wall's is, so both read identically from any orbit.
+   */
+  pedestalDragTarget(d) {
+    const point = this.ray.ray.intersectPlane(FLOOR, new T.Vector3());
+    if (!point) return null;
+    const grid = this.snap ? 1 : 0.01;
+    const ped = findPedestal(this.p, d.pedestal);
+    if (!ped) return null;
+    return constrainPedestal(this.p, {
+      ...ped,
+      x: Math.round((point.x / IN - d.dx) / grid) * grid,
+      z: Math.round((point.z / IN - d.dz) / grid) * grid,
+    });
   }
   updateArtwork(a) {
     const entry = this.artGroups.get(a.id);
@@ -990,6 +1180,18 @@ export class BoothScene {
     };
     c.addEventListener("dblclick", e => {
       this.point(e);
+      // Double-clicking a pedestal selects it, so one gesture both picks it
+      // up and arms the drag — the single click that selects is the same
+      // click a double-click starts with, so this only has to catch the case
+      // where the first click landed on something else.
+      const ped = this.pickPedestal();
+      if (ped) {
+        e.preventDefault();
+        const id = ped.object.userData.pedestal;
+        this.selectedPedestal = id;
+        this.onSelectPedestal(id);
+        return;
+      }
       const hit = this.pickArt();
       if (!hit) return;
       e.preventDefault();
@@ -999,8 +1201,29 @@ export class BoothScene {
       if (e.button !== 0 || this.drag) return;
       this.point(e); this.group.updateMatrixWorld(true);
       this.down = [e.clientX, e.clientY];
-      const nearest = this.ray.intersectObjects([...this.resizeHandles, ...this.wallObjects, ...this.artObjects], false)[0];
+      const nearest = this.ray.intersectObjects([...this.resizeHandles, ...this.wallObjects, ...this.artObjects, ...this.pedestalObjects], false)[0];
       const handle = nearest?.object.userData.editorOnly ? nearest : null;
+      const pedestalHit = !handle && nearest?.object.userData.pedestal ? nearest : null;
+      if (pedestalHit) {
+        const id = pedestalHit.object.userData.pedestal,
+          ped = findPedestal(this.p, id);
+        // The same rule a free-standing wall gets: a first click selects, and
+        // only a selected pedestal — or the Move tool — drags. A pedestal in
+        // the middle of the booth is otherwise something you shove across the
+        // floor on the way to orbiting.
+        if (ped && (this.move || this.selectedPedestal === id)) {
+          const floor = this.ray.ray.intersectPlane(FLOOR, new T.Vector3());
+          if (floor) {
+            this.drag = { pedestal: id, dx: floor.x / IN - ped.x, dz: floor.z / IN - ped.z };
+            this.controls.enabled = false;
+            this.onStart();
+            c.setPointerCapture(e.pointerId);
+          }
+        }
+        this.selectedPedestal = id;
+        this.onSelectPedestal(id);
+        return;
+      }
       const panelHit =
         !handle && nearest && !nearest.object.userData.artId &&
         isPanelKey(nearest.object.userData.wall)
@@ -1054,6 +1277,14 @@ export class BoothScene {
         }
         return;
       }
+      if (this.drag.pedestal) {
+        const next = this.pedestalDragTarget(this.drag);
+        if (next) {
+          this.movePedestal(next);
+          this.onMovePedestal(next);
+        }
+        return;
+      }
       const point = this.ray.ray.intersectPlane(this.drag.plane, new T.Vector3());
       if (!point) return;
       const d = this.drag, local = d.frame.worldToLocal(point);
@@ -1089,6 +1320,15 @@ export class BoothScene {
       }
       if (this.down && Math.hypot(e.clientX-this.down[0], e.clientY-this.down[1]) < 7) {
         this.point(e);
+        const pedestalHit = this.pickPedestal();
+        if (pedestalHit) {
+          const id = pedestalHit.object.userData.pedestal;
+          this.lastTap = null;
+          this.down = null;
+          this.selectedPedestal = id;
+          this.onSelectPedestal(id);
+          return;
+        }
         const panelHit = this.pickPanel();
         if (panelHit) {
           const key = panelHit.object.userData.wall;
