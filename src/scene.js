@@ -7,7 +7,7 @@ import { TextureCache } from "./texture-cache.js";
 import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY } from "./lighting.js";
 import { GROUND_CONSUMER, TENT_CONSUMER, TENT_WEAVE, WALL_CONSUMER, WALL_SET, UV_METRE, SurfaceTextures } from "./surfaces.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
-import { IN, constrain, findPanel, scalePanel, wallKeys, wallSpec } from "./model.js";
+import { IN, constrain, constrainPanel, findPanel, isPanelKey, scalePanel, wallKeys, wallSpec } from "./model.js";
 import { frameTimes, resolveMove, samplePath } from "./camera-path.js";
 import { fadeAt, isTimeline, timelineSeconds } from "./timeline.js";
 import { flareGhosts, flareSource } from "./flare.js";
@@ -120,13 +120,53 @@ export function temperature(k) {
     T.SRGBColorSpace,
   );
 }
+/**
+ * Stand a free-standing wall's frame where its measurements say. A perimeter
+ * wall's frame plane sits on the footprint line, so its slab hangs just
+ * outside it. A panel has no line to sit on and is used from both sides, so
+ * its typed X/Z is the centre of the slab: the frame is pushed forward by the
+ * same offset the slab is pushed back, and the corner is that centre stepped
+ * back half a width along the frame's own +x.
+ *
+ * Both the build and a drag go through here, so a dragged panel lands exactly
+ * where typing the same numbers would have put it.
+ */
+// The plan-view plane every free-standing wall drag is measured in.
+const FLOOR = new T.Plane(new T.Vector3(0, 1, 0), 0);
+function placePanelFrame(g, panel) {
+  const r = ((panel.rotation || 0) * Math.PI) / 180,
+    half = (panel.width * IN) / 2;
+  g.position.set(
+    panel.x * IN - Math.cos(r) * half + Math.sin(r) * WALL_SLAB_OFFSET,
+    0,
+    panel.z * IN + Math.sin(r) * half + Math.cos(r) * WALL_SLAB_OFFSET,
+  );
+  g.rotation.y = r;
+  return g;
+}
 export class BoothScene {
-  constructor(host, onSelect, onMove, onStart, onEnd = () => {}) {
+  constructor(
+    host,
+    onSelect,
+    onMove,
+    onStart,
+    onEnd = () => {},
+    // A free-standing wall is selected and dragged the way artwork is, but it
+    // is not artwork: it lives in booth.panels, its inspector is Layout, and
+    // moving it changes X/Z rather than a placement. Two callbacks of its own
+    // keep that separation, and default to nothing so every older caller —
+    // the tests among them — still constructs a scene.
+    onSelectPanel = () => {},
+    onMovePanel = () => {},
+  ) {
     this.host = host;
     this.onSelect = onSelect;
     this.onMove = onMove;
     this.onStart = onStart;
     this.onEnd = onEnd;
+    this.onSelectPanel = onSelectPanel;
+    this.onMovePanel = onMovePanel;
+    this.selectedPanel = null;
     this.view = "perspective";
     this.move = false;
     // On by default, matching the toolbar button's own initial state: this is a
@@ -407,21 +447,7 @@ export class BoothScene {
       D = p.depth * IN;
     const g = new T.Group();
     const panel = findPanel(this.p, wall);
-    if (panel) {
-      const r = ((panel.rotation || 0) * Math.PI) / 180,
-        half = (panel.width * IN) / 2;
-      // A perimeter wall's frame plane sits on the footprint line, so its slab
-      // hangs just outside it. A free-standing panel has no line to sit on and
-      // is used from both sides, so its typed X/Z is the centre of the slab:
-      // the frame is pushed forward by the same offset the slab is pushed back.
-      g.position.set(
-        panel.x * IN - Math.cos(r) * half + Math.sin(r) * WALL_SLAB_OFFSET,
-        0,
-        panel.z * IN + Math.sin(r) * half + Math.cos(r) * WALL_SLAB_OFFSET,
-      );
-      g.rotation.y = r;
-      return g;
-    }
+    if (panel) return placePanelFrame(g, panel);
     if (wall === "back") g.position.set(-W / 2, 0, -D / 2);
     if (wall === "left") {
       g.position.set(-W / 2, 0, D / 2);
@@ -464,10 +490,11 @@ export class BoothScene {
       im.src = asset.data;
     }));
   }
-  update(p, selected) {
+  update(p, selected, selectedPanel = null) {
     this.renderer.shadowMap.needsUpdate = true;
     this.p = p;
     this.selected = selected;
+    this.selectedPanel = findPanel(p, selectedPanel) ? selectedPanel : null;
     if (this.scaleId !== selected) this.scaleId = null;
     this.revision = (this.revision || 0) + 1;
     const rev = this.revision;
@@ -580,6 +607,19 @@ export class BoothScene {
       );
       wallMesh.userData.wall = wall;
       this.wallObjects.push(wallMesh);
+      // The same blue outline artwork gets, for the same reason: a free-standing
+      // wall is a thing you pick up, and it has to say when it is the thing the
+      // sliders and the mouse are about to move.
+      if (wall === this.selectedPanel) {
+        const edge = new T.LineSegments(
+          new T.EdgesGeometry(wallMesh.geometry),
+          new T.LineBasicMaterial({ color: "#78b4ff" }),
+        );
+        edge.position.copy(wallMesh.position);
+        edge.scale.set(1.004, 1.004, 1.2);
+        edge.userData.editorOnly = true;
+        g.add(edge);
+      }
       // A fabric pro-panel finish: the weave, not the carpet's own colour. The
       // user picked that colour and this is a tool for judging artwork against
       // it, so only the relief and the sheen are taken and `keepColor` leaves
@@ -867,6 +907,50 @@ export class BoothScene {
     const hits = this.ray.intersectObjects([...this.artObjects, ...this.wallObjects], false);
     return hits[0]?.object.userData.artId ? hits[0] : null;
   }
+  /**
+   * The free-standing wall under the pointer, or null. Artwork wins: the walls
+   * are raycast in the same pass, so a work hanging on a panel is picked
+   * rather than the panel behind it, which is what clicking a picture means.
+   */
+  pickPanel() {
+    this.group.updateMatrixWorld(true);
+    const hit = this.ray.intersectObjects([...this.artObjects, ...this.wallObjects], false)[0];
+    if (!hit || hit.object.userData.artId) return null;
+    return isPanelKey(hit.object.userData.wall) ? hit : null;
+  }
+  /**
+   * A dragged panel's new position, from the pointer's own point on the floor.
+   * The floor is the plane a plan view is measured in, so an X/Z drag reads
+   * the same from any orbit — and a grab keeps its offset, so a panel does not
+   * jump its centre to the cursor on the first pixel of movement.
+   */
+  panelDragTarget(d) {
+    const point = this.ray.ray.intersectPlane(FLOOR, new T.Vector3());
+    if (!point) return null;
+    const grid = this.snap ? 1 : 0.01;
+    const panel = findPanel(this.p, d.key);
+    if (!panel) return null;
+    return constrainPanel(this.p, {
+      ...panel,
+      x: Math.round((point.x / IN - d.dx) / grid) * grid,
+      z: Math.round((point.z / IN - d.dz) / grid) * grid,
+    });
+  }
+  /**
+   * Restand one panel without rebuilding the scene. `update()` disposes and
+   * rebuilds everything, which is far too much for every pixel of a drag —
+   * and the exterior frame, the art hanging on both faces and the posts are
+   * all children of the panel's own frame, so moving that group moves the lot.
+   */
+  movePanel(panel) {
+    const index = (this.p.booth.panels || []).findIndex((x) => x.id === panel.id);
+    if (index < 0) return;
+    this.p.booth.panels[index] = panel;
+    const frame = this.frames["panel:" + panel.id];
+    if (!frame) return;
+    placePanelFrame(frame, panel);
+    this.renderer.shadowMap.needsUpdate = true;
+  }
   wallDrop(e, a) {
     this.point(e); this.group.updateMatrixWorld(true);
     const hit = this.ray.intersectObjects(this.wallObjects, false)[0];
@@ -917,6 +1001,30 @@ export class BoothScene {
       this.down = [e.clientX, e.clientY];
       const nearest = this.ray.intersectObjects([...this.resizeHandles, ...this.wallObjects, ...this.artObjects], false)[0];
       const handle = nearest?.object.userData.editorOnly ? nearest : null;
+      const panelHit =
+        !handle && nearest && !nearest.object.userData.artId &&
+        isPanelKey(nearest.object.userData.wall)
+          ? nearest
+          : null;
+      if (panelHit) {
+        const key = panelHit.object.userData.wall,
+          panel = findPanel(this.p, key);
+        // A first click selects; only a selected wall — or the Move tool —
+        // drags. Otherwise every click on a panel on the way to orbiting the
+        // booth would shove it across the floor.
+        if (panel && (this.move || this.selectedPanel === key)) {
+          const floor = this.ray.ray.intersectPlane(FLOOR, new T.Vector3());
+          if (floor) {
+            this.drag = { key, dx: floor.x / IN - panel.x, dz: floor.z / IN - panel.z };
+            this.controls.enabled = false;
+            this.onStart();
+            c.setPointerCapture(e.pointerId);
+          }
+        }
+        this.selectedPanel = key;
+        this.onSelectPanel(key);
+        return;
+      }
       const hit = handle || this.pickArt();
       if (!hit || (!handle && !this.move && this.scaleId !== hit.object.userData.artId)) return;
       const id = hit.object.userData.artId, a = this.p.art.find(x => x.id === id);
@@ -938,6 +1046,14 @@ export class BoothScene {
     c.addEventListener("pointermove", e => {
       if (!this.drag) return;
       this.point(e);
+      if (this.drag.key) {
+        const next = this.panelDragTarget(this.drag);
+        if (next) {
+          this.movePanel(next);
+          this.onMovePanel(next);
+        }
+        return;
+      }
       const point = this.ray.ray.intersectPlane(this.drag.plane, new T.Vector3());
       if (!point) return;
       const d = this.drag, local = d.frame.worldToLocal(point);
@@ -973,8 +1089,24 @@ export class BoothScene {
       }
       if (this.down && Math.hypot(e.clientX-this.down[0], e.clientY-this.down[1]) < 7) {
         this.point(e);
+        const panelHit = this.pickPanel();
+        if (panelHit) {
+          const key = panelHit.object.userData.wall;
+          this.lastTap = null;
+          this.down = null;
+          this.selectedPanel = key;
+          this.onSelectPanel(key);
+          return;
+        }
         const hit = this.pickArt();
         const id = hit?.object.userData.artId || null;
+        // Clicking anything that is not a free-standing wall lets go of the
+        // one that was selected, so the sliders never point at a wall the
+        // pointer has moved on from.
+        if (this.selectedPanel) {
+          this.selectedPanel = null;
+          this.onSelectPanel(null);
+        }
         const now = performance.now();
         if (
           id &&

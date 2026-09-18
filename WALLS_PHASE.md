@@ -79,15 +79,62 @@ treats that the way it already treated a hidden wall — nothing throws.
 - **A panel keeps its own height.** Changing the booth's Wall height sets all
   three perimeter walls; a free-standing wall is a separate piece of kit and is
   not swept along with them.
-- **Position is typed, not dragged.** This is a measured tool and a typed inch
-  is the thing being measured. Dragging a panel around the floor is a
-  reasonable later refinement; it is not what was asked for.
+- **Position was typed before it could be dragged.** This is a measured tool
+  and a typed inch is the thing being measured, so the first cut was numbers
+  only. Dragging came second, and did not replace them — see below.
 - **The hanging guide names where a panel stands.** A builder can read a
   perimeter wall's position off the footprint; a free-standing wall's position
   is part of the measurement, so its section carries the X, Z and rotation, and
   its two faces are called front and back rather than inside and outside.
 - **Eight panels is the limit**, and a panel does not affect `booth.width` or
   `booth.depth`, so the neighbouring-booths layout is untouched.
+
+## Second pass: click and drag, and a slider per axis
+
+Requested: *"can we make the free standing walls clickable? when selected you
+can move them with the mouse (x and z) and let's add a slider for x and z."*
+
+**Done.** Click a free-standing wall in the booth to select it; drag it across
+the floor; or pull the left/right and front/back sliders in Layout. The typed
+X and Z fields are still there and still authoritative — a drag writes the
+same two numbers, and all three controls show one value.
+
+- **A first click selects; only a selected wall drags.** The Move tool drags
+  one straight away, the same exception artwork gets. Without this, every
+  click on a panel on the way to orbiting the booth would shove it across the
+  floor, and a booth's dividers are the largest click targets in the scene.
+- **Artwork wins the pick.** Walls and art are raycast in one pass, so a work
+  hanging on a panel is what a click on that work selects. Clicking a picture
+  has never meant "pick up the wall behind it".
+- **A drag is measured on the floor plane**, not on the wall's own face. X and
+  Z are the two numbers being edited and the floor is the plane a plan view
+  measures them in, so the drag reads the same from any orbit. The grab keeps
+  its offset, so a wall does not snap its centre to the cursor.
+- **A drag stops at the footprint.** `constrainPanel()` clamps to
+  `panelRange()` — the booth's own half width and depth. The stored schema
+  still allows ±360 and is unchanged, which is what lets a typed or imported
+  position outside the booth keep its meaning; a slider whose value is already
+  outside the footprint widens to hold it rather than yanking it back the
+  moment the panel is drawn.
+- **`scene.movePanel()` restands one wall without a rebuild.** `update()`
+  disposes and rebuilds the whole scene, which is far too much for every pixel
+  of a drag. The exterior frame, the posts and the art on both faces are all
+  children of the panel's own frame, so moving that one group moves the lot —
+  and `placePanelFrame()` is now the single piece of arithmetic the build and
+  the drag both go through, so a dragged wall lands exactly where typing the
+  same numbers would have put it.
+- **One checkpoint per gesture.** A slider takes its undo step on the first
+  `input` and the rest of the gesture rides on it, the way the artwork scale
+  slider already did; the `change` that follows closes the gesture out instead
+  of falling through to the generic field handler, which would checkpoint the
+  finished position and leave undo pointing at the wrong thing.
+- **Selecting a wall and selecting artwork are exclusive.** They are two
+  selections with one inspector between them; holding both would leave the
+  sliders pointing at a wall nobody is looking at. Clicking a wall opens
+  Layout and scrolls its controls into view; clicking anything else lets go.
+- **The selected wall is outlined in the same blue as selected artwork**, and
+  its Layout block is marked to match, so the thing the sliders move and the
+  thing the outline is around are visibly one thing.
 
 ## What is not covered
 

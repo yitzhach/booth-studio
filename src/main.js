@@ -69,6 +69,8 @@ import {
   boothPanels,
   findPanel,
   panelKey,
+  panelIdOf,
+  panelRange,
   wallKeys,
   wallLabel,
   wallSpec,
@@ -116,6 +118,10 @@ async function boot() {
     `<button data-action="${action}" class="${cls}" title="${e(label)}" aria-label="${e(label)}">${ic ? icon(ic) : ""}<span>${label}</span></button>`;
   let p,
     selected = null,
+    // The free-standing wall the mouse and the position sliders are about to
+    // move, by its "panel:<id>" key. Independent of `selected`: a panel is not
+    // artwork, and its inspector is Layout rather than Artwork.
+    selectedPanel = null,
     photoSelected = null,
     tab = "art",
     history = [],
@@ -184,6 +190,10 @@ async function boot() {
       document.querySelector("#scene"),
       (id) => {
         selected = id;
+        // Artwork and a free-standing wall are two selections with one pair of
+        // arrow-free controls between them; holding both at once would leave
+        // the sliders pointing at a wall nobody is looking at.
+        if (id) selectedPanel = null;
         tab = "art";
         render();
       },
@@ -198,6 +208,26 @@ async function boot() {
         refreshScene();
         renderInspector();
         scheduleSave();
+      },
+      // Clicking a free-standing wall in the viewport opens Layout on it, the
+      // way clicking artwork opens Artwork on that. The scene is the thing
+      // that knows what was clicked; where its controls live is this file's.
+      (key) => {
+        if (selectedPanel === key) return;
+        selectedPanel = key;
+        if (key) tab = "layout";
+        render();
+        if (key) revealPanelFields();
+      },
+      // Mid-drag. The scene has already restood the panel, so this only keeps
+      // the project and the two sliders in step; the checkpoint came from
+      // onStart and the save from onEnd, exactly as an artwork drag does.
+      (panel) => {
+        const list = boothPanels(p),
+          index = list.findIndex((x) => x.id === panel.id);
+        if (index < 0) return;
+        list[index] = panel;
+        syncPanelInputs(panel);
       },
     );
   } catch (err) {
@@ -262,7 +292,8 @@ async function boot() {
     createIcons({ icons, attrs: { "stroke-width": 1.6 } });
   }
   function refreshScene() {
-    scene?.update(p, selected);
+    if (selectedPanel && !findPanel(p, selectedPanel)) selectedPanel = null;
+    scene?.update(p, selected, selectedPanel);
     photo.update(p, photoSelected);
   }
   function field(
@@ -298,15 +329,53 @@ async function boot() {
       }
     return rows.join("");
   }
+  // A position slider's travel is the booth's own footprint, so the whole
+  // length of it is somewhere a wall can usefully stand. A panel already
+  // outside that — typed, or in an older backup, both of which the schema
+  // allows — widens its own slider instead of being dragged back in the
+  // moment these controls are drawn.
+  function panelSlider(panel, name, key, label) {
+    const reach = Math.max(panelRange(p)[key], Math.abs(panel[key])),
+      min = -Math.ceil(reach),
+      max = Math.ceil(reach);
+    return `<label class="range"><span>${label}<output>${Number(panel[key].toFixed(2))}in</output></span><input type="range" data-field="${key}" data-scope="panel-${e(panel.id)}" aria-label="${e(name + " " + label + " slider")}" min="${min}" max="${max}" step="1" value="${panel[key]}"/></label>`;
+  }
   function panelFields() {
     const panels = boothPanels(p);
-    return `<section><h3>Free-standing walls</h3><p class="muted">Interior panels you can stand anywhere in the booth and hang art on either side. Position is measured in inches from the centre of the floor: X is right, Z is toward the entrance. They do not change the booth footprint.</p>${panels.map((panel, i) => {
+    return `<section><h3>Free-standing walls</h3><p class="muted">Interior panels you can stand anywhere in the booth and hang art on either side. Position is measured in inches from the centre of the floor: X is right, Z is toward the entrance. They do not change the booth footprint.</p><p class="muted">Click a free-standing wall in the booth to select it, then drag it across the floor or use the sliders. Snap keeps a drag on whole inches.</p>${panels.map((panel, i) => {
       const name = panel.name || "Panel " + (i + 1),
         scope = "panel-" + panel.id,
+        chosen = selectedPanel === panelKey(panel.id),
         f = (label, key, value, min, max, step, unit) =>
           field(label, key, value, min, max, step, unit, scope, name + " " + label);
-      return `<div class="wall-setting"><div class="panel-heading"><h4>${e(name)}</h4>${btn("delete-panel-" + panel.id, "Remove " + name, "trash-2", "icon-only")}</div>${f("Width", "width", panel.width, 12, 360, 1, "in")}${f("Height", "height", panel.height, 24, 144, 1, "in")}${f("Position X", "x", panel.x, -360, 360, 1, "in")}${f("Position Z", "z", panel.z, -360, 360, 1, "in")}${f("Rotation", "rotation", panel.rotation, -180, 180, 5, "°")}</div>`;
+      return `<div class="wall-setting${chosen ? " selected" : ""}" data-panel="${e(panel.id)}"><div class="panel-heading"><h4>${e(name)}${chosen ? ' <span class="badge">Selected</span>' : ""}</h4>${btn("delete-panel-" + panel.id, "Remove " + name, "trash-2", "icon-only")}</div>${f("Width", "width", panel.width, 12, 360, 1, "in")}${f("Height", "height", panel.height, 24, 144, 1, "in")}${f("Position X", "x", panel.x, -360, 360, 1, "in")}${panelSlider(panel, name, "x", "Slide left / right")}${f("Position Z", "z", panel.z, -360, 360, 1, "in")}${panelSlider(panel, name, "z", "Slide front / back")}${f("Rotation", "rotation", panel.rotation, -180, 180, 5, "°")}</div>`;
     }).join("")}${panels.length < MAX_PANELS ? btn("add-panel", "Add free-standing wall", "plus", "wide") : `<p class="muted">${MAX_PANELS} free-standing walls is the limit.</p>`}</section>`;
+  }
+  // One panel's X and Z, in both controls at once. A drag in the viewport and
+  // a pull on either slider are the same edit, so whichever one is not being
+  // touched has to follow rather than sit at a stale number.
+  function syncPanelInputs(panel, except = null) {
+    for (const key of ["x", "z"]) {
+      for (const input of document.querySelectorAll(
+        `[data-scope="panel-${CSS.escape(panel.id)}"][data-field="${key}"]`,
+      )) {
+        if (input === except) continue;
+        input.value = Number(panel[key].toFixed(3));
+        input
+          .closest("label")
+          ?.querySelector("output")
+          ?.replaceChildren(Number(panel[key].toFixed(2)) + "in");
+      }
+    }
+  }
+  // Selecting a wall in the viewport is only useful if its controls are on
+  // screen; the Layout panel is long enough that they usually are not.
+  function revealPanelFields() {
+    const id = panelIdOf(selectedPanel);
+    if (!id) return;
+    document
+      .querySelector(`.wall-setting[data-panel="${CSS.escape(id)}"]`)
+      ?.scrollIntoView({ block: "nearest" });
   }
   function range(
     label,
@@ -703,6 +772,8 @@ async function boot() {
     mutate(()=>{p.art.push(constrain(p,a));selected=a.id;tab="art";});
   }
   let scaleBase = null, scaleGesture = false;
+  // One undo step per slider gesture, not one per pixel.
+  let panelGesture = false;
   function scaleControl(a) {
     scaleBase = { ...a };
     scaleGesture = false;
@@ -1217,7 +1288,7 @@ async function boot() {
     help: () => {
       const d = document.querySelector("#dialog");
       document.querySelector("#dialog-content").innerHTML =
-        `<div class="panel-heading"><h2>Welcome to Booth Studio</h2>${btn("close-help", "Close", "x", "icon-only")}</div><p>Start with Layout, upload your original artwork, and enter its actual dimensions. Sample panels are dimension placeholders, not artwork.</p><ol><li><strong>Arrange:</strong> select a work in the library. Set its wall, left edge, and bottom edge. Use Move to drag along the wall, or Center to align.</li><li><strong>Navigate:</strong> drag empty space to orbit, scroll to zoom, right-drag to pan. On touch, use one finger to orbit and two to pan/zoom. Wall and Plan views give precise views.</li><li><strong>Light:</strong> adjust ambient light and each spotlight’s position, target, power, and temperature.</li><li><strong>Photo:</strong> upload a booth shot, select uploaded library artwork to add it, then drag its four corners. Lighting is a visual overlay. Existing photo objects remain baked in.</li><li><strong>Keep:</strong> autosave is on this browser/device only. Download a full backup to transfer or archive a project.</li><li><strong>Export:</strong> PNG captures the current view; the hanging guide gives measured artwork edges.</li></ol><p class="muted">Ctrl/⌘ Z: undo · Ctrl/⌘ Shift Z: redo · Delete: remove selected artwork. No AI calls. Single images do not supply surface relief; baked-in lighting remains. Photorealism and exact display color are not guaranteed.</p>`;
+        `<div class="panel-heading"><h2>Welcome to Booth Studio</h2>${btn("close-help", "Close", "x", "icon-only")}</div><p>Start with Layout, upload your original artwork, and enter its actual dimensions. Sample panels are dimension placeholders, not artwork.</p><ol><li><strong>Arrange:</strong> select a work in the library. Set its wall, left edge, and bottom edge. Use Move to drag along the wall, or Center to align.</li><li><strong>Free-standing walls:</strong> add one in Layout, then click it in the booth to select it. Drag it across the floor, or use its left/right and front/back sliders. Snap keeps a drag on whole inches.</li><li><strong>Navigate:</strong> drag empty space to orbit, scroll to zoom, right-drag to pan. On touch, use one finger to orbit and two to pan/zoom. Wall and Plan views give precise views.</li><li><strong>Light:</strong> adjust ambient light and each spotlight’s position, target, power, and temperature.</li><li><strong>Photo:</strong> upload a booth shot, select uploaded library artwork to add it, then drag its four corners. Lighting is a visual overlay. Existing photo objects remain baked in.</li><li><strong>Keep:</strong> autosave is on this browser/device only. Download a full backup to transfer or archive a project.</li><li><strong>Export:</strong> PNG captures the current view; the hanging guide gives measured artwork edges.</li></ol><p class="muted">Ctrl/⌘ Z: undo · Ctrl/⌘ Shift Z: redo · Delete: remove selected artwork. No AI calls. Single images do not supply surface relief; baked-in lighting remains. Photorealism and exact display color are not guaranteed.</p>`;
       refreshIcons();
       d.showModal();
     },
@@ -1241,7 +1312,10 @@ async function boot() {
           z: 0,
           rotation: 0,
         });
-        toast("Free-standing wall added at the centre of the booth. Set its position below.");
+        // Selected on arrival: the next thing anyone does with a new wall is
+        // move it, and a selected wall can be dragged straight away.
+        selectedPanel = panelKey(panels[panels.length - 1].id);
+        toast("Free-standing wall added at the centre of the booth. Drag it in the booth or use the sliders below.");
       }),
   };
   // Removing a panel must decide what happens to art hanging on it. Moving
@@ -1251,6 +1325,7 @@ async function boot() {
     mutate(() => {
       const key = panelKey(id);
       p.booth.panels = boothPanels(p).filter((panel) => panel.id !== id);
+      if (selectedPanel === key) selectedPanel = null;
       const moved = p.art.filter((a) => a.wall === key);
       for (const a of moved) Object.assign(a, constrain(p, { ...a, wall: "back" }));
       if (selected && !p.art.some((a) => a.id === selected)) selected = p.art[0]?.id;
@@ -1358,6 +1433,20 @@ async function boot() {
 
   document.addEventListener("change", (ev) => {
     const el = ev.target;
+    // The slider's own input handler has already made the move and taken the
+    // one checkpoint the gesture gets; this only closes it out. Falling
+    // through to the generic field handler would checkpoint the finished
+    // position, which is undo pointing at the wrong thing.
+    if (
+      el.type === "range" &&
+      (el.dataset.scope || "").startsWith("panel-") &&
+      ["x", "z"].includes(el.dataset.field)
+    ) {
+      panelGesture = false;
+      refreshScene();
+      scheduleSave();
+      return;
+    }
     if (el.id === "art-scale") {
       scaleGesture = false;
       scheduleSave();
@@ -1521,6 +1610,28 @@ async function boot() {
         const input = document.querySelector('[data-scope="art"][data-field="' + key + '"]');
         if (input) input.value = Number(a[key].toFixed(3));
       }
+      return;
+    }
+    // A position slider for a free-standing wall. Handled live, and entirely
+    // here: one checkpoint at the start of the gesture rather than one per
+    // pixel, and the scene restands the panel without a rebuild — the same
+    // deal the artwork scale slider gets, for the same reason.
+    const panelScope = ev.target.dataset.scope || "";
+    if (
+      ev.target.type === "range" &&
+      panelScope.startsWith("panel-") &&
+      ["x", "z"].includes(ev.target.dataset.field)
+    ) {
+      const panel = findPanel(p, panelKey(panelScope.slice(6)));
+      if (!panel) return;
+      if (!panelGesture) { checkpoint(); panelGesture = true; }
+      panel[ev.target.dataset.field] = Number(ev.target.value);
+      scene?.movePanel({ ...panel });
+      syncPanelInputs(panel, ev.target);
+      ev.target
+        .closest("label")
+        ?.querySelector("output")
+        ?.replaceChildren(Number(panel[ev.target.dataset.field].toFixed(2)) + "in");
       return;
     }
     if (ev.target.dataset.scope === "timeline" && ev.target.dataset.field === "flare-strength") {
@@ -1710,6 +1821,9 @@ async function boot() {
       },
       get scene() {
         return scene;
+      },
+      get selectedPanel() {
+        return selectedPanel;
       },
       get photo() {
         return photo;

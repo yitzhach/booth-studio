@@ -170,6 +170,26 @@ export function constrain(p, a) {
     y: Math.max(0, Math.min(a.y, h - a.h)),
   };
 }
+/**
+ * The travel of a free-standing wall's position sliders and of a drag across
+ * the floor: the booth's own footprint, measured from the centre. A panel is
+ * an interior fitting, so that is the useful range — the stored schema has
+ * always allowed +/-360 and still does, which is what lets a typed or imported
+ * position outside the booth keep its meaning.
+ */
+export const panelRange = (p) => ({
+  x: p.booth.width / 2,
+  z: p.booth.depth / 2,
+});
+/** A panel with its X/Z pulled back inside the footprint. Everything else is untouched. */
+export function constrainPanel(p, panel) {
+  const r = panelRange(p);
+  return {
+    ...panel,
+    x: Math.max(-r.x, Math.min(r.x, panel.x)),
+    z: Math.max(-r.z, Math.min(r.z, panel.z)),
+  };
+}
 export function mismatch(p, a) {
   const asset = p.assets[a.asset];
   return (

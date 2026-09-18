@@ -5,6 +5,8 @@ import {
   demoProject,
   validateProject,
   constrain,
+  constrainPanel,
+  panelRange,
   boundWarning,
   mismatch,
   homography,
@@ -284,4 +286,24 @@ test("the hanging guide gives a panel its own elevation and where it stands", ()
   assert.match(g, /Front piece/);
   // A panel's empty back face is skipped, the way an empty exterior face is.
   assert.equal(/Center panel · back/.test(g), false);
+});
+
+test("a dragged free-standing wall stays inside the footprint", () => {
+  const p = demoProject();
+  const panel = { id: "one", width: 72, height: 84, x: 0, z: 0, rotation: 0 };
+  assert.deepEqual(panelRange(p), { x: p.booth.width / 2, z: p.booth.depth / 2 });
+  // Inside the booth, a drag is taken as measured.
+  assert.deepEqual(constrainPanel(p, { ...panel, x: -18.5, z: 24 }),
+    { ...panel, x: -18.5, z: 24 });
+  // Past either edge, it stops at the footprint line rather than walking out
+  // of the booth it is furniture for.
+  const out = constrainPanel(p, { ...panel, x: 900, z: -900 });
+  assert.equal(out.x, p.booth.width / 2);
+  assert.equal(out.z, -p.booth.depth / 2);
+  // Nothing else about the wall is touched by a move.
+  assert.equal(out.width, 72);
+  assert.equal(out.rotation, 0);
+  // A wider booth gives a longer drag.
+  p.booth.width = 240;
+  assert.equal(constrainPanel(p, { ...panel, x: 900, z: 0 }).x, 120);
 });

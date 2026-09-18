@@ -22,7 +22,7 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 
 ## Current behavior
 
-- Booth sizes, back/left/right walls, free-standing interior walls, four tent forms, lighting and procedural/photo surroundings.
+- Booth sizes, back/left/right walls, free-standing interior walls you can click and drag across the floor, four tent forms, lighting and procedural/photo surroundings.
 - Environment presets light the booth from an HDRI and can supply a photographed backdrop; without those files a preset keeps the procedural surroundings. See `docs/HDRI-ASSETS.md`.
 - Ground surfaces (studio, grass, concrete, asphalt, carpet, wood) use real PBR texture sets when their files are present, tiled from the surface's real-world size; otherwise the procedural canvas ground. See `docs/TEXTURE-ASSETS.md`.
 - Dragging artwork snaps to 1 inch by default; the Snap 1″ toolbar button turns it off for fine placement.

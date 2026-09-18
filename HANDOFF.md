@@ -65,11 +65,15 @@ Extend it; do not rebuild it.
    because no agent session can load the live site:
    - **Nobody has looked at a booth with free-standing walls in it.** Where a
      panel stands is pinned by a test that reads the mesh's world matrix back,
-     so that is not a guess. Whether a 72″ divider at the centre of a 10 × 10
-     booth reads as useful, and whether the fabric weave looks right at a
-     panel's width, are judgements that need eyes. Dragging a panel around the
-     floor instead of typing its X and Z is the obvious next refinement, and it
-     was deliberately not the first cut.
+     so that is not a guess, and a click-and-drag in a real browser is covered
+     by `tests/view-panels.mjs`. Whether a 72″ divider at the centre of a
+     10 × 10 booth reads as useful, whether the fabric weave looks right at a
+     panel's width, and whether dragging a wall *feels* right — the
+     select-then-drag rule, the floor-plane grab, the 1″ snap — are judgements
+     that need a hand on a mouse. Rotating a panel by dragging is the obvious
+     next refinement and was deliberately left out: it needs a handle of its
+     own, and a wall that spins when you meant to slide it is worse than a
+     typed angle.
    - The custom timeline and the lens flare are covered by tests in a real
      browser, but nobody has *looked* at a keyframed clip. The flare's ghost
      spacing, its warmth ramp and the fade lengths are judgement calls made
@@ -93,8 +97,9 @@ Extend it; do not rebuild it.
    design and reads as a broken dropdown. Planned in `FUTURE_BUILD.md`; not
    started.
 
-Free-standing walls and custom video mode are **done** and are no longer on
-this list; see Now.
+Free-standing walls — placement, art on both faces, and now click-and-drag
+with sliders — and custom video mode are **done** and are no longer on this
+list; see Now.
 
 ## Diagnosing "the texture isn't showing"
 
@@ -254,6 +259,21 @@ hidden a failure once. Run each suite directly.
   axes of one tripod head; under three's default XYZ order a pan applied after
   a tilt rolls the image, and a rolled panorama reads as the entire hall
   leaning over. `tests/view-hdri.mjs` pins the order and asserts roll stays 0.
+- **A drag and a typed number must be one edit, through one function.** A
+  panel's frame placement is three lines of trigonometry; having the drag
+  carry its own copy would mean a dragged wall landing somewhere a typed wall
+  would not. `placePanelFrame()` is called by the scene build and by
+  `movePanel()`, and `tests/view-panels.mjs` drags a panel and then reads the
+  mesh's world matrix against the number the drag stored.
+- **Rebuilding the scene per pixel of a drag is not an option.** `update()`
+  disposes and rebuilds everything. Artwork already had `updateArtwork()` for
+  this; a panel got `movePanel()`, which is cheap only because everything a
+  panel carries — its exterior frame, its posts, the art on both faces — is a
+  child of the panel's own frame group.
+- **A click target that big needs a first click that does nothing.** Selecting
+  on the first click and dragging only once selected is what keeps a free-
+  standing wall from being shoved across the floor by someone reaching for an
+  orbit. The Move tool is the deliberate exception.
 - **One lookup function is cheaper than six generalisations.** Three fixed
   walls were assumed in six places. Rather than teach each about panels,
   `wallSpec(p, key)` answers "what am I measuring against" for either kind and

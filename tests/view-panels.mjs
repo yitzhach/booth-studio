@@ -108,6 +108,75 @@ try {
   // The back face looks the other way, so the art sits just behind the panel.
   assert.ok(hung[0] < -24 * IN, 'art on the back face hangs behind the panel');
 
+  // --- Clicking and dragging a free-standing wall in the viewport.
+  await page.click('[data-tab="layout"]');
+  // Stand it square in the middle of the booth so it is unmistakably in frame.
+  for (const [label, value] of [['Position X', '0'], ['Position Z', '0'], ['Rotation', '0']]) {
+    await page.fill(`input[aria-label="Panel 1 ${label}"]`, value);
+    await page.locator(`input[aria-label="Panel 1 ${label}"]`).dispatchEvent('change');
+  }
+  await page.waitForTimeout(500);
+
+  // Where the panel's own slab lands on screen, so the click is aimed at the
+  // wall rather than at whatever happens to be at the centre of the canvas.
+  const screenPoint = async (key) => page.evaluate((k) => {
+    const scene = window.__booth.scene;
+    scene.group.updateMatrixWorld(true);
+    const mesh = scene.wallObjects.find((o) => o.userData.wall === k);
+    const v = mesh.localToWorld(new (mesh.position.constructor)(0, 0, 0));
+    v.project(scene.camera);
+    const r = scene.renderer.domElement.getBoundingClientRect();
+    return [r.left + ((v.x + 1) / 2) * r.width, r.top + ((1 - v.y) / 2) * r.height];
+  }, key);
+
+  let [px, py] = await screenPoint(key);
+  await page.mouse.click(px, py);
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => window.__booth.selectedPanel), key,
+    'clicking a free-standing wall selects it');
+  assert.equal(await page.evaluate(() => window.__booth.scene.selectedPanel), key,
+    'and the scene outlines the one that is selected');
+  assert.ok(await page.locator('.wall-setting.selected').count(),
+    'its Layout controls say which wall the sliders are about to move');
+
+  // Drag it. A selected wall follows the pointer across the floor.
+  [px, py] = await screenPoint(key);
+  await page.mouse.move(px, py);
+  await page.mouse.down();
+  await page.mouse.move(px + 140, py + 40, { steps: 12 });
+  await page.mouse.up();
+  await page.waitForTimeout(400);
+  const dragged = await page.evaluate(() => {
+    const panel = window.__booth.project.booth.panels[0];
+    return { x: panel.x, z: panel.z };
+  });
+  assert.ok(Math.abs(dragged.x) > 1 || Math.abs(dragged.z) > 1,
+    'dragging a selected free-standing wall moves it across the floor');
+  const half = await page.evaluate(() => window.__booth.project.booth.width / 2);
+  assert.ok(Math.abs(dragged.x) <= half && Math.abs(dragged.z) <= half,
+    'and it stops at the footprint rather than walking out of the booth');
+  // Whole inches: the Snap button is on, and this is a measured tool.
+  assert.equal(dragged.x, Math.round(dragged.x), 'a snapped drag lands on whole inches');
+  const moved = await wallState(page, key);
+  assert.ok(Math.abs(moved.centre[0] - dragged.x * IN) < 1e-6,
+    'the mesh stands where the drag says, without a scene rebuild to put it there');
+  // The typed field follows the drag rather than showing a stale number.
+  assert.equal(
+    Number(await page.locator('input[aria-label="Panel 1 Position X"]').inputValue()),
+    dragged.x, 'the Position X field follows the drag');
+
+  // The sliders are the same edit from the other end.
+  const slider = page.locator('input[aria-label="Panel 1 Slide front / back slider"]');
+  assert.equal(Number(await slider.inputValue()), dragged.z, 'the Z slider follows the drag too');
+  await slider.fill('-40');
+  await slider.dispatchEvent('input');
+  await slider.dispatchEvent('change');
+  await page.waitForTimeout(400);
+  assert.equal(await page.evaluate(() => window.__booth.project.booth.panels[0].z), -40,
+    'the Z slider moves the wall');
+  assert.ok(Math.abs((await wallState(page, key)).centre[2] - -40 * IN) < 1e-6,
+    'and the mesh goes with it');
+
   // Removing the panel keeps the placement, on the back wall.
   await page.click('[data-tab="layout"]');
   await page.locator('[data-action^="delete-panel-"]').click();
