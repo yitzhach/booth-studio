@@ -33,7 +33,8 @@ try {
   const move = page.locator('#video-move');
   assert.equal(await move.count(), 1, 'the export panel offers a camera move');
   const moves = await move.locator('option').evaluateAll((os) => os.map((o) => o.value));
-  assert.deepEqual(moves, ['orbit', 'push', 'reveal', 'survey'], `unexpected moves ${moves}`);
+  // The four fixed moves, then the door to a timeline of the user's own.
+  assert.deepEqual(moves, ['orbit', 'push', 'reveal', 'survey', 'custom'], `unexpected moves ${moves}`);
 
   // Choosing a move proposes the length it was designed around.
   await move.selectOption('push');

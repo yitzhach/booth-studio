@@ -9,11 +9,34 @@ import { GROUND_CONSUMER, TENT_CONSUMER, TENT_WEAVE, WALL_CONSUMER, WALL_SET, UV
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
 import { IN, constrain, scalePanel } from "./model.js";
 import { frameTimes, resolveMove, samplePath } from "./camera-path.js";
+import { fadeAt, isTimeline, timelineSeconds } from "./timeline.js";
+import { flareGhosts, flareSource } from "./flare.js";
 import { DEFAULT_SIZE, SIZES, evenSize, recordMp4, videoSupported } from "./video.js";
 // The orbit camera may drop below the booth's centre of interest to give a
 // low, looking-up perspective. It is stopped by the ground, not by a fixed
 // angle: MIN_CAMERA_Y keeps the eye just above the floor plane, and
 // MAX_POLAR avoids the up-vector flip OrbitControls suffers near 180 degrees.
+// One soft disc, drawn once into a canvas and shared by every ghost. A flare is
+// the only thing in this app that wants a texture nothing else can supply, and
+// a 128px gradient is cheaper to make here than to ship as a file.
+let RADIAL;
+function radialTexture() {
+  if (RADIAL) return RADIAL;
+  const size = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  gradient.addColorStop(0, "rgba(255,255,255,1)");
+  gradient.addColorStop(0.35, "rgba(255,255,255,0.45)");
+  gradient.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+  RADIAL = new T.CanvasTexture(canvas);
+  RADIAL.colorSpace = T.SRGBColorSpace;
+  return RADIAL;
+}
+
 const MIN_CAMERA_Y = 0.12;
 const MAX_POLAR = Math.PI * 0.82;
 // An equirectangular backdrop is sampled by view direction, so the field of
@@ -125,6 +148,10 @@ export class BoothScene {
     this.backdropScene = new T.Scene();
     this.backdropCamera = new T.PerspectiveCamera(FOV, 1, 0.1, 10);
     this.backdropFraming = BACKDROP_FRAMING;
+    // What the overlay pass draws over a finished frame: a fade to black and an
+    // optional lens flare. Both belong to a clip, not to the booth, so the
+    // default is "nothing at all" and every recording restores it.
+    this.overlay = { fade: 1, flare: null };
     this.startLoop();
   }
   // The live loop, in one place: the video recorder stops it so that nothing
@@ -150,6 +177,7 @@ export class BoothScene {
       backdropFov(this.camera.fov, this.backdropFraming) <= this.camera.fov
     ) {
       this.renderer.render(this.scene, this.camera);
+      this.renderOverlay();
       return;
     }
     this.backdropScene.background = background;
@@ -178,6 +206,89 @@ export class BoothScene {
       this.backdropScene.background = null;
       this.renderer.autoClear = autoClear;
     }
+    this.renderOverlay();
+  }
+
+  // The fade and the flare, drawn over a finished frame.
+  //
+  // After tone mapping, on purpose. A fade implemented by scaling exposure
+  // never reaches black — ACES rolls off rather than cutting — so a clip that
+  // "ends on black" would end on a dark grey wash that reads as an encoding
+  // fault. Drawing actual black over the rendered pixels is the fade a cut is.
+  //
+  // Nothing is built until something asks for it, so a booth that never records
+  // a clip never pays for the geometry or the two textures.
+  renderOverlay() {
+    const fade = this.overlay?.fade ?? 1;
+    const flare = this.overlay?.flare;
+    if (fade >= 1 && !flare) return;
+    const parts = this.overlayParts();
+    parts.fade.material.opacity = Math.min(1, Math.max(0, 1 - fade));
+    parts.fade.visible = parts.fade.material.opacity > 0.001;
+    const ghosts = flare ? flareGhosts(flare.ndc, { strength: flare.strength, aspect: this.camera.aspect || 1.6 }) : [];
+    parts.ghosts.forEach((sprite, i) => {
+      const g = ghosts[i];
+      sprite.visible = !!g;
+      if (!g) return;
+      sprite.position.set(g.x, g.y, 0);
+      sprite.scale.set(Math.max(0.001, g.width), Math.max(0.001, g.height), 1);
+      sprite.material.opacity = g.alpha;
+      // Warm at the source, cool down the chain: uncoated glass scatters the
+      // long wavelengths first, which is why a real flare is not one colour.
+      sprite.material.color.setRGB(1, 0.72 + 0.28 * g.warm, 0.45 + 0.5 * g.warm);
+    });
+    const autoClear = this.renderer.autoClear;
+    this.renderer.autoClear = false;
+    try {
+      this.renderer.render(parts.scene, parts.camera);
+    } finally {
+      this.renderer.autoClear = autoClear;
+    }
+  }
+  overlayParts() {
+    if (this.overlayCache) return this.overlayCache;
+    const scene = new T.Scene();
+    // -1..1 in both axes, which is the space src/flare.js computes in.
+    const camera = new T.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    camera.position.z = 0.5;
+    const fade = new T.Mesh(
+      new T.PlaneGeometry(2, 2),
+      new T.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthTest: false, depthWrite: false }),
+    );
+    fade.renderOrder = 1;
+    scene.add(fade);
+    const texture = radialTexture();
+    const ghosts = Array.from({ length: 8 }, () => {
+      const sprite = new T.Mesh(
+        new T.PlaneGeometry(1, 1),
+        new T.MeshBasicMaterial({
+          map: texture,
+          transparent: true,
+          // Additive, because a flare is light arriving at the sensor on top of
+          // the image, not paint over it.
+          blending: T.AdditiveBlending,
+          depthTest: false,
+          depthWrite: false,
+          opacity: 0,
+        }),
+      );
+      sprite.visible = false;
+      // Under the fade: a flare in a frame that is fading to black fades too.
+      sprite.renderOrder = 0;
+      scene.add(sprite);
+      return sprite;
+    });
+    this.overlayCache = { scene, camera, fade, ghosts };
+    return this.overlayCache;
+  }
+  // Where the flare comes from this frame: the brightest spotlight, projected
+  // into the same -1..1 space the ghosts are placed in. Null when the booth has
+  // no lights, which is what lets the panel say so rather than doing nothing.
+  flareState(strength) {
+    const light = flareSource(this.p?.lights);
+    if (!light) return null;
+    const ndc = new T.Vector3(light.x * IN, light.y * IN, light.z * IN).project(this.camera);
+    return { ndc: { x: ndc.x, y: ndc.y, z: ndc.z }, strength };
   }
   // Allow the lowest polar angle that still keeps the camera above the floor
   // at its current distance, so orbiting down slides along the ground instead
@@ -810,6 +921,22 @@ export class BoothScene {
       this.onEnd();
     });
   }
+  // The framing as a keyframe would hold it, and the way back to one. Both are
+  // here rather than in main.js because the camera and its controls are this
+  // class's to touch — a panel that set camera.position itself would be fighting
+  // OrbitControls for the same state.
+  pose() {
+    return { position: this.camera.position.toArray(), target: this.controls.target.toArray() };
+  }
+  applyPose(pose) {
+    if (!pose?.position || !pose?.target) return;
+    this.stopPreview?.();
+    this.controls.target.set(...pose.target);
+    this.camera.position.set(...pose.position);
+    this.camera.lookAt(this.controls.target);
+    this.controls.update();
+    this.renderFrame();
+  }
   // Plays a camera move in the viewport at its real duration, so a move can be
   // judged before committing to a render — a 14-second 1440p clip is minutes of
   // encoding, and finding out afterwards that the move was wrong is the whole
@@ -829,7 +956,10 @@ export class BoothScene {
       position: this.camera.position.toArray(),
       target: this.controls.target.toArray(),
     };
-    const duration = Math.max(0.5, seconds ?? resolveMove(move).seconds) * 1000;
+    // A timeline carries its own length, including its holds; a fixed move has
+    // the length it was designed around.
+    const duration = Math.max(0.5, seconds ?? (isTimeline(move) ? timelineSeconds(move) : resolveMove(move).seconds)) * 1000;
+    const overlay = isTimeline(move) ? move : null;
     const restore = {
       position: this.camera.position.clone(),
       target: this.controls.target.clone(),
@@ -851,6 +981,9 @@ export class BoothScene {
       done = true;
       cancelAnimationFrame(this.previewFrame);
       this.stopPreview = null;
+      // The live loop and export() share this renderer, so a fade left at 0.3
+      // after a cancelled preview is a viewport that looks broken.
+      this.overlay = { fade: 1, flare: null };
       this.camera.position.copy(restore.position);
       this.controls.target.copy(restore.target);
       this.camera.lookAt(this.controls.target);
@@ -874,6 +1007,11 @@ export class BoothScene {
         this.camera.position.set(...frame.position);
         this.controls.target.set(...frame.target);
         this.camera.lookAt(this.controls.target);
+        // Fades and flares are functions of t, so the wall-clock preview and the
+        // frame-indexed recording get the same answer without sharing a loop.
+        this.overlay = overlay
+          ? { fade: fadeAt(overlay, t), flare: overlay.flare?.on ? this.flareState(overlay.flare.strength) : null }
+          : { fade: 1, flare: null };
         this.renderFrame();
         onProgress(t);
         if (t >= 1) {
@@ -928,7 +1066,11 @@ export class BoothScene {
       position: this.camera.position.toArray(),
       target: this.controls.target.toArray(),
     };
-    const clip = frameTimes(seconds ?? resolveMove(move).seconds, fps);
+    const clip = frameTimes(seconds ?? (isTimeline(move) ? timelineSeconds(move) : resolveMove(move).seconds), fps);
+    // frameTimes still owns the frame count and the exact landing on t=1, even
+    // for a timeline that knows its own length: two sources of frame times is
+    // how a clip ends a frame early.
+    const overlay = isTimeline(move) ? move : null;
     const pixelRatio = this.renderer.getPixelRatio();
     const restore = {
       position: this.camera.position.clone(),
@@ -966,7 +1108,11 @@ export class BoothScene {
         onProgress,
         signal,
         drawFrame: (i) => {
-          const frame = samplePath(move, base, clip.at(i));
+          const t = clip.at(i);
+          const frame = samplePath(move, base, t);
+          this.overlay = overlay
+            ? { fade: fadeAt(overlay, t), flare: overlay.flare?.on ? this.flareState(overlay.flare.strength) : null }
+            : { fade: 1, flare: null };
           this.camera.position.set(...frame.position);
           this.controls.target.set(...frame.target);
           this.camera.lookAt(this.controls.target);
@@ -982,6 +1128,9 @@ export class BoothScene {
       });
       return { ...recorded, width, height, fps, seconds: clip.count / fps };
     } finally {
+      // Restored here and not on the happy path only: a cancelled recording
+      // must not leave the viewport faded or flaring.
+      this.overlay = { fade: 1, flare: null };
       hidden.forEach((o) => (o.visible = true));
       this.camera.position.copy(restore.position);
       this.camera.quaternion.copy(restore.quaternion);

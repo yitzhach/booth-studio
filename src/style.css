@@ -1466,3 +1466,56 @@ dialog li {
   text-transform: uppercase;
   opacity: 0.7;
 }
+
+/* The custom camera timeline. It is a dialog for the focus and escape-key
+   behaviour, but never a modal one: keyframes are captured from the viewport,
+   so the viewport has to stay draggable while it is open. */
+.timeline-dialog {
+  position: fixed;
+  inset: auto auto 22px 22px;
+  margin: 0;
+  width: min(410px, calc(100vw - 30px));
+  max-height: min(76dvh, 760px);
+  padding: 20px;
+}
+.timeline-dialog::backdrop {
+  background: none;
+  backdrop-filter: none;
+}
+.key-list {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+}
+.key-row {
+  border: 1px solid #3a4756;
+  border-radius: 10px;
+  padding: 12px;
+  background: #1a212a;
+}
+.key-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 14px;
+}
+.key-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.key-row .button-row {
+  margin-top: 8px;
+}
+.key-row p.muted {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+@media (max-width: 900px) {
+  .timeline-dialog {
+    inset: auto 10px 10px 10px;
+    width: auto;
+  }
+}

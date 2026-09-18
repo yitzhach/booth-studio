@@ -37,6 +37,10 @@ const MIN_PHI = 0.08;
 const MAX_PHI = Math.PI * 0.82;
 const MIN_GROUND_Y = 0.12;
 
+// Imported rather than duplicated: a timeline is sampled by the same call as a
+// fixed move, and the two must agree about what a pose is.
+import { isTimeline, sampleTimeline } from "./timeline.js";
+
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -94,13 +98,25 @@ export const MOVES = {
     at: (e) => ({ radius: lerp(1.15, 1.15, e), theta: (-72 + 144 * e) * DEG, phi: (4 - 8 * e) * DEG, lift: 0 }),
   },
 };
+// The fifth entry of the Camera move menu. It is not a move — it is the door to
+// a timeline the user builds themselves — so it is named here but has no entry
+// in MOVES, which stays a list of moves that can be sampled with a base pose.
+export const CUSTOM_MOVE = "custom";
 export const DEFAULT_MOVE = "orbit";
 export const resolveMove = (id) => (MOVES[id] ? { id, ...MOVES[id] } : { id: DEFAULT_MOVE, ...MOVES[DEFAULT_MOVE] });
 
 // One frame of a move. `base` is the framing the user already set:
 // { position, target } as 3-element arrays. The return value is a camera
 // position and a look-at target, clamped to stay above the floor.
+//
+// `moveId` may also be a custom timeline object, in which case the keyframes
+// decide the pose and `base` is ignored — a keyframe is an absolute shot
+// someone composed, where a fixed move is a gesture applied to whatever they
+// are looking at now. That branch is the whole of the custom-video feature as
+// far as everything downstream is concerned: src/video.js, the muxer and the
+// offline frame loop still see one `(t) -> pose` function.
 export function samplePath(moveId, base, t) {
+  if (isTimeline(moveId)) return sampleTimeline(moveId, t);
   const move = resolveMove(moveId);
   const eased = move.ease(t);
   const step = move.at(eased);

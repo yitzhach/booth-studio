@@ -1,6 +1,10 @@
 import { TENTS } from "./environment.js";
 import { ENV_PRESETS, ART_FIDELITY, DEFAULT_PRESET, DEFAULT_FIDELITY, resolvePreset } from "./lighting.js";
-import { MOVES, DEFAULT_MOVE, resolveMove, frameTimes } from "./camera-path.js";
+import { MOVES, DEFAULT_MOVE, CUSTOM_MOVE, resolveMove, frameTimes } from "./camera-path.js";
+import {
+  EASES, MAX_KEYS, MIN_KEYS, MIN_SECONDS, MAX_SECONDS,
+  emptyTimeline, keyFrom, normalizeTimeline, segmentSpeed, timelineSeconds,
+} from "./timeline.js";
 import { SIZES, DEFAULT_SIZE, FPS, DEFAULT_FPS, videoSupported, pickCodec } from "./video.js";
 import { applyImageEdits, DEFAULT_IMAGE_EDITS, normalizeImageEdits } from "./image-edit.js";
 import "@fontsource/dm-sans/400.css";
@@ -121,6 +125,10 @@ async function boot() {
     // recording survives re-renders of the inspector and has to be cancellable
     // from a button the inspector redraws.
     videoMove = DEFAULT_MOVE,
+    // The user's own keyframed move, built in the timeline dialog. Like every
+    // other video setting this is view state: it is not saved with the booth,
+    // is not in the undo history and does not touch schema 1.
+    videoTimeline = null,
     videoSeconds = MOVES[DEFAULT_MOVE].seconds,
     videoFps = DEFAULT_FPS,
     videoSize = DEFAULT_SIZE,
@@ -162,7 +170,7 @@ async function boot() {
   selected = p.art[0]?.id;
   document.querySelector("#app").innerHTML =
     `<header><a class="brand" href="#" aria-label="Booth Studio">${icon("box")}<span>Artist OS</span></a><span class="app-badge">Booth Studio</span><div class="project"><input id="project-name" aria-label="Project name" maxlength="120" value="${e(p.name)}"/>${icon("chevron-down")}</div><div class="save-status" id="save-status" role="status">Opening…</div>${btn("help", "Help", "help-circle", "icon-only")}<div class="avatar">IA</div></header>
-<div class="workspace"><aside class="library" id="library"></aside><main class="editor"><div class="toolbar"><div class="toolgroup">${btn("select", "Select", "mouse-pointer-2", "active")}${btn("move", "Move", "move")}${btn("snap", "Snap 1″", "grid-2x2", "active")}</div><div class="toolgroup">${btn("undo", "Undo", "undo-2", "icon-only")}${btn("redo", "Redo", "redo-2", "icon-only")}</div><div class="mode-switch"><button data-action="mode-3d">3D booth</button><button data-action="mode-photo">Photo</button></div>${btn("export-tab", "Export", "download", "export-top")}</div><div class="viewport"><div id="scene"></div><div id="photo" hidden></div><div class="scene-label"><span class="eyebrow" id="mode-label">MEASURED WORKSPACE</span><strong id="scene-title"></strong><span id="scene-subtitle"></span></div><div id="photo-empty" hidden><div>${icon("image-plus")}<h2>Start with your booth shot</h2><p>Add artwork and adjust its four corners to match the wall perspective.</p>${btn("upload-photo", "Upload booth photo", "plus", "primary")}</div></div><div class="viewport-bottom"><div class="view-switch" id="view-switch"><button data-view="perspective" class="active">Perspective</button><button data-view="back">Back</button><button data-view="left">Left</button><button data-view="right">Right</button><button data-view="plan">Plan</button></div><div class="zoom-controls"><span class="zoom-label">Zoom</span>${btn("zoom-out", "Zoom out", "minus", "icon-only")}${btn("zoom-in", "Zoom in", "plus", "icon-only")}${btn("reset-view", "Reset view", "rotate-ccw", "icon-only")}</div></div></div><div class="statusbar"><span id="gesture-hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</span><span id="selection-status"></span></div></main><aside class="inspector"><div class="inspector-tabs">${["art", "layout", "lighting", "export"].map((t, i) => `<button data-tab="${t}">${icon(["image", "layout-panel-left", "lightbulb", "download"][i])}<span>${["Artwork", "Layout", "Lighting", "Export"][i]}</span></button>`).join("")}</div><div id="inspector-content"></div></aside></div><footer><span class="footer-brand">${icon("box")} BOOTH STUDIO <small>Prototype 01</small><small id="build-stamp" title="Version ${BUILD.version} · built ${BUILD.time} · commit ${BUILD.commit}">v${BUILD.version} · ${BUILD.short} UTC · ${BUILD.commit}</small></span><span>Your images. Your space. Your arrangement.</span><span id="network">Local workspace</span></footer><input type="file" id="art-input" accept="image/jpeg,image/png" multiple hidden/><input type="file" id="replace-input" accept="image/jpeg,image/png" hidden/><input type="file" id="photo-input" accept="image/jpeg,image/png" hidden/><input type="file" id="surround-input" accept="image/jpeg,image/png" hidden/><input type="file" id="ground-input" accept="image/jpeg,image/png" hidden/><input type="file" id="backup-input" accept=".json,.booth" hidden/><div id="toast" role="status"></div><dialog id="dialog"><div id="dialog-content"></div></dialog><dialog id="image-editor"><div id="image-editor-content"></div></dialog>`;
+<div class="workspace"><aside class="library" id="library"></aside><main class="editor"><div class="toolbar"><div class="toolgroup">${btn("select", "Select", "mouse-pointer-2", "active")}${btn("move", "Move", "move")}${btn("snap", "Snap 1″", "grid-2x2", "active")}</div><div class="toolgroup">${btn("undo", "Undo", "undo-2", "icon-only")}${btn("redo", "Redo", "redo-2", "icon-only")}</div><div class="mode-switch"><button data-action="mode-3d">3D booth</button><button data-action="mode-photo">Photo</button></div>${btn("export-tab", "Export", "download", "export-top")}</div><div class="viewport"><div id="scene"></div><div id="photo" hidden></div><div class="scene-label"><span class="eyebrow" id="mode-label">MEASURED WORKSPACE</span><strong id="scene-title"></strong><span id="scene-subtitle"></span></div><div id="photo-empty" hidden><div>${icon("image-plus")}<h2>Start with your booth shot</h2><p>Add artwork and adjust its four corners to match the wall perspective.</p>${btn("upload-photo", "Upload booth photo", "plus", "primary")}</div></div><div class="viewport-bottom"><div class="view-switch" id="view-switch"><button data-view="perspective" class="active">Perspective</button><button data-view="back">Back</button><button data-view="left">Left</button><button data-view="right">Right</button><button data-view="plan">Plan</button></div><div class="zoom-controls"><span class="zoom-label">Zoom</span>${btn("zoom-out", "Zoom out", "minus", "icon-only")}${btn("zoom-in", "Zoom in", "plus", "icon-only")}${btn("reset-view", "Reset view", "rotate-ccw", "icon-only")}</div></div></div><div class="statusbar"><span id="gesture-hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</span><span id="selection-status"></span></div></main><aside class="inspector"><div class="inspector-tabs">${["art", "layout", "lighting", "export"].map((t, i) => `<button data-tab="${t}">${icon(["image", "layout-panel-left", "lightbulb", "download"][i])}<span>${["Artwork", "Layout", "Lighting", "Export"][i]}</span></button>`).join("")}</div><div id="inspector-content"></div></aside></div><footer><span class="footer-brand">${icon("box")} BOOTH STUDIO <small>Prototype 01</small><small id="build-stamp" title="Version ${BUILD.version} · built ${BUILD.time} · commit ${BUILD.commit}">v${BUILD.version} · ${BUILD.short} UTC · ${BUILD.commit}</small></span><span>Your images. Your space. Your arrangement.</span><span id="network">Local workspace</span></footer><input type="file" id="art-input" accept="image/jpeg,image/png" multiple hidden/><input type="file" id="replace-input" accept="image/jpeg,image/png" hidden/><input type="file" id="photo-input" accept="image/jpeg,image/png" hidden/><input type="file" id="surround-input" accept="image/jpeg,image/png" hidden/><input type="file" id="ground-input" accept="image/jpeg,image/png" hidden/><input type="file" id="backup-input" accept=".json,.booth" hidden/><div id="toast" role="status"></div><dialog id="dialog"><div id="dialog-content"></div></dialog><dialog id="image-editor"><div id="image-editor-content"></div></dialog><dialog id="timeline-dialog" class="timeline-dialog"><div id="timeline-content"></div></dialog>`;
   let scene;
   try {
     scene = new BoothScene(
@@ -417,25 +425,85 @@ async function boot() {
   // failure — or a file QuickTime refuses — after someone has waited through a
   // render.
   function videoSection() {
+    const custom = videoMove === CUSTOM_MOVE;
     const move = resolveMove(videoMove);
     const supported = videoSupported();
     // Fire and forget: the probe re-renders this panel when it answers, and it
     // no-ops for a size and rate it has already asked about, so this cannot
     // loop.
     if (supported) probeCodec();
-    return `<section><h3>Video</h3>${
-      supported
-        ? `<label class="setting-label">Camera move<select id="video-move" aria-label="Camera move">${Object.entries(MOVES)
-            .map(([k, v]) => `<option value="${k}" ${videoMove === k ? "selected" : ""}>${e(v.label)}</option>`)
-            .join("")}</select></label><p class="muted">${e(move.describe)} The move starts and ends on the view you have now, so compose the shot first.</p><label class="setting-label">Length<select id="video-seconds" aria-label="Clip length">${[6, 8, 10, 12, 14, 16, 20]
-            .map((sec) => `<option value="${sec}" ${videoSeconds === sec ? "selected" : ""}>${sec} seconds</option>`)
-            .join("")}</select></label><label class="setting-label">Frame rate<select id="video-fps" aria-label="Frame rate">${FPS.map(
-            (f) => `<option value="${f}" ${videoFps === f ? "selected" : ""}>${f} fps</option>`,
-          ).join("")}</select></label><label class="setting-label">Resolution<select id="video-size" aria-label="Video resolution">${Object.entries(SIZES)
-            .map(([k, v]) => `<option value="${k}" ${String(videoSize) === k ? "selected" : ""}>${e(v.label)}</option>`)
-            .join("")}</select></label><p class="muted">MP4 · H.264 where this browser can encode it, which is what QuickTime Player and phones want. Width comes from the setting, height from the viewport's aspect ratio. Every frame is rendered in full before it is encoded, so the clip runs at the frame rate you chose however fast this machine is — which is why it takes longer than the clip lasts.</p>${videoCodecLine()}${busyPreview ? btn("stop-preview", "Stop preview", "x", "wide") : btn("preview-move", "Preview the move", "play", "wide")}<p class="muted">Plays the move in the viewport at its real length, without rendering anything. Judge it here first: a 14-second 1440p clip is minutes of encoding.</p>${btn("export-video", "Export MP4", "download", "primary wide")}${busyVideo ? btn("cancel-video", "Cancel", "x", "wide") : ""}<div class="video-progress" role="status" aria-live="polite">${busyVideo ? `<progress max="1" value="${videoProgress}"></progress><span>${Math.round(videoProgress * 100)}% · frame ${videoFrame} of ${videoFrames}</span>` : ""}</div>`
-        : `<p class="muted">Video export needs the WebCodecs video encoder, which this browser does not offer. Chrome, Edge and Safari 16.4 or newer have it. Export PNG works everywhere.</p>`
-    }</section>`;
+    if (!supported)
+      return `<section><h3>Video</h3><p class="muted">Video export needs the WebCodecs video encoder, which this browser does not offer. Chrome, Edge and Safari 16.4 or newer have it. Export PNG works everywhere.</p></section>`;
+    const moveOptions = [
+      ...Object.entries(MOVES).map(([k, v]) => `<option value="${k}" ${videoMove === k ? "selected" : ""}>${e(v.label)}</option>`),
+      `<option value="${CUSTOM_MOVE}" ${custom ? "selected" : ""}>Custom · your own keyframes</option>`,
+    ].join("");
+    // A custom clip's length lives in the timeline, with the keyframe times it
+    // has to agree with; offering a second length control beside it would let
+    // the two contradict each other.
+    const lengthField = custom
+      ? `${btn("edit-timeline", "Edit timeline…", "sliders-horizontal", "wide")}<p class="muted">${e(timelineSummary())}</p>`
+      : `<label class="setting-label">Length<select id="video-seconds" aria-label="Clip length">${[6, 8, 10, 12, 14, 16, 20]
+          .map((sec) => `<option value="${sec}" ${videoSeconds === sec ? "selected" : ""}>${sec} seconds</option>`)
+          .join("")}</select></label>`;
+    const describe = custom
+      ? "Your own keyframes, in the order you set them. Compose a shot in the viewport, add it as a keyframe, and repeat — each one is the exact view you captured, not a gesture applied to the current framing."
+      : `${e(move.describe)} The move starts and ends on the view you have now, so compose the shot first.`;
+    return `<section><h3>Video</h3><label class="setting-label">Camera move<select id="video-move" aria-label="Camera move">${moveOptions}</select></label><p class="muted">${describe}</p>${lengthField}<label class="setting-label">Frame rate<select id="video-fps" aria-label="Frame rate">${FPS.map(
+      (f) => `<option value="${f}" ${videoFps === f ? "selected" : ""}>${f} fps</option>`,
+    ).join("")}</select></label><label class="setting-label">Resolution<select id="video-size" aria-label="Video resolution">${Object.entries(SIZES)
+      .map(([k, v]) => `<option value="${k}" ${String(videoSize) === k ? "selected" : ""}>${e(v.label)}</option>`)
+      .join("")}</select></label><p class="muted">MP4 · H.264 where this browser can encode it, which is what QuickTime Player and phones want. Width comes from the setting, height from the viewport's aspect ratio. Every frame is rendered in full before it is encoded, so the clip runs at the frame rate you chose however fast this machine is — which is why it takes longer than the clip lasts.</p>${videoCodecLine()}${busyPreview ? btn("stop-preview", "Stop preview", "x", "wide") : btn("preview-move", "Preview the move", "play", "wide")}<p class="muted">Plays the move in the viewport at its real length, without rendering anything. Judge it here first: a 14-second 1440p clip is minutes of encoding.</p>${btn("export-video", "Export MP4", "download", "primary wide")}${busyVideo ? btn("cancel-video", "Cancel", "x", "wide") : ""}<div class="video-progress" role="status" aria-live="polite">${busyVideo ? `<progress max="1" value="${videoProgress}"></progress><span>${Math.round(videoProgress * 100)}% · frame ${videoFrame} of ${videoFrames}</span>` : ""}</div></section>`;
+  }
+  // The timeline the export will render, always normalised: the dialog edits a
+  // plain object and everything else reads it through here, so no caller has to
+  // defend itself against an unordered or half-built one.
+  function timeline() {
+    videoTimeline = normalizeTimeline(videoTimeline || emptyTimeline(...currentPose()), {
+      position: currentPose()[0],
+      target: currentPose()[1],
+    });
+    return videoTimeline;
+  }
+  const currentPose = () => {
+    const pose = scene?.pose();
+    return [pose?.position || [3, 1.6, 4], pose?.target || [0, 1.2, 0]];
+  };
+  // A one-line answer to "what will this export?", which is the question the
+  // panel is actually being asked once the timeline is closed.
+  function timelineSummary() {
+    const tl = timeline();
+    const holds = tl.keys.reduce((sum, k) => sum + (k.hold || 0), 0);
+    const parts = [`${tl.keys.length} keyframes`, `${tl.seconds} seconds`];
+    if (holds > 0) parts.push(`${holds.toFixed(1)}s held`);
+    if (tl.fade.in > 0 || tl.fade.out > 0) parts.push(`fade ${tl.fade.in}s / ${tl.fade.out}s`);
+    if (tl.flare.on) parts.push("lens flare");
+    return parts.join(" · ") + ".";
+  }
+  // The timeline dialog. It reuses #dialog rather than owning one, because two
+  // modal dialogs in one app is two sets of focus and escape-key behaviour to
+  // keep in step.
+  function renderTimelineDialog() {
+    const tl = timeline();
+    const seconds = tl.seconds;
+    const noLights = !(p.lights || []).length;
+    const rows = tl.keys
+      .map((k, i) => {
+        const first = i === 0;
+        const last = i === tl.keys.length - 1;
+        const speed = last ? null : segmentSpeed(tl, i);
+        return `<div class="key-row" data-key="${k.id}"><div class="key-head"><strong>${first ? "Start" : last ? "End" : `Keyframe ${i + 1}`}</strong><span class="muted">${(k.t * seconds).toFixed(1)}s</span></div><div class="key-fields"><label class="setting-label">At<input type="number" data-key-field="t" data-key="${k.id}" min="0" max="${seconds}" step="0.1" value="${(k.t * seconds).toFixed(1)}" ${first || last ? "disabled" : ""} aria-label="Keyframe time in seconds"/></label><label class="setting-label">Hold<input type="number" data-key-field="hold" data-key="${k.id}" min="0" max="10" step="0.1" value="${(k.hold || 0).toFixed(1)}" aria-label="Seconds held on this pose"/></label>${
+          last
+            ? ""
+            : `<label class="setting-label">Ramp<select data-key-field="ease" data-key="${k.id}" aria-label="Segment ramp">${Object.entries(EASES)
+                .map(([id, v]) => `<option value="${id}" ${k.ease === id ? "selected" : ""}>${e(v.label)}</option>`)
+                .join("")}</select></label>`
+        }</div>${speed === null ? "" : `<p class="muted">Then travels ${speed.toFixed(2)} m/s to the next keyframe.</p>`}<div class="button-row">${btn("timeline-go", "Go to this view", "camera")}${btn("timeline-recapture", "Recapture", "rotate-ccw")}${tl.keys.length > MIN_KEYS ? btn("timeline-delete", "Delete", "trash-2") : ""}</div></div>`;
+      })
+      .join("");
+    document.querySelector("#timeline-content").innerHTML =
+      `<div class="panel-heading"><h2>Custom camera timeline</h2>${btn("close-timeline", "Close", "x", "icon-only")}</div><p class="muted">Compose a shot in the viewport behind this panel, then add it as a keyframe. Each keyframe is the exact view you captured. Times set the speed between them; the ramp is what makes a move read as a camera rather than a scrub.</p><label class="setting-label">Clip length<input type="number" id="timeline-seconds" min="${MIN_SECONDS}" max="${MAX_SECONDS}" step="1" value="${seconds}" aria-label="Clip length in seconds"/></label><div class="key-list">${rows}</div>${tl.keys.length < MAX_KEYS ? btn("timeline-add", "Add keyframe from this view", "plus", "primary wide") : `<p class="muted">${MAX_KEYS} keyframes is the limit. Delete one to add another.</p>`}<section><h3>Fades</h3><div class="field-pair"><label class="setting-label">Fade in<input type="number" id="timeline-fade-in" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.in.toFixed(1)}" aria-label="Fade in seconds"/></label><label class="setting-label">Fade out<input type="number" id="timeline-fade-out" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.out.toFixed(1)}" aria-label="Fade out seconds"/></label></div><p class="muted">Seconds of black at each end. Zero disables. The fade is drawn over the finished frame, so it reaches real black rather than a dark wash.</p></section><section><h3>Lens flare</h3><label class="check-field"><input type="checkbox" id="timeline-flare" ${tl.flare.on ? "checked" : ""} ${noLights ? "disabled" : ""}/>Lens flare from the brightest spotlight</label>${noLights ? `<p class="muted">This booth has no spotlights, so there is nothing for a flare to come from. Add one in Lighting.</p>` : `${range("Flare strength", "flare-strength", Math.round(tl.flare.strength * 100), 0, 100, 1, "timeline", "%")}<p class="muted">The flare tracks the camera: its ghosts sit on the line from the light through the centre of frame, and it fades out as the light leaves the shot.</p>`}</section><div class="button-row">${busyPreview ? btn("stop-preview", "Stop preview", "x") : btn("preview-move", "Preview", "play")}${btn("close-timeline", "Done", "check", "primary")}</div>`;
+    refreshIcons();
   }
   // Says what will come out, in the terms that matter: whether QuickTime
   // Player will open it. Nothing is claimed until the probe has answered.
@@ -988,7 +1056,12 @@ async function boot() {
       videoAbort = new AbortController();
       videoProgress = 0;
       videoFrame = 0;
-      videoFrames = frameTimes(videoSeconds, videoFps).count;
+      // What is actually recorded: a timeline where the menu says Custom, one of
+      // the four fixed moves otherwise. Everything downstream — the recorder,
+      // the encoder, the muxer — sees the same (t) -> pose contract either way.
+      const move = videoMove === CUSTOM_MOVE ? timeline() : videoMove;
+      const seconds = videoMove === CUSTOM_MOVE ? move.seconds : videoSeconds;
+      videoFrames = frameTimes(seconds, videoFps).count;
       renderInspector();
       // The progress element is written to directly rather than through
       // renderInspector: redrawing the whole panel a few hundred times would
@@ -1002,8 +1075,8 @@ async function boot() {
       };
       try {
         const recorded = await scene.recordVideo({
-          move: videoMove,
-          seconds: videoSeconds,
+          move,
+          seconds,
           fps: videoFps,
           size: videoSize,
           signal: videoAbort.signal,
@@ -1024,7 +1097,7 @@ async function boot() {
             true,
           );
         else
-          toast(`${videoSeconds}s MP4 exported · ${videoFrames} frames at ${videoFps} fps · ${recorded.label}.`);
+          toast(`${seconds}s MP4 exported · ${videoFrames} frames at ${videoFps} fps · ${recorded.label}.`);
       } catch (err) {
         if (err?.name === "AbortError") toast("Recording cancelled.");
         else toast(err.message, true);
@@ -1036,13 +1109,64 @@ async function boot() {
       }
     },
     "cancel-video": () => videoAbort?.abort(),
+    "edit-timeline": () => {
+      if (!scene) return toast("3D is not available, so there is no view to keyframe.", true);
+      timeline();
+      renderTimelineDialog();
+      // show(), not showModal(). A modal would block the viewport, and the
+      // viewport is where keyframes come from: the whole loop is compose a
+      // shot, press Add, orbit, press Add again.
+      const panel = document.querySelector("#timeline-dialog");
+      if (!panel.open) panel.show();
+    },
+    "close-timeline": () => {
+      document.querySelector("#timeline-dialog").close();
+      renderInspector();
+    },
+    "timeline-add": () => {
+      const tl = timeline();
+      if (tl.keys.length >= MAX_KEYS) return toast(`${MAX_KEYS} keyframes is the limit.`, true);
+      const [position, target] = currentPose();
+      // A new key lands halfway between the last one and the end, which is
+      // where someone building a move in order wants it — and never on top of
+      // the end key, which would be a zero-length segment.
+      const previous = tl.keys.at(-2).t;
+      videoTimeline = normalizeTimeline({ ...tl, keys: [...tl.keys, { ...keyFrom(position, target), t: (previous + 1) / 2 }] });
+      renderTimelineDialog();
+      toast(`Keyframe ${videoTimeline.keys.length} captured from this view.`);
+    },
+    "timeline-go": (button) => {
+      const key = timeline().keys.find((k) => k.id === button?.closest("[data-key]")?.dataset.key);
+      if (key) scene?.applyPose(key);
+    },
+    "timeline-recapture": (button) => {
+      const id = button?.closest("[data-key]")?.dataset.key;
+      const [position, target] = currentPose();
+      videoTimeline = normalizeTimeline({
+        ...timeline(),
+        keys: timeline().keys.map((k) => (k.id === id ? { ...k, position, target } : k)),
+      });
+      renderTimelineDialog();
+      toast("Keyframe replaced with this view.");
+    },
+    "timeline-delete": (button) => {
+      const id = button?.closest("[data-key]")?.dataset.key;
+      const tl = timeline();
+      if (tl.keys.length <= MIN_KEYS) return toast("A move needs a start and an end.", true);
+      videoTimeline = normalizeTimeline({ ...tl, keys: tl.keys.filter((k) => k.id !== id) });
+      renderTimelineDialog();
+    },
     "preview-move": async () => {
       if (busy || busyVideo || busyPreview) return;
       if (!scene) return toast("3D is not available, so there is no view to preview.", true);
       busyPreview = true;
       renderInspector();
       try {
-        const { cancelled } = await scene.previewMove({ move: videoMove, seconds: videoSeconds });
+        const custom = videoMove === CUSTOM_MOVE ? timeline() : null;
+        const { cancelled } = await scene.previewMove({
+          move: custom || videoMove,
+          seconds: custom ? custom.seconds : videoSeconds,
+        });
         if (!cancelled) toast("That is the move. Export MP4 renders it.");
       } catch (err) {
         toast(err.message, true);
@@ -1066,7 +1190,7 @@ async function boot() {
     if (!b) return;
     if (b.dataset.action) {
       try {
-        actions[b.dataset.action]?.();
+        actions[b.dataset.action]?.(b);
       } catch (err) {
         toast(err.message, true);
       }
@@ -1173,11 +1297,45 @@ async function boot() {
     }
     // Video settings are view state, not project state: they are not saved
     // with the booth and do not belong in the undo history.
+    if (el.id === "timeline-seconds") {
+      videoTimeline = normalizeTimeline({ ...timeline(), seconds: +el.value });
+      renderTimelineDialog();
+      return;
+    }
+    if (el.id === "timeline-fade-in" || el.id === "timeline-fade-out") {
+      const tl = timeline();
+      const fade = { ...tl.fade, [el.id === "timeline-fade-in" ? "in" : "out"]: +el.value };
+      videoTimeline = normalizeTimeline({ ...tl, fade });
+      renderTimelineDialog();
+      return;
+    }
+    if (el.id === "timeline-flare") {
+      const tl = timeline();
+      videoTimeline = normalizeTimeline({ ...tl, flare: { ...tl.flare, on: el.checked } });
+      renderTimelineDialog();
+      return;
+    }
+    if (el.dataset.keyField) {
+      const tl = timeline();
+      const keys = tl.keys.map((k) => {
+        if (k.id !== el.dataset.key) return k;
+        // Times are entered in seconds — the unit on screen — and stored as a
+        // fraction of the clip, so changing the clip length moves the keys with
+        // it rather than stranding them past the end.
+        if (el.dataset.keyField === "t") return { ...k, t: +el.value / Math.max(0.001, tl.seconds) };
+        if (el.dataset.keyField === "hold") return { ...k, hold: +el.value };
+        return { ...k, ease: el.value };
+      });
+      videoTimeline = normalizeTimeline({ ...tl, keys });
+      renderTimelineDialog();
+      return;
+    }
     if (el.id === "video-move") {
       videoMove = el.value;
       // Each move has a length it was designed around, so choosing a move
-      // proposes its own length rather than keeping the last one.
-      videoSeconds = resolveMove(videoMove).seconds;
+      // proposes its own length rather than keeping the last one. A custom
+      // timeline carries its own, set in the dialog.
+      videoSeconds = videoMove === CUSTOM_MOVE ? timelineSeconds(timeline()) : resolveMove(videoMove).seconds;
       renderInspector();
       return;
     }
@@ -1280,6 +1438,12 @@ async function boot() {
         const input = document.querySelector('[data-scope="art"][data-field="' + key + '"]');
         if (input) input.value = Number(a[key].toFixed(3));
       }
+      return;
+    }
+    if (ev.target.dataset.scope === "timeline" && ev.target.dataset.field === "flare-strength") {
+      const tl = timeline();
+      videoTimeline = { ...tl, flare: { ...tl.flare, strength: Number(ev.target.value) / 100 } };
+      ev.target.closest("label")?.querySelector("output")?.replaceChildren(ev.target.value + "%");
       return;
     }
     if (ev.target.dataset.edit) {
@@ -1468,6 +1632,10 @@ async function boot() {
         return photo;
       },
       mutate,
+      // The custom video timeline, normalised — what the export would render.
+      // tests/view-timeline.mjs reads it to check that Add really captured the
+      // view the viewport was showing.
+      timeline,
       save: () => save(structuredClone(p)),
     };
 }
