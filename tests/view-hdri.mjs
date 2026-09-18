@@ -99,6 +99,57 @@ try {
   assert.equal(turned.background, true, 'the backdrop survived the re-render');
   assert.equal(turned.intensity, intensity, 'headroom survived the re-render');
 
+  // Backdrop framing. A spherical photograph is framed by field of view alone,
+  // so the backdrop is drawn in its own pass through a wider lens. Three things
+  // have to hold: the wider lens is actually used, the booth keeps its own
+  // 62-degree perspective, and scene.background survives a pass that borrows it.
+  const framing = page.locator('input[aria-label="Backdrop framing"]');
+  assert.equal(await framing.count(), 1, 'a preset with a backdrop offers framing');
+  const framed = await page.evaluate(() => {
+    const view = window.__booth.scene;
+    view.renderFrame();
+    return {
+      backdropFov: view.backdropCamera.fov,
+      cameraFov: view.camera.fov,
+      restored: !!view.scene.background?.isTexture,
+      borrowed: view.backdropScene.background,
+    };
+  });
+  assert.equal(framed.cameraFov, 62, 'the booth keeps its own field of view');
+  assert.ok(
+    framed.backdropFov > 80 && framed.backdropFov < 90,
+    `the backdrop should be drawn near 85 degrees, got ${framed.backdropFov}`,
+  );
+  assert.equal(framed.restored, true, 'the backdrop pass put scene.background back');
+  assert.equal(framed.borrowed, null, 'the backdrop pass does not hold the texture between frames');
+
+  // The framing has to reach the screen, not just the camera object.
+  const canvas = page.locator('#viewport canvas, canvas').first();
+  const wide = await canvas.screenshot();
+  await framing.fill('100');
+  await framing.dispatchEvent('change');
+  await page.waitForFunction(
+    () => Math.abs(window.__booth.scene.backdropFraming - 100) < 1e-6,
+    null,
+    { timeout: 5000 },
+  );
+  const matched = await page.evaluate(() => {
+    const view = window.__booth.scene;
+    view.renderFrame();
+    return { backdropFov: view.backdropCamera.fov, background: !!view.scene.background?.isTexture };
+  });
+  assert.equal(matched.background, true, 'the backdrop survived the framing change');
+  const tight = await canvas.screenshot();
+  assert.ok(!wide.equals(tight), 'changing the framing changed the rendered frame');
+
+  await framing.fill('65');
+  await framing.dispatchEvent('change');
+  await page.waitForFunction(
+    () => Math.abs(window.__booth.scene.backdropFraming - 65) < 1e-6,
+    null,
+    { timeout: 5000 },
+  );
+
   // Image-based lighting must not reach uploaded artwork on the default setting.
   const shielded = await page.evaluate(() =>
     [...window.__booth.scene.artGroups.values()].map((g) => g.plane.material.envMapIntensity));
