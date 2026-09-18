@@ -10,6 +10,9 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
+- **Last deploy: 2026-09-18** — the art-show booth, the pedestals, the two
+  new tools and the light-bar diffusion slider are all on `main` and live.
+  Nothing is sitting unmerged on a branch.
 - The photoreal phase (`PBR_PHASE.md`) is done through Phase 4: HDRI lighting,
   PBR ground surfaces, the tent canvas and a fabric wall finish. Assets are
   committed and live. `public/assets` is 28 MB of a ~50 MB budget.
@@ -63,7 +66,21 @@ Extend it; do not rebuild it.
 
 ## Next
 
-1. **The two shipped backdrops are 1024×512 and read soft.** This is the one
+1. **Look at the art-show booth on the live site and set Diffusion.** This is
+   the first thing to do and it needs a human, not a session: no agent can
+   load production. Open Art show, and judge in this order —
+   - **Diffusion** (Light bar, default 0.7) is the one number in the softening
+     pass that was chosen rather than derived. Still harsh? Drag it up. Gone
+     flat and washed out? Drag it down. 0 restores the original hard lighting
+     exactly, so the slider is safe to explore.
+   - **Fixture brightness (60) and 3500K** are the next two judgement calls.
+   - Whether nine shadow-casting spots are affordable on your machine. If not,
+     the honest fix is dropping `castShadow` on the washers, not cutting their
+     number — with diffusion up, their shadows are mostly fill anyway.
+   - Whether the hall reads as a hall, and whether a seamless white wall wants
+     the fabric finish on (`wallFinish: "fabric"` works on an art-show booth).
+   `ART_SHOW_PHASE.md` says which knob to turn first for each.
+2. **The two shipped backdrops are 1024×512 and read soft.** This is the one
    open bug with a known fix. Both were prepped from Poly Haven's **1K** HDRI,
    and `tools/hdri-prep.mjs` will not stretch a backdrop past its source. Re-prep
    from the **4K** download and the softness goes:
@@ -74,24 +91,18 @@ Extend it; do not rebuild it.
    **No agent session can do this** — polyhaven.com is refused by the sandbox
    egress proxy, as is the workers.dev production host. It needs a human with a
    browser. `docs/HDRI-ASSETS.md` is step by step.
-2. **H.264 output is unverified on real hardware.** Open Chromium builds ship no
+3. **H.264 output is unverified on real hardware.** Open Chromium builds ship no
    H.264 *encoder*, so every sandbox run exercises the VP9 fallback instead.
    That does prove the whole encoder-to-muxer pipeline with real encoder bytes,
    and mp4box.js validated the container — but nobody has opened an
    `avc1`/`avcC` file from Chrome or Safari in QuickTime. If a clip will not
    play, start here.
-3. **Unverified on real hardware** — things no one has confirmed by eye,
+4. **Unverified on real hardware** — things no one has confirmed by eye,
    because no agent session can load the live site:
-   - **Nobody has looked at an art-show booth.** The measurements are pinned by
-     tests that read the meshes back, and the nine spotlights are checked
-     against the arithmetic that placed them — but whether a nine-head wall
-     wash reads as an art-show booth, whether 0.7 is the right default
-     diffusion — the one number in the softening pass that was chosen rather
-     than derived, and the reason the slider exists — whether the hall reads
-     as a hall rather than a grey room, whether a seamless white wall wants
-     the fabric finish on, and whether nine shadow-casting spots are
-     affordable on a real machine are all judgements that need eyes. `ART_SHOW_PHASE.md` lists
-     them and says which knob to turn first.
+   - **Nobody has looked at an art-show booth.** See item 1 — it is the whole
+     of that item. The measurements are pinned by tests that read the meshes
+     back and the nine spotlights are checked against the arithmetic that
+     placed them, so nothing there is a guess; what is left is all judgement.
    - **Nobody has looked at a booth with free-standing walls in it.** Where a
      panel stands is pinned by a test that reads the mesh's world matrix back,
      so that is not a guess, and a click-and-drag in a real browser is covered
@@ -119,9 +130,9 @@ Extend it; do not rebuild it.
      `canvas` is a one-line change to a finer weave.
    - Is the tent weave visible? Its relief is exaggerated 3x (`TENT_WEAVE`)
      because a true-depth weave on a white roof washes out.
-4. **A `home` HDRI** is still missing — an interior with windows on one side.
+5. **A `home` HDRI** is still missing — an interior with windows on one side.
    That preset falls back procedurally until someone downloads one.
-5. **Two ground-texture sets — presets and a user-uploaded library.** Requested
+6. **Two ground-texture sets — presets and a user-uploaded library.** Requested
    after an upload was found to override the preset picker, which is today's
    design and reads as a broken dropdown. Planned in `FUTURE_BUILD.md`; not
    started.
@@ -230,10 +241,10 @@ hidden a failure once. Run each suite directly.
   fine; changed meaning is not. `booth.panels` and the widened `a.wall` are the
   worked example; `WALLS_PHASE.md` explains how it was kept. The art-show
   booth added five more optional keys — `venue`, `artShow`, `lightBar`, `hall`
-  and `pedestals` — the same way, and `lightBar.diffusion` was added
-  to one of them as a sixth, and `artShowPanel()` / `lightBarSpec()` /
-  `hallSpec()` are the only things that read them, so `undefined` means the
-  defaults everywhere.
+  and `pedestals` — the same way, and `lightBar.diffusion` later became a
+  sixth, nested inside one of them. `artShowPanel()` / `lightBarSpec()` /
+  `hallSpec()` are the only things that read any of them, so `undefined` means
+  the defaults everywhere.
 - **Never alter stored original image data.** Edits belong to placements.
 - The city skyline must stay **seeded**, never `Math.random`: it rebuilds on
   every `update()` and would reshuffle on each edit. `tests/view-city.mjs`
