@@ -34,13 +34,17 @@ Extend it; do not rebuild it.
 - **The backdrop is aimed from the Layout panel.** Layout → Surroundings →
   Backdrop: a zoom slider with -/+/reset buttons, plus pan (horizontal) and
   tilt (vertical). `+`/`-` on the keyboard zoom the viewport camera.
+- **Free-standing interior walls are done.** Layout → Free-standing walls: add
+  a panel, type its width, height, X/Z position and rotation in inches, and
+  hang art on either face through the usual Location dropdown. `booth.panels`
+  is a separate optional list beside `booth.walls`, so every older backup still
+  loads; `wallSpec()` in `src/model.js` is the one place that answers "what am
+  I measuring against" for a perimeter wall and a panel alike.
+  `WALLS_PHASE.md` is now the record of what was decided.
 
 ## Next
 
-1. **`WALLS_PHASE.md`** — free-standing interior walls you can place and hang
-   art on. Requested, planned, not built. Read that file; it explains the
-   schema-1 compatibility constraint that shapes the whole design.
-2. **The two shipped backdrops are 1024×512 and read soft.** This is the one
+1. **The two shipped backdrops are 1024×512 and read soft.** This is the one
    open bug with a known fix. Both were prepped from Poly Haven's **1K** HDRI,
    and `tools/hdri-prep.mjs` will not stretch a backdrop past its source. Re-prep
    from the **4K** download and the softness goes:
@@ -51,14 +55,21 @@ Extend it; do not rebuild it.
    **No agent session can do this** — polyhaven.com is refused by the sandbox
    egress proxy, as is the workers.dev production host. It needs a human with a
    browser. `docs/HDRI-ASSETS.md` is step by step.
-3. **H.264 output is unverified on real hardware.** Open Chromium builds ship no
+2. **H.264 output is unverified on real hardware.** Open Chromium builds ship no
    H.264 *encoder*, so every sandbox run exercises the VP9 fallback instead.
    That does prove the whole encoder-to-muxer pipeline with real encoder bytes,
    and mp4box.js validated the container — but nobody has opened an
    `avc1`/`avcC` file from Chrome or Safari in QuickTime. If a clip will not
    play, start here.
-4. **Unverified on real hardware, older** — things no one has confirmed by
-   eye, because no agent session can load the live site:
+3. **Unverified on real hardware** — things no one has confirmed by eye,
+   because no agent session can load the live site:
+   - **Nobody has looked at a booth with free-standing walls in it.** Where a
+     panel stands is pinned by a test that reads the mesh's world matrix back,
+     so that is not a guess. Whether a 72″ divider at the centre of a 10 × 10
+     booth reads as useful, and whether the fabric weave looks right at a
+     panel's width, are judgements that need eyes. Dragging a panel around the
+     floor instead of typing its X and Z is the obvious next refinement, and it
+     was deliberately not the first cut.
    - The custom timeline and the lens flare are covered by tests in a real
      browser, but nobody has *looked* at a keyframed clip. The flare's ghost
      spacing, its warmth ramp and the fade lengths are judgement calls made
@@ -75,14 +86,15 @@ Extend it; do not rebuild it.
      `canvas` is a one-line change to a finer weave.
    - Is the tent weave visible? Its relief is exaggerated 3x (`TENT_WEAVE`)
      because a true-depth weave on a white roof washes out.
-5. **A `home` HDRI** is still missing — an interior with windows on one side.
+4. **A `home` HDRI** is still missing — an interior with windows on one side.
    That preset falls back procedurally until someone downloads one.
-6. **Two ground-texture sets — presets and a user-uploaded library.** Requested
+5. **Two ground-texture sets — presets and a user-uploaded library.** Requested
    after an upload was found to override the preset picker, which is today's
    design and reads as a broken dropdown. Planned in `FUTURE_BUILD.md`; not
    started.
 
-Custom video mode is **done** and is no longer on this list; see Now.
+Free-standing walls and custom video mode are **done** and are no longer on
+this list; see Now.
 
 ## Diagnosing "the texture isn't showing"
 
@@ -160,11 +172,11 @@ this and neither is visible from the repository.
 
 ```sh
 npm ci
-npm test                 # 157 Node tests
+npm test                 # 162 Node tests
 npm run build
-npm run test:view        # camera, city, env presets, HDRI, ground, tent, walls, video, timeline
-npm run test:browser     # 18 end-to-end checks
-node tests/wall-assets.mjs
+npm run test:view        # camera, city, env presets, HDRI, ground, tent, walls, video, timeline, panels
+npm run test:browser     # 19 end-to-end checks
+BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
 ```
 
 The sandbox has WebGL via swiftshader, but the pinned Playwright expects a
@@ -181,7 +193,8 @@ hidden a failure once. Run each suite directly.
 ## Rules that are easy to break
 
 - Preserve schema-1 backup compatibility. Optional fields and widened enums are
-  fine; changed meaning is not. `WALLS_PHASE.md` turns on this.
+  fine; changed meaning is not. `booth.panels` and the widened `a.wall` are the
+  worked example; `WALLS_PHASE.md` explains how it was kept.
 - **Never alter stored original image data.** Edits belong to placements.
 - The city skyline must stay **seeded**, never `Math.random`: it rebuilds on
   every `update()` and would reshuffle on each edit. `tests/view-city.mjs`
@@ -241,6 +254,15 @@ hidden a failure once. Run each suite directly.
   axes of one tripod head; under three's default XYZ order a pan applied after
   a tilt rolls the image, and a rolled panorama reads as the entire hall
   leaning over. `tests/view-hdri.mjs` pins the order and asserts roll stays 0.
+- **One lookup function is cheaper than six generalisations.** Three fixed
+  walls were assumed in six places. Rather than teach each about panels,
+  `wallSpec(p, key)` answers "what am I measuring against" for either kind and
+  returns `null` for a wall that is gone — which every caller already knew how
+  to treat, because it looks like a hidden wall.
+- **A per-consumer texture cache leaks when a consumer can be deleted.** Walls
+  claim their set under `wall:<key>`, and the three perimeter walls are
+  forever. A panel is not, so `surfaces.releaseMatching()` now hands back every
+  `wall:` claim that is not in the current wall list on each rebuild.
 - **The tent weave is exaggerated 3x** over its literal depth. A true-depth
   weave on a white, brightly lit, tone-mapped roof is invisible. That is a
   rendering choice, not a measurement, and it is commented as one.
@@ -249,7 +271,8 @@ hidden a failure once. Run each suite directly.
 
 - `README.md` — commands, architecture, stable behavior.
 - `PBR_PHASE.md` — HDRI lighting and PBR surfaces, and what each phase found.
-- `WALLS_PHASE.md` — the next feature, planned in full.
+- `WALLS_PHASE.md` — free-standing interior walls: the schema-compatibility
+  problem and every decision taken around it.
 - `src/camera-path.js`, `src/video.js` — the camera moves and the MP4 writer.
   Both carry their reasoning in comments; neither needs a phase document.
 - `CUSTOM_VIDEO_PHASE.md` — custom video mode: the keyframe model, why speed is
