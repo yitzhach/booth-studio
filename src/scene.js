@@ -796,6 +796,87 @@ export class BoothScene {
       this.onEnd();
     });
   }
+  // Plays a camera move in the viewport at its real duration, so a move can be
+  // judged before committing to a render — a 14-second 1440p clip is minutes of
+  // encoding, and finding out afterwards that the move was wrong is the whole
+  // cost of not having this.
+  //
+  // Unlike recordVideo this is driven by wall clock, not by frame index, and
+  // that is correct here for the same reason it is wrong there: a preview
+  // should take the number of seconds it claims even if the machine drops
+  // frames doing it, whereas a file must contain every frame it promises.
+  previewMove({ move, seconds, onProgress = () => {}, signal } = {}) {
+    // Any preview already running is stopped *before* the framing is read,
+    // because stopping it is what puts the camera back. Reading first would
+    // capture a camera halfway through the old move and make that the place
+    // this one returns to, displacing the view permanently.
+    this.stopPreview?.();
+    const base = {
+      position: this.camera.position.toArray(),
+      target: this.controls.target.toArray(),
+    };
+    const duration = Math.max(0.5, seconds ?? resolveMove(move).seconds) * 1000;
+    const restore = {
+      position: this.camera.position.clone(),
+      target: this.controls.target.clone(),
+      enabled: this.controls.enabled,
+    };
+    // The live loop is stopped and frames are drawn here instead, for the same
+    // reason recordVideo does it: OrbitControls.update() re-derives the camera
+    // position from its own spherical state every frame and re-applies
+    // minDistance, maxDistance and maxPolarAngle. It would quietly clamp a
+    // move — a push-in that starts at 1.75x the orbit radius can exceed
+    // maxDistance — and a preview that is clamped where the recording is not
+    // is a preview of the wrong clip.
+    this.renderer.setAnimationLoop(null);
+    // A drag mid-preview would still reach the controls and fight the path.
+    this.controls.enabled = false;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      cancelAnimationFrame(this.previewFrame);
+      this.stopPreview = null;
+      this.camera.position.copy(restore.position);
+      this.controls.target.copy(restore.target);
+      this.camera.lookAt(this.controls.target);
+      this.controls.enabled = restore.enabled;
+      this.controls.update();
+      this.startLoop();
+    };
+    return new Promise((resolve) => {
+      const started = performance.now();
+      const step = () => {
+        if (signal?.aborted) {
+          finish();
+          return resolve({ cancelled: true });
+        }
+        // Wall clock, not frame index — the opposite of recordVideo, and right
+        // for the opposite reason: a preview should take the seconds it claims
+        // even if the machine drops frames, whereas a file must contain every
+        // frame it promises.
+        const t = Math.min(1, (performance.now() - started) / duration);
+        const frame = samplePath(move, base, t);
+        this.camera.position.set(...frame.position);
+        this.controls.target.set(...frame.target);
+        this.camera.lookAt(this.controls.target);
+        this.renderFrame();
+        onProgress(t);
+        if (t >= 1) {
+          finish();
+          return resolve({ cancelled: false });
+        }
+        this.previewFrame = requestAnimationFrame(step);
+      };
+      // Cancellable from outside: someone who sees the wrong move in the first
+      // second should not have to wait out the rest.
+      this.stopPreview = () => {
+        finish();
+        resolve({ cancelled: true });
+      };
+      this.previewFrame = requestAnimationFrame(step);
+    });
+  }
   // Records a filmic camera move to an MP4.
   //
   // Frames are rendered offline, one at a time, and handed to the encoder with
@@ -814,6 +895,8 @@ export class BoothScene {
       throw new Error(
         "This browser cannot encode video. Chrome, Edge and Safari 16.4 or newer can; Export PNG works everywhere.",
       );
+    // A preview drives the same camera, so it cannot be left running.
+    this.stopPreview?.();
     await Promise.allSettled(this.textureCache.pending());
     const preset = SIZES[size] || SIZES[DEFAULT_SIZE];
     const canvas = this.renderer.domElement;
@@ -860,7 +943,7 @@ export class BoothScene {
       this.renderer.setPixelRatio(1);
       this.renderer.setSize(width, height, false);
       this.camera.aspect = width / height;
-      return await recordMp4({
+      const recorded = await recordMp4({
         count: clip.count,
         fps,
         width,
@@ -883,6 +966,7 @@ export class BoothScene {
           return canvas;
         },
       });
+      return { ...recorded, width, height, fps, seconds: clip.count / fps };
     } finally {
       hidden.forEach((o) => (o.visible = true));
       this.camera.position.copy(restore.position);

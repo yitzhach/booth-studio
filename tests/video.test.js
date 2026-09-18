@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { muxMp4, sampleDuration, evenSize, vp9Level, MP4_TIMESCALE, CODECS, H264_CODECS, SIZES, videoSupported } from "../src/video.js";
+import {
+  muxMp4, sampleDuration, evenSize, vp9Level, h264Level, macroblocks, codecsFor,
+  MP4_TIMESCALE, H264_PROFILE_NAMES, SIZES, FPS, videoSupported,
+} from "../src/video.js";
 
 // A muxer is either exactly right or it produces a file no player will open,
 // and there is no middle ground to eyeball. So the file is parsed back here:
@@ -53,7 +56,9 @@ test("the file opens with ftyp and carries exactly ftyp, mdat and moov", () => {
   const file = muxMp4({ width: 1920, height: 1080, samples: clip(4), description: DESCRIPTION });
   const top = parse(file);
   assert.deepEqual(top.map((b) => b.type), ["ftyp", "mdat", "moov"]);
-  assert.equal(String.fromCharCode(...top[0].body.subarray(0, 4)), "isom");
+  // mp42 leads for H.264: it is the brand QuickTime and phones expect to see
+  // before they parse anything.
+  assert.equal(String.fromCharCode(...top[0].body.subarray(0, 4)), "mp42");
   // avc1 has to be in the compatible brands or players may not try H.264.
   const brands = [];
   for (let i = 8; i + 4 <= top[0].body.length; i += 4)
@@ -137,8 +142,10 @@ test("the file's brands advertise the codec that is actually inside it", () => {
     return out;
   };
   assert.ok(brandsOf(muxMp4({ width: 640, height: 480, samples: clip(2), description: DESCRIPTION })).includes("avc1"));
+  assert.ok(brandsOf(muxMp4({ width: 640, height: 480, samples: clip(2), description: DESCRIPTION })).includes("mp42"));
   const vp9 = brandsOf(muxMp4({ width: 640, height: 480, samples: clip(2), kind: "vp09" }));
   assert.ok(!vp9.includes("avc1"), "a VP9 file must not claim to be H.264");
+  assert.ok(!vp9.includes("mp42"), "nor lead with the brand that implies it");
   assert.ok(vp9.includes("iso6"), `VP9 brands were ${vp9}`);
 });
 
@@ -240,14 +247,75 @@ test("H.264 needs even dimensions, and every offered size already has them", () 
 });
 
 test("codecs are offered best first, with VP9 only as the last resort", () => {
-  assert.equal(H264_CODECS[0], "avc1.640028", "High profile is tried first");
-  assert.ok(H264_CODECS.at(-1).startsWith("avc1.42"), "then Baseline, which everything decodes");
-  // H.264 is what every player and upload form takes, so VP9 must never be
-  // chosen on a machine that could have encoded H.264.
-  const kinds = CODECS.map((c) => c.kind);
-  assert.equal(kinds.lastIndexOf("avc") < kinds.indexOf("vp09"), true, "every H.264 option is tried before VP9");
+  const codecs = codecsFor(1920, 1080, 30);
+  assert.deepEqual(codecs.map((c) => c.kind), ["avc", "avc", "avc", "vp09"]);
+  assert.deepEqual(H264_PROFILE_NAMES, ["High", "Main", "Baseline"]);
+  // H.264 is what every player, phone and upload form takes, and QuickTime
+  // cannot open VP9 at all, so VP9 must never be chosen on a machine that
+  // could have encoded H.264.
+  const kinds = codecs.map((c) => c.kind);
+  assert.ok(kinds.lastIndexOf("avc") < kinds.indexOf("vp09"), "every H.264 option is tried before VP9");
   assert.equal(kinds.filter((k) => k === "vp09").length, 1);
-  assert.equal(CODECS.at(-1).codec.startsWith("vp09."), true);
+  assert.ok(codecs.at(-1).codec.startsWith("vp09."));
+  for (const c of codecs) assert.ok(c.label, `${c.codec} is named for the user`);
+});
+
+// The bug this replaced: every codec string hard-coded level 4.0 (0x28), which
+// cannot carry 1440p at any rate or 1080p at 60. A stream that exceeds the
+// level it declares is out of spec, and a strict decoder — QuickTime is one —
+// may refuse it outright, or the encoder refuses the configuration and the
+// export silently drops to VP9, which QuickTime cannot open either.
+test("the H.264 level is derived from the frame size and rate, not assumed", () => {
+  assert.equal(h264Level(1280, 720, 30), 0x1f, "720p30 is level 3.1");
+  assert.equal(h264Level(1280, 720, 60), 0x20, "720p60 needs 3.2");
+  assert.equal(h264Level(1920, 1080, 30), 0x28, "1080p30 is level 4.0");
+  assert.equal(h264Level(1920, 1080, 60), 0x2a, "1080p60 needs 4.2, not 4.0");
+  assert.equal(h264Level(2560, 1440, 30), 0x32, "1440p30 needs 5.0, not 4.0");
+  assert.equal(h264Level(2560, 1440, 60), 0x33, "1440p60 needs 5.1");
+});
+
+test("a macroblock count pads partial blocks, as the spec requires", () => {
+  assert.equal(macroblocks(1280, 720), 80 * 45);
+  assert.equal(macroblocks(1920, 1080), 120 * 68, "1080 is not a multiple of 16");
+  assert.equal(macroblocks(1922, 1082), 121 * 68);
+});
+
+// Every size the app actually offers, at every frame rate it offers, must
+// declare a level that can carry it. This is the assertion that would have
+// caught the original bug.
+test("every offered size and frame rate declares a level it does not exceed", () => {
+  const limits = { 0x1e: [1620, 40500], 0x1f: [3600, 108000], 0x20: [5120, 216000], 0x28: [8192, 245760], 0x2a: [8704, 522240], 0x32: [22080, 589824], 0x33: [36864, 983040], 0x34: [36864, 2073600] };
+  for (const size of Object.values(SIZES))
+    for (const fps of FPS) {
+      const level = h264Level(size.width, size.height, fps);
+      const [maxFrame, maxRate] = limits[level];
+      const frame = macroblocks(size.width, size.height);
+      assert.ok(frame <= maxFrame, `${size.label} at ${fps}fps: ${frame} macroblocks exceeds level 0x${level.toString(16)}`);
+      assert.ok(frame * fps <= maxRate, `${size.label} at ${fps}fps exceeds the level's macroblock rate`);
+      // And the level has to reach the codec string the encoder is handed.
+      assert.ok(codecsFor(size.width, size.height, fps)[0].codec.endsWith(level.toString(16).padStart(2, "0")));
+    }
+});
+
+// QuickTime colour-manages what it plays and respects pixel aspect, so both
+// are stated rather than left to its defaults.
+test("an H.264 clip states its colour and its square pixels", () => {
+  const file = muxMp4({ width: 1920, height: 1080, samples: clip(3), description: DESCRIPTION });
+  const stbl = find(find(find(find(find(parse(file), "moov"), "trak"), "mdia"), "minf"), "stbl");
+  const entry = parse(stbl.children.find((b) => b.type === "stsd").body.subarray(8))[0];
+  const children = parse(entry.body.subarray(78));
+  const types = children.map((b) => b.type);
+  assert.deepEqual(types, ["avcC", "colr", "pasp"], `sample entry children were ${types}`);
+  const colr = children.find((b) => b.type === "colr");
+  assert.equal(String.fromCharCode(...colr.body.subarray(0, 4)), "nclx");
+  const dv = new DataView(colr.body.buffer, colr.body.byteOffset);
+  assert.equal(dv.getUint16(4), 1, "BT.709 primaries");
+  assert.equal(dv.getUint16(6), 1, "BT.709 transfer");
+  assert.equal(dv.getUint16(8), 1, "BT.709 matrix");
+  const pasp = children.find((b) => b.type === "pasp");
+  const pdv = new DataView(pasp.body.buffer, pasp.body.byteOffset);
+  assert.equal(pdv.getUint32(0), 1, "square pixels: horizontal spacing");
+  assert.equal(pdv.getUint32(4), 1, "square pixels: vertical spacing");
 });
 
 test("support detection does not throw where WebCodecs is absent", () => {
