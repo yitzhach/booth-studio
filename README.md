@@ -39,7 +39,9 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 - Image-edit preview is live; edits can be copied and pasted between placements.
 - Artist signs and small artwork labels use the same wall-placement system.
 - PNG exports at 2048/4096 px and printable measured hanging guides.
-- MP4 video export: four eased camera moves (orbit, push in, reveal, survey) at 720p/1080p/1440p and 24/30/60 fps. Frames are rendered offline and encoded with WebCodecs, so the clip runs at the chosen frame rate regardless of how fast the machine renders. H.264 where the browser encodes it, VP9 in MP4 where it does not; see `src/video.js`.
+- MP4 video export: four eased camera moves (orbit, push in, reveal, survey) at 720p/1080p/1440p and 24/30/60 fps. Frames are rendered offline and encoded with WebCodecs, so the clip runs at the chosen frame rate regardless of how fast the machine renders. H.264 where the browser encodes it — with the level derived from the frame size and rate — and VP9 in MP4 where it does not; see `src/video.js`.
+- The export panel probes and states which codec the browser will use *before* rendering, and warns when it falls back to VP9, which QuickTime Player cannot open.
+- Preview the move live in the viewport at its real duration, without rendering anything.
 - A spherical backdrop is drawn in its own pass through a wider lens than the camera's, because field of view alone frames an image at infinity. Backdrop framing, in Layout → Surroundings, controls it.
 - Projects autosave locally in IndexedDB; downloadable backups include original images.
 
@@ -54,6 +56,7 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 - Preview artwork textures are capped at 2048 px for device stability.
 - 4096 export depends on the device GPU/canvas limit.
 - Video export needs the WebCodecs `VideoEncoder`. Chrome, Edge and Safari 16.4+ have it; the panel says so plainly where it is missing rather than failing after a render.
+- H.264 is licensed, so open Chromium builds have no H.264 *encoder* and fall back to VP9. The H.264 branch of the muxer has therefore never been produced on real hardware in this sandbox — see `HANDOFF.md`.
 - The two shipped HDRI backdrops are 1024x512, because they were prepped from Poly Haven's 1K sources and `tools/hdri-prep.mjs` will not stretch a backdrop past its source. They read soft. Re-prepping from the 4K download is the fix and needs network access to polyhaven.com.
 - Tent and environment models are visual approximations, not certified products.
 - Photo panoramas are backdrops, not reconstructed geometry. Environment presets do light the booth from an HDRI, when its files are present.
@@ -65,7 +68,7 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 - `src/model.js`: schema validation, geometry and wall constraints.
 - `src/scene.js`: Three.js booth, artwork interaction, lighting, the backdrop pass, and image and video export.
 - `src/camera-path.js`: the filmic camera moves. Pure geometry — no three.js, no DOM — so every move is covered in Node.
-- `src/video.js`: the MP4 muxer and the WebCodecs encoder that feeds it. `muxMp4` is pure bytes-in, bytes-out.
+- `src/video.js`: the MP4 muxer and the WebCodecs encoder that feeds it. `muxMp4` is pure bytes-in, bytes-out. The H.264 level is computed from the frame size and rate against the spec's macroblock limits, not assumed.
 - `src/lighting.js`: environment presets, HDRI image-based lighting and backdrops.
 - `src/surfaces.js`: PBR ground texture sets, colour space, tiling and disposal.
 - `src/texture-cache.js`: source/edit-keyed GPU texture reuse.
@@ -82,6 +85,6 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 
 ## Verification
 
-Run `npm test` and `npm run build` for every change. When a WebGL-capable browser is available, also run `npm run test:browser`, `npm run test:view`, and `node tests/wall-assets.mjs` — all three are green. In the cloud sandbox, prefix them with `BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium`. Test desktop plus iPhone/iPad interaction and a 4096 export.
+Run `npm test` (128 tests) and `npm run build` for every change. When a WebGL-capable browser is available, also run `npm run test:browser`, `npm run test:view`, and `node tests/wall-assets.mjs` — all three are green. In the cloud sandbox, prefix them with `BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium`. Test desktop plus iPhone/iPad interaction and a 4096 export.
 
 For a new development chat, read only `HANDOFF.md` first. Read this file when commands or architecture are needed. Read `PBR_PHASE.md` when working on HDRI lighting or PBR surfaces, `docs/HDRI-ASSETS.md` and `docs/TEXTURE-ASSETS.md` to add the asset files, and `AI_EXPORT_PHASE.md` only when implementing the paid AI export phase. `docs/ORIGINAL-HANDOFF.md` is historical reference, not current instructions.

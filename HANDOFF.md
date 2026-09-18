@@ -9,24 +9,40 @@ Extend it; do not rebuild it.
 
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
-- `main` is deployed. Every branch is preview-only.
-- The photoreal phase (`PBR_PHASE.md`) is done through Phase 4's tent canvas
-  and fabric walls. Assets are committed and live: HDRIs for trade show and
-  art fair, ground textures for concrete, asphalt, grass, carpet and wood, a
-  tent canvas and a fabric wall finish. `public/assets` is 28 MB of a ~50 MB
-  budget.
-- **Video export is built.** Four eased camera moves, rendered offline and
-  encoded with WebCodecs into an MP4. `src/camera-path.js` is the moves,
-  `src/video.js` is the muxer and encoder, `scene.recordVideo()` drives them.
+- `main` is deployed. Every other branch is preview-only.
+- The photoreal phase (`PBR_PHASE.md`) is done through Phase 4: HDRI lighting,
+  PBR ground surfaces, the tent canvas and a fabric wall finish. Assets are
+  committed and live. `public/assets` is 28 MB of a ~50 MB budget.
+- **Video export is done.** Four eased camera moves, a live preview, and an MP4
+  written by hand. `src/camera-path.js`, `src/video.js`,
+  `scene.previewMove()` and `scene.recordVideo()`.
+- **The backdrop is drawn in its own pass**, through a lens wider than the
+  camera's, so the surroundings can be pulled back without a wide-angle booth.
 
 ## Next
 
 1. **`WALLS_PHASE.md`** — free-standing interior walls you can place and hang
    art on. Requested, planned, not built. Read that file; it explains the
    schema-1 compatibility constraint that shapes the whole design.
-2. **Unverified on real hardware** — three things shipped that no one has
-   confirmed by eye, because no agent session can load the live site (the
-   workers.dev host is refused by the egress proxy, same as polyhaven.com):
+2. **The two shipped backdrops are 1024×512 and read soft.** This is the one
+   open bug with a known fix. Both were prepped from Poly Haven's **1K** HDRI,
+   and `tools/hdri-prep.mjs` will not stretch a backdrop past its source. Re-prep
+   from the **4K** download and the softness goes:
+   ```sh
+   node tools/hdri-prep.mjs ~/Downloads/burnt_warehouse_4k.exr tradeshow \
+     --credit "Burnt Warehouse (Poly Haven)"
+   ```
+   **No agent session can do this** — polyhaven.com is refused by the sandbox
+   egress proxy, as is the workers.dev production host. It needs a human with a
+   browser. `docs/HDRI-ASSETS.md` is step by step.
+3. **H.264 output is unverified on real hardware.** Open Chromium builds ship no
+   H.264 *encoder*, so every sandbox run exercises the VP9 fallback instead.
+   That does prove the whole encoder-to-muxer pipeline with real encoder bytes,
+   and mp4box.js validated the container — but nobody has opened an
+   `avc1`/`avcC` file from Chrome or Safari in QuickTime. If a clip will not
+   play, start here.
+4. **Unverified on real hardware, older** — three things no one has confirmed by
+   eye, because no agent session can load the live site:
    - Are the four ground tile sizes really 2 m? They were recorded at the
      tool's default, not read off the ambientCG pages. Wrong tile size makes a
      floor read as a picture of a floor.
@@ -34,24 +50,10 @@ Extend it; do not rebuild it.
      1.5 repeats across a 10 ft panel, which may be coarse for a pro-panel.
      `WALL_SET` in `src/surfaces.js` points at `carpet`; pointing it at
      `canvas` is a one-line change to a finer weave.
-   - Is the tent weave visible now? Its relief is exaggerated 3x (`TENT_WEAVE`)
+   - Is the tent weave visible? Its relief is exaggerated 3x (`TENT_WEAVE`)
      because a true-depth weave on a white roof washes out.
-3. **A `home` HDRI** is still missing — an interior with windows on one side.
-   That preset falls back procedurally until someone downloads one;
-   `docs/HDRI-ASSETS.md` is step by step.
-4. **The two shipped backdrops are 1024x512 and read soft.** Both were prepped
-   from Poly Haven's *1K* HDRI, and `tools/hdri-prep.mjs` will not stretch a
-   backdrop past its source — it now warns loudly rather than capping in
-   silence. Re-prep from the **4K** download and the softness goes. This needs
-   network access: polyhaven.com is refused by the sandbox egress proxy, so no
-   agent session can do it.
-5. **H.264 encoding is untested on real hardware.** Open Chromium builds ship
-   without an H.264 *encoder*, so the sandbox exercises the VP9-in-MP4 fallback
-   instead — which does prove the whole encoder-to-muxer pipeline, and the
-   container was independently validated with mp4box.js. What no one has
-   confirmed is an `avc1`/`avcC` file out of Chrome or Safari. If a clip will
-   not play, that is the first thing to look at, and `muxMp4` takes the
-   encoder's own `decoderConfig.description` verbatim.
+5. **A `home` HDRI** is still missing — an interior with windows on one side.
+   That preset falls back procedurally until someone downloads one.
 
 ## Diagnosing "the texture isn't showing"
 
@@ -71,9 +73,27 @@ Two real causes found so far, both of which look like "the dropdown is broken":
   apart from a bug.
 
 Ruled out, so do not re-investigate: Cloudflare Workers serves the assets
-correctly. `wrangler dev --local` was used to check — HEAD returns
-`image/jpeg`, and a missing path returns the SPA fallback that `requireAsset()`
-already detects. The build output contains all 37 asset files.
+correctly, checked with `wrangler dev --local`. The build output contains all
+37 asset files.
+
+## Diagnosing "the video won't play"
+
+- **Ask which codec it used.** The export panel states it before rendering and
+  the toast repeats it afterwards. VP9 in MP4 is the fallback for a browser
+  with no H.264 encoder; it plays in Chrome, Edge and VLC and **QuickTime
+  Player cannot open it at all**. That is the most likely answer, and the app
+  now warns rather than handing over a file that looks broken.
+- **If it says H.264 and still will not play**, the container is the suspect.
+  `muxMp4` takes the encoder's own `decoderConfig.description` verbatim as the
+  `avcC` payload, and the H.264 branch has never been produced on real
+  hardware here. `tests/video.test.js` parses the file back; use mp4box.js for
+  an opinion this repository did not write.
+- **The H.264 level is computed from the frame size and rate** (`h264Level`).
+  It used to be hard-coded at 4.0, which cannot carry 1440p at any rate or
+  1080p at 60 — a stream that exceeds its declared level is out of spec and a
+  strict decoder may refuse it. If you add a size or a frame rate, the test
+  "every offered size and frame rate declares a level it does not exceed"
+  covers you.
 
 ## Deployment
 
@@ -82,7 +102,8 @@ already detects. The build output contains all 37 asset files.
 | `main` | **production** |
 | any other branch | preview only |
 
-- Merging to `main` is the deploy. There is no other step.
+- Merging to `main` is the deploy. There is no other step, and **there is no
+  GitHub Actions workflow** — it is Cloudflare's Git integration alone.
 - **The dashboard uploader cannot deploy this project** and will say so: it is
   a Vite app with a `wrangler.jsonc`, so it needs a build. Do not fight it.
 - `wrangler deploy` with no credentials opens a browser login and hangs forever
@@ -90,13 +111,15 @@ already detects. The build output contains all 37 asset files.
   and `CI=true`. Merging is easier.
 - Account `8e38cda861b39784706d53545a0a435f`, worker `booth-studio`.
 - The footer reads `v0.1.0 · <time> UTC · <commit>`, hidden under the mobile
-  breakpoint — use `window.BOOTH_BUILD` on a phone.
+  breakpoint — use `window.BOOTH_BUILD` on a phone. **Check it before
+  believing a fix did not ship**: a merge was reported as not working twice,
+  and both times the build simply had not finished.
 
 ## Testing
 
 ```sh
 npm ci
-npm test                 # 124 Node tests
+npm test                 # 128 Node tests
 npm run build
 npm run test:view        # camera, city, env presets, HDRI, ground, tent, walls, video
 npm run test:browser     # 18 end-to-end checks
@@ -129,6 +152,33 @@ hidden a failure once. Run each suite directly.
 
 ## Things learned the hard way
 
+- **A spherical backdrop is framed by field of view alone.** Moving the camera
+  cannot pull it back, because the background is a lookup by view direction. So
+  "the backdrop is too zoomed in" and "the backdrop is blurry" are one bug: a
+  62 degree view of a 1024px equirectangular image puts about 176 source pixels
+  across the whole canvas. It is now drawn in a pass of its own through a wider
+  lens. That pass borrows `scene.background` into an empty scene rather than
+  using a hand-written fullscreen shader, which is what keeps tone mapping and
+  colour space identical to a one-pass render — and it puts `scene.background`
+  back in a `finally`, because the live loop and `export()` both read it.
+- **Never capture video from a live canvas.** `MediaRecorder` timestamps frames
+  by wall clock, so a clip is only correct if every frame renders inside its
+  33 ms. This booth does not, and the file comes out stuttering or in slow
+  motion — the machine's performance baked into the artwork. Frames are
+  rendered offline and given exact presentation times instead. The *preview*
+  is deliberately the opposite: driven by wall clock, because a preview should
+  take the seconds it claims even if it drops frames doing it.
+- **Chromium is not Chrome for codecs.** H.264 is licensed, so open Chromium
+  builds have no H.264 encoder. That is why there is a VP9-in-MP4 fallback, and
+  why the browser suite can test the real pipeline at all.
+- **A muxer is right or it produces a file nothing opens, with no middle
+  ground.** `tests/video.test.js` parses its own output back and requires every
+  box's children to fill it exactly. mp4box.js then caught what that missed: a
+  `vpcC` three bytes short, because VP9's colour description is not optional.
+  Validate against a parser you did not write.
+- **`isConfigSupported` can hand back a config with fields dropped.** Losing
+  `avc.format` would silently produce Annex B samples the muxer cannot wrap, so
+  the returned config is merged over ours, never substituted for it.
 - **UVs on tent panels are in metres, not 0..1.** A roof is ~3 m across and a
   valance 12 inches deep; with 0..1 UVs one weave is stretched ten times
   further on the valance. `repeatFor(tileMetres, 1)` is then the whole
@@ -141,33 +191,6 @@ hidden a failure once. Run each suite directly.
 - **Quality is a supersampling factor, not a ceiling.** `min(devicePixelRatio,
   quality)` renders at 1x on the 1x monitor most desktops have, and edges
   stair-step however high the setting. `tests/render-scale.test.js` pins it.
-- **Field of view is the only thing that frames an equirectangular backdrop.**
-  Moving the camera cannot pull it back. It is 62 degrees for that reason.
-- **A spherical backdrop is framed by field of view alone.** Moving the camera
-  cannot pull it back, because the background is a lookup by view direction. So
-  "the backdrop is too zoomed in" and "the backdrop is blurry" are one bug: a
-  62 degree view of a 1024px equirectangular image puts about 176 source pixels
-  across the whole canvas. The backdrop is now drawn in a pass of its own,
-  through a wider lens, so it can be pulled back without putting a wide-angle
-  lens on the booth. That pass borrows `scene.background` into an empty scene
-  rather than using a hand-written fullscreen shader, which is what keeps the
-  tone mapping and colour space identical to a one-pass render — and it puts
-  `scene.background` back in a `finally`, because the live loop and `export()`
-  both read it.
-- **Never capture video from a live canvas.** `MediaRecorder` timestamps frames
-  by wall clock, so a clip is only correct if every frame renders inside its
-  33 ms. This booth does not, and the file comes out stuttering or in slow
-  motion — the machine's performance baked into the artwork. Frames are
-  rendered offline and given exact presentation times instead.
-- **Chromium is not Chrome for codecs.** H.264 is licensed, so open Chromium
-  builds have no H.264 encoder and `VideoEncoder.isConfigSupported` says so.
-  That is why there is a VP9-in-MP4 fallback, and why the browser suite can
-  test the real pipeline at all.
-- **A muxer is right or it produces a file nothing opens, with no middle
-  ground.** `tests/video.test.js` parses its own output back and requires every
-  box's children to fill it exactly. mp4box.js then caught what that missed: a
-  `vpcC` three bytes short, because the colour description is not optional.
-  Validate against a parser you did not write.
 - **The tent weave is exaggerated 3x** over its literal depth. A true-depth
   weave on a white, brightly lit, tone-mapped roof is invisible. That is a
   rendering choice, not a measurement, and it is commented as one.
@@ -176,9 +199,9 @@ hidden a failure once. Run each suite directly.
 
 - `README.md` — commands, architecture, stable behavior.
 - `PBR_PHASE.md` — HDRI lighting and PBR surfaces, and what each phase found.
+- `WALLS_PHASE.md` — the next feature, planned in full.
 - `src/camera-path.js`, `src/video.js` — the camera moves and the MP4 writer.
   Both carry their reasoning in comments; neither needs a phase document.
-- `WALLS_PHASE.md` — the next feature, planned in full.
 - `docs/HDRI-ASSETS.md`, `docs/TEXTURE-ASSETS.md` — adding asset files.
 - `AI_EXPORT_PHASE.md` — only for AI-export implementation.
 - `docs/ORIGINAL-HANDOFF.md` — historical; ignore unless you need old

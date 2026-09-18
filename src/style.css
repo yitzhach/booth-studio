@@ -1436,3 +1436,17 @@ dialog li {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* A note that is a warning rather than an aside: the export will not open in
+   the player most people reach for. It has to read differently from .muted. */
+.warn-note {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: #f0d9a8;
+  background: rgba(190, 140, 40, 0.13);
+  border-left: 2px solid #c8a04a;
+  border-radius: 0 4px 4px 0;
+  padding: 0.55rem 0.7rem;
+  margin: 0.5rem 0;
+}
+.warn-note strong { color: #ffe9bf; }

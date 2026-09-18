@@ -95,14 +95,14 @@ export function muxMp4({
     throw new Error("The encoder did not describe its own output.");
   const duration = samples.reduce((total, s) => total + s.duration, 0);
 
-  const ftyp = box(
-    "ftyp",
-    FOURCC("isom"), u32(0x200),
-    FOURCC("isom"), FOURCC("iso2"), FOURCC("mp41"),
-    // A player that reads brands to decide whether to bother needs to see the
-    // codec that is actually in the file.
-    kind === "vp09" ? FOURCC("iso6") : FOURCC("avc1"),
-  );
+  // Brands tell a player what it is looking at before it parses anything. An
+  // H.264 file leads with mp42 and names avc1, which is the combination
+  // QuickTime and every phone expect; a VP9 file cannot claim avc1, and leads
+  // with iso6 because that is the brand its binding specifies.
+  const ftyp =
+    kind === "vp09"
+      ? box("ftyp", FOURCC("iso6"), u32(0x200), FOURCC("iso6"), FOURCC("isom"), FOURCC("iso2"), FOURCC("mp41"))
+      : box("ftyp", FOURCC("mp42"), u32(0x200), FOURCC("mp42"), FOURCC("mp41"), FOURCC("isom"), FOURCC("iso2"), FOURCC("avc1"));
 
   // A VisualSampleEntry: 78 bytes that every video codec in MP4 shares, then
   // one codec-specific configuration box. H.264 puts avcC there, taken verbatim
@@ -119,6 +119,16 @@ export function muxMp4({
       compressorName("Artist OS Booth Studio"),
       u16(0x18), u16(0xffff),        // 24-bit colour, pre_defined = -1
       configuration,
+      // Colour, stated rather than left to the player to guess. QuickTime
+      // colour-manages what it plays, and an unmarked clip is interpreted
+      // against whatever default it likes, which is how a render comes out
+      // looking washed or oversaturated next to the PNG export. "nclx" with
+      // BT.709 primaries, transfer and matrix is what the canvas actually is.
+      box("colr", FOURCC("nclx"), u16(1), u16(1), u16(1), u8(0)),
+      // Square pixels, stated for the same reason: a player that assumes
+      // anamorphic pixels would stretch the booth, and the booth is the thing
+      // being measured.
+      box("pasp", u32(1), u32(1)),
     );
   const entry =
     kind === "vp09"
@@ -221,13 +231,56 @@ export function muxMp4({
 // encoding is a licensed codec that open Chromium builds and some Linux
 // browsers ship without — those machines would otherwise have no video export
 // at all, and VP9 in MP4 plays in every current browser and in VLC.
-export const CODECS = [
-  { codec: "avc1.640028", kind: "avc" },
-  { codec: "avc1.4d0028", kind: "avc" },
-  { codec: "avc1.42e01e", kind: "avc" },
-  { codec: "vp09.00.41.08", kind: "vp09" },
+// H.264 levels, as the limits the spec actually sets: macroblocks per frame
+// and macroblocks per second. A level is a promise about how much work a
+// decoder will be asked to do, and a stream that exceeds the level it declares
+// is out of spec — QuickTime is entitled to refuse it, and an encoder is
+// entitled to refuse the configuration, which drops the export to VP9 and
+// leaves QuickTime unable to open the file at all.
+//
+// This was hard-coded at 4.0 (`avc1.640028`) for every size, and 4.0 cannot
+// carry 1440p at any rate or 1080p at 60. That is the bug.
+const H264_LEVELS = [
+  { level: 0x1e, macroblocks: 1620, rate: 40500 },    // 3.0
+  { level: 0x1f, macroblocks: 3600, rate: 108000 },   // 3.1 — 720p30
+  { level: 0x20, macroblocks: 5120, rate: 216000 },   // 3.2 — 720p60
+  { level: 0x28, macroblocks: 8192, rate: 245760 },   // 4.0 — 1080p30
+  { level: 0x2a, macroblocks: 8704, rate: 522240 },   // 4.2 — 1080p60
+  { level: 0x32, macroblocks: 22080, rate: 589824 },  // 5.0 — 1440p30
+  { level: 0x33, macroblocks: 36864, rate: 983040 },  // 5.1 — 1440p60
+  { level: 0x34, macroblocks: 36864, rate: 2073600 }, // 5.2
 ];
-export const H264_CODECS = CODECS.filter((c) => c.kind === "avc").map((c) => c.codec);
+// A macroblock is 16x16, and a frame is padded up to whole macroblocks.
+export const macroblocks = (width, height) => Math.ceil(width / 16) * Math.ceil(height / 16);
+export const h264Level = (width, height, fps) => {
+  const perFrame = macroblocks(width, height);
+  const perSecond = perFrame * fps;
+  const fit = H264_LEVELS.find((l) => perFrame <= l.macroblocks && perSecond <= l.rate);
+  // Nothing above 5.2 is worth claiming: no frame this app offers reaches it,
+  // and a level a decoder does not know is as bad as one that is too low.
+  return (fit || H264_LEVELS.at(-1)).level;
+};
+const hex2 = (n) => n.toString(16).padStart(2, "0");
+// Profiles, most capable first. High gives the best picture per byte; Main and
+// then Baseline are what an older or stricter decoder will take. The level is
+// appended per clip rather than baked in.
+const H264_PROFILES = [
+  { name: "High", prefix: "6400" },
+  { name: "Main", prefix: "4d00" },
+  { name: "Baseline", prefix: "42e0" },
+];
+export const codecsFor = (width, height, fps) => [
+  ...H264_PROFILES.map((p) => ({
+    codec: `avc1.${p.prefix}${hex2(h264Level(width, height, fps))}`,
+    kind: "avc",
+    label: `H.264 ${p.name}`,
+  })),
+  // Last resort. VP9 in MP4 plays in every current browser and in VLC, but
+  // QuickTime Player cannot open it, so the app says so when it lands here
+  // rather than handing over a file that looks broken.
+  { codec: "vp09.00.41.08", kind: "vp09", label: "VP9" },
+];
+export const H264_PROFILE_NAMES = H264_PROFILES.map((p) => p.name);
 
 export const SIZES = {
   1080: { label: "1080p · 1920 × 1080", width: 1920, height: 1080, bitrate: 12e6 },
@@ -253,7 +306,7 @@ export const evenSize = (n) => Math.max(2, Math.round(n / 2) * 2);
  */
 export async function pickCodec({ width, height, framerate, bitrate }) {
   if (!videoSupported()) return null;
-  for (const { codec, kind } of CODECS) {
+  for (const { codec, kind, label } of codecsFor(width, height, framerate)) {
     const config = {
       codec,
       width,
@@ -267,7 +320,12 @@ export async function pickCodec({ width, height, framerate, bitrate }) {
     };
     try {
       const support = await VideoEncoder.isConfigSupported(config);
-      if (support?.supported) return { config: support.config || config, kind };
+      // isConfigSupported may hand back a config with fields the browser has
+      // normalised, but it can also drop the ones it does not recognise — and
+      // losing avc.format would silently produce Annex B samples the muxer
+      // cannot wrap. So the returned config is merged over ours, never
+      // substituted for it.
+      if (support?.supported) return { config: { ...config, ...(support.config || {}) }, kind, label };
     } catch {
       // isConfigSupported throws rather than resolving on some builds; the next
       // codec is a better answer than giving up on the whole feature.
@@ -277,7 +335,8 @@ export async function pickCodec({ width, height, framerate, bitrate }) {
 }
 
 /**
- * Encodes frames drawn on demand by `drawFrame(index)` into an MP4.
+ * Encodes frames drawn on demand by `drawFrame(index)` into an MP4, and
+ * reports which codec did it.
  *
  * `drawFrame` renders one frame and returns something VideoFrame accepts — the
  * renderer's own canvas. It is called exactly `count` times, in order, and it
@@ -299,7 +358,7 @@ export async function recordMp4({
     throw new Error(
       "This browser cannot encode video. Chrome, Edge and Safari 16.4 or newer can; Export PNG works everywhere.",
     );
-  const { config, kind } = chosen;
+  const { config, kind, label } = chosen;
   const samples = [];
   const duration = sampleDuration(fps);
   let description = null;
@@ -346,5 +405,10 @@ export async function recordMp4({
   } finally {
     if (encoder.state !== "closed") encoder.close();
   }
-  return new Blob([muxMp4({ width, height, samples, description, kind })], { type: "video/mp4" });
+  const blob = new Blob([muxMp4({ width, height, samples, description, kind })], { type: "video/mp4" });
+  // The caller needs to know which codec landed, because it decides what the
+  // file can be opened with: QuickTime Player plays H.264 and cannot open VP9.
+  // Returning it is what lets the app say so instead of leaving someone with a
+  // file their player rejects for no stated reason.
+  return { blob, kind, label, codec: config.codec, frames: samples.length };
 }

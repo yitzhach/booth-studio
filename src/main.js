@@ -1,7 +1,7 @@
 import { TENTS } from "./environment.js";
 import { ENV_PRESETS, ART_FIDELITY, DEFAULT_PRESET, DEFAULT_FIDELITY, resolvePreset } from "./lighting.js";
 import { MOVES, DEFAULT_MOVE, resolveMove, frameTimes } from "./camera-path.js";
-import { SIZES, DEFAULT_SIZE, FPS, DEFAULT_FPS, videoSupported } from "./video.js";
+import { SIZES, DEFAULT_SIZE, FPS, DEFAULT_FPS, videoSupported, pickCodec } from "./video.js";
 import { applyImageEdits, DEFAULT_IMAGE_EDITS, normalizeImageEdits } from "./image-edit.js";
 import "@fontsource/dm-sans/400.css";
 import "@fontsource/dm-sans/500.css";
@@ -48,6 +48,7 @@ import {
   ArrowUpToLine,
   Layers,
   RotateCcw,
+  Play,
 } from "lucide";
 import {
   demoProject,
@@ -97,6 +98,7 @@ async function boot() {
     ArrowUpToLine,
     Layers,
     RotateCcw,
+    Play,
   };
   const icon = (n) => `<i data-lucide="${n}"></i>`;
   const btn = (action, label, ic, cls = "") =>
@@ -126,7 +128,13 @@ async function boot() {
     videoFrame = 0,
     videoFrames = 0,
     videoAbort = null,
-    busyVideo = false;
+    busyVideo = false,
+    busyPreview = false,
+    // What this browser will actually encode, probed rather than assumed. It
+    // decides whether the file opens in QuickTime, so it is worth knowing
+    // before spending minutes rendering rather than after.
+    videoCodec = null,
+    videoCodecFor = "";
   try {
     p = await load();
     if (p) validateProject(p);
@@ -382,12 +390,39 @@ async function boot() {
       ${b.groundAsset ? `${field("Ground tile size","groundTile",b.groundTile||48,12,240,1,"in","booth")}${btn("clear-ground","Remove ground texture",null,"wide")}` : ""}
       <p class="muted">Panorama: 2:1 full-sphere JPG/PNG, not an ordinary flat photo. Your own panorama replaces the environment preset's backdrop; rotation turns whichever of the two is showing, and has nothing to turn while a preset's image files are missing. Ground: a top-down, ideally seamless photograph. Images stay on this device and enter backups/exports. Scenery is a backdrop, not reconstructed 3D.</p>`;
   }
+  // Asks the browser which codec it will encode, for the size and rate
+  // currently chosen, and re-renders the panel once it knows. Keyed so that
+  // changing the resolution or frame rate re-probes: the H.264 level depends
+  // on both, and a machine can support one and refuse another.
+  async function probeCodec() {
+    const key = `${videoSize}/${videoFps}`;
+    if (videoCodecFor === key) return;
+    videoCodecFor = key;
+    const preset = SIZES[videoSize] || SIZES[DEFAULT_SIZE];
+    try {
+      videoCodec = await pickCodec({
+        width: preset.width,
+        height: preset.height,
+        framerate: videoFps,
+        bitrate: preset.bitrate,
+      });
+    } catch {
+      videoCodec = null;
+    }
+    if (tab === "export") renderInspector();
+  }
+
   // Video export. Offered only where it can actually be delivered: the encoder
-  // is WebCodecs H.264, and saying so up front is kinder than a failure after
-  // someone has waited through a render.
+  // is WebCodecs, and saying up front what it will produce is kinder than a
+  // failure — or a file QuickTime refuses — after someone has waited through a
+  // render.
   function videoSection() {
     const move = resolveMove(videoMove);
     const supported = videoSupported();
+    // Fire and forget: the probe re-renders this panel when it answers, and it
+    // no-ops for a size and rate it has already asked about, so this cannot
+    // loop.
+    if (supported) probeCodec();
     return `<section><h3>Video</h3>${
       supported
         ? `<label class="setting-label">Camera move<select id="video-move" aria-label="Camera move">${Object.entries(MOVES)
@@ -398,9 +433,17 @@ async function boot() {
             (f) => `<option value="${f}" ${videoFps === f ? "selected" : ""}>${f} fps</option>`,
           ).join("")}</select></label><label class="setting-label">Resolution<select id="video-size" aria-label="Video resolution">${Object.entries(SIZES)
             .map(([k, v]) => `<option value="${k}" ${String(videoSize) === k ? "selected" : ""}>${e(v.label)}</option>`)
-            .join("")}</select></label><p class="muted">MP4 · H.264 · width from the setting, height from the viewport's aspect ratio. Every frame is rendered in full before it is encoded, so the clip runs at the frame rate you chose no matter how fast this machine is — which is why it takes longer than the clip lasts.</p>${btn("export-video", "Export MP4", "download", "primary wide")}${busyVideo ? btn("cancel-video", "Cancel", "x", "wide") : ""}<div class="video-progress" role="status" aria-live="polite">${busyVideo ? `<progress max="1" value="${videoProgress}"></progress><span>${Math.round(videoProgress * 100)}% · frame ${videoFrame} of ${videoFrames}</span>` : ""}</div>`
+            .join("")}</select></label><p class="muted">MP4 · H.264 where this browser can encode it, which is what QuickTime Player and phones want. Width comes from the setting, height from the viewport's aspect ratio. Every frame is rendered in full before it is encoded, so the clip runs at the frame rate you chose however fast this machine is — which is why it takes longer than the clip lasts.</p>${videoCodecLine()}${busyPreview ? btn("stop-preview", "Stop preview", "x", "wide") : btn("preview-move", "Preview the move", "play", "wide")}<p class="muted">Plays the move in the viewport at its real length, without rendering anything. Judge it here first: a 14-second 1440p clip is minutes of encoding.</p>${btn("export-video", "Export MP4", "download", "primary wide")}${busyVideo ? btn("cancel-video", "Cancel", "x", "wide") : ""}<div class="video-progress" role="status" aria-live="polite">${busyVideo ? `<progress max="1" value="${videoProgress}"></progress><span>${Math.round(videoProgress * 100)}% · frame ${videoFrame} of ${videoFrames}</span>` : ""}</div>`
         : `<p class="muted">Video export needs the WebCodecs video encoder, which this browser does not offer. Chrome, Edge and Safari 16.4 or newer have it. Export PNG works everywhere.</p>`
     }</section>`;
+  }
+  // Says what will come out, in the terms that matter: whether QuickTime
+  // Player will open it. Nothing is claimed until the probe has answered.
+  function videoCodecLine() {
+    if (!videoCodec) return `<p class="muted">Checking what this browser can encode…</p>`;
+    if (videoCodec.kind === "vp09")
+      return `<p class="warn-note">This browser has no H.264 encoder, so the clip will be <strong>VP9 in an MP4</strong>. It plays in Chrome, Edge and VLC, but <strong>QuickTime Player cannot open it</strong>. Record in Chrome or Safari for a QuickTime-ready file.</p>`;
+    return `<p class="muted">This browser will encode <strong>${e(videoCodec.label)}</strong> — the codec QuickTime Player, phones and upload forms expect.</p>`;
   }
   function renderInspector() {
     const root = document.querySelector("#inspector-content"),
@@ -953,7 +996,7 @@ async function boot() {
           label.textContent = `${Math.round(videoProgress * 100)}% · frame ${videoFrame} of ${videoFrames}`;
       };
       try {
-        const blob = await scene.recordVideo({
+        const recorded = await scene.recordVideo({
           move: videoMove,
           seconds: videoSeconds,
           fps: videoFps,
@@ -965,8 +1008,18 @@ async function boot() {
             status();
           },
         });
-        download(blob, `${safeName()}-${videoMove}.mp4`);
-        toast(`${videoSeconds}s MP4 exported · ${videoFrames} frames at ${videoFps} fps.`);
+        download(recorded.blob, `${safeName()}-${videoMove}.mp4`);
+        // Which codec landed decides what can open the file, so it is said out
+        // loud. VP9 is the fallback for a browser with no H.264 encoder, and
+        // QuickTime Player cannot open VP9 — someone handed that file without
+        // being told just sees their player refuse their own export.
+        if (recorded.kind === "vp09")
+          toast(
+            "Exported as VP9, because this browser cannot encode H.264. It plays in Chrome, Edge and VLC, but not in QuickTime Player — use Chrome or Safari for a QuickTime-ready file.",
+            true,
+          );
+        else
+          toast(`${videoSeconds}s MP4 exported · ${videoFrames} frames at ${videoFps} fps · ${recorded.label}.`);
       } catch (err) {
         if (err?.name === "AbortError") toast("Recording cancelled.");
         else toast(err.message, true);
@@ -978,6 +1031,22 @@ async function boot() {
       }
     },
     "cancel-video": () => videoAbort?.abort(),
+    "preview-move": async () => {
+      if (busy || busyVideo || busyPreview) return;
+      if (!scene) return toast("3D is not available, so there is no view to preview.", true);
+      busyPreview = true;
+      renderInspector();
+      try {
+        const { cancelled } = await scene.previewMove({ move: videoMove, seconds: videoSeconds });
+        if (!cancelled) toast("That is the move. Export MP4 renders it.");
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        busyPreview = false;
+        renderInspector();
+      }
+    },
+    "stop-preview": () => scene?.stopPreview?.(),
     help: () => {
       const d = document.querySelector("#dialog");
       document.querySelector("#dialog-content").innerHTML =
@@ -1111,12 +1180,16 @@ async function boot() {
       videoSeconds = +el.value;
       return;
     }
+    // Both of these change the H.264 level, so the codec is re-probed and the
+    // panel re-rendered once the browser has answered.
     if (el.id === "video-fps") {
       videoFps = +el.value;
+      probeCodec();
       return;
     }
     if (el.id === "video-size") {
       videoSize = el.value;
+      probeCodec();
       return;
     }
     if (!el.dataset.field) return;
