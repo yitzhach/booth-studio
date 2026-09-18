@@ -186,8 +186,59 @@ try {
   assert.ok(bare.panels.every((p) => !p.map), 'no canvas texture without files');
   assert.ok(bare.panels.every((p) => p.bump), 'the procedural weave is still there');
 
+  // ---- The fabric wall finish --------------------------------------------
+  // A pro-panel wall takes the weave from the carpet set but never its colour:
+  // this is a tool for judging artwork against a finish the user chose, so the
+  // colour they picked has to survive.
+  const walls = () => page.evaluate(() => {
+    const out = [];
+    window.__booth.scene.group.traverse((o) => {
+      if (!o.userData?.wall) return;
+      const m = o.material;
+      out.push({
+        wall: o.userData.wall, color: m.color.getHexString(),
+        map: !!m.map, normal: !!m.normalMap, rough: !!m.roughnessMap,
+        scale: m.normalMap ? m.normalScale.x : null,
+        repeat: m.normalMap ? [m.normalMap.repeat.x, m.normalMap.repeat.y] : null,
+      });
+    });
+    return out;
+  });
+  await page.selectOption('select[aria-label="Panel surface"]', 'fabric');
+  await page.waitForFunction(() => {
+    let ok = false;
+    window.__booth.scene.group.traverse((o) => { if (o.userData?.wall && o.material.normalMap) ok = true; });
+    return ok;
+  }, null, { timeout: 15000 });
+  const fabric = await walls();
+  assert.equal(fabric.length, 3, 'three panels');
+  for (const w of fabric) {
+    assert.equal(w.color, '45474a', `${w.wall}: the chosen colour survives the finish`);
+    assert.equal(w.map, false, `${w.wall}: the carpet's own colour is not taken`);
+    assert.ok(w.normal && w.rough, `${w.wall}: weave and sheen are`);
+    assert.equal(w.scale, 0.6, `${w.wall}: relief follows the weave-depth default`);
+    // A panel is wider than it is tall, so one repeat would stretch the weave.
+    assert.ok(w.repeat[0] > w.repeat[1], `${w.wall}: repeat is per axis, not square`);
+  }
+
+  await page.fill('input[aria-label="Weave depth"]', '20');
+  await page.locator('input[aria-label="Weave depth"]').dispatchEvent('change');
+  await page.waitForFunction(() => {
+    let scale = null;
+    window.__booth.scene.group.traverse((o) => { if (o.userData?.wall && o.material.normalMap) scale = o.material.normalScale.x; });
+    return scale !== null && Math.abs(scale - 0.2) < 1e-6;
+  }, null, { timeout: 15000 });
+
+  await page.selectOption('select[aria-label="Panel surface"]', 'smooth');
+  await page.waitForTimeout(600);
+  const smooth = await walls();
+  assert.ok(smooth.every((w) => !w.normal && !w.rough), 'smooth panels carry no weave');
+  assert.ok(smooth.every((w) => w.color === '45474a'), 'and still the chosen colour');
+  assert.equal(await page.evaluate(() => window.__booth.scene.surfaces.claims.size), 0,
+    'every wall hands its set back');
+
   assert.deepEqual(errors, [], 'no page errors');
-  console.log('PASS PBR ground and tent canvas: maps, colour space, repeat from tile size, UVs in metres, fallback.');
+  console.log('PASS PBR ground, tent canvas and fabric walls: colour space, per-axis repeat, UVs in metres, weave depth, fallback.');
 } finally {
   await browser.close();
   await server.close();

@@ -46,7 +46,7 @@ surface instead of sliding over a flat plane.
 | `grass` | `Grass004` | *grass*, *lawn* |
 | `carpet` | `Carpet013` | *carpet* — this is what trade show halls actually are |
 | `wood` | `WoodFloor051` | *wood floor*, *planks* |
-| `canvas` | `Fabric063` | *canvas*, *fabric*, *tarp* — the tent, not the floor |
+| `canvas` | `Fabric081C` | *canvas*, *fabric*, *tarp* — the tent, not the floor |
 
 Pick seamless, evenly-lit, low-contrast surfaces. A texture with a distinctive
 mark or a strong light gradient in it will visibly repeat across a 180 m floor.
@@ -169,8 +169,8 @@ off-white or light grey weave is what you want; the material keeps its sheen,
 so it will not look flat.
 
 ```sh
-node tools/texture-prep.mjs ~/Downloads/Fabric063_1K-JPG canvas \
-  --tile 1 --credit "Fabric063 (ambientCG)"
+node tools/texture-prep.mjs ~/Downloads/Fabric081C_1K-JPG canvas \
+  --tile 1 --credit "Fabric081C (ambientCG)"
 ```
 
 Check it under **Layout** → **Footprint** → **White canopy & frame**. The weave
@@ -179,7 +179,32 @@ thing worth looking at, because it is what the geometry's UVs are there to
 guarantee. If the valance weave looks stretched downward, the UVs are wrong,
 not the texture.
 
-## 8. Budget and licensing
+## 8. The fabric wall finish
+
+**Layout** → **Display walls** → **Panel surface** offers *Smooth print* or
+*Fabric pro-panel*. The fabric option has no folder of its own: it borrows the
+`carpet` set, because a woven pile is what a fabric pro-panel is.
+
+It takes only the **normal and roughness maps** — never the colour map. The
+wall colour is the one the user picked in the swatch above it, and this is a
+tool for judging artwork against that colour, so a carpet's navy must not
+creep into it. The weave and the sheen are the whole contribution.
+
+**Weave depth** (0–100%) scales the relief. 0 is indistinguishable from smooth;
+the default 60 is a clear but quiet texture. It is one slider rather than one
+per map because the maps are not independent — deepening the weave without
+changing how it catches light just looks like noise.
+
+With no `carpet/` folder the panels stay smooth and the control does nothing,
+the same fallback as everywhere else.
+
+One thing to watch: the weave is tiled at the carpet's real size, so a 2 m
+carpet repeats about one and a half times across a 10 ft panel. That is
+physically honest, and it may read coarser than the fine weave of a real
+pro-panel. If it does, re-prep the carpet set with a smaller `--tile`, or point
+`WALL_SET` in `src/surfaces.js` at the finer `canvas` set instead.
+
+## 9. Budget and licensing
 
 - 1K-JPG, five kinds: well under 10 MB in total.
 - Keep all of `public/assets` (HDRIs included) under about 50 MB.

@@ -5,7 +5,7 @@ import { signTexture } from "./signage.js";
 import { edgeMaterial } from "./edge-material.js";
 import { TextureCache } from "./texture-cache.js";
 import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY } from "./lighting.js";
-import { GROUND_CONSUMER, TENT_CONSUMER, UV_METRE, SurfaceTextures } from "./surfaces.js";
+import { GROUND_CONSUMER, TENT_CONSUMER, WALL_CONSUMER, WALL_SET, UV_METRE, SurfaceTextures } from "./surfaces.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
 import { IN, constrain, scalePanel } from "./model.js";
 // The orbit camera may drop below the booth's centre of interest to give a
@@ -291,6 +291,23 @@ export class BoothScene {
       );
       wallMesh.userData.wall = wall;
       this.wallObjects.push(wallMesh);
+      // A fabric pro-panel finish: the weave, not the carpet's own colour. The
+      // user picked that colour and this is a tool for judging artwork against
+      // it, so only the relief and the sheen are taken and `keepColor` leaves
+      // the colour exactly as chosen. The panel's UVs run 0..1 over a face that
+      // is wider than it is tall, so the span is given per axis.
+      if (p.booth.wallFinish === "fabric") {
+        const consumer = WALL_CONSUMER + wall;
+        const strength = Math.max(0, Math.min(100, p.booth.wallTexture ?? 60)) / 100;
+        this.surfaces.load(WALL_SET, consumer).then(set => {
+          if (this.revision !== rev || !set) return;
+          if (this.surfaces.applyTo(wallMesh, set, {
+            consumer, strength, keepColor: true,
+            metres: [width, height],
+            slots: ["normalMap", "roughnessMap"],
+          })) this.renderer.shadowMap.needsUpdate = true;
+        }).catch(() => {});
+      } else this.surfaces.release(WALL_CONSUMER + wall);
       const exterior = new T.Group();
       exterior.position.set(width, 0, -0.063);
       exterior.rotation.y = Math.PI;

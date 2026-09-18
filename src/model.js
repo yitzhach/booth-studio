@@ -22,6 +22,11 @@ export function blankProject() {
       neighborRear: false,
       rearGap: 24,
       color: "#45474a",
+      // Panel finish. "smooth" is the printed vinyl this has always drawn;
+      // "fabric" puts a woven relief over the same colour, the way a fabric
+      // pro-panel wall looks. wallTexture is how far up that relief is turned.
+      wallFinish: "smooth",
+      wallTexture: 60,
       walls: {
         back: { enabled: true, width: 120, height: 96 },
         left: { enabled: true, width: 120, height: 96 },
@@ -146,7 +151,7 @@ export function validateProject(p) {
     typeof p.booth.tent !== "boolean"
   )
     fail();
-  for (const [key, values] of Object.entries({tentStyle:["classic","peak","barrel","dome"],ground:["studio","grass","concrete","asphalt","carpet","wood"],horizon:["studio","open","park","urban"]})) {
+  for (const [key, values] of Object.entries({tentStyle:["classic","peak","barrel","dome"],ground:["studio","grass","concrete","asphalt","carpet","wood"],horizon:["studio","open","park","urban"],wallFinish:["smooth","fabric"]})) {
     if (p.booth[key] !== undefined && !values.includes(p.booth[key])) fail();
   }
   if (p.booth.neighbors !== undefined && typeof p.booth.neighbors !== "boolean") fail();
@@ -167,6 +172,7 @@ export function validateProject(p) {
   if (p.booth.surroundRotation !== undefined && !finite(p.booth.surroundRotation, -180, 180)) fail();
   if (p.booth.groundAsset != null && (typeof p.booth.groundAsset !== "string" || !p.assets[p.booth.groundAsset])) fail();
   if (p.booth.groundTile !== undefined && !finite(p.booth.groundTile, 12, 240)) fail();
+  if (p.booth.wallTexture !== undefined && !finite(p.booth.wallTexture, 0, 100)) fail();
   const ids = new Set();
   for (const a of p.art) {
     if (

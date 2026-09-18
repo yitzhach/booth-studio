@@ -28,6 +28,12 @@ export const GROUND_METRES = 180;
 // Consumers are named, not counted, so a release can name the one it means.
 export const GROUND_CONSUMER = "ground";
 export const TENT_CONSUMER = "tent";
+// One consumer per wall, suffixed with the side: each panel is a different
+// width and so needs its own repeat over the same set.
+export const WALL_CONSUMER = "wall:";
+// The fabric finish borrows the carpet set — woven pile is what a fabric
+// pro-panel is — and takes only its relief, never its colour.
+export const WALL_SET = "carpet";
 
 // The ground kinds, plus the tent's canvas. `canvas` is not a ground: the
 // Ground control in main.js lists its own options and does not read this.
@@ -133,7 +139,15 @@ export class SurfaceTextures {
       this.pending.set(id, inFlight);
     }
     const set = await inFlight;
-    if (!set) return null;
+    if (!set) {
+      // The files are not there, so this consumer is about to show whatever
+      // procedural surface it falls back to. Whatever it was holding is no
+      // longer on screen, and holding it would keep a set on the GPU that
+      // nothing draws — picking a texture-free kind has to free it just as
+      // surely as picking the studio floor does.
+      this.release(consumer);
+      return null;
+    }
     this.sets.set(id, set);
     this.claim(consumer, id);
     return set;
@@ -194,20 +208,40 @@ export class SurfaceTextures {
   }
   // Puts a loaded set onto a mesh. The mesh is rebuilt on every update() and
   // its material with it, so this re-applies cached maps rather than reloading.
-  applyTo(mesh, set, { planeMetres = GROUND_METRES, consumer = GROUND_CONSUMER } = {}) {
+  //
+  // The options are what let one set serve surfaces that want different things
+  // from it:
+  //   metres    [u, v] — how far one UV unit reaches on each axis. A wall is
+  //             wider than it is tall, so a single number would stretch the
+  //             weave; `planeMetres` is the square shorthand the ground uses.
+  //   slots     which maps to bind, when a surface wants only some of them.
+  //   keepColor leaves the material's own colour alone. A photographed floor
+  //             must not be tinted, but a wall the user has picked a colour for
+  //             must keep it and take only the weave.
+  //   strength  scales the relief, 0 to 1, for a "how much texture" control.
+  applyTo(mesh, set, {
+    planeMetres = GROUND_METRES,
+    metres,
+    consumer = GROUND_CONSUMER,
+    slots,
+    keepColor = false,
+    strength = 1,
+  } = {}) {
     if (!mesh?.material || !set?.maps?.map) return false;
     const material = mesh.material;
     this.claim(consumer, set.id);
-    const repeat = repeatFor(set.tileMetres, planeMetres);
-    for (const [slot, texture] of Object.entries(this.viewFor(set, consumer))) {
-      texture.repeat.setScalar(repeat);
+    const span = metres || [planeMetres, planeMetres];
+    const view = this.viewFor(set, consumer);
+    for (const [slot, texture] of Object.entries(view)) {
+      if (slots && !slots.includes(slot)) { material[slot] = null; continue; }
+      texture.repeat.set(repeatFor(set.tileMetres, span[0]), repeatFor(set.tileMetres, span[1]));
       material[slot] = texture;
     }
     // The procedural ground tints a grey plane; a photographed one must not be
     // tinted at all, and its own bump map would fight the real normal map.
-    material.color.set("#ffffff");
+    if (!keepColor) material.color.set("#ffffff");
     material.bumpMap = null;
-    if (material.normalMap) material.normalScale.set(1, set.normalConvention === "DX" ? -1 : 1);
+    if (material.normalMap) material.normalScale.set(strength, strength * (set.normalConvention === "DX" ? -1 : 1));
     if (material.aoMap) {
       material.aoMapIntensity = 1;
       // aoMap reads UV channel 1, which a PlaneGeometry does not have: without

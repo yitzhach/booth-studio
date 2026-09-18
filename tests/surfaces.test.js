@@ -18,12 +18,12 @@ const fakeTexture = (name) => ({
   wrapS: T.ClampToEdgeWrapping,
   wrapT: T.ClampToEdgeWrapping,
   anisotropy: 1,
-  repeat: { value: 1, setScalar(v) { this.value = v; } },
+  repeat: { x: 1, y: 1, set(x, y) { this.x = x; this.y = y; }, setScalar(v) { this.x = this.y = v; } },
   disposed: false,
   dispose() { this.disposed = true; },
   // Real clones share their image source and carry their own repeat, which is
   // the whole reason two consumers can hold one set.
-  clone() { return { ...this, repeat: { ...this.repeat }, source: this, clone() { return fakeTexture(name); } }; },
+  clone() { const r = this.repeat; return { ...this, repeat: { ...r, set: r.set, setScalar: r.setScalar }, source: this, clone() { return fakeTexture(name); } }; },
 });
 // A stand-in for the rebuilt ground mesh: a real material would work, but the
 // rules under test are about which slots get set, not about shading.
@@ -111,7 +111,7 @@ test("every map repeats and filters the same way", async () => {
     assert.equal(texture.wrapS, T.RepeatWrapping, `${slot} wrapS`);
     assert.equal(texture.wrapT, T.RepeatWrapping, `${slot} wrapT`);
     assert.equal(texture.anisotropy, 8, `${slot} anisotropy`);
-    assert.equal(texture.repeat.value, repeatFor(set.tileMetres), `${slot} repeat`);
+    assert.equal(texture.repeat.x, repeatFor(set.tileMetres), `${slot} repeat`);
     assert.equal(texture.source, set.maps[slot], `${slot} shares the loaded map's source`);
   }
 });
@@ -122,7 +122,7 @@ test("meta.json can override the tile size", async () => {
   assert.equal(set.tileMetres, 4);
   const mesh = fakeMesh();
   surfaces.applyTo(mesh, set);
-  assert.equal(mesh.material.map.repeat.value, 45);
+  assert.equal(mesh.material.map.repeat.x, 45);
 });
 
 test("applying a set drops the procedural tint and bump", async () => {
@@ -212,8 +212,8 @@ test("two consumers share one set without fighting over its scale", async () => 
   const floor = fakeMesh(), panel = fakeMesh();
   surfaces.applyTo(floor, ground);
   surfaces.applyTo(panel, tent, { planeMetres: 3, consumer: "tent" });
-  assert.equal(floor.material.map.repeat.value, repeatFor(ground.tileMetres));
-  assert.equal(panel.material.map.repeat.value, repeatFor(tent.tileMetres, 3));
+  assert.equal(floor.material.map.repeat.x, repeatFor(ground.tileMetres));
+  assert.equal(panel.material.map.repeat.x, repeatFor(tent.tileMetres, 3));
   assert.notEqual(floor.material.map, panel.material.map, "each consumer binds its own copy");
   assert.equal(floor.material.map.source, panel.material.map.source, "sharing one upload");
 });
@@ -297,4 +297,25 @@ test("dispose drops every set and every consumer's copies", async () => {
   assert.ok(floor.material.map.disposed && panel.material.map.disposed, "copies released");
   assert.equal(surfaces.sets.size, 0);
   assert.equal(surfaces.claims.size, 0);
+});
+
+// Falling back is not the same as keeping what you had: a kind whose files are
+// missing shows the procedural surface, so the set the consumer was holding is
+// no longer on screen and must not stay on the GPU.
+test("a kind with no files releases what the consumer was holding", async () => {
+  const present = new Set(["wood"]);
+  const base = loaders();
+  const surfaces = new SurfaceTextures(fakeRenderer(), {
+    ...base,
+    loadTexture: (url) => (present.has(url.split("/")[2]) ? base.loadTexture(url) : Promise.reject(new Error("404"))),
+    loadMeta: () => Promise.reject(new Error("404")),
+  });
+  const wood = await surfaces.load("wood");
+  surfaces.applyTo(fakeMesh(), wood);
+  assert.equal(surfaces.sets.size, 1);
+
+  assert.equal(await surfaces.load("carpet"), null, "carpet has no files");
+  assert.equal(surfaces.sets.size, 0, "the wood set does not outlive the switch");
+  assert.equal(surfaces.claims.size, 0);
+  assert.ok(Object.values(wood.maps).every((t) => t.disposed), "wood maps released");
 });
