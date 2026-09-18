@@ -5,7 +5,7 @@ import { signTexture } from "./signage.js";
 import { edgeMaterial } from "./edge-material.js";
 import { TextureCache } from "./texture-cache.js";
 import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY } from "./lighting.js";
-import { GROUND_CONSUMER, TENT_CONSUMER, WALL_CONSUMER, WALL_SET, UV_METRE, SurfaceTextures } from "./surfaces.js";
+import { GROUND_CONSUMER, TENT_CONSUMER, TENT_WEAVE, WALL_CONSUMER, WALL_SET, UV_METRE, SurfaceTextures } from "./surfaces.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
 import { IN, constrain, scalePanel } from "./model.js";
 // The orbit camera may drop below the booth's centre of interest to give a
@@ -14,6 +14,16 @@ import { IN, constrain, scalePanel } from "./model.js";
 // MAX_POLAR avoids the up-vector flip OrbitControls suffers near 180 degrees.
 const MIN_CAMERA_Y = 0.12;
 const MAX_POLAR = Math.PI * 0.82;
+// An equirectangular backdrop is sampled by view direction, so the field of
+// view is the only thing that decides how much of it you see — moving the
+// camera cannot pull it back. 62 degrees against the old 44 shows about half
+// as much again, and frames more of the booth with it.
+export const FOV = 62;
+// Quality is a supersampling factor, not a ceiling: on a 1x monitor asking for
+// min(devicePixelRatio, 2) renders at 1 and aliases. Capped at 3 because the
+// cost is per pixel and a phone does not need 9x the fragments.
+export const renderScale = (quality = 2) =>
+  Math.min(Math.max(devicePixelRatio || 1, quality), 3);
 export function temperature(k) {
   const t = (k - 2700) / 3800;
   return new T.Color().setRGB(
@@ -43,7 +53,12 @@ export class BoothScene {
       antialias: true,
       preserveDrawingBuffer: true,
     });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+    // Render above the display's own density and let the browser downsample.
+    // antialias:true asks for MSAA, but on a 1x desktop monitor — which is most
+    // of them — a white tent roof against a dark backdrop still stair-steps:
+    // sample counts are the driver's choice and ANGLE often gives few.
+    // Supersampling does not ask permission.
+    this.renderer.setPixelRatio(renderScale());
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.autoUpdate = false;
     this.renderer.shadowMap.type = T.PCFSoftShadowMap;
@@ -56,7 +71,7 @@ export class BoothScene {
       "aria-label",
       "Interactive measured 3D booth",
     );
-    this.camera = new T.PerspectiveCamera(44, 1, 0.02, 100);
+    this.camera = new T.PerspectiveCamera(FOV, 1, 0.02, 100);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.maxPolarAngle = MAX_POLAR;
@@ -480,7 +495,14 @@ export class BoothScene {
       if (this.revision !== rev || !set) return;
       let applied = false;
       for (const panel of fabric)
-        applied = this.surfaces.applyTo(panel, set, { planeMetres: UV_METRE, consumer: TENT_CONSUMER }) || applied;
+        applied = this.surfaces.applyTo(panel, set, {
+          planeMetres: UV_METRE, consumer: TENT_CONSUMER,
+          // A tent roof is white, lit from a bright sky and tone-mapped: a
+          // weave at its literal depth washes out to nothing. This is a
+          // rendering choice, not a measurement, so the relief is exaggerated
+          // until the fabric reads as fabric.
+          strength: TENT_WEAVE,
+        }) || applied;
       if (applied) this.renderer.shadowMap.needsUpdate = true;
     }).catch(() => {});
     if (!this.initialized) {
@@ -507,7 +529,7 @@ export class BoothScene {
       H = this.p.booth.height * IN;
     const perspective = view === "perspective";
     this.camera = perspective
-      ? new T.PerspectiveCamera(44, 1, 0.02, 100)
+      ? new T.PerspectiveCamera(FOV, 1, 0.02, 100)
       : new T.OrthographicCamera(-3, 3, 3, -3, 0.01, 100);
     this.controls.object = this.camera;
     this.controls.enableRotate = perspective;

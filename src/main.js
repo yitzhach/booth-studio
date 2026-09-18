@@ -60,7 +60,7 @@ import {
   convex,
 } from "./model.js";
 import { load, save, download, readImage } from "./storage.js";
-import { BoothScene } from "./scene.js";
+import { BoothScene, renderScale } from "./scene.js";
 import { PhotoEditor } from "./photo.js";
 import { hangingGuide } from "./guide.js";
 async function boot() {
@@ -111,7 +111,7 @@ async function boot() {
     lightIndex = 0,
     photoLightIndex = 0,
     busy = false,
-    quality = 1.5,
+    quality = 2,
     editingStart = null;
   try {
     p = await load();
@@ -392,7 +392,7 @@ async function boot() {
       html = `<div class="panel-heading"><h2>${photoMode ? "Photo lighting" : "Lighting studio"}</h2>${icon("lightbulb")}</div><p class="muted">${photoMode ? "Reversible light overlays. A single photo cannot recover geometry or physically relight the booth." : "Light your real geometry. Wall gaps and panel thickness shape the cast shadows."}</p><div class="button-row">${btn("daylight", "Daylight", "sun")}${btn("warm", "Warm", "lightbulb")}</div>${!photoMode ? `<section>${range("Ambient illumination", "ambient", p.ambient, 0, 4, 0.05)}</section>` : ""}<section><h3>${photoMode ? "Light overlays" : "Spotlights"} <span>${lights.length} / ${photoMode ? 8 : 4}</span></h3><div class="light-picker">${lights.map((l, i) => `<button data-light="${i}" class="${index === i ? "active" : ""}">${i + 1}</button>`).join("")}${lights.length < (photoMode ? 8 : 4) ? btn("add-light", "Add", "plus", "icon-only") : ""}</div>${light ? `${range("Brightness", "power", light.power, 0, photoMode ? 1 : 300, photoMode ? 0.05 : 5, photoMode ? "photoLight" : "light")}${range("Temperature", "kelvin", light.kelvin, 2700, 6500, 100, photoMode ? "photoLight" : "light", " K")}${photoMode ? `${range("Horizontal", "x", light.x, 0, 1, 0.01, "photoLight")}${range("Vertical", "y", light.y, 0, 1, 0.01, "photoLight")}${range("Radius", "radius", light.radius, 0.02, 0.8, 0.01, "photoLight")}` : `<h4>Light position · inches</h4>${field("Left / right", "x", light.x, -360, 360, 1, "in", "light")}${field("Height", "y", light.y, 0, 160, 1, "in", "light")}${field("Front / back", "z", light.z, -360, 360, 1, "in", "light")}<h4>Aim at · inches</h4>${field("Target X", "tx", light.tx, -360, 360, 1, "in", "light")}${field("Target height", "ty", light.ty, 0, 160, 1, "in", "light")}${field("Target Z", "tz", light.tz, -360, 360, 1, "in", "light")}<p class="muted">Origin: center of floor. +X right, +Z toward the entrance. Height starts at the floor.</p>`}${btn("delete-light", "Remove light", "trash-2", "wide")}` : ""}</section>`;
     }
     if (tab === "export") {
-      html = `<div class="panel-heading"><h2>Export your booth</h2>${icon("download")}</div><p class="muted">A clean image of the current ${p.mode === "photo" ? "photo composition" : "camera view"}, without controls or selection outlines.</p><section><h3>Image size</h3><select id="export-size" aria-label="Export image width"><option value="2048">2048 px wide · Fast</option><option value="4096" selected>4096 px wide · High resolution</option></select><p class="muted">PNG · Current aspect ratio${p.mode === "photo" ? ". Enlarging a small source cannot restore missing detail." : ". Preview textures are capped at 2048 px per artwork; originals remain in the backup."}</p>${btn("export-image", "Export PNG", "download", "primary wide")}</section><section><h3>Installation guide</h3><p class="muted">Measured wall elevations, panel sizes, and left/bottom placement references. Open the downloaded HTML to print or save as PDF. Photo overlays are excluded.</p>${btn("guide", "Download hanging guide", "layout-panel-left", "wide")}</section><section><h3>Keep your work</h3>${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Includes original artwork and photo files, booth layout, and lighting.</p></section><section><h3>Preview quality</h3><select id="quality" aria-label="Preview quality"><option value="1" ${quality === 1 ? "selected" : ""}>Efficient · Older devices</option><option value="1.5" ${quality === 1.5 ? "selected" : ""}>Balanced</option><option value="2" ${quality === 2 ? "selected" : ""}>High detail</option></select></section>`;
+      html = `<div class="panel-heading"><h2>Export your booth</h2>${icon("download")}</div><p class="muted">A clean image of the current ${p.mode === "photo" ? "photo composition" : "camera view"}, without controls or selection outlines.</p><section><h3>Image size</h3><select id="export-size" aria-label="Export image width"><option value="2048">2048 px wide · Fast</option><option value="4096" selected>4096 px wide · High resolution</option></select><p class="muted">PNG · Current aspect ratio${p.mode === "photo" ? ". Enlarging a small source cannot restore missing detail." : ". Preview textures are capped at 2048 px per artwork; originals remain in the backup."}</p>${btn("export-image", "Export PNG", "download", "primary wide")}</section><section><h3>Installation guide</h3><p class="muted">Measured wall elevations, panel sizes, and left/bottom placement references. Open the downloaded HTML to print or save as PDF. Photo overlays are excluded.</p>${btn("guide", "Download hanging guide", "layout-panel-left", "wide")}</section><section><h3>Keep your work</h3>${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Includes original artwork and photo files, booth layout, and lighting.</p></section><section><h3>Preview quality</h3><select id="quality" aria-label="Preview quality"><option value="1" ${quality === 1 ? "selected" : ""}>Efficient · Older devices</option><option value="2" ${quality === 2 ? "selected" : ""}>Balanced</option><option value="3" ${quality === 3 ? "selected" : ""}>High detail</option></select></section>`;
     }
     root.innerHTML = html;
     refreshIcons();
@@ -1014,7 +1014,7 @@ async function boot() {
     }
     if (el.id === "quality") {
       quality = +el.value;
-      scene?.renderer.setPixelRatio(Math.min(devicePixelRatio, +el.value));
+      scene?.renderer.setPixelRatio(renderScale(+el.value));
       scene?.resize();
       return;
     }

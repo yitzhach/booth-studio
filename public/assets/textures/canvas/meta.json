@@ -1,5 +1,5 @@
 {
-  "tileMetres": 1,
+  "tileMetres": 0.5,
   "files": {
     "map": "color.jpg",
     "normalMap": "normal.jpg",
@@ -10,5 +10,5 @@
   "credit": "Fabric081C (ambientCG)",
   "license": "CC0",
   "source": "Fabric081C_1K-JPG",
-  "generated": "2026-09-18T01:25:31.362Z"
+  "generated": "2026-09-18T02:14:56.201Z"
 }
