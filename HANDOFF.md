@@ -57,8 +57,15 @@ Extend it; do not rebuild it.
    and mp4box.js validated the container — but nobody has opened an
    `avc1`/`avcC` file from Chrome or Safari in QuickTime. If a clip will not
    play, start here.
-4. **Unverified on real hardware, older** — three things no one has confirmed by
+4. **Unverified on real hardware, older** — things no one has confirmed by
    eye, because no agent session can load the live site:
+   - The custom timeline and the lens flare are covered by tests in a real
+     browser, but nobody has *looked* at a keyframed clip. The flare's ghost
+     spacing, its warmth ramp and the fade lengths are judgement calls made
+     without a render; they are the first things to adjust if it reads wrong.
+   - Whether the backdrop horizon lock looks right through a full orbit. The
+     arithmetic is exact at the centre of frame and approximate across it, and
+     approximate is a thing you see, not a thing a test catches.
    - Are the four ground tile sizes really 2 m? They were recorded at the
      tool's default, not read off the ambientCG pages. Wrong tile size makes a
      floor read as a picture of a floor.
