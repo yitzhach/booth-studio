@@ -18,13 +18,25 @@ Extend it; do not rebuild it.
   `scene.previewMove()` and `scene.recordVideo()`.
 - **The backdrop is drawn in its own pass**, through a lens wider than the
   camera's, so the surroundings can be pulled back without a wide-angle booth.
+- **The backdrop is aimed from the Layout panel.** Layout → Surroundings →
+  Backdrop: a zoom slider with -/+/reset buttons, plus pan (horizontal) and
+  tilt (vertical). `+`/`-` on the keyboard zoom the viewport camera.
 
 ## Next
 
-1. **`WALLS_PHASE.md`** — free-standing interior walls you can place and hang
+1. **Custom video mode — requested, not started, nothing written.** The ask:
+   a pop-up timeline on the Export tab where you keyframe a start point, an end
+   point and points in between, with per-segment speed and ramping, fade in/out
+   options, and an optional lens flare that tracks the camera. Today
+   `src/camera-path.js` offers four fixed eased moves and nothing else; this is
+   a keyframe list and an interpolator over the same `moveAt(t)` contract
+   `src/video.js` already renders through, so the encoder and muxer do not
+   change. Treat it as its own phase and write the phase document first — it
+   is at least the size of `WALLS_PHASE.md`.
+2. **`WALLS_PHASE.md`** — free-standing interior walls you can place and hang
    art on. Requested, planned, not built. Read that file; it explains the
    schema-1 compatibility constraint that shapes the whole design.
-2. **The two shipped backdrops are 1024×512 and read soft.** This is the one
+3. **The two shipped backdrops are 1024×512 and read soft.** This is the one
    open bug with a known fix. Both were prepped from Poly Haven's **1K** HDRI,
    and `tools/hdri-prep.mjs` will not stretch a backdrop past its source. Re-prep
    from the **4K** download and the softness goes:
@@ -35,13 +47,13 @@ Extend it; do not rebuild it.
    **No agent session can do this** — polyhaven.com is refused by the sandbox
    egress proxy, as is the workers.dev production host. It needs a human with a
    browser. `docs/HDRI-ASSETS.md` is step by step.
-3. **H.264 output is unverified on real hardware.** Open Chromium builds ship no
+4. **H.264 output is unverified on real hardware.** Open Chromium builds ship no
    H.264 *encoder*, so every sandbox run exercises the VP9 fallback instead.
    That does prove the whole encoder-to-muxer pipeline with real encoder bytes,
    and mp4box.js validated the container — but nobody has opened an
    `avc1`/`avcC` file from Chrome or Safari in QuickTime. If a clip will not
    play, start here.
-4. **Unverified on real hardware, older** — three things no one has confirmed by
+5. **Unverified on real hardware, older** — three things no one has confirmed by
    eye, because no agent session can load the live site:
    - Are the four ground tile sizes really 2 m? They were recorded at the
      tool's default, not read off the ambientCG pages. Wrong tile size makes a
@@ -52,7 +64,7 @@ Extend it; do not rebuild it.
      `canvas` is a one-line change to a finer weave.
    - Is the tent weave visible? Its relief is exaggerated 3x (`TENT_WEAVE`)
      because a true-depth weave on a white roof washes out.
-5. **A `home` HDRI** is still missing — an interior with windows on one side.
+6. **A `home` HDRI** is still missing — an interior with windows on one side.
    That preset falls back procedurally until someone downloads one.
 
 ## Diagnosing "the texture isn't showing"
@@ -75,6 +87,18 @@ Two real causes found so far, both of which look like "the dropdown is broken":
 Ruled out, so do not re-investigate: Cloudflare Workers serves the assets
 correctly, checked with `wrangler dev --local`. The build output contains all
 37 asset files.
+
+**Also ruled out, 2026-09-18.** "Grass does nothing, the floor stays cement"
+was reported again and chased to the end this time. On `main`, against the
+committed assets, all six ground kinds load, claim, bind and **render
+distinctly** — grass comes out green in a screenshot. `BOOTH_ASSETS` reported
+every set `loaded` with all four maps at a 2 m tile, and HEAD on every
+`color.jpg` returned 200 `image/jpeg`. The selector, the loader and the
+renderer are not the bug. If it recurs it is state or staleness on that
+browser, so get **`window.BOOTH_ASSETS` and `window.BOOTH_BUILD` from the
+machine seeing it** before touching code — the two known causes (an uploaded
+ground photo outranking the kind, and a stale deploy) both look exactly like
+this and neither is visible from the repository.
 
 ## Diagnosing "the video won't play"
 
@@ -191,6 +215,15 @@ hidden a failure once. Run each suite directly.
 - **Quality is a supersampling factor, not a ceiling.** `min(devicePixelRatio,
   quality)` renders at 1x on the 1x monitor most desktops have, and edges
   stair-step however high the setting. `tests/render-scale.test.js` pins it.
+- **The backdrop zoom floor is 25%, and 15% was tried and rejected.** Lower
+  framing means a wider lens, and past about 25 an equirectangular lookup
+  shears: the hall ceiling smears into radial streaks. The floor is a judgement
+  made by looking at a render, which is exactly the kind of thing a later diff
+  will "clean up" — `BACKDROP_FRAMING_MIN` carries the reason.
+- **`backgroundRotation` is a YXZ Euler on purpose.** Pan and tilt are two
+  axes of one tripod head; under three's default XYZ order a pan applied after
+  a tilt rolls the image, and a rolled panorama reads as the entire hall
+  leaning over. `tests/view-hdri.mjs` pins the order and asserts roll stays 0.
 - **The tent weave is exaggerated 3x** over its literal depth. A true-depth
   weave on a white, brightly lit, tone-mapped roof is invisible. That is a
   rendering choice, not a measurement, and it is commented as one.
