@@ -1,12 +1,21 @@
-import { escapeHTML as e, boundWarning } from "./model.js";
+import { escapeHTML as e, boundWarning, findPanel, wallKeys, wallLabel, wallSpec } from "./model.js";
 export function hangingGuide(p) {
   let content = "";
-  for (const key of ["back", "left", "right"]) for (const face of ["inside", "outside"]) {
-    const w = p.booth.walls[key],
-      scale = 6,
+  for (const key of wallKeys(p)) for (const face of ["inside", "outside"]) {
+    const w = wallSpec(p, key);
+    if (!w) continue;
+    const scale = 6,
       arts = p.art.filter((a) => a.wall === key && (a.face || "inside") === face);
     if (face === "outside" && !arts.length) continue;
-    content += `<section><h2>${key[0].toUpperCase() + key.slice(1)} wall · ${face} · ${w.width} × ${w.height} in${w.enabled ? "" : " (hidden)"}</h2><svg viewBox="-20 -24 ${w.width * scale + 40} ${w.height * scale + 70}" xmlns="http://www.w3.org/2000/svg"><rect width="${w.width * scale}" height="${w.height * scale}" fill="#f3f3f3" stroke="#555"/>${arts.map((a, i) => `<rect x="${a.x * scale}" y="${(w.height - a.y - a.h) * scale}" width="${a.w * scale}" height="${a.h * scale}" fill="#d6e5f7" stroke="#28619e"/><text x="${(a.x + a.w / 2) * scale}" y="${(w.height - a.y - a.h / 2) * scale}" text-anchor="middle" font-size="16">${i + 1}</text>`).join("")}<text x="0" y="${w.height * scale + 28}" font-size="14">Origin (0, 0) · bottom left, facing the wall from ${face}</text></svg><table><thead><tr><th># / Artwork</th><th>W × H</th><th>Left edge</th><th>Bottom edge</th><th>Top edge</th><th>Thickness / gap</th></tr></thead><tbody>${arts.map((a, i) => `<tr><td>${i + 1}. ${e(a.title)}${boundWarning(p, a) ? "<br><strong>Outside wall / hidden</strong>" : ""}</td><td>${a.w} × ${a.h}</td><td>${a.x.toFixed(2)}</td><td>${a.y.toFixed(2)}</td><td>${(a.y + a.h).toFixed(2)}</td><td>${a.thickness} / ${a.offset}</td></tr>`).join("")}</tbody></table></section>`;
+    const panel = findPanel(p, key);
+    // A free-standing panel has no fixed side of the booth to stand on, so
+    // where it stands is part of the measurement, not something the builder
+    // can read off the footprint.
+    const standing = panel
+      ? ` · standing ${panel.x.toFixed(1)}″ right / ${panel.z.toFixed(1)}″ forward of centre, turned ${panel.rotation.toFixed(0)}°`
+      : "";
+    const faceName = panel ? (face === "outside" ? "back" : "front") : face;
+    content += `<section><h2>${e(wallLabel(p, key))} · ${faceName} · ${w.width} × ${w.height} in${w.enabled ? "" : " (hidden)"}${standing}</h2><svg viewBox="-20 -24 ${w.width * scale + 40} ${w.height * scale + 70}" xmlns="http://www.w3.org/2000/svg"><rect width="${w.width * scale}" height="${w.height * scale}" fill="#f3f3f3" stroke="#555"/>${arts.map((a, i) => `<rect x="${a.x * scale}" y="${(w.height - a.y - a.h) * scale}" width="${a.w * scale}" height="${a.h * scale}" fill="#d6e5f7" stroke="#28619e"/><text x="${(a.x + a.w / 2) * scale}" y="${(w.height - a.y - a.h / 2) * scale}" text-anchor="middle" font-size="16">${i + 1}</text>`).join("")}<text x="0" y="${w.height * scale + 28}" font-size="14">Origin (0, 0) · bottom left, facing the wall from the ${faceName}</text></svg><table><thead><tr><th># / Artwork</th><th>W × H</th><th>Left edge</th><th>Bottom edge</th><th>Top edge</th><th>Thickness / gap</th></tr></thead><tbody>${arts.map((a, i) => `<tr><td>${i + 1}. ${e(a.title)}${boundWarning(p, a) ? "<br><strong>Outside wall / hidden</strong>" : ""}</td><td>${a.w} × ${a.h}</td><td>${a.x.toFixed(2)}</td><td>${a.y.toFixed(2)}</td><td>${(a.y + a.h).toFixed(2)}</td><td>${a.thickness} / ${a.offset}</td></tr>`).join("")}</tbody></table></section>`;
   }
   return `<!doctype html><html><head><meta charset="utf-8"><title>${e(p.name)} — Hanging guide</title><style>body{font:14px system-ui,sans-serif;margin:36px;color:#202630}h1{font-size:26px}h2{font-size:18px}section{break-inside:avoid;page-break-after:always}svg{display:block;width:100%;max-height:440px;margin:20px 0}table{width:100%;border-collapse:collapse;font-size:12px}td,th{text-align:left;padding:9px;border-bottom:1px solid #ccc}p{line-height:1.5}@media print{body{margin:12mm}button{display:none}}@page{margin:10mm}</style></head><body><button onclick="window.print()">Print / save PDF</button><h1>${e(p.name)} · Hanging guide</h1><p>Footprint: ${p.booth.width / 12} × ${p.booth.depth / 12} ft. All panel measurements below are inches.<br>Left and bottom edges are measured on the wall from its bottom-left corner, viewed facing the listed inside or outside face. Top edge is height above floor. These are panel positions, not hook positions; account for your hanging hardware separately. Photo overlays are not measured and are excluded.</p>${content}</body></html>`;
 }

@@ -744,6 +744,15 @@ h4 {
   margin-top: 18px;
   padding-top: 2px;
 }
+/* A free-standing wall's row: its name beside the button that removes it. */
+.wall-setting .panel-heading {
+  margin: 12px 0 8px;
+}
+.wall-setting .panel-heading h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 550;
+}
 .light-picker {
   display: flex;
   gap: 8px;

@@ -7,11 +7,14 @@ import { TextureCache } from "./texture-cache.js";
 import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY } from "./lighting.js";
 import { GROUND_CONSUMER, TENT_CONSUMER, TENT_WEAVE, WALL_CONSUMER, WALL_SET, UV_METRE, SurfaceTextures } from "./surfaces.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
-import { IN, constrain, scalePanel } from "./model.js";
+import { IN, constrain, findPanel, scalePanel, wallKeys, wallSpec } from "./model.js";
 import { frameTimes, resolveMove, samplePath } from "./camera-path.js";
 import { fadeAt, isTimeline, timelineSeconds } from "./timeline.js";
 import { flareGhosts, flareSource } from "./flare.js";
 import { DEFAULT_SIZE, SIZES, evenSize, recordMp4, videoSupported } from "./video.js";
+// How far behind its frame plane a wall's slab sits, in metres. Half the
+// slab's thickness plus the sliver that keeps art from z-fighting the face.
+const WALL_SLAB_OFFSET = 0.031;
 // The orbit camera may drop below the booth's centre of interest to give a
 // low, looking-up perspective. It is stopped by the ground, not by a fixed
 // angle: MIN_CAMERA_Y keeps the eye just above the floor plane, and
@@ -391,11 +394,34 @@ export class BoothScene {
     parent.add(o);
     return o;
   }
+  /**
+   * A wall's local frame: origin at its bottom-left corner, +x along its
+   * width, +z out of its front (inside) face. The three perimeter walls are
+   * three fixed callers; a free-standing panel supplies its own centre and
+   * rotation, and the corner is that centre stepped back half a width along
+   * the frame's own +x.
+   */
   wallFrame(wall) {
     const p = this.p.booth,
       W = p.width * IN,
       D = p.depth * IN;
     const g = new T.Group();
+    const panel = findPanel(this.p, wall);
+    if (panel) {
+      const r = ((panel.rotation || 0) * Math.PI) / 180,
+        half = (panel.width * IN) / 2;
+      // A perimeter wall's frame plane sits on the footprint line, so its slab
+      // hangs just outside it. A free-standing panel has no line to sit on and
+      // is used from both sides, so its typed X/Z is the centre of the slab:
+      // the frame is pushed forward by the same offset the slab is pushed back.
+      g.position.set(
+        panel.x * IN - Math.cos(r) * half + Math.sin(r) * WALL_SLAB_OFFSET,
+        0,
+        panel.z * IN + Math.sin(r) * half + Math.cos(r) * WALL_SLAB_OFFSET,
+      );
+      g.rotation.y = r;
+      return g;
+    }
     if (wall === "back") g.position.set(-W / 2, 0, -D / 2);
     if (wall === "left") {
       g.position.set(-W / 2, 0, D / 2);
@@ -533,11 +559,12 @@ export class BoothScene {
     fill.shadow.camera.bottom = -5;
     fill.shadow.normalBias = 0.015;
     this.group.add(fill);
-    for (const wall of ["back", "left", "right"]) {
+    const wallConsumers = new Set();
+    for (const wall of wallKeys(p)) {
       const g = this.wallFrame(wall);
       this.frames[wall] = g;
       this.group.add(g);
-      const config = p.booth.walls[wall],
+      const config = wallSpec(p, wall),
         width = config.width * IN,
         height = config.height * IN;
       if (!config.enabled) continue;
@@ -547,7 +574,7 @@ export class BoothScene {
         0.055,
         width / 2,
         height / 2,
-        -0.031,
+        -WALL_SLAB_OFFSET,
         rough(p.booth.color),
         g,
       );
@@ -560,6 +587,7 @@ export class BoothScene {
       // is wider than it is tall, so the span is given per axis.
       if (p.booth.wallFinish === "fabric") {
         const consumer = WALL_CONSUMER + wall;
+        wallConsumers.add(consumer);
         const strength = Math.max(0, Math.min(100, p.booth.wallTexture ?? 60)) / 100;
         this.surfaces.load(WALL_SET, consumer).then(set => {
           if (this.revision !== rev || !set) return;
@@ -592,9 +620,10 @@ export class BoothScene {
       }
       this.box(width, 0.025, 0.08, width / 2, height, 0.0, rough("#26292b"), g);
     }
+    this.surfaces.releaseMatching(WALL_CONSUMER, wallConsumers);
     for (const a of p.art) {
       const frame = this.frames[a.wall + (a.face === "outside" ? "-outside" : "")];
-      if (!p.booth.walls[a.wall].enabled) continue;
+      if (!frame || !wallSpec(p, a.wall)?.enabled) continue;
       const art = new T.Group();
       this.artGroups.set(a.id, { group: art, initial: { ...a } });
       art.position.set(
@@ -851,12 +880,18 @@ export class BoothScene {
       y:Math.round((local.y/IN-a.h/2)/grid)*grid});
   }
   focusWall(wall, face = "inside") {
-    this.setView(wall);
-    if (face !== "outside") return;
-    const f = this.frames[wall + "-outside"];
+    // A panel stands anywhere and at any angle, so there is no fixed
+    // elevation to switch to: frame it from its own face instead, the way an
+    // exterior face is already framed.
+    const panel = findPanel(this.p, wall);
+    if (panel) this.setView("perspective");
+    else this.setView(wall);
+    if (face !== "outside" && !panel) return;
+    const f = this.frames[wall + (face === "outside" ? "-outside" : "")];
     if (!f) return;
     f.updateWorldMatrix(true, false);
-    const w = this.p.booth.walls[wall];
+    const w = wallSpec(this.p, wall);
+    if (!w) return;
     const target = f.localToWorld(new T.Vector3(w.width*IN/2, w.height*IN/2, 0));
     const normal = new T.Vector3(0,0,1).applyQuaternion(f.getWorldQuaternion(new T.Quaternion()));
     this.controls.target.copy(target);
@@ -910,8 +945,9 @@ export class BoothScene {
         const a = d.initial;
         if (d.stretch) {
           const horizontal = d.sx !== 0;
-          const width = this.p.booth.walls[a.wall].width;
-          const height = this.p.booth.walls[a.wall].height;
+          const spec = wallSpec(this.p, a.wall);
+          const width = spec.width;
+          const height = spec.height;
           const x = horizontal && d.sx < 0 ? Math.max(0, Math.min(a.x+a.w-1, local.x/IN)) : a.x;
           const y = !horizontal && d.sy < 0 ? Math.max(0, Math.min(a.y+a.h-1, local.y/IN)) : a.y;
           const w = horizontal ? d.sx < 0 ? a.x+a.w-x : Math.max(1,Math.min(360,width-a.x,local.x/IN-a.x)) : a.w;

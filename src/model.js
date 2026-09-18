@@ -45,6 +45,13 @@ export function blankProject() {
         left: { enabled: true, width: 120, height: 96 },
         right: { enabled: true, width: 120, height: 96 },
       },
+      // Free-standing interior walls. A separate optional list rather than
+      // more keys in `walls`, because `walls` is a fixed record that six
+      // places assume the shape of, and because a schema-1 backup written
+      // before panels existed has no key here at all and must still load.
+      // x/z are inches from the booth centre (+x right, +z toward the
+      // entrance), rotation is degrees about the vertical axis.
+      panels: [],
     },
     art: [],
     assets: {},
@@ -102,9 +109,46 @@ export function demoProject() {
   );
   return p;
 }
-export const wallWidth = (p, wall) => p.booth.walls[wall].width;
+export const PANEL_PREFIX = "panel:";
+export const panelKey = (id) => PANEL_PREFIX + id;
+export const isPanelKey = (key) =>
+  typeof key === "string" && key.startsWith(PANEL_PREFIX);
+export const panelIdOf = (key) =>
+  isPanelKey(key) ? key.slice(PANEL_PREFIX.length) : null;
+export const boothPanels = (p) => p.booth.panels || [];
+export const findPanel = (p, key) =>
+  boothPanels(p).find((panel) => panel.id === panelIdOf(key)) || null;
+/** Every wall a placement may name, perimeter walls first. */
+export const wallKeys = (p) => [
+  "back",
+  "left",
+  "right",
+  ...boothPanels(p).map((panel) => panelKey(panel.id)),
+];
+/**
+ * The width/height/enabled a placement is measured against, for a perimeter
+ * wall or a free-standing panel alike. Every caller that used to index
+ * `booth.walls` goes through here. A key naming a panel that no longer exists
+ * returns null; callers treat that the way they treat a hidden wall.
+ */
+export function wallSpec(p, key) {
+  if (isPanelKey(key)) {
+    const panel = findPanel(p, key);
+    return panel
+      ? { enabled: true, width: panel.width, height: panel.height, panel }
+      : null;
+  }
+  return p.booth.walls[key] || null;
+}
+export const wallLabel = (p, key) => {
+  const panel = findPanel(p, key);
+  if (panel) return panel.name || "Panel";
+  return key ? key[0].toUpperCase() + key.slice(1) + " wall" : "";
+};
+export const wallWidth = (p, wall) => wallSpec(p, wall)?.width ?? 0;
 export function boundWarning(p, a) {
-  const wall = p.booth.walls[a.wall];
+  const wall = wallSpec(p, a.wall);
+  if (!wall) return "This wall no longer exists. Move the artwork in Layout.";
   if (!wall.enabled) return "This wall is hidden. Enable it in Layout.";
   if (
     a.x < 0 ||
@@ -116,8 +160,10 @@ export function boundWarning(p, a) {
   return "";
 }
 export function constrain(p, a) {
-  const w = wallWidth(p, a.wall),
-    h = p.booth.walls[a.wall].height;
+  const wall = wallSpec(p, a.wall);
+  if (!wall) return { ...a };
+  const w = wall.width,
+    h = wall.height;
   return {
     ...a,
     x: Math.max(0, Math.min(a.x, w - a.w)),
@@ -133,6 +179,7 @@ export function mismatch(p, a) {
       0.015
   );
 }
+export const MAX_PANELS = 8;
 const finite = (n, min, max) =>
   typeof n === "number" && Number.isFinite(n) && n >= min && n <= max;
 export function validateProject(p) {
@@ -189,6 +236,30 @@ export function validateProject(p) {
   if (p.booth.backdropFraming !== undefined && !finite(p.booth.backdropFraming, 25, 100)) fail();
   if (p.booth.backdropTilt !== undefined && !finite(p.booth.backdropTilt, -45, 45)) fail();
   if (p.booth.backdropLock !== undefined && typeof p.booth.backdropLock !== "boolean") fail();
+  // Free-standing panels. Absent in every schema-1 backup written before they
+  // existed, so undefined is valid and means "none".
+  const panelIds = new Set();
+  if (p.booth.panels !== undefined) {
+    if (!Array.isArray(p.booth.panels) || p.booth.panels.length > MAX_PANELS) fail();
+    for (const panel of p.booth.panels) {
+      if (
+        !panel ||
+        typeof panel.id !== "string" ||
+        !panel.id ||
+        panel.id.length > 200 ||
+        panelIds.has(panel.id) ||
+        panel.id.includes(":") ||
+        !finite(panel.width, 12, 360) ||
+        !finite(panel.height, 24, 144) ||
+        !finite(panel.x, -360, 360) ||
+        !finite(panel.z, -360, 360) ||
+        !finite(panel.rotation, -180, 180)
+      )
+        fail();
+      if (panel.name !== undefined && (typeof panel.name !== "string" || panel.name.length > 200)) fail();
+      panelIds.add(panel.id);
+    }
+  }
   const ids = new Set();
   for (const a of p.art) {
     if (
@@ -196,7 +267,8 @@ export function validateProject(p) {
       ids.has(a.id) ||
       typeof a.title !== "string" ||
       a.title.length > 200 ||
-      !["back", "left", "right"].includes(a.wall) ||
+      !(["back", "left", "right"].includes(a.wall) ||
+        (isPanelKey(a.wall) && panelIds.has(panelIdOf(a.wall)))) ||
       !finite(a.w, 1, 360) ||
       !finite(a.h, 1, 360) ||
       !finite(a.x, -360, 360) ||
@@ -328,7 +400,8 @@ export function neighborPlacements(b) {
 }
 /** Uniform size adjustment preserves image proportions and the panel's center. */
 export function scalePanel(p, a, factor) {
-  const wall = p.booth.walls[a.wall];
+  const wall = wallSpec(p, a.wall);
+  if (!wall) return { ...a };
   const low = Math.max(1 / a.w, 1 / a.h);
   const high = Math.max(low, Math.min(360 / a.w, 360 / a.h, wall.width / a.w, wall.height / a.h));
   const f = Math.max(low, Math.min(high, Number.isFinite(factor) ? factor : 1));
