@@ -32,6 +32,11 @@ export function blankProject() {
       // environment back and reduces the magnification a 1K panorama suffers.
       // See BACKDROP_FRAMING in scene.js.
       backdropFraming: 65,
+      // Vertical aim of the spherical backdrop, in degrees. Pan is
+      // surroundRotation; this is the other axis of the same tripod head.
+      // Positive lifts the horizon into frame. Optional, so a schema-1 backup
+      // written before it existed still loads.
+      backdropTilt: 0,
       walls: {
         back: { enabled: true, width: 120, height: 96 },
         left: { enabled: true, width: 120, height: 96 },
@@ -179,6 +184,7 @@ export function validateProject(p) {
   if (p.booth.groundTile !== undefined && !finite(p.booth.groundTile, 12, 240)) fail();
   if (p.booth.wallTexture !== undefined && !finite(p.booth.wallTexture, 0, 100)) fail();
   if (p.booth.backdropFraming !== undefined && !finite(p.booth.backdropFraming, 25, 100)) fail();
+  if (p.booth.backdropTilt !== undefined && !finite(p.booth.backdropTilt, -45, 45)) fail();
   const ids = new Set();
   for (const a of p.art) {
     if (

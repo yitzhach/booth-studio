@@ -86,7 +86,7 @@ try {
   assert.equal(applied.exposure, 1, 'the trade show preset sets its own exposure');
 
   // Rotation: the same control a user panorama uses now turns a preset backdrop.
-  const rotation = page.locator('input[aria-label="Backdrop rotation"]');
+  const rotation = page.locator('input[aria-label="Pan · horizontal"]');
   assert.equal(await rotation.count(), 1, 'a preset with a backdrop offers rotation');
   await rotation.fill('90');
   await rotation.dispatchEvent('change');
@@ -103,7 +103,7 @@ try {
   // so the backdrop is drawn in its own pass through a wider lens. Three things
   // have to hold: the wider lens is actually used, the booth keeps its own
   // 62-degree perspective, and scene.background survives a pass that borrows it.
-  const framing = page.locator('input[aria-label="Backdrop framing"]');
+  const framing = page.locator('input[aria-label="Backdrop zoom"]');
   assert.equal(await framing.count(), 1, 'a preset with a backdrop offers framing');
   const framed = await page.evaluate(() => {
     const view = window.__booth.scene;
@@ -122,6 +122,36 @@ try {
   );
   assert.equal(framed.restored, true, 'the backdrop pass put scene.background back');
   assert.equal(framed.borrowed, null, 'the backdrop pass does not hold the texture between frames');
+
+  // Tilt is the second aiming axis. Pan is still at 90 degrees from above, so
+  // this also pins the Euler order: under the default XYZ a pan-then-tilt rolls
+  // the horizon, and YXZ is what keeps the hall level.
+  const tilt = page.locator('input[aria-label="Tilt · vertical"]');
+  assert.equal(await tilt.count(), 1, 'a preset with a backdrop offers tilt');
+  await tilt.fill('30');
+  await tilt.dispatchEvent('change');
+  await page.waitForFunction(
+    () => Math.abs(window.__booth.scene.scene.backgroundRotation.x - Math.PI / 6) < 1e-6,
+    null,
+    { timeout: 5000 },
+  );
+  const aimed = await page.evaluate(() => {
+    const view = window.__booth.scene;
+    view.renderFrame();
+    const s = view.scene;
+    return {
+      x: s.backgroundRotation.x,
+      y: s.backgroundRotation.y,
+      order: s.backgroundRotation.order,
+      backdropOrder: view.backdropScene.backgroundRotation.order,
+      roll: s.backgroundRotation.z,
+    };
+  });
+  assert.ok(Math.abs(aimed.x - Math.PI / 6) < 1e-6, 'the backdrop tilted with the control');
+  assert.ok(Math.abs(aimed.y - Math.PI / 2) < 1e-6, 'tilt left the pan alone');
+  assert.equal(aimed.roll, 0, 'aiming the backdrop never rolls the horizon');
+  assert.equal(aimed.order, 'YXZ', 'pan-then-tilt order keeps the horizon level');
+  assert.equal(aimed.backdropOrder, 'YXZ', 'the backdrop pass inherits the same order');
 
   // The framing has to reach the screen, not just the camera object.
   const canvas = page.locator('#viewport canvas, canvas').first();

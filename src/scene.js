@@ -37,8 +37,12 @@ export const FOV = 62;
 // Re-prepping from the 4K download is the rest of the fix — see
 // docs/HDRI-ASSETS.md.
 export const BACKDROP_FRAMING = 65;
+// How far the zoom can be pulled back. Tried at 15 and rejected by eye: a lens
+// that wide shears an equirectangular lookup badly enough that the hall ceiling
+// smears into streaks. 25 is the widest that still reads as a room.
+export const BACKDROP_FRAMING_MIN = 25;
 export const backdropFov = (fov, framing = BACKDROP_FRAMING) => {
-  const clamped = Math.min(100, Math.max(25, Number(framing) || BACKDROP_FRAMING));
+  const clamped = Math.min(100, Math.max(BACKDROP_FRAMING_MIN, Number(framing) || BACKDROP_FRAMING));
   const half = Math.atan(Math.tan((fov * Math.PI) / 360) / (clamped / 100));
   return Math.min(160, (half * 360) / Math.PI);
 };
@@ -151,6 +155,7 @@ export class BoothScene {
     this.backdropScene.background = background;
     this.backdropScene.backgroundIntensity = this.scene.backgroundIntensity;
     this.backdropScene.backgroundRotation.copy(this.scene.backgroundRotation);
+    this.backdropScene.backgroundRotation.order = this.scene.backgroundRotation.order;
     this.backdropCamera.aspect = this.camera.aspect;
     this.backdropCamera.fov = backdropFov(this.camera.fov, this.backdropFraming);
     this.backdropCamera.updateProjectionMatrix();
@@ -314,6 +319,11 @@ export class BoothScene {
     // backdrop settings it knows nothing about are reset here, before anything
     // that loads an image can claim them. Resetting afterwards would undo the
     // rotation a still-loaded preset backdrop re-applies synchronously.
+    // YXZ so the two backdrop controls compose the way a tripod head does:
+    // pan swings around the world's vertical, then tilt lifts from there. Under
+    // the default XYZ order a pan applied after a tilt rolls the horizon, which
+    // reads as the whole hall leaning.
+    this.scene.backgroundRotation.order = "YXZ";
     this.scene.backgroundRotation.set(0, 0, 0);
     this.scene.backgroundIntensity = 1;
     this.backdropFraming = p.booth.backdropFraming ?? BACKDROP_FRAMING;
@@ -325,7 +335,10 @@ export class BoothScene {
         rotation: p.booth.surroundRotation || 0,
       })
       .then(() => {
-        if (this.revision === rev) this.renderer.shadowMap.needsUpdate = true;
+        if (this.revision !== rev) return;
+        // Tilt rides on top of whatever yaw the preset backdrop applied.
+        this.scene.backgroundRotation.x = (p.booth.backdropTilt || 0) * Math.PI / 180;
+        this.renderer.shadowMap.needsUpdate = true;
       })
       .catch(() => {});
     if (p.booth.surroundAsset) this.texture(p.booth.surroundAsset).then(t => {
@@ -333,6 +346,7 @@ export class BoothScene {
       t.mapping = T.EquirectangularReflectionMapping;
       this.scene.background = t;
       this.scene.backgroundRotation.y = (p.booth.surroundRotation || 0) * Math.PI / 180;
+      this.scene.backgroundRotation.x = (p.booth.backdropTilt || 0) * Math.PI / 180;
       this.scene.fog = null;
     }).catch(() => {});
     // A photographed ground surface, when its files are present. The user's own

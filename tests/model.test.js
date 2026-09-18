@@ -177,3 +177,31 @@ test("stretch and colored edge materials survive backups and reject invalid data
     assert.throws(() => validateProject(bad));
   }
 });
+
+// The backdrop's two aiming axes. Pan (surroundRotation) has always been
+// stored; tilt is new, and the point of this test is the schema-1 rule: a
+// backup written before the field existed must still load, so the field is
+// optional rather than defaulted into existence by the validator.
+test("backdrop tilt round-trips, stays optional, and rejects an out-of-range aim", () => {
+  const p = demoProject();
+  Object.assign(p.booth, { backdropTilt: -30, surroundRotation: 120, backdropFraming: 25 });
+  assert.deepEqual(validateProject(JSON.parse(JSON.stringify(p))), p);
+
+  // A schema-1 backup from before the control shipped.
+  const old = structuredClone(p);
+  delete old.booth.backdropTilt;
+  assert.deepEqual(validateProject(structuredClone(old)), old);
+
+  for (const [key, value] of [
+    ["backdropTilt", 46],
+    ["backdropTilt", -46],
+    ["backdropTilt", "up"],
+    // The zoom floor is 25: below that the lens shears the panorama apart.
+    ["backdropFraming", 24],
+    ["backdropFraming", 101],
+  ]) {
+    const bad = structuredClone(p);
+    bad.booth[key] = value;
+    assert.throws(() => validateProject(bad), `${key}=${value} must be rejected`);
+  }
+});
