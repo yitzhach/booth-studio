@@ -5,7 +5,7 @@ import { signTexture } from "./signage.js";
 import { edgeMaterial } from "./edge-material.js";
 import { TextureCache } from "./texture-cache.js";
 import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY } from "./lighting.js";
-import { SurfaceTextures } from "./surfaces.js";
+import { GROUND_CONSUMER, TENT_CONSUMER, WALL_CONSUMER, WALL_SET, UV_METRE, SurfaceTextures } from "./surfaces.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
 import { IN, constrain, scalePanel } from "./model.js";
 // The orbit camera may drop below the booth's centre of interest to give a
@@ -245,6 +245,9 @@ export class BoothScene {
       const floor = this.group.getObjectByName("environment-ground");
       if (this.surfaces.applyTo(floor, set)) this.renderer.shadowMap.needsUpdate = true;
     }).catch(() => {});
+    // The user's own photograph wins, so the texture set the ground was holding
+    // is handed back rather than left on the GPU behind it.
+    if (p.booth.groundAsset) this.surfaces.release(GROUND_CONSUMER);
     if (p.booth.groundAsset) this.texture(p.booth.groundAsset).then(t => {
       if (this.revision !== rev) return;
       const floor = this.group.getObjectByName("environment-ground"), map = t.clone();
@@ -288,6 +291,23 @@ export class BoothScene {
       );
       wallMesh.userData.wall = wall;
       this.wallObjects.push(wallMesh);
+      // A fabric pro-panel finish: the weave, not the carpet's own colour. The
+      // user picked that colour and this is a tool for judging artwork against
+      // it, so only the relief and the sheen are taken and `keepColor` leaves
+      // the colour exactly as chosen. The panel's UVs run 0..1 over a face that
+      // is wider than it is tall, so the span is given per axis.
+      if (p.booth.wallFinish === "fabric") {
+        const consumer = WALL_CONSUMER + wall;
+        const strength = Math.max(0, Math.min(100, p.booth.wallTexture ?? 60)) / 100;
+        this.surfaces.load(WALL_SET, consumer).then(set => {
+          if (this.revision !== rev || !set) return;
+          if (this.surfaces.applyTo(wallMesh, set, {
+            consumer, strength, keepColor: true,
+            metres: [width, height],
+            slots: ["normalMap", "roughnessMap"],
+          })) this.renderer.shadowMap.needsUpdate = true;
+        }).catch(() => {});
+      } else this.surfaces.release(WALL_CONSUMER + wall);
       const exterior = new T.Group();
       exterior.position.set(width, 0, -0.063);
       exterior.rotation.y = Math.PI;
@@ -446,6 +466,23 @@ export class BoothScene {
     }
     this.box(W, 0.025, 0.025, 0, H - 0.025, D * 0.2, rough("#2e3032"));
     if (p.booth.tent) this.group.add(makeTent(W,D,H,p.booth.tentStyle || "classic"));
+    // Photographed canvas on every fabric panel in the scene, when its files
+    // are present. Asked of the whole group rather than of the tent just added,
+    // because the neighbouring booths environment() built are canopies too and
+    // a textured tent beside two procedural ones looks worse than three
+    // procedural ones. The panels carry their UVs in metres, so one UV unit is
+    // one metre: the same repeatFor() the ground uses, with a span of one
+    // instead of 180.
+    const fabric = [];
+    this.group.traverse(o => { if (o.userData?.fabric) fabric.push(o); });
+    if (!fabric.length) this.surfaces.release(TENT_CONSUMER);
+    else this.surfaces.load("canvas", TENT_CONSUMER).then(set => {
+      if (this.revision !== rev || !set) return;
+      let applied = false;
+      for (const panel of fabric)
+        applied = this.surfaces.applyTo(panel, set, { planeMetres: UV_METRE, consumer: TENT_CONSUMER }) || applied;
+      if (applied) this.renderer.shadowMap.needsUpdate = true;
+    }).catch(() => {});
     if (!this.initialized) {
       this.initialized = true;
       this.setView("perspective");
