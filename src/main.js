@@ -1,5 +1,7 @@
 import { TENTS } from "./environment.js";
 import { ENV_PRESETS, ART_FIDELITY, DEFAULT_PRESET, DEFAULT_FIDELITY, resolvePreset } from "./lighting.js";
+import { MOVES, DEFAULT_MOVE, resolveMove, frameTimes } from "./camera-path.js";
+import { SIZES, DEFAULT_SIZE, FPS, DEFAULT_FPS, videoSupported } from "./video.js";
 import { applyImageEdits, DEFAULT_IMAGE_EDITS, normalizeImageEdits } from "./image-edit.js";
 import "@fontsource/dm-sans/400.css";
 import "@fontsource/dm-sans/500.css";
@@ -112,7 +114,19 @@ async function boot() {
     photoLightIndex = 0,
     busy = false,
     quality = 2,
-    editingStart = null;
+    editingStart = null,
+    // Video export state. It lives here rather than in the DOM because a
+    // recording survives re-renders of the inspector and has to be cancellable
+    // from a button the inspector redraws.
+    videoMove = DEFAULT_MOVE,
+    videoSeconds = MOVES[DEFAULT_MOVE].seconds,
+    videoFps = DEFAULT_FPS,
+    videoSize = DEFAULT_SIZE,
+    videoProgress = 0,
+    videoFrame = 0,
+    videoFrames = 0,
+    videoAbort = null,
+    busyVideo = false;
   try {
     p = await load();
     if (p) validateProject(p);
@@ -368,6 +382,26 @@ async function boot() {
       ${b.groundAsset ? `${field("Ground tile size","groundTile",b.groundTile||48,12,240,1,"in","booth")}${btn("clear-ground","Remove ground texture",null,"wide")}` : ""}
       <p class="muted">Panorama: 2:1 full-sphere JPG/PNG, not an ordinary flat photo. Your own panorama replaces the environment preset's backdrop; rotation turns whichever of the two is showing, and has nothing to turn while a preset's image files are missing. Ground: a top-down, ideally seamless photograph. Images stay on this device and enter backups/exports. Scenery is a backdrop, not reconstructed 3D.</p>`;
   }
+  // Video export. Offered only where it can actually be delivered: the encoder
+  // is WebCodecs H.264, and saying so up front is kinder than a failure after
+  // someone has waited through a render.
+  function videoSection() {
+    const move = resolveMove(videoMove);
+    const supported = videoSupported();
+    return `<section><h3>Video</h3>${
+      supported
+        ? `<label class="setting-label">Camera move<select id="video-move" aria-label="Camera move">${Object.entries(MOVES)
+            .map(([k, v]) => `<option value="${k}" ${videoMove === k ? "selected" : ""}>${e(v.label)}</option>`)
+            .join("")}</select></label><p class="muted">${e(move.describe)} The move starts and ends on the view you have now, so compose the shot first.</p><label class="setting-label">Length<select id="video-seconds" aria-label="Clip length">${[6, 8, 10, 12, 14, 16, 20]
+            .map((sec) => `<option value="${sec}" ${videoSeconds === sec ? "selected" : ""}>${sec} seconds</option>`)
+            .join("")}</select></label><label class="setting-label">Frame rate<select id="video-fps" aria-label="Frame rate">${FPS.map(
+            (f) => `<option value="${f}" ${videoFps === f ? "selected" : ""}>${f} fps</option>`,
+          ).join("")}</select></label><label class="setting-label">Resolution<select id="video-size" aria-label="Video resolution">${Object.entries(SIZES)
+            .map(([k, v]) => `<option value="${k}" ${String(videoSize) === k ? "selected" : ""}>${e(v.label)}</option>`)
+            .join("")}</select></label><p class="muted">MP4 · H.264 · width from the setting, height from the viewport's aspect ratio. Every frame is rendered in full before it is encoded, so the clip runs at the frame rate you chose no matter how fast this machine is — which is why it takes longer than the clip lasts.</p>${btn("export-video", "Export MP4", "download", "primary wide")}${busyVideo ? btn("cancel-video", "Cancel", "x", "wide") : ""}<div class="video-progress" role="status" aria-live="polite">${busyVideo ? `<progress max="1" value="${videoProgress}"></progress><span>${Math.round(videoProgress * 100)}% · frame ${videoFrame} of ${videoFrames}</span>` : ""}</div>`
+        : `<p class="muted">Video export needs the WebCodecs video encoder, which this browser does not offer. Chrome, Edge and Safari 16.4 or newer have it. Export PNG works everywhere.</p>`
+    }</section>`;
+  }
   function renderInspector() {
     const root = document.querySelector("#inspector-content"),
       a = p.art.find((a) => a.id === selected),
@@ -392,7 +426,7 @@ async function boot() {
       html = `<div class="panel-heading"><h2>${photoMode ? "Photo lighting" : "Lighting studio"}</h2>${icon("lightbulb")}</div><p class="muted">${photoMode ? "Reversible light overlays. A single photo cannot recover geometry or physically relight the booth." : "Light your real geometry. Wall gaps and panel thickness shape the cast shadows."}</p><div class="button-row">${btn("daylight", "Daylight", "sun")}${btn("warm", "Warm", "lightbulb")}</div>${!photoMode ? `<section>${range("Ambient illumination", "ambient", p.ambient, 0, 4, 0.05)}</section>` : ""}<section><h3>${photoMode ? "Light overlays" : "Spotlights"} <span>${lights.length} / ${photoMode ? 8 : 4}</span></h3><div class="light-picker">${lights.map((l, i) => `<button data-light="${i}" class="${index === i ? "active" : ""}">${i + 1}</button>`).join("")}${lights.length < (photoMode ? 8 : 4) ? btn("add-light", "Add", "plus", "icon-only") : ""}</div>${light ? `${range("Brightness", "power", light.power, 0, photoMode ? 1 : 300, photoMode ? 0.05 : 5, photoMode ? "photoLight" : "light")}${range("Temperature", "kelvin", light.kelvin, 2700, 6500, 100, photoMode ? "photoLight" : "light", " K")}${photoMode ? `${range("Horizontal", "x", light.x, 0, 1, 0.01, "photoLight")}${range("Vertical", "y", light.y, 0, 1, 0.01, "photoLight")}${range("Radius", "radius", light.radius, 0.02, 0.8, 0.01, "photoLight")}` : `<h4>Light position · inches</h4>${field("Left / right", "x", light.x, -360, 360, 1, "in", "light")}${field("Height", "y", light.y, 0, 160, 1, "in", "light")}${field("Front / back", "z", light.z, -360, 360, 1, "in", "light")}<h4>Aim at · inches</h4>${field("Target X", "tx", light.tx, -360, 360, 1, "in", "light")}${field("Target height", "ty", light.ty, 0, 160, 1, "in", "light")}${field("Target Z", "tz", light.tz, -360, 360, 1, "in", "light")}<p class="muted">Origin: center of floor. +X right, +Z toward the entrance. Height starts at the floor.</p>`}${btn("delete-light", "Remove light", "trash-2", "wide")}` : ""}</section>`;
     }
     if (tab === "export") {
-      html = `<div class="panel-heading"><h2>Export your booth</h2>${icon("download")}</div><p class="muted">A clean image of the current ${p.mode === "photo" ? "photo composition" : "camera view"}, without controls or selection outlines.</p><section><h3>Image size</h3><select id="export-size" aria-label="Export image width"><option value="2048">2048 px wide · Fast</option><option value="4096" selected>4096 px wide · High resolution</option></select><p class="muted">PNG · Current aspect ratio${p.mode === "photo" ? ". Enlarging a small source cannot restore missing detail." : ". Preview textures are capped at 2048 px per artwork; originals remain in the backup."}</p>${btn("export-image", "Export PNG", "download", "primary wide")}</section><section><h3>Installation guide</h3><p class="muted">Measured wall elevations, panel sizes, and left/bottom placement references. Open the downloaded HTML to print or save as PDF. Photo overlays are excluded.</p>${btn("guide", "Download hanging guide", "layout-panel-left", "wide")}</section><section><h3>Keep your work</h3>${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Includes original artwork and photo files, booth layout, and lighting.</p></section><section><h3>Preview quality</h3><select id="quality" aria-label="Preview quality"><option value="1" ${quality === 1 ? "selected" : ""}>Efficient · Older devices</option><option value="2" ${quality === 2 ? "selected" : ""}>Balanced</option><option value="3" ${quality === 3 ? "selected" : ""}>High detail</option></select></section>`;
+      html = `<div class="panel-heading"><h2>Export your booth</h2>${icon("download")}</div><p class="muted">A clean image of the current ${p.mode === "photo" ? "photo composition" : "camera view"}, without controls or selection outlines.</p><section><h3>Image size</h3><select id="export-size" aria-label="Export image width"><option value="2048">2048 px wide · Fast</option><option value="4096" selected>4096 px wide · High resolution</option></select><p class="muted">PNG · Current aspect ratio${p.mode === "photo" ? ". Enlarging a small source cannot restore missing detail." : ". Preview textures are capped at 2048 px per artwork; originals remain in the backup."}</p>${btn("export-image", "Export PNG", "download", "primary wide")}</section>${p.mode === "photo" ? "" : videoSection()}<section><h3>Installation guide</h3><p class="muted">Measured wall elevations, panel sizes, and left/bottom placement references. Open the downloaded HTML to print or save as PDF. Photo overlays are excluded.</p>${btn("guide", "Download hanging guide", "layout-panel-left", "wide")}</section><section><h3>Keep your work</h3>${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Includes original artwork and photo files, booth layout, and lighting.</p></section><section><h3>Preview quality</h3><select id="quality" aria-label="Preview quality"><option value="1" ${quality === 1 ? "selected" : ""}>Efficient · Older devices</option><option value="2" ${quality === 2 ? "selected" : ""}>Balanced</option><option value="3" ${quality === 3 ? "selected" : ""}>High detail</option></select></section>`;
     }
     root.innerHTML = html;
     refreshIcons();
@@ -899,6 +933,51 @@ async function boot() {
         renderInspector();
       }
     },
+    "export-video": async () => {
+      if (busy || busyVideo) return;
+      if (!scene) return toast("3D is not available, so there is no view to record.", true);
+      busy = busyVideo = true;
+      videoAbort = new AbortController();
+      videoProgress = 0;
+      videoFrame = 0;
+      videoFrames = frameTimes(videoSeconds, videoFps).count;
+      renderInspector();
+      // The progress element is written to directly rather than through
+      // renderInspector: redrawing the whole panel a few hundred times would
+      // itself slow the render it is reporting on.
+      const status = () => {
+        const bar = document.querySelector(".video-progress progress");
+        const label = document.querySelector(".video-progress span");
+        if (bar) bar.value = videoProgress;
+        if (label)
+          label.textContent = `${Math.round(videoProgress * 100)}% · frame ${videoFrame} of ${videoFrames}`;
+      };
+      try {
+        const blob = await scene.recordVideo({
+          move: videoMove,
+          seconds: videoSeconds,
+          fps: videoFps,
+          size: videoSize,
+          signal: videoAbort.signal,
+          onProgress: (fraction) => {
+            videoProgress = fraction;
+            videoFrame = Math.round(fraction * videoFrames);
+            status();
+          },
+        });
+        download(blob, `${safeName()}-${videoMove}.mp4`);
+        toast(`${videoSeconds}s MP4 exported · ${videoFrames} frames at ${videoFps} fps.`);
+      } catch (err) {
+        if (err?.name === "AbortError") toast("Recording cancelled.");
+        else toast(err.message, true);
+      } finally {
+        busy = busyVideo = false;
+        videoAbort = null;
+        videoProgress = 0;
+        renderInspector();
+      }
+    },
+    "cancel-video": () => videoAbort?.abort(),
     help: () => {
       const d = document.querySelector("#dialog");
       document.querySelector("#dialog-content").innerHTML =
@@ -1016,6 +1095,28 @@ async function boot() {
       quality = +el.value;
       scene?.renderer.setPixelRatio(renderScale(+el.value));
       scene?.resize();
+      return;
+    }
+    // Video settings are view state, not project state: they are not saved
+    // with the booth and do not belong in the undo history.
+    if (el.id === "video-move") {
+      videoMove = el.value;
+      // Each move has a length it was designed around, so choosing a move
+      // proposes its own length rather than keeping the last one.
+      videoSeconds = resolveMove(videoMove).seconds;
+      renderInspector();
+      return;
+    }
+    if (el.id === "video-seconds") {
+      videoSeconds = +el.value;
+      return;
+    }
+    if (el.id === "video-fps") {
+      videoFps = +el.value;
+      return;
+    }
+    if (el.id === "video-size") {
+      videoSize = el.value;
       return;
     }
     if (!el.dataset.field) return;

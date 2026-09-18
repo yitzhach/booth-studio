@@ -39,6 +39,8 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 - Image-edit preview is live; edits can be copied and pasted between placements.
 - Artist signs and small artwork labels use the same wall-placement system.
 - PNG exports at 2048/4096 px and printable measured hanging guides.
+- MP4 video export: four eased camera moves (orbit, push in, reveal, survey) at 720p/1080p/1440p and 24/30/60 fps. Frames are rendered offline and encoded with WebCodecs, so the clip runs at the chosen frame rate regardless of how fast the machine renders. H.264 where the browser encodes it, VP9 in MP4 where it does not; see `src/video.js`.
+- A spherical backdrop is drawn in its own pass through a wider lens than the camera's, because field of view alone frames an image at infinity. Backdrop framing, in Layout → Surroundings, controls it.
 - Projects autosave locally in IndexedDB; downloadable backups include original images.
 
 ## Important constraints
@@ -51,6 +53,8 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 - Local browser storage can be cleared or evicted; users should download backups.
 - Preview artwork textures are capped at 2048 px for device stability.
 - 4096 export depends on the device GPU/canvas limit.
+- Video export needs the WebCodecs `VideoEncoder`. Chrome, Edge and Safari 16.4+ have it; the panel says so plainly where it is missing rather than failing after a render.
+- The two shipped HDRI backdrops are 1024x512, because they were prepped from Poly Haven's 1K sources and `tools/hdri-prep.mjs` will not stretch a backdrop past its source. They read soft. Re-prepping from the 4K download is the fix and needs network access to polyhaven.com.
 - Tent and environment models are visual approximations, not certified products.
 - Photo panoramas are backdrops, not reconstructed geometry. Environment presets do light the booth from an HDRI, when its files are present.
 - Limits: 200 placements, 250 assets, 25 MB/image, 200 MB imported backup.
@@ -59,7 +63,9 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 
 - `src/main.js`: interface, actions, inspector and undo/redo.
 - `src/model.js`: schema validation, geometry and wall constraints.
-- `src/scene.js`: Three.js booth, artwork interaction, lighting and export.
+- `src/scene.js`: Three.js booth, artwork interaction, lighting, the backdrop pass, and image and video export.
+- `src/camera-path.js`: the filmic camera moves. Pure geometry — no three.js, no DOM — so every move is covered in Node.
+- `src/video.js`: the MP4 muxer and the WebCodecs encoder that feeds it. `muxMp4` is pure bytes-in, bytes-out.
 - `src/lighting.js`: environment presets, HDRI image-based lighting and backdrops.
 - `src/surfaces.js`: PBR ground texture sets, colour space, tiling and disposal.
 - `src/texture-cache.js`: source/edit-keyed GPU texture reuse.

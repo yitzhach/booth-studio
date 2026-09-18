@@ -8,6 +8,8 @@ import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY } from "./lighti
 import { GROUND_CONSUMER, TENT_CONSUMER, TENT_WEAVE, WALL_CONSUMER, WALL_SET, UV_METRE, SurfaceTextures } from "./surfaces.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
 import { IN, constrain, scalePanel } from "./model.js";
+import { frameTimes, resolveMove, samplePath } from "./camera-path.js";
+import { DEFAULT_SIZE, SIZES, evenSize, recordMp4, videoSupported } from "./video.js";
 // The orbit camera may drop below the booth's centre of interest to give a
 // low, looking-up perspective. It is stopped by the ground, not by a fixed
 // angle: MIN_CAMERA_Y keeps the eye just above the floor plane, and
@@ -119,6 +121,11 @@ export class BoothScene {
     this.backdropScene = new T.Scene();
     this.backdropCamera = new T.PerspectiveCamera(FOV, 1, 0.1, 10);
     this.backdropFraming = BACKDROP_FRAMING;
+    this.startLoop();
+  }
+  // The live loop, in one place: the video recorder stops it so that nothing
+  // renders between the frames it is encoding, and starts it again afterwards.
+  startLoop() {
     this.renderer.setAnimationLoop(() => {
       if (!this.host.hidden) {
         this.clampToGround();
@@ -788,6 +795,109 @@ export class BoothScene {
       this.drag = null; this.controls.enabled = true; this.down = null;
       this.onEnd();
     });
+  }
+  // Records a filmic camera move to an MP4.
+  //
+  // Frames are rendered offline, one at a time, and handed to the encoder with
+  // exact presentation times — never captured from a live canvas. A booth with
+  // a photographic backdrop and two spotlights does not render inside 33 ms on
+  // most machines, and a live capture would bake that machine's frame rate into
+  // the file as stutter or slow motion. Rendering offline costs the user a
+  // progress bar and buys a clip that is the same on every machine.
+  //
+  // The camera, the controls and the editor's own overlays are all restored in
+  // a finally block: this drives the same camera the user is holding, and
+  // leaving it parked mid-move after a cancelled recording would look like the
+  // viewport had broken.
+  async recordVideo({ move, seconds, fps, size, onProgress = () => {}, signal } = {}) {
+    if (!videoSupported())
+      throw new Error(
+        "This browser cannot encode video. Chrome, Edge and Safari 16.4 or newer can; Export PNG works everywhere.",
+      );
+    await Promise.allSettled(this.textureCache.pending());
+    const preset = SIZES[size] || SIZES[DEFAULT_SIZE];
+    const canvas = this.renderer.domElement;
+    const aspect = canvas.width / canvas.height;
+    // The clip keeps the viewport's aspect ratio rather than letterboxing into
+    // a fixed frame, so what is recorded is what was composed. Height follows
+    // width, and both are forced even because H.264 encodes in macroblocks.
+    const width = evenSize(preset.width);
+    const height = evenSize(width / aspect);
+    const max = this.renderer.capabilities.maxTextureSize;
+    if (width > max || height > max)
+      throw new Error("This device cannot render that clip size. Choose 720p.");
+
+    const base = {
+      position: this.camera.position.toArray(),
+      target: this.controls.target.toArray(),
+    };
+    const clip = frameTimes(seconds ?? resolveMove(move).seconds, fps);
+    const pixelRatio = this.renderer.getPixelRatio();
+    const restore = {
+      position: this.camera.position.clone(),
+      quaternion: this.camera.quaternion.clone(),
+      target: this.controls.target.clone(),
+      aspect: this.camera.aspect,
+      enabled: this.controls.enabled,
+      damping: this.controls.enableDamping,
+      maxPolar: this.controls.maxPolarAngle,
+    };
+    const hidden = [];
+    this.group.traverse((o) => {
+      if (o.isLineSegments || o.userData.editorOnly) {
+        hidden.push(o);
+        o.visible = false;
+      }
+    });
+    // The live loop must not render between frames: it would fight this method
+    // for the camera and for the framebuffer the encoder is about to read.
+    this.renderer.setAnimationLoop(null);
+    this.controls.enabled = false;
+    // Damping interpolates towards a target over wall-clock time. On a path
+    // driven frame by frame it would smear every frame towards the last one.
+    this.controls.enableDamping = false;
+    try {
+      this.renderer.setPixelRatio(1);
+      this.renderer.setSize(width, height, false);
+      this.camera.aspect = width / height;
+      return await recordMp4({
+        count: clip.count,
+        fps,
+        width,
+        height,
+        bitrate: preset.bitrate,
+        onProgress,
+        signal,
+        drawFrame: (i) => {
+          const frame = samplePath(move, base, clip.at(i));
+          this.camera.position.set(...frame.position);
+          this.controls.target.set(...frame.target);
+          this.camera.lookAt(this.controls.target);
+          this.camera.updateProjectionMatrix();
+          // Shadows are static between edits, so the map is refreshed once per
+          // frame here rather than never: the lights do not move, but the
+          // camera does, and a cascade that was fit to the old view would
+          // crawl across the floor.
+          this.renderer.shadowMap.needsUpdate = true;
+          this.renderFrame();
+          return canvas;
+        },
+      });
+    } finally {
+      hidden.forEach((o) => (o.visible = true));
+      this.camera.position.copy(restore.position);
+      this.camera.quaternion.copy(restore.quaternion);
+      this.controls.target.copy(restore.target);
+      this.camera.aspect = restore.aspect;
+      this.controls.maxPolarAngle = restore.maxPolar;
+      this.controls.enableDamping = restore.damping;
+      this.controls.enabled = restore.enabled;
+      this.renderer.setPixelRatio(pixelRatio);
+      this.resize();
+      this.controls.update();
+      this.renderer.shadowMap.needsUpdate = true;
+      this.startLoop();
+    }
   }
   async export(width) {
     await Promise.allSettled(this.textureCache.pending());

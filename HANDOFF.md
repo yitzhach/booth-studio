@@ -15,6 +15,9 @@ Extend it; do not rebuild it.
   art fair, ground textures for concrete, asphalt, grass, carpet and wood, a
   tent canvas and a fabric wall finish. `public/assets` is 28 MB of a ~50 MB
   budget.
+- **Video export is built.** Four eased camera moves, rendered offline and
+  encoded with WebCodecs into an MP4. `src/camera-path.js` is the moves,
+  `src/video.js` is the muxer and encoder, `scene.recordVideo()` drives them.
 
 ## Next
 
@@ -22,7 +25,8 @@ Extend it; do not rebuild it.
    art on. Requested, planned, not built. Read that file; it explains the
    schema-1 compatibility constraint that shapes the whole design.
 2. **Unverified on real hardware** — three things shipped that no one has
-   confirmed by eye, because no agent session can load the live site:
+   confirmed by eye, because no agent session can load the live site (the
+   workers.dev host is refused by the egress proxy, same as polyhaven.com):
    - Are the four ground tile sizes really 2 m? They were recorded at the
      tool's default, not read off the ambientCG pages. Wrong tile size makes a
      floor read as a picture of a floor.
@@ -35,11 +39,19 @@ Extend it; do not rebuild it.
 3. **A `home` HDRI** is still missing — an interior with windows on one side.
    That preset falls back procedurally until someone downloads one;
    `docs/HDRI-ASSETS.md` is step by step.
-4. **Filmic camera moves and MP4 export** — requested, not planned yet. Sketch:
-   eased camera paths are the easy half; real H.264 needs WebCodecs
-   `VideoEncoder` plus an MP4 muxer, since `MediaRecorder` gives WebM. Render
-   frames offline rather than capturing live, or a slow machine bakes its own
-   stutter into the file. Its own phase.
+4. **The two shipped backdrops are 1024x512 and read soft.** Both were prepped
+   from Poly Haven's *1K* HDRI, and `tools/hdri-prep.mjs` will not stretch a
+   backdrop past its source — it now warns loudly rather than capping in
+   silence. Re-prep from the **4K** download and the softness goes. This needs
+   network access: polyhaven.com is refused by the sandbox egress proxy, so no
+   agent session can do it.
+5. **H.264 encoding is untested on real hardware.** Open Chromium builds ship
+   without an H.264 *encoder*, so the sandbox exercises the VP9-in-MP4 fallback
+   instead — which does prove the whole encoder-to-muxer pipeline, and the
+   container was independently validated with mp4box.js. What no one has
+   confirmed is an `avc1`/`avcC` file out of Chrome or Safari. If a clip will
+   not play, that is the first thing to look at, and `muxMp4` takes the
+   encoder's own `decoderConfig.description` verbatim.
 
 ## Diagnosing "the texture isn't showing"
 
@@ -84,9 +96,9 @@ already detects. The build output contains all 37 asset files.
 
 ```sh
 npm ci
-npm test                 # 90 Node tests
+npm test                 # 124 Node tests
 npm run build
-npm run test:view        # camera, city, env presets, HDRI, PBR ground, tent, walls
+npm run test:view        # camera, city, env presets, HDRI, ground, tent, walls, video
 npm run test:browser     # 18 end-to-end checks
 node tests/wall-assets.mjs
 ```
@@ -131,6 +143,31 @@ hidden a failure once. Run each suite directly.
   stair-step however high the setting. `tests/render-scale.test.js` pins it.
 - **Field of view is the only thing that frames an equirectangular backdrop.**
   Moving the camera cannot pull it back. It is 62 degrees for that reason.
+- **A spherical backdrop is framed by field of view alone.** Moving the camera
+  cannot pull it back, because the background is a lookup by view direction. So
+  "the backdrop is too zoomed in" and "the backdrop is blurry" are one bug: a
+  62 degree view of a 1024px equirectangular image puts about 176 source pixels
+  across the whole canvas. The backdrop is now drawn in a pass of its own,
+  through a wider lens, so it can be pulled back without putting a wide-angle
+  lens on the booth. That pass borrows `scene.background` into an empty scene
+  rather than using a hand-written fullscreen shader, which is what keeps the
+  tone mapping and colour space identical to a one-pass render — and it puts
+  `scene.background` back in a `finally`, because the live loop and `export()`
+  both read it.
+- **Never capture video from a live canvas.** `MediaRecorder` timestamps frames
+  by wall clock, so a clip is only correct if every frame renders inside its
+  33 ms. This booth does not, and the file comes out stuttering or in slow
+  motion — the machine's performance baked into the artwork. Frames are
+  rendered offline and given exact presentation times instead.
+- **Chromium is not Chrome for codecs.** H.264 is licensed, so open Chromium
+  builds have no H.264 encoder and `VideoEncoder.isConfigSupported` says so.
+  That is why there is a VP9-in-MP4 fallback, and why the browser suite can
+  test the real pipeline at all.
+- **A muxer is right or it produces a file nothing opens, with no middle
+  ground.** `tests/video.test.js` parses its own output back and requires every
+  box's children to fill it exactly. mp4box.js then caught what that missed: a
+  `vpcC` three bytes short, because the colour description is not optional.
+  Validate against a parser you did not write.
 - **The tent weave is exaggerated 3x** over its literal depth. A true-depth
   weave on a white, brightly lit, tone-mapped roof is invisible. That is a
   rendering choice, not a measurement, and it is commented as one.
@@ -139,6 +176,8 @@ hidden a failure once. Run each suite directly.
 
 - `README.md` — commands, architecture, stable behavior.
 - `PBR_PHASE.md` — HDRI lighting and PBR surfaces, and what each phase found.
+- `src/camera-path.js`, `src/video.js` — the camera moves and the MP4 writer.
+  Both carry their reasoning in comments; neither needs a phase document.
 - `WALLS_PHASE.md` — the next feature, planned in full.
 - `docs/HDRI-ASSETS.md`, `docs/TEXTURE-ASSETS.md` — adding asset files.
 - `AI_EXPORT_PHASE.md` — only for AI-export implementation.

@@ -1410,3 +1410,29 @@ dialog li {
   .image-editor-footer button { min-width: 0; flex: 1; }
   .library-drag-note { font-size: 10px; }
 }
+
+/* Video export progress. The bar is written to directly during a recording,
+   so it must keep its box whether or not it currently holds anything. */
+.video-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 0;
+}
+.video-progress:not(:empty) {
+  min-height: 2.6rem;
+  margin-top: 0.5rem;
+}
+.video-progress progress {
+  inline-size: 100%;
+  block-size: 0.4rem;
+  border: none;
+  border-radius: 999px;
+  overflow: hidden;
+  accent-color: var(--blue);
+}
+.video-progress span {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
