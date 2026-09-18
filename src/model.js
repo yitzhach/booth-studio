@@ -163,6 +163,12 @@ export const LIGHT_BAR = {
   count: 9,
   power: 60,
   kelvin: 3500,
+  // How diffused the wall wash is, 0..1. A real art-fair bar carries a frost
+  // or a barn-door diffuser over each head, and the hall's white walls bounce
+  // the rest; a bare point source aimed at a wall is what makes nine heads
+  // read as nine hot pools with nine crossing shadows behind every pedestal.
+  // 0 is the bare source, 1 is a fully frosted wash. See `lightBarOptics`.
+  diffusion: 0.7,
 };
 // 30 foot ceilings, as asked. The ceiling itself is off by default: it is
 // almost always out of frame, and drawing it puts a grey wash over the booth.
@@ -413,7 +419,8 @@ export function validateProject(p) {
       !finite(l.count, 1, 24) ||
       l.count !== Math.round(l.count) ||
       !finite(l.power, 0, 300) ||
-      !finite(l.kelvin, 2700, 6500)
+      !finite(l.kelvin, 2700, 6500) ||
+      (l.diffusion !== undefined && !finite(l.diffusion, 0, 1))
     )
       fail();
   }

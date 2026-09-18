@@ -7,7 +7,7 @@
 // measurements. So the bar is described by five numbers and the fixtures are
 // derived from them — which also makes the arithmetic a pure function this
 // file can hand to Node, rather than something only a renderer can answer.
-import { lightBarSpec, wallSpec } from "./model.js";
+import { LIGHT_BAR, lightBarSpec, wallSpec } from "./model.js";
 // The walls a fixture can be assigned to, left to right along the bar, so the
 // heads fan outward from the middle instead of crossing over each other.
 const WALL_ORDER = ["left", "back", "right"];
@@ -95,4 +95,56 @@ export function lightBarFixtures(p) {
 export function lightBarRail(p) {
   const bar = lightBarSpec(p.booth), b = p.booth;
   return { width: b.width, y: bar.height, z: b.depth / 2 - BAR_INSET, on: bar.on };
+}
+
+/** Linear blend, for reading the optics table below as "bare … frosted". */
+const mix = (a, b, t) => a + (b - a) * t;
+/**
+ * What `diffusion` means to a renderer, as one pure function so the numbers
+ * can be read in Node and so there is one place to argue with them.
+ *
+ * Four things make a nine-head bar read harsh, and diffusion softens all four
+ * together, because turning any one of them alone just trades one artefact for
+ * another — a wider cone on its own is merely a bigger hot pool, and a lifted
+ * shadow on its own is a flat wall with a hard-edged puddle on it:
+ *
+ * - **Cone angle.** A 22° beam paints a pool with a visible rim. Opening it to
+ *   ~39° makes neighbouring heads overlap, and overlapping pools are a wash.
+ * - **Penumbra.** The fraction of the cone spent fading out. At 0.98 there is
+ *   no rim left to see at all.
+ * - **Shadow intensity.** `LightShadow.intensity` scales how dark a shadow
+ *   goes without touching the light itself. This is the literal answer to
+ *   "less harsh shadows": a diffuser does not remove a shadow, it fills it.
+ * - **Bounce.** White walls in a white hall throw a lot of light back. Without
+ *   it, everything the beams miss goes black, which reads harsher than the
+ *   beams themselves.
+ *
+ * `power` is scaled down as the cone opens because a wider cone lights more of
+ * the booth from the same fixture, so a bar left at 60 gets brighter as it is
+ * softened — and "softer" that arrives brighter reads as a failed slider.
+ */
+export function lightBarOptics(bar) {
+  const d = Math.min(1, Math.max(0, bar.diffusion ?? 0.7));
+  return {
+    angle: mix(Math.PI / 8, Math.PI / 4.5, d),
+    penumbra: mix(0.45, 0.98, d),
+    shadowIntensity: mix(1, 0.32, d),
+    // A grazing wide cone lights a wall at a shallow angle, where a shadow map
+    // self-shadows into stripes. More normal bias is the cost of the wider cone.
+    normalBias: mix(0.004, 0.014, d),
+    powerScale: mix(1, 0.68, d),
+  };
+}
+/**
+ * The bounce fill that stands in for a white hall's walls: a hemisphere light
+ * at the bar's own colour temperature. It is proportional to how much light
+ * the bar is actually putting out, so turning the fixtures down dims the
+ * bounce with them rather than leaving a flat grey haze behind.
+ */
+export function lightBarBounce(p) {
+  const bar = lightBarSpec(p.booth);
+  const d = Math.min(1, Math.max(0, bar.diffusion ?? 0.7));
+  if (!bar.on || d <= 0) return 0;
+  const output = (bar.count * bar.power) / (LIGHT_BAR.count * LIGHT_BAR.power);
+  return Math.min(0.6, d * 0.5 * output);
 }

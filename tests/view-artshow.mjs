@@ -58,11 +58,19 @@ try {
     const rail = scene.group.getObjectByName('light-bar');
     if (!rail) return null;
     const spots = [];
-    rail.traverse((o) => { if (o.isSpotLight) spots.push({
-      pos: [o.position.x, o.position.y, o.position.z],
-      target: [o.target.position.x, o.target.position.y, o.target.position.z],
-    }); });
-    return { spots, expected: window.__booth.fixtures };
+    let bounce = null;
+    rail.traverse((o) => {
+      if (o.isHemisphereLight) bounce = o.intensity;
+      if (o.isSpotLight) spots.push({
+        pos: [o.position.x, o.position.y, o.position.z],
+        target: [o.target.position.x, o.target.position.y, o.target.position.z],
+        angle: o.angle,
+        penumbra: o.penumbra,
+        intensity: o.intensity,
+        shadowIntensity: o.shadow.intensity,
+      });
+    });
+    return { spots, bounce, expected: window.__booth.fixtures };
   });
   assert.ok(bar, 'the bar is in the scene');
   assert.equal(bar.spots.length, 9, 'nine directional fixtures');
@@ -74,6 +82,45 @@ try {
     assert.ok(Math.abs(bar.spots[i].target[0] - f.tx * IN) < 1e-6, `fixture ${i + 1} is aimed where the wall is`);
     assert.ok(Math.abs(bar.spots[i].target[2] - f.tz * IN) < 1e-6);
   }
+
+  // --- Diffusion: the softening has to reach the renderer, not just the model.
+  // The default bar is diffused, so every head must arrive wider, softer-edged
+  // and filling its shadow rather than stacking a ninth hard one.
+  for (const spot of bar.spots) {
+    assert.ok(spot.angle > Math.PI / 8, 'a diffused head opens wider than a bare washer');
+    assert.ok(spot.penumbra > 0.8, 'and spends most of its cone fading out');
+    assert.ok(spot.shadowIntensity < 0.6, 'and fills its shadow rather than cutting one');
+    assert.ok(spot.intensity < 60, 'and is trimmed back, so softer does not arrive brighter');
+  }
+  assert.ok(bar.bounce > 0, 'the white hall bounces the bar back at itself');
+
+  // Turning diffusion off must put the bare source back, bounce and all.
+  await page.evaluate(() => {
+    const b = window.__booth.project.booth;
+    b.lightBar = { ...b.lightBar, diffusion: 0 };
+    window.__booth.scene.update(window.__booth.project);
+  });
+  const bare = await page.evaluate(() => {
+    const rail = window.__booth.scene.group.getObjectByName('light-bar');
+    const spots = [];
+    let bounce = 0;
+    rail.traverse((o) => {
+      if (o.isHemisphereLight) bounce = o.intensity;
+      if (o.isSpotLight) spots.push([o.angle, o.penumbra, o.shadow.intensity, o.intensity]);
+    });
+    return { spots, bounce };
+  });
+  assert.equal(bare.bounce, 0, 'a bare source leaves no bounce behind');
+  for (const [angle, , shadowIntensity, intensity] of bare.spots) {
+    assert.ok(Math.abs(angle - Math.PI / 8) < 1e-6, 'diffusion 0 is the original wall washer');
+    assert.equal(shadowIntensity, 1, 'and cuts a full-strength shadow again');
+    assert.ok(Math.abs(intensity - 60) < 1e-6, 'and burns the brightness the user typed');
+  }
+  await page.evaluate(() => {
+    const b = window.__booth.project.booth;
+    b.lightBar = { ...b.lightBar, diffusion: 0.7 };
+    window.__booth.scene.update(window.__booth.project);
+  });
 
   // --- The exhibition hall.
   assert.ok(await page.evaluate(() => !!window.__booth.scene.group.getObjectByName('exhibition-hall')),
