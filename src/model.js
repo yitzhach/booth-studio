@@ -37,6 +37,9 @@ export function blankProject() {
       // Positive lifts the horizon into frame. Optional, so a schema-1 backup
       // written before it existed still loads.
       backdropTilt: 0,
+      // Keeps the photographed horizon fixed against the floor when the camera
+      // pitches; see lockedPitch in scene.js.
+      backdropLock: true,
       walls: {
         back: { enabled: true, width: 120, height: 96 },
         left: { enabled: true, width: 120, height: 96 },
@@ -185,6 +188,7 @@ export function validateProject(p) {
   if (p.booth.wallTexture !== undefined && !finite(p.booth.wallTexture, 0, 100)) fail();
   if (p.booth.backdropFraming !== undefined && !finite(p.booth.backdropFraming, 25, 100)) fail();
   if (p.booth.backdropTilt !== undefined && !finite(p.booth.backdropTilt, -45, 45)) fail();
+  if (p.booth.backdropLock !== undefined && typeof p.booth.backdropLock !== "boolean") fail();
   const ids = new Set();
   for (const a of p.art) {
     if (

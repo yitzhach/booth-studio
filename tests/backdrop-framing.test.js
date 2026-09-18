@@ -7,6 +7,15 @@ import assert from "node:assert/strict";
 // a judgement about how a photograph reads on screen, which no one can see in
 // a diff.
 const BACKDROP_FRAMING = 65;
+// Restated here for the same reason, and pinned for a stronger one: the lock is
+// the difference between a horizon nailed to the floor and one that slides.
+const lockedPitch = (pitch, fov, wideFov) => {
+  const narrow = Math.tan((Math.min(179, Math.max(1, fov)) * Math.PI) / 360);
+  const wide = Math.tan((Math.min(179, Math.max(1, wideFov)) * Math.PI) / 360);
+  if (!(narrow > 0) || !(wide > 0)) return pitch;
+  const clamped = Math.min(Math.PI / 2.2, Math.max(-Math.PI / 2.2, pitch));
+  return Math.atan(Math.tan(clamped) * (wide / narrow));
+};
 const backdropFov = (fov, framing = BACKDROP_FRAMING) => {
   const clamped = Math.min(100, Math.max(25, Number(framing) || BACKDROP_FRAMING));
   const half = Math.atan(Math.tan((fov * Math.PI) / 360) / (clamped / 100));
@@ -58,4 +67,44 @@ test("the framing range is clamped, so no value produces a degenerate lens", () 
   assert.equal(backdropFov(62, 400), backdropFov(62, 100), "clamped at 100%");
   for (const framing of [25, 40, 65, 80, 100])
     assert.ok(backdropFov(62, framing) < 160);
+});
+
+// Horizon lock. The backdrop is drawn through a wider lens than the booth, so
+// the same pitch moves the two by different amounts on screen and the
+// photographed horizon slides against the floor. lockedPitch is the correction.
+test("the locked backdrop lands a pitched direction where the camera's own lens would", () => {
+  const fov = 62;
+  const wide = backdropFov(fov, 40);
+  const screen = (angle, lens) => Math.tan(angle) / Math.tan((lens * Math.PI) / 360);
+  for (const degrees of [-30, -12, -3, 0, 5, 18, 34]) {
+    const pitch = (degrees * Math.PI) / 180;
+    const corrected = lockedPitch(pitch, fov, wide);
+    assert.ok(
+      Math.abs(screen(corrected, wide) - screen(pitch, fov)) < 1e-9,
+      `${degrees}° lands at ${screen(corrected, wide)} instead of ${screen(pitch, fov)}`,
+    );
+  }
+});
+
+test("locking over-rotates, because the wider lens compresses the same angle", () => {
+  const wide = backdropFov(62, 40);
+  assert.ok(lockedPitch(0.3, 62, wide) > 0.3);
+  assert.ok(lockedPitch(-0.3, 62, wide) < -0.3);
+  assert.equal(lockedPitch(0, 62, wide), 0, "level stays level");
+});
+
+test("a backdrop at 100% framing is the camera's own lens, so the lock is a no-op", () => {
+  const same = backdropFov(62, 100);
+  for (const pitch of [-0.4, 0, 0.25])
+    assert.ok(Math.abs(lockedPitch(pitch, 62, same) - pitch) < 1e-9);
+});
+
+test("no pitch can fold the backdrop over", () => {
+  const wide = backdropFov(62, 25);
+  for (const pitch of [-3, -Math.PI / 2, -1.2, 1.2, Math.PI / 2, 3]) {
+    const corrected = lockedPitch(pitch, 62, wide);
+    assert.ok(Number.isFinite(corrected), `pitch ${pitch} produced ${corrected}`);
+    assert.ok(Math.abs(corrected) < Math.PI / 2, "and stays in front of the lens");
+    assert.equal(Math.sign(corrected), Math.sign(pitch) || 0, "and never flips direction");
+  }
 });

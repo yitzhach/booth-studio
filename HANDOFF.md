@@ -18,25 +18,29 @@ Extend it; do not rebuild it.
   `scene.previewMove()` and `scene.recordVideo()`.
 - **The backdrop is drawn in its own pass**, through a lens wider than the
   camera's, so the surroundings can be pulled back without a wide-angle booth.
+- **Custom video mode is done.** Export → Video → Camera move → **Custom** opens
+  a non-modal timeline: compose a shot in the viewport, press Add keyframe,
+  orbit, repeat. Per-keyframe time, hold and ramp, fade in/out, and an optional
+  lens flare that tracks the camera. `src/timeline.js`, `src/flare.js`, the
+  overlay pass in `scene.js`, and `CUSTOM_VIDEO_PHASE.md` for the reasoning.
+  The recorder, the encoder and the muxer are unchanged: a timeline is another
+  implementation of the same `samplePath(move, base, t)` contract.
+- **The backdrop is locked to the horizon**, on by default, with an on/off in
+  Layout → Surroundings → Backdrop. The backdrop's wider lens compresses the
+  same pitch, so the photographed horizon used to slide against the floor as
+  the camera tilted; `lockedPitch` in `src/scene.js` over-rotates the backdrop
+  camera by the ratio of the two lenses' tangents. Pitch only — scaling yaw the
+  same way would spin the backdrop nearly twice in a full orbit.
 - **The backdrop is aimed from the Layout panel.** Layout → Surroundings →
   Backdrop: a zoom slider with -/+/reset buttons, plus pan (horizontal) and
   tilt (vertical). `+`/`-` on the keyboard zoom the viewport camera.
 
 ## Next
 
-1. **Custom video mode — requested, not started, nothing written.** The ask:
-   a pop-up timeline on the Export tab where you keyframe a start point, an end
-   point and points in between, with per-segment speed and ramping, fade in/out
-   options, and an optional lens flare that tracks the camera. Today
-   `src/camera-path.js` offers four fixed eased moves and nothing else; this is
-   a keyframe list and an interpolator over the same `moveAt(t)` contract
-   `src/video.js` already renders through, so the encoder and muxer do not
-   change. Treat it as its own phase and write the phase document first — it
-   is at least the size of `WALLS_PHASE.md`.
-2. **`WALLS_PHASE.md`** — free-standing interior walls you can place and hang
+1. **`WALLS_PHASE.md`** — free-standing interior walls you can place and hang
    art on. Requested, planned, not built. Read that file; it explains the
    schema-1 compatibility constraint that shapes the whole design.
-3. **The two shipped backdrops are 1024×512 and read soft.** This is the one
+2. **The two shipped backdrops are 1024×512 and read soft.** This is the one
    open bug with a known fix. Both were prepped from Poly Haven's **1K** HDRI,
    and `tools/hdri-prep.mjs` will not stretch a backdrop past its source. Re-prep
    from the **4K** download and the softness goes:
@@ -47,13 +51,13 @@ Extend it; do not rebuild it.
    **No agent session can do this** — polyhaven.com is refused by the sandbox
    egress proxy, as is the workers.dev production host. It needs a human with a
    browser. `docs/HDRI-ASSETS.md` is step by step.
-4. **H.264 output is unverified on real hardware.** Open Chromium builds ship no
+3. **H.264 output is unverified on real hardware.** Open Chromium builds ship no
    H.264 *encoder*, so every sandbox run exercises the VP9 fallback instead.
    That does prove the whole encoder-to-muxer pipeline with real encoder bytes,
    and mp4box.js validated the container — but nobody has opened an
    `avc1`/`avcC` file from Chrome or Safari in QuickTime. If a clip will not
    play, start here.
-5. **Unverified on real hardware, older** — three things no one has confirmed by
+4. **Unverified on real hardware, older** — three things no one has confirmed by
    eye, because no agent session can load the live site:
    - Are the four ground tile sizes really 2 m? They were recorded at the
      tool's default, not read off the ambientCG pages. Wrong tile size makes a
@@ -64,8 +68,14 @@ Extend it; do not rebuild it.
      `canvas` is a one-line change to a finer weave.
    - Is the tent weave visible? Its relief is exaggerated 3x (`TENT_WEAVE`)
      because a true-depth weave on a white roof washes out.
-6. **A `home` HDRI** is still missing — an interior with windows on one side.
+5. **A `home` HDRI** is still missing — an interior with windows on one side.
    That preset falls back procedurally until someone downloads one.
+6. **Two ground-texture sets — presets and a user-uploaded library.** Requested
+   after an upload was found to override the preset picker, which is today's
+   design and reads as a broken dropdown. Planned in `FUTURE_BUILD.md`; not
+   started.
+
+Custom video mode is **done** and is no longer on this list; see Now.
 
 ## Diagnosing "the texture isn't showing"
 
@@ -143,9 +153,9 @@ this and neither is visible from the repository.
 
 ```sh
 npm ci
-npm test                 # 128 Node tests
+npm test                 # 157 Node tests
 npm run build
-npm run test:view        # camera, city, env presets, HDRI, ground, tent, walls, video
+npm run test:view        # camera, city, env presets, HDRI, ground, tent, walls, video, timeline
 npm run test:browser     # 18 end-to-end checks
 node tests/wall-assets.mjs
 ```
@@ -235,6 +245,11 @@ hidden a failure once. Run each suite directly.
 - `WALLS_PHASE.md` — the next feature, planned in full.
 - `src/camera-path.js`, `src/video.js` — the camera moves and the MP4 writer.
   Both carry their reasoning in comments; neither needs a phase document.
+- `CUSTOM_VIDEO_PHASE.md` — custom video mode: the keyframe model, why speed is
+  expressed as time, and why the fade is drawn rather than exposed.
+- `src/timeline.js`, `src/flare.js` — the keyframe sampler and the flare's
+  arithmetic. Both pure, both covered in Node.
+- `FUTURE_BUILD.md` — requested, deliberately not started.
 - `docs/HDRI-ASSETS.md`, `docs/TEXTURE-ASSETS.md` — adding asset files.
 - `AI_EXPORT_PHASE.md` — only for AI-export implementation.
 - `docs/ORIGINAL-HANDOFF.md` — historical; ignore unless you need old

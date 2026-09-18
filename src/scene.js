@@ -64,6 +64,33 @@ export const BACKDROP_FRAMING = 65;
 // that wide shears an equirectangular lookup badly enough that the hall ceiling
 // smears into streaks. 25 is the widest that still reads as a room.
 export const BACKDROP_FRAMING_MIN = 25;
+// Drawing the backdrop through a wider lens has a side effect that reads as a
+// second bug: the horizon slides.
+//
+// A direction at angle θ from the lens axis lands at tan(θ)/tan(fov/2) of the
+// way to the frame edge. The booth is drawn at the camera's own field of view
+// and the backdrop at a wider one, so the same pitch moves the booth further up
+// the screen than it moves the backdrop — tilt the camera down and the
+// photographed horizon appears to climb out of the floor, which is the one
+// thing in the frame that should be nailed to it.
+//
+// The fix is to over-rotate the backdrop camera by exactly the ratio of those
+// two tangents, so a world direction lands in the same place in both passes.
+// It is exact at the centre of frame and very close across it; nothing can be
+// exact everywhere, because two lenses are two projections.
+//
+// Only pitch. Yaw could be scaled by the same argument, but a 360 degree orbit
+// would then spin the backdrop nearly twice — the horizon is what drifts and
+// the horizon is what this locks.
+export const lockedPitch = (pitch, fov, wideFov) => {
+  const narrow = Math.tan((Math.min(179, Math.max(1, fov)) * Math.PI) / 360);
+  const wide = Math.tan((Math.min(179, Math.max(1, wideFov)) * Math.PI) / 360);
+  if (!(narrow > 0) || !(wide > 0)) return pitch;
+  // Clamped to a quarter turn: past that the scaling is asking a lens to show
+  // something behind it, and atan would fold the image over.
+  const clamped = Math.min(Math.PI / 2.2, Math.max(-Math.PI / 2.2, pitch));
+  return Math.atan(Math.tan(clamped) * (wide / narrow));
+};
 export const backdropFov = (fov, framing = BACKDROP_FRAMING) => {
   const clamped = Math.min(100, Math.max(BACKDROP_FRAMING_MIN, Number(framing) || BACKDROP_FRAMING));
   const half = Math.atan(Math.tan((fov * Math.PI) / 360) / (clamped / 100));
@@ -148,6 +175,7 @@ export class BoothScene {
     this.backdropScene = new T.Scene();
     this.backdropCamera = new T.PerspectiveCamera(FOV, 1, 0.1, 10);
     this.backdropFraming = BACKDROP_FRAMING;
+    this.backdropLock = true;
     // What the overlay pass draws over a finished frame: a fade to black and an
     // optional lens flare. Both belong to a clip, not to the booth, so the
     // default is "nothing at all" and every recording restores it.
@@ -189,6 +217,14 @@ export class BoothScene {
     this.backdropCamera.updateProjectionMatrix();
     this.camera.updateMatrixWorld();
     this.backdropCamera.quaternion.copy(this.camera.quaternion);
+    // Horizon lock: see lockedPitch. YXZ, so pitch can be scaled on its own
+    // without the yaw rolling the image — the same reason backgroundRotation is
+    // a YXZ Euler.
+    if (this.backdropLock) {
+      const euler = new T.Euler().setFromQuaternion(this.camera.quaternion, "YXZ");
+      euler.x = lockedPitch(euler.x, this.camera.fov, this.backdropCamera.fov);
+      this.backdropCamera.quaternion.setFromEuler(euler);
+    }
     // The booth has to draw over the backdrop rather than clear it away, so
     // autoClear goes off for the second pass. three draws a background with
     // depth writes disabled, so the depth buffer is already clean; clearing it
@@ -438,6 +474,9 @@ export class BoothScene {
     this.scene.backgroundRotation.set(0, 0, 0);
     this.scene.backgroundIntensity = 1;
     this.backdropFraming = p.booth.backdropFraming ?? BACKDROP_FRAMING;
+    // On by default, including for a backup saved before this existed: a
+    // horizon that slides against the floor is a bug, not a look someone chose.
+    this.backdropLock = p.booth.backdropLock ?? true;
     // The preset only supplies image-based lighting and a backdrop; the
     // procedural horizon above stays in place when its assets are missing.
     this.lighting

@@ -153,6 +153,41 @@ try {
   assert.equal(aimed.order, 'YXZ', 'pan-then-tilt order keeps the horizon level');
   assert.equal(aimed.backdropOrder, 'YXZ', 'the backdrop pass inherits the same order');
 
+  // Horizon lock. The backdrop's wider lens compresses the same pitch, so a
+  // locked backdrop camera has to be pitched further than the real one for the
+  // photographed horizon to stay nailed to the floor. Off, the two match and
+  // the horizon drifts, which is the behaviour the toggle turns back on.
+  const pitched = await page.evaluate(() => {
+    const view = window.__booth.scene;
+    const read = () => {
+      view.camera.position.set(3.2, 0.5, 3.2);
+      view.controls.target.set(0, 2.4, 0);
+      view.camera.lookAt(view.controls.target);
+      view.controls.update();
+      view.renderFrame();
+      const euler = (q) => {
+        const e = new (Object.getPrototypeOf(view.scene.backgroundRotation).constructor)();
+        return e.setFromQuaternion(q, 'YXZ').x;
+      };
+      return { camera: euler(view.camera.quaternion), backdrop: euler(view.backdropCamera.quaternion) };
+    };
+    view.backdropLock = true;
+    const locked = read();
+    view.backdropLock = false;
+    const loose = read();
+    view.backdropLock = true;
+    return { locked, loose };
+  });
+  assert.ok(Math.abs(pitched.locked.camera) > 0.15, `the camera should be pitched, got ${pitched.locked.camera}`);
+  assert.ok(
+    Math.abs(pitched.locked.backdrop) > Math.abs(pitched.locked.camera) + 0.01,
+    `locked backdrop pitch ${pitched.locked.backdrop} should exceed the camera's ${pitched.locked.camera}`,
+  );
+  assert.ok(
+    Math.abs(pitched.loose.backdrop - pitched.loose.camera) < 1e-6,
+    'unlocked, the backdrop simply copies the camera — the drifting horizon this toggle fixes',
+  );
+
   // The framing has to reach the screen, not just the camera object.
   const canvas = page.locator('#viewport canvas, canvas').first();
   const wide = await canvas.screenshot();

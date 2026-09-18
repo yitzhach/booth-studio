@@ -39,10 +39,11 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 - Image-edit preview is live; edits can be copied and pasted between placements.
 - Artist signs and small artwork labels use the same wall-placement system.
 - PNG exports at 2048/4096 px and printable measured hanging guides.
+- Custom video mode: a timeline of your own keyframes, each captured from the viewport, with per-keyframe time, hold and ramp, fade in and out, and an optional lens flare that tracks the camera. It renders through the same `(t) -> pose` contract the fixed moves do, so the encoder and the muxer are untouched; see `CUSTOM_VIDEO_PHASE.md`.
 - MP4 video export: four eased camera moves (orbit, push in, reveal, survey) at 720p/1080p/1440p and 24/30/60 fps. Frames are rendered offline and encoded with WebCodecs, so the clip runs at the chosen frame rate regardless of how fast the machine renders. H.264 where the browser encodes it — with the level derived from the frame size and rate — and VP9 in MP4 where it does not; see `src/video.js`.
 - The export panel probes and states which codec the browser will use *before* rendering, and warns when it falls back to VP9, which QuickTime Player cannot open.
 - Preview the move live in the viewport at its real duration, without rendering anything.
-- A spherical backdrop is drawn in its own pass through a wider lens than the camera's, because field of view alone frames an image at infinity. Backdrop framing, in Layout → Surroundings, controls it.
+- A spherical backdrop is drawn in its own pass through a wider lens than the camera's, because field of view alone frames an image at infinity. Backdrop framing, in Layout → Surroundings, controls it. Because that wider lens compresses the same pitch, the horizon is locked to the floor by default — an on/off beside the framing controls.
 - Projects autosave locally in IndexedDB; downloadable backups include original images.
 
 ## Important constraints
@@ -67,6 +68,7 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 - `src/main.js`: interface, actions, inspector and undo/redo.
 - `src/model.js`: schema validation, geometry and wall constraints.
 - `src/scene.js`: Three.js booth, artwork interaction, lighting, the backdrop pass, and image and video export.
+- `src/timeline.js`, `src/flare.js`: custom camera timelines and the lens flare's arithmetic. Pure, and covered in Node.
 - `src/camera-path.js`: the filmic camera moves. Pure geometry — no three.js, no DOM — so every move is covered in Node.
 - `src/video.js`: the MP4 muxer and the WebCodecs encoder that feeds it. `muxMp4` is pure bytes-in, bytes-out. The H.264 level is computed from the frame size and rate against the spec's macroblock limits, not assumed.
 - `src/lighting.js`: environment presets, HDRI image-based lighting and backdrops.
