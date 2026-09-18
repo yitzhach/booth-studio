@@ -34,6 +34,10 @@ export const WALL_CONSUMER = "wall:";
 // The fabric finish borrows the carpet set — woven pile is what a fabric
 // pro-panel is — and takes only its relief, never its colour.
 export const WALL_SET = "carpet";
+// How far the tent's weave is exaggerated over its literal depth. See the note
+// where it is used: a white roof under a bright sky washes a true-depth weave
+// out completely.
+export const TENT_WEAVE = 3;
 
 // The ground kinds, plus the tent's canvas. `canvas` is not a ground: the
 // Ground control in main.js lists its own options and does not read this.
@@ -45,7 +49,7 @@ export const SURFACE_SETS = {
   wood: { label: "Wood floor", tileMetres: 2 },
   // Woven polyester at a metre or two per tile; a canvas photographed at four
   // metres would put a weave on the roof you could see from across the hall.
-  canvas: { label: "Tent canvas", tileMetres: 1 },
+  canvas: { label: "Tent canvas", tileMetres: 0.5 },
 };
 
 // Tent geometry carries its UVs in metres, so one UV unit is one metre and the
@@ -154,6 +158,13 @@ export class SurfaceTextures {
   }
   async fetchSet(id) {
     const base = surfacePaths(id);
+    // Production-readable record of what happened, so a floor that stays grey
+    // can be diagnosed from a phone or a colleague's browser rather than
+    // guessed at. window.__booth is dev-only; this is not.
+    const report = (state, detail) => {
+      if (typeof window === "undefined") return;
+      (window.BOOTH_ASSETS ||= {})[id] = { state, detail, at: new Date().toISOString() };
+    };
     const meta = await this.loadMeta(base.meta).catch(() => null);
     const paths = surfacePaths(id, { ...MAP_FILES, ...(meta?.files || {}) });
     const slots = Object.keys(MAP_FILES);
@@ -164,6 +175,7 @@ export class SurfaceTextures {
     });
     if (!maps.map) {
       Object.values(maps).forEach((texture) => texture.dispose());
+      report("missing", `no colour map at ${paths.map}`);
       return null;
     }
     // Colour is the only map carrying sRGB data. Normals, roughness and
@@ -175,7 +187,7 @@ export class SurfaceTextures {
       texture.wrapS = texture.wrapT = T.RepeatWrapping;
       texture.anisotropy = this.anisotropy();
     }
-    return {
+    const set = {
       id,
       maps,
       // Per-consumer clones, built on first use. The base maps above are never
@@ -188,6 +200,8 @@ export class SurfaceTextures {
       normalConvention: meta?.normalMap === "DX" ? "DX" : "GL",
       credit: meta?.credit || "",
     };
+    report("loaded", `${Object.keys(maps).join(", ")} · tile ${set.tileMetres} m${meta ? "" : " (no meta.json)"}`);
+    return set;
   }
   // The clones one consumer binds. Built once per consumer and reused across
   // rebuilds, so the repeat set below survives an update() and no consumer can

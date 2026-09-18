@@ -9,120 +9,138 @@ Extend it; do not rebuild it.
 
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
-- Branch: `claude/stoic-goodall-26lt81`, ahead of `main`. **Nothing on it is
-  live until it merges.**
-- The photoreal phase (`PBR_PHASE.md`) is **done in code through Phase 3**:
-  image-based lighting, HDRI backdrops, PBR ground surfaces. Phase 4 is tent
-  fabric and wall materials.
-- Presets still show the procedural sky and floor because **no asset files are
-  committed yet**. That is the one outstanding user task, and only the user can
-  do it: the sandbox proxy blocks polyhaven.com and ambientcg.com.
-  `docs/HDRI-ASSETS.md` and `docs/TEXTURE-ASSETS.md` are step-by-step.
-- Green on this branch: `npm test` 80/80, `npm run build`, `npm run test:view`
-  4/4, `npm run test:browser`, `node tests/wall-assets.mjs`.
+- `main` is deployed. Every branch is preview-only.
+- The photoreal phase (`PBR_PHASE.md`) is done through Phase 4's tent canvas
+  and fabric walls. Assets are committed and live: HDRIs for trade show and
+  art fair, ground textures for concrete, asphalt, grass, carpet and wood, a
+  tent canvas and a fabric wall finish. `public/assets` is 28 MB of a ~50 MB
+  budget.
 
 ## Next
 
-1. **User:** download the HDRIs and ground textures (the two docs above).
-   Nothing else in Phases 1–3 is outstanding.
-2. Merge to `main` so the environment work reaches production. Then confirm on
-   Mac/iPhone/iPad: low looking-up orbit, city backdrop, environment presets,
-   ground surfaces, footer stamp showing the merged commit.
-3. Touch testing: stretch handles, scale-slider keyboard steps, live editor
-   preview. Interior/exterior edited artwork and clean 2048/4096 exports.
-4. Phase 4 of `PBR_PHASE.md`, once assets are in and you can see what still
-   looks wrong. That file says where to start and what to change first.
-5. On request only: paid AI export, from `AI_EXPORT_PHASE.md`.
+1. **`WALLS_PHASE.md`** — free-standing interior walls you can place and hang
+   art on. Requested, planned, not built. Read that file; it explains the
+   schema-1 compatibility constraint that shapes the whole design.
+2. **Unverified on real hardware** — three things shipped that no one has
+   confirmed by eye, because no agent session can load the live site:
+   - Are the four ground tile sizes really 2 m? They were recorded at the
+     tool's default, not read off the ambientCG pages. Wrong tile size makes a
+     floor read as a picture of a floor.
+   - Does the wall weave look right? It tiles at the carpet's real size, about
+     1.5 repeats across a 10 ft panel, which may be coarse for a pro-panel.
+     `WALL_SET` in `src/surfaces.js` points at `carpet`; pointing it at
+     `canvas` is a one-line change to a finer weave.
+   - Is the tent weave visible now? Its relief is exaggerated 3x (`TENT_WEAVE`)
+     because a true-depth weave on a white roof washes out.
+3. **A `home` HDRI** is still missing — an interior with windows on one side.
+   That preset falls back procedurally until someone downloads one;
+   `docs/HDRI-ASSETS.md` is step by step.
+4. **Filmic camera moves and MP4 export** — requested, not planned yet. Sketch:
+   eased camera paths are the easy half; real H.264 needs WebCodecs
+   `VideoEncoder` plus an MP4 muxer, since `MediaRecorder` gives WebM. Render
+   frames offline rather than capturing live, or a slow machine bakes its own
+   stutter into the file. Its own phase.
 
-## Deployment — read before debugging "my change isn't live"
+## Diagnosing "the texture isn't showing"
+
+This came up twice and was guessed at twice. Do not guess a third time.
+
+**`window.BOOTH_ASSETS`** works in production and records, per texture set,
+whether it loaded and what it found. `window.BOOTH_BUILD` gives the deployed
+commit. `window.__booth` is dev-only.
+
+Two real causes found so far, both of which look like "the dropdown is broken":
+
+- **An uploaded ground photograph outranks the Ground kind entirely.** The
+  panel now says so while it is happening. Layout → Surroundings → Remove
+  ground texture.
+- **A ground kind whose files are missing** falls back to the procedural
+  surface silently. That is by design; `BOOTH_ASSETS` is how you tell that
+  apart from a bug.
+
+Ruled out, so do not re-investigate: Cloudflare Workers serves the assets
+correctly. `wrangler dev --local` was used to check — HEAD returns
+`image/jpeg`, and a missing path returns the SPA fallback that `requireAsset()`
+already detects. The build output contains all 37 asset files.
+
+## Deployment
 
 | Push target | Cloudflare result |
 | - | - |
-| `main` | **production** → `booth-studio.bobdylan2000.workers.dev` |
-| any other branch | **preview only** → separate URL, production untouched |
+| `main` | **production** |
+| any other branch | preview only |
 
-- Workers Builds runs on every push and comments the preview URL on the PR.
-  Preview URLs follow `claude-<branch-with-dashes>-booth-studio.…workers.dev`.
-- A worker's `modified_on` bumps for previews too, so it **cannot** tell
-  production from preview. Use the footer stamp or the bot comment instead.
-- A manual dashboard upload is overwritten by the next `main` build. Merge.
-- There is no GitHub Actions workflow — Workers Builds is a Cloudflare-side Git
-  integration that appears only as a GitHub *check*. `actions_list` showing zero
-  runs is not a broken pipeline.
-- `wrangler deploy` without credentials opens an **interactive browser login and
-  hangs forever** in a headless session. For non-interactive deploys set
-  `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` and `CI=true`.
+- Merging to `main` is the deploy. There is no other step.
+- **The dashboard uploader cannot deploy this project** and will say so: it is
+  a Vite app with a `wrangler.jsonc`, so it needs a build. Do not fight it.
+- `wrangler deploy` with no credentials opens a browser login and hangs forever
+  in a headless session. Needs `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`
+  and `CI=true`. Merging is easier.
 - Account `8e38cda861b39784706d53545a0a435f`, worker `booth-studio`.
-
-**Telling what is live:** footer bottom-left reads `v0.1.0 · <time> UTC ·
-<commit>`; `window.BOOTH_BUILD` works anywhere including production
-(`window.__booth` is dev-only). The footer is hidden under the mobile
-breakpoint, so use `window.BOOTH_BUILD` on a phone.
+- The footer reads `v0.1.0 · <time> UTC · <commit>`, hidden under the mobile
+  breakpoint — use `window.BOOTH_BUILD` on a phone.
 
 ## Testing
 
 ```sh
 npm ci
-npm test                 # 80 Node tests
+npm test                 # 90 Node tests
 npm run build
-npm run test:view        # browser: camera, city, env presets, HDRI, PBR ground
-npm run test:browser     # browser: full editor end-to-end
+npm run test:view        # camera, city, env presets, HDRI, PBR ground, tent, walls
+npm run test:browser     # 18 end-to-end checks
 node tests/wall-assets.mjs
 ```
 
-The cloud sandbox **does** have WebGL via swiftshader, but the pinned Playwright
-expects a newer Chromium than is installed, so pass the browser explicitly:
+The sandbox has WebGL via swiftshader, but the pinned Playwright expects a
+newer Chromium than is installed, so pass the browser explicitly:
 
 ```sh
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium npm run test:view
 ```
 
-All five suites are green. If one fails, it is a regression — the two that were
-long-abandoned were repaired in Phase 3.
+**Never verify through a pipe.** A pipeline's exit status is the last command's,
+so `npm test | grep PASS` exits 0 even when the suite fails. This has already
+hidden a failure once. Run each suite directly.
 
 ## Rules that are easy to break
 
-- Preserve the implementation and schema-1 backup compatibility. Adding optional
-  fields and widening enums is fine; changing meaning is not.
+- Preserve schema-1 backup compatibility. Optional fields and widened enums are
+  fine; changed meaning is not. `WALLS_PHASE.md` turns on this.
 - **Never alter stored original image data.** Edits belong to placements.
 - The city skyline must stay **seeded**, never `Math.random`: it rebuilds on
   every `update()` and would reshuffle on each edit. `tests/view-city.mjs`
   guards this.
-- The app must run with `public/assets` empty. Every HDRI and texture path falls
-  back to procedural; keep it that way.
+- The app must run with `public/assets` empty. Every path falls back to
+  procedural; keep it that way.
 - Local-first: no accounts, backend, payments, sync or live AI calls.
 - Do not modify the separate `yitzhach/commission` repo.
 
-## Recently landed, worth knowing
+## Things learned the hard way
 
-- Environment presets (studio / trade show / art fair / home): HDRI lighting, a
-  photographed backdrop with rotation, per-preset exposure, and an artwork-colour
-  toggle that keeps uploaded art out of the environment's shading by default.
-- PBR ground per kind (now including carpet and wood), tiled from the surface's
-  real-world size so every floor stays the same scale.
-- `tools/hdri-prep.mjs` and `tools/texture-prep.mjs` build those asset sets with
-  no native image tooling.
-- **Drag snapping now defaults to 1 inch.** The toolbar button had always
-  rendered as active while snapping was off, so drags landed at 23.59″ in a
-  measured tool. Behaviour change worth eyeballing.
-
-## Known limits
-
-- 4096 export depends on device GPU/canvas limits.
-- Image editor is Canvas adjustment, not RAW development.
-- Local browser storage can be evicted; keep downloadable backups.
-- The sandbox proxy blocks `*.workers.dev`, so no agent session can load the
-  live or preview site. Screenshots must come from a local `vite` server driven
-  by Playwright.
-- Tent and environment models are visual approximations, not certified products.
+- **UVs on tent panels are in metres, not 0..1.** A roof is ~3 m across and a
+  valance 12 inches deep; with 0..1 UVs one weave is stretched ten times
+  further on the valance. `repeatFor(tileMetres, 1)` is then the whole
+  conversion. Walls use the same idea per axis, since a panel is wider than it
+  is tall.
+- **`SurfaceTextures` caches per id and clones per consumer.** `repeat` lives on
+  the texture, so two surfaces sharing one texture object fight over scale.
+  Clones share their image source, so a second consumer is a few objects, not a
+  second upload. Loading claims a set; `release(consumer)` is how one leaves.
+- **Quality is a supersampling factor, not a ceiling.** `min(devicePixelRatio,
+  quality)` renders at 1x on the 1x monitor most desktops have, and edges
+  stair-step however high the setting. `tests/render-scale.test.js` pins it.
+- **Field of view is the only thing that frames an equirectangular backdrop.**
+  Moving the camera cannot pull it back. It is 62 degrees for that reason.
+- **The tent weave is exaggerated 3x** over its literal depth. A true-depth
+  weave on a white, brightly lit, tone-mapped roof is invisible. That is a
+  rendering choice, not a measurement, and it is commented as one.
 
 ## Read map
 
 - `README.md` — commands, architecture, stable behavior.
-- `PBR_PHASE.md` — HDRI lighting and PBR surfaces. Self-contained, and records
-  what each phase discovered, so a fresh chat can take Phase 4 without reading
-  the codebase first.
-- `docs/HDRI-ASSETS.md`, `docs/TEXTURE-ASSETS.md` — only to add asset files.
+- `PBR_PHASE.md` — HDRI lighting and PBR surfaces, and what each phase found.
+- `WALLS_PHASE.md` — the next feature, planned in full.
+- `docs/HDRI-ASSETS.md`, `docs/TEXTURE-ASSETS.md` — adding asset files.
 - `AI_EXPORT_PHASE.md` — only for AI-export implementation.
 - `docs/ORIGINAL-HANDOFF.md` — historical; ignore unless you need old
   requirements.
