@@ -7,8 +7,8 @@ import { TextureCache } from "./texture-cache.js";
 import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY } from "./lighting.js";
 import { GROUND_CONSUMER, TENT_CONSUMER, TENT_WEAVE, WALL_CONSUMER, WALL_SET, UV_METRE, SurfaceTextures } from "./surfaces.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
-import { IN, PEDESTAL, boothPedestals, constrain, constrainPanel, constrainPedestal, findPanel, findPedestal, isArtShow, isPanelKey, scalePanel, wallKeys, wallSpec } from "./model.js";
-import { lightBarFixtures, lightBarRail } from "./lightbar.js";
+import { IN, PEDESTAL, boothPedestals, constrain, constrainPanel, constrainPedestal, findPanel, findPedestal, isArtShow, lightBarSpec, isPanelKey, scalePanel, wallKeys, wallSpec } from "./model.js";
+import { lightBarBounce, lightBarFixtures, lightBarOptics, lightBarRail } from "./lightbar.js";
 import { frameTimes, resolveMove, samplePath } from "./camera-path.js";
 import { fadeAt, isTimeline, timelineSeconds } from "./timeline.js";
 import { flareGhosts, flareSource } from "./flare.js";
@@ -875,9 +875,19 @@ export class BoothScene {
     if (!rail.on) return;
     const fixtures = lightBarFixtures(p);
     if (!fixtures.length) return;
+    const spec = lightBarSpec(p.booth);
+    const optics = lightBarOptics(spec);
     const bar = new T.Group();
     bar.name = "light-bar";
     this.group.add(bar);
+    // The white hall bouncing the bar back at itself. Without it every surface
+    // the nine beams miss falls to black, which reads harsher than the beams.
+    const bounce = lightBarBounce(p);
+    if (bounce > 0) {
+      const fill = new T.HemisphereLight(temperature(spec.kelvin), "#d8d5cf", bounce);
+      fill.name = "light-bar-bounce";
+      bar.add(fill);
+    }
     const metal = new T.MeshStandardMaterial({
       color: "#2b2e31",
       roughness: 0.42,
@@ -894,13 +904,14 @@ export class BoothScene {
       const to = new T.Vector3(f.tx * IN, f.ty * IN, f.tz * IN);
       const light = new T.SpotLight(
         temperature(f.kelvin),
-        f.power,
+        f.power * optics.powerScale,
         // Reach far enough to cross the booth diagonally and land on the wall.
         26,
         // Narrower than a floor-standing spot: a wall washer on a bar is aimed
-        // at one section of one wall, not at the room.
-        Math.PI / 8,
-        0.55,
+        // at one section of one wall, not at the room. How much narrower is
+        // the Diffusion slider's business — see `lightBarOptics`.
+        optics.angle,
+        optics.penumbra,
         2,
       );
       light.position.copy(from);
@@ -911,7 +922,11 @@ export class BoothScene {
       // edge anyway, so there is nothing in it to see.
       light.shadow.mapSize.set(512, 512);
       light.shadow.bias = -0.00008;
-      light.shadow.normalBias = 0.004;
+      light.shadow.normalBias = optics.normalBias;
+      // Nine sources means nine shadows behind every pedestal. Scaling how
+      // dark each one goes is what a diffuser does in the room: it fills the
+      // shadow rather than removing it.
+      light.shadow.intensity = optics.shadowIntensity;
       light.shadow.camera.near = 0.1;
       light.shadow.camera.far = 26;
       bar.add(light, light.target);

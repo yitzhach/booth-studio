@@ -14,13 +14,14 @@ import {
   constrainPedestal,
   hallSpec,
   isArtShow,
+  LIGHT_BAR,
   lightBarSpec,
   panelCount,
   relinkArtShowWalls,
   uid,
   validateProject,
 } from "../src/model.js";
-import { fixtureShare, lightBarFixtures } from "../src/lightbar.js";
+import { fixtureShare, lightBarBounce, lightBarFixtures, lightBarOptics } from "../src/lightbar.js";
 
 const artShow = () => applyVenue(blankProject(), "artshow");
 
@@ -187,5 +188,55 @@ test("a backup written before any of this still opens", () => {
 test("a booth is not both venues: an unknown venue is refused", () => {
   const p = blankProject();
   p.booth.venue = "gallery";
+  assert.throws(() => validateProject(p));
+});
+
+test("diffusion softens every lever at once, and 0 is the bare source", () => {
+  const bare = lightBarOptics({ ...LIGHT_BAR, diffusion: 0 });
+  const soft = lightBarOptics({ ...LIGHT_BAR, diffusion: 1 });
+  assert.ok(soft.angle > bare.angle, "a frosted head throws a wider cone");
+  assert.ok(soft.penumbra > bare.penumbra, "and fades further out over its rim");
+  assert.ok(
+    soft.shadowIntensity < bare.shadowIntensity,
+    "and fills its shadow rather than stacking a ninth hard one",
+  );
+  assert.ok(soft.normalBias > bare.normalBias, "a grazing wide cone needs more bias");
+  assert.ok(
+    soft.powerScale < bare.powerScale,
+    "a wider cone lights more from the same fixture, so softer must not arrive brighter",
+  );
+  assert.equal(bare.shadowIntensity, 1, "diffusion 0 leaves the shadow untouched");
+  assert.equal(bare.powerScale, 1, "diffusion 0 leaves the typed brightness alone");
+  assert.ok(bare.angle >= Math.PI / 8 - 1e-9, "and is still a wall washer, not a floodlight");
+});
+
+test("the bar's default is diffused, and a backup written before it reads soft too", () => {
+  assert.ok(LIGHT_BAR.diffusion > 0, "a bar out of the box is not a bare source");
+  const p = artShow();
+  // A schema-1 backup has no `diffusion` at all; the default must fill in.
+  delete p.booth.lightBar.diffusion;
+  assert.deepEqual(
+    lightBarOptics(lightBarSpec(p.booth)),
+    lightBarOptics(LIGHT_BAR),
+    "an older backup is lit exactly as a new booth is",
+  );
+  validateProject(p);
+});
+
+test("the bounce tracks the bar's own output and stops when it does", () => {
+  const p = artShow();
+  const full = lightBarBounce(p);
+  assert.ok(full > 0, "a diffused bar throws bounce off the hall");
+  p.booth.lightBar = { ...lightBarSpec(p.booth), power: 0 };
+  assert.equal(lightBarBounce(p), 0, "fixtures at zero leave no haze behind");
+  p.booth.lightBar = { ...lightBarSpec(p.booth), power: 60, diffusion: 0 };
+  assert.equal(lightBarBounce(p), 0, "a bare source is a bare source");
+  p.booth.lightBar = { ...lightBarSpec(p.booth), diffusion: 0.7, on: false };
+  assert.equal(lightBarBounce(p), 0, "no bar, no bounce");
+});
+
+test("diffusion outside 0..1 is not a project", () => {
+  const p = artShow();
+  p.booth.lightBar = { ...lightBarSpec(p.booth), diffusion: 1.5 };
   assert.throws(() => validateProject(p));
 });

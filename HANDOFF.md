@@ -45,6 +45,14 @@ Extend it; do not rebuild it.
   12 by default, solid top, double-click in the booth to pick one up and drag
   it). `src/lightbar.js` derives the nine fixtures from the booth's own
   measurements; `ART_SHOW_PHASE.md` is the record of what was decided.
+- **The light bar is diffused**, after the first look reported it as harsh.
+  Art show → Light bar → **Diffusion** (0..1, default 0.7) opens the beams
+  until they overlap into a wash, fades their rims, fills their shadows
+  instead of stacking nine hard ones, trims the fixtures back as they widen,
+  and adds a bounce fill standing in for the white hall. `lightBarOptics()`
+  and `lightBarBounce()` in `src/lightbar.js` are the whole of it, both pure.
+  **Diffusion 0 reproduces the old lighting exactly** — it is a setting, not
+  a replacement — and the browser test asserts that after dragging it to zero.
 - **Free-standing interior walls are done.** Layout → Free-standing walls: add
   a panel, type its width, height, X/Z position and rotation in inches, and
   hang art on either face through the usual Location dropdown. `booth.panels`
@@ -77,10 +85,12 @@ Extend it; do not rebuild it.
    - **Nobody has looked at an art-show booth.** The measurements are pinned by
      tests that read the meshes back, and the nine spotlights are checked
      against the arithmetic that placed them — but whether a nine-head wall
-     wash reads as an art-show booth, whether the hall reads as a hall rather
-     than a grey room, whether a seamless white wall wants the fabric finish
-     on, and whether nine shadow-casting spots are affordable on a real
-     machine are all judgements that need eyes. `ART_SHOW_PHASE.md` lists
+     wash reads as an art-show booth, whether 0.7 is the right default
+     diffusion — the one number in the softening pass that was chosen rather
+     than derived, and the reason the slider exists — whether the hall reads
+     as a hall rather than a grey room, whether a seamless white wall wants
+     the fabric finish on, and whether nine shadow-casting spots are
+     affordable on a real machine are all judgements that need eyes. `ART_SHOW_PHASE.md` lists
      them and says which knob to turn first.
    - **Nobody has looked at a booth with free-standing walls in it.** Where a
      panel stands is pinned by a test that reads the mesh's world matrix back,
@@ -196,7 +206,7 @@ this and neither is visible from the repository.
 
 ```sh
 npm ci
-npm test                 # 162 Node tests
+npm test                 # 183 Node tests
 npm run build
 npm run test:view        # camera, city, env presets, HDRI, ground, tent, walls, video, timeline, panels, art show
 npm run test:browser     # 19 end-to-end checks
@@ -220,7 +230,8 @@ hidden a failure once. Run each suite directly.
   fine; changed meaning is not. `booth.panels` and the widened `a.wall` are the
   worked example; `WALLS_PHASE.md` explains how it was kept. The art-show
   booth added five more optional keys — `venue`, `artShow`, `lightBar`, `hall`
-  and `pedestals` — the same way, and `artShowPanel()` / `lightBarSpec()` /
+  and `pedestals` — the same way, and `lightBar.diffusion` was added
+  to one of them as a sixth, and `artShowPanel()` / `lightBarSpec()` /
   `hallSpec()` are the only things that read them, so `undefined` means the
   defaults everywhere.
 - **Never alter stored original image data.** Edits belong to placements.

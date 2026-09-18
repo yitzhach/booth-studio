@@ -149,8 +149,9 @@ not a guess, and the nine spotlights are checked against the arithmetic that
 placed them. What needs eyes:
 
 - **Whether a nine-head wall wash reads as an art-show booth.** The fixture
-  brightness (60), the 22.5° cone and the 3500K default are judgement calls
-  made without a render, and they are the first things to adjust.
+  brightness (60) and the 3500K default are judgement calls made without a
+  render. The cone is no longer one: **Diffusion** now owns it, so this is a
+  slider to drag rather than a constant to edit (see below).
 - **Whether the hall reads as a hall** rather than as a grey room, and whether
   turning the ceiling on is ever worth it.
 - **Whether a seamless 144″ white wall reads as a pro-panel wall.** With the
@@ -159,3 +160,51 @@ placed them. What needs eyes:
 - **Whether nine shadow-casting spots are affordable** on a real machine. If
   not, the honest fix is to drop `castShadow` on the wall washers rather than
   to cut their number.
+- **Whether 0.7 is the right default diffusion.** It is the one number in the
+  softening pass that was chosen rather than derived, and the slider exists
+  precisely so it can be answered by eye.
+
+## Diffusion — the softening pass
+
+The first report from a pair of eyes was that the bar read harsh: hot pools
+with hard rims, and a stack of crossing shadows behind every pedestal. That is
+what nine bare point sources aimed at three walls will always do, and it is not
+what an art fair looks like, where each head carries a frost or a barn-door
+diffuser and the hall's white walls throw most of the light back.
+
+So `lightBar.diffusion` (0..1, default 0.7) was added, and `lightBarOptics()`
+in `src/lightbar.js` is the one place that says what it means. It moves five
+things at once, because moving any one alone trades one artefact for another —
+a wider cone on its own is just a bigger hot pool, and a lifted shadow on its
+own is a flat wall with a hard-edged puddle on it:
+
+| | diffusion 0 | diffusion 1 |
+| - | - | - |
+| cone angle | 22.5° | 40° |
+| penumbra | 0.45 | 0.98 |
+| `shadow.intensity` | 1 | 0.32 |
+| `shadow.normalBias` | 0.004 | 0.014 |
+| power scale | 1 | 0.68 |
+
+Four notes on why each is there:
+
+- **`LightShadow.intensity`** (three r165+) scales how dark a shadow goes
+  without touching the light that cast it. That is the literal answer to "less
+  harsh shadows", and it is better than dropping `castShadow`, which would make
+  art and pedestals float.
+- **The power scale** exists because a wider cone lights more of the booth from
+  the same fixture. Without it, a bar left at 60 gets *brighter* as it is
+  softened, and a softness slider that arrives brighter reads as broken.
+- **The normal bias climbs with the cone** because a wide beam meets a wall at
+  a shallow angle, where a 512px shadow map self-shadows into stripes.
+- **`lightBarBounce()`** adds a hemisphere fill at the bar's own colour
+  temperature, standing in for the white hall. It is scaled by the bar's actual
+  output (`count × power`), so turning the fixtures down dims the bounce with
+  them instead of leaving a flat grey haze behind, and it is zero at diffusion
+  0, at `power: 0`, and with the bar off.
+
+Diffusion 0 reproduces the original lighting exactly, which is what the
+browser test asserts after dragging the slider to zero — the softening is a
+setting, not a replacement. `diffusion` is a sixth optional key on an optional
+object, so a backup written before it existed reads as 0.7 like everything
+else, and `tests/artshow.test.js` pins that too.
