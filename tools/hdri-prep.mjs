@@ -27,8 +27,13 @@ import jpeg from "jpeg-js";
 
 export const DEFAULTS = {
   lightWidth: 1024,
-  backgroundWidth: 2048,
-  quality: 88,
+  // The backdrop is the one asset the camera magnifies, so it gets the width
+  // and the quality. 4096 is what a 4K source should produce; a smaller source
+  // still caps at its own width, loudly. Quality 92 rather than 88 because
+  // `backgroundIntensity` multiplies the backdrop's radiance — 16x for the
+  // trade show hall — and multiplies its quantization steps with it.
+  backgroundWidth: 4096,
+  quality: 92,
   percentile: 0.995,
   maxHeadroom: 16,
   license: "CC0",
@@ -248,9 +253,19 @@ export async function prepare({
   const light = downsample(image, lightWidth);
   const hdr = encodeRadiance(light);
 
-  // Upsampling a backdrop invents detail it never had; cap at the source.
+  // Upsampling a backdrop invents detail it never had; cap at the source. This
+  // cap is how the shipped backdrops ended up at 1024px: both were prepped from
+  // Poly Haven's 1K .hdr, the cap quietly took effect, and the result is a
+  // panorama the camera magnifies about eightfold. The warning is loud because
+  // the consequence is only visible on screen, long after the tool has run.
   const bgWidth = Math.min(backgroundWidth, image.width);
-  if (bgWidth < backgroundWidth) log(`backdrop capped at the source width (${bgWidth}px)`);
+  if (bgWidth < backgroundWidth)
+    log(
+      `WARNING backdrop capped at the source width (${bgWidth}px, asked for ${backgroundWidth}px).\n` +
+        `        A spherical backdrop is magnified by the camera's field of view: at ${bgWidth}px\n` +
+        `        only ${Math.round((bgWidth * 62) / 360)}px of it span the whole canvas, so it will read as soft.\n` +
+        `        Prep from the 4K HDR or EXR instead of the 1K one.`,
+    );
   const backdrop = downsample(image, bgWidth);
   const k = forcedHeadroom ?? headroom(image);
   const jpg = encodeBackdrop(backdrop, { headroom: k, quality });

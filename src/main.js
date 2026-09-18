@@ -60,7 +60,7 @@ import {
   convex,
 } from "./model.js";
 import { load, save, download, readImage } from "./storage.js";
-import { BoothScene, renderScale } from "./scene.js";
+import { BoothScene, renderScale, BACKDROP_FRAMING } from "./scene.js";
 import { PhotoEditor } from "./photo.js";
 import { hangingGuide } from "./guide.js";
 async function boot() {
@@ -362,7 +362,7 @@ async function boot() {
     return `${b.neighbors ? `<label class="setting-label">Booth position<select aria-label="Booth position" data-field="neighborLayout" data-scope="booth">${Object.entries({inline:"Inline · both sides","corner-left":"Left corner · left side open","corner-right":"Right corner · right side open",island:"Island · no adjoining booths"}).map(([k,v])=>`<option value="${k}" ${(b.neighborLayout||"inline")===k?"selected":""}>${v}</option>`).join("")}</select></label>${field("Side spacing","neighborGap",b.neighborGap ?? 24,0,240,1,"in","booth")}${(b.neighborLayout||"inline") !== "island" ? `<label class="check-field"><input type="checkbox" data-field="neighborRear" data-scope="booth" ${b.neighborRear?"checked":""}/>Booth behind</label>${b.neighborRear ? field("Rear spacing","rearGap",b.rearGap ?? 24,0,240,1,"in","booth") : ""}` : ""}<p class="muted">Gaps are between nominal footprint edges. Left/right are viewed from the entrance. Tent overhangs and artwork can extend into the gap.</p>` : ""}
       <h4>Photographic materials</h4>
       ${btn("upload-surround",b.surroundAsset?"Replace panorama":"Upload 360° panorama","image-plus","wide")}
-      ${b.surroundAsset || resolvePreset(b.envPreset).hdri ? field("Backdrop rotation","surroundRotation",b.surroundRotation||0,-180,180,1,"°","booth") : ""}
+      ${b.surroundAsset || resolvePreset(b.envPreset).hdri ? `${field("Backdrop rotation","surroundRotation",b.surroundRotation||0,-180,180,1,"°","booth")}${range("Backdrop framing","backdropFraming",b.backdropFraming ?? BACKDROP_FRAMING,25,100,1,"booth","%")}<p class="muted">A spherical backdrop sits at infinity, so only the lens frames it — orbiting cannot pull it back. Lower values draw it through a wider lens, which pushes the surroundings away and makes them sharper, while the booth keeps its own perspective. 100% matches the camera.</p>` : ""}
       ${b.surroundAsset ? btn("clear-surround","Remove panorama",null,"wide") : ""}
       ${btn("upload-ground",b.groundAsset?"Replace ground texture":"Upload ground texture","image-plus","wide")}
       ${b.groundAsset ? `${field("Ground tile size","groundTile",b.groundTile||48,12,240,1,"in","booth")}${btn("clear-ground","Remove ground texture",null,"wide")}` : ""}

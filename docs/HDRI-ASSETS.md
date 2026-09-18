@@ -74,8 +74,13 @@ formats (HDR, EXR, and on many assets a tone-mapped JPG). You need:
 1K is the right answer for `light.hdr` at *every* stage. Image-based lighting is
 blurred into a probe before it is used; the resolution does nothing.
 
-For the backdrop, start at 2K. Go to 4K only if you orbit low and wide and find
-the horizon looking soft. 4K doubles the download for detail that is usually
+For the backdrop, do not start below 2K, and prefer 4K. A spherical backdrop is
+magnified by the field of view alone: a 62-degree view shows 62/360 of the
+image, so a 1K panorama puts about 176 source pixels across the whole canvas and
+every one of them is smeared over eight. **This is not hypothetical — both
+shipped presets were prepped from the 1K HDR and look soft and magnified because
+of it.** The Backdrop framing control in Layout → Surroundings buys back about a
+third of that magnification, and re-prepping from the 4K source is the rest. 4K doubles the download for detail that is usually
 behind the booth.
 
 ---
@@ -98,8 +103,9 @@ looks like the place. Route B fixes it.
 
 ### Route B — the tool (best quality, one command)
 
-1. Download **one** file: the 1K HDR, or a 4K HDR/EXR if you want a 4K backdrop
-   from the same source.
+1. Download **one** file: the **4K HDR or EXR**. Do not prep from the 1K file —
+   the tool will not stretch a backdrop past its source, so a 1K source silently
+   produces a 1024px backdrop. It warns loudly when that happens; heed it.
 2. Run:
 
 ```sh
@@ -115,8 +121,8 @@ Options:
 
 ```
 --light <px>      width of light.hdr           (default 1024)
---bg <px>         width of bg.jpg              (default 2048)
---quality <1-100> JPEG quality                 (default 88)
+--bg <px>         width of bg.jpg              (default 4096)
+--quality <1-100> JPEG quality                 (default 92)
 --headroom <n>    override the measured backdrop headroom
 --credit <text>   asset name and author, recorded in meta.json
 --license <text>  asset licence                (default CC0)

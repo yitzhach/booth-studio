@@ -19,6 +19,34 @@ const MAX_POLAR = Math.PI * 0.82;
 // camera cannot pull it back. 62 degrees against the old 44 shows about half
 // as much again, and frames more of the booth with it.
 export const FOV = 62;
+// The backdrop is drawn in a pass of its own, with a field of view wider than
+// the camera's. Two problems share that one cause. A spherical photograph sits
+// at infinity, so field of view alone frames it — which is why a 62 degree
+// view of a 1024px equirectangular image shows only 62/360 of it, about 176
+// pixels, stretched across the whole canvas. Everything in it therefore looks
+// both magnified and soft, and no camera move can pull it back. Widening the
+// view of the backdrop alone pulls the environment back and cuts the
+// magnification with it, without putting a wide-angle lens on the booth, which
+// is the thing actually being measured. `framing` is a percentage: 100 matches
+// the camera exactly, and smaller is wider.
+//
+// This buys back magnification; it cannot add detail the file never had. The
+// backdrops are prepped from Poly Haven's 1K HDRIs, so bg.jpg is 1024x512.
+// Re-prepping from the 4K download is the rest of the fix — see
+// docs/HDRI-ASSETS.md.
+export const BACKDROP_FRAMING = 65;
+export const backdropFov = (fov, framing = BACKDROP_FRAMING) => {
+  const clamped = Math.min(100, Math.max(25, Number(framing) || BACKDROP_FRAMING));
+  const half = Math.atan(Math.tan((fov * Math.PI) / 360) / (clamped / 100));
+  return Math.min(160, (half * 360) / Math.PI);
+};
+// Only a spherical photograph is framed by field of view. A flat colour or the
+// procedural sky gradient has nothing to reframe, so it stays in the one pass.
+export const isPanorama = (background) =>
+  !!background &&
+  background.isTexture === true &&
+  (background.mapping === T.EquirectangularReflectionMapping ||
+    background.mapping === T.EquirectangularRefractionMapping);
 // Quality is a supersampling factor, not a ceiling: on a 1x monitor asking for
 // min(devicePixelRatio, 2) renders at 1 and aliases. Capped at 3 because the
 // cost is per pixel and a phone does not need 9x the fragments.
@@ -84,13 +112,60 @@ export class BoothScene {
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(host);
     this.bind();
+    // The backdrop's own pass needs somewhere to live. An empty scene carrying
+    // nothing but the background reuses three's own background shader, so the
+    // tone mapping and colour space stay identical to a one-pass render —
+    // which a hand-written fullscreen shader would have to reproduce.
+    this.backdropScene = new T.Scene();
+    this.backdropCamera = new T.PerspectiveCamera(FOV, 1, 0.1, 10);
+    this.backdropFraming = BACKDROP_FRAMING;
     this.renderer.setAnimationLoop(() => {
       if (!this.host.hidden) {
         this.clampToGround();
         this.controls.update();
-        this.renderer.render(this.scene, this.camera);
+        this.renderFrame();
       }
     });
+  }
+  // One frame. A spherical backdrop is drawn first, through a wider lens of its
+  // own, then the booth over the top of it; see BACKDROP_FRAMING. Anything else
+  // — a flat colour, the procedural sky, the orthographic plan view — has
+  // nothing to reframe and takes the single pass it always did.
+  renderFrame() {
+    const background = this.scene.background;
+    if (
+      !this.camera.isPerspectiveCamera ||
+      !isPanorama(background) ||
+      backdropFov(this.camera.fov, this.backdropFraming) <= this.camera.fov
+    ) {
+      this.renderer.render(this.scene, this.camera);
+      return;
+    }
+    this.backdropScene.background = background;
+    this.backdropScene.backgroundIntensity = this.scene.backgroundIntensity;
+    this.backdropScene.backgroundRotation.copy(this.scene.backgroundRotation);
+    this.backdropCamera.aspect = this.camera.aspect;
+    this.backdropCamera.fov = backdropFov(this.camera.fov, this.backdropFraming);
+    this.backdropCamera.updateProjectionMatrix();
+    this.camera.updateMatrixWorld();
+    this.backdropCamera.quaternion.copy(this.camera.quaternion);
+    // The booth has to draw over the backdrop rather than clear it away, so
+    // autoClear goes off for the second pass. three draws a background with
+    // depth writes disabled, so the depth buffer is already clean; clearing it
+    // anyway keeps this honest if that ever changes.
+    const autoClear = this.renderer.autoClear;
+    try {
+      this.renderer.autoClear = true;
+      this.renderer.render(this.backdropScene, this.backdropCamera);
+      this.renderer.autoClear = false;
+      this.renderer.clearDepth();
+      this.scene.background = null;
+      this.renderer.render(this.scene, this.camera);
+    } finally {
+      this.scene.background = background;
+      this.backdropScene.background = null;
+      this.renderer.autoClear = autoClear;
+    }
   }
   // Allow the lowest polar angle that still keeps the camera above the floor
   // at its current distance, so orbiting down slides along the ground instead
@@ -234,6 +309,7 @@ export class BoothScene {
     // rotation a still-loaded preset backdrop re-applies synchronously.
     this.scene.backgroundRotation.set(0, 0, 0);
     this.scene.backgroundIntensity = 1;
+    this.backdropFraming = p.booth.backdropFraming ?? BACKDROP_FRAMING;
     // The preset only supplies image-based lighting and a backdrop; the
     // procedural horizon above stays in place when its assets are missing.
     this.lighting
@@ -735,7 +811,7 @@ export class BoothScene {
     try {
       this.renderer.setPixelRatio(1);
       this.renderer.setSize(width, Math.round(width / ratio), false);
-      this.renderer.render(this.scene, this.camera);
+      this.renderFrame();
       return await new Promise((res, rej) =>
         canvas.toBlob(
           (b) => (b ? res(b) : rej(new Error("Export failed. Try 2048 px."))),

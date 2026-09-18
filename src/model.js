@@ -27,6 +27,11 @@ export function blankProject() {
       // pro-panel wall looks. wallTexture is how far up that relief is turned.
       wallFinish: "smooth",
       wallTexture: 60,
+      // How wide a lens the spherical backdrop is drawn through, as a
+      // percentage of the camera's own. 100 matches the camera; lower pulls the
+      // environment back and reduces the magnification a 1K panorama suffers.
+      // See BACKDROP_FRAMING in scene.js.
+      backdropFraming: 65,
       walls: {
         back: { enabled: true, width: 120, height: 96 },
         left: { enabled: true, width: 120, height: 96 },
@@ -173,6 +178,7 @@ export function validateProject(p) {
   if (p.booth.groundAsset != null && (typeof p.booth.groundAsset !== "string" || !p.assets[p.booth.groundAsset])) fail();
   if (p.booth.groundTile !== undefined && !finite(p.booth.groundTile, 12, 240)) fail();
   if (p.booth.wallTexture !== undefined && !finite(p.booth.wallTexture, 0, 100)) fail();
+  if (p.booth.backdropFraming !== undefined && !finite(p.booth.backdropFraming, 25, 100)) fail();
   const ids = new Set();
   for (const a of p.art) {
     if (
