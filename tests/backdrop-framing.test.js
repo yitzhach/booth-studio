@@ -9,12 +9,21 @@ import assert from "node:assert/strict";
 const BACKDROP_FRAMING = 65;
 // Restated here for the same reason, and pinned for a stronger one: the lock is
 // the difference between a horizon nailed to the floor and one that slides.
-const lockedPitch = (pitch, fov, wideFov) => {
+const BACKDROP_EDGE_LIMIT = 52;
+const safeBackdropFov = (cameraFov, wideFov, pitch, limit = BACKDROP_EDGE_LIMIT) => {
+  const pitchDegrees = Math.abs(((Number(pitch) || 0) * 180) / Math.PI);
+  const allowed = 2 * Math.max(0, (Number(limit) || BACKDROP_EDGE_LIMIT) - pitchDegrees);
+  return Math.max(cameraFov, Math.min(wideFov, allowed));
+};
+const lockedPitch = (pitch, fov, wideFov, limit = BACKDROP_EDGE_LIMIT) => {
   const narrow = Math.tan((Math.min(179, Math.max(1, fov)) * Math.PI) / 360);
   const wide = Math.tan((Math.min(179, Math.max(1, wideFov)) * Math.PI) / 360);
   if (!(narrow > 0) || !(wide > 0)) return pitch;
+  if (wide <= narrow) return pitch;
   const clamped = Math.min(Math.PI / 2.2, Math.max(-Math.PI / 2.2, pitch));
-  return Math.atan(Math.tan(clamped) * (wide / narrow));
+  const corrected = Math.atan(Math.tan(clamped) * (wide / narrow));
+  const ceiling = Math.max(0, (((Number(limit) || BACKDROP_EDGE_LIMIT) * Math.PI) / 180) - (wideFov * Math.PI) / 360);
+  return Math.min(ceiling, Math.max(-ceiling, corrected));
 };
 const backdropFov = (fov, framing = BACKDROP_FRAMING) => {
   const clamped = Math.min(100, Math.max(25, Number(framing) || BACKDROP_FRAMING));
@@ -74,9 +83,11 @@ test("the framing range is clamped, so no value produces a degenerate lens", () 
 // photographed horizon slides against the floor. lockedPitch is the correction.
 test("the locked backdrop lands a pitched direction where the camera's own lens would", () => {
   const fov = 62;
-  const wide = backdropFov(fov, 40);
+  // A lens the edge limit leaves alone at these tilts, so this covers the
+  // correction itself rather than the clamp below it.
+  const wide = 70;
   const screen = (angle, lens) => Math.tan(angle) / Math.tan((lens * Math.PI) / 360);
-  for (const degrees of [-30, -12, -3, 0, 5, 18, 34]) {
+  for (const degrees of [-12, -6, -3, 0, 5, 9, 14]) {
     const pitch = (degrees * Math.PI) / 180;
     const corrected = lockedPitch(pitch, fov, wide);
     assert.ok(
@@ -87,9 +98,9 @@ test("the locked backdrop lands a pitched direction where the camera's own lens 
 });
 
 test("locking over-rotates, because the wider lens compresses the same angle", () => {
-  const wide = backdropFov(62, 40);
-  assert.ok(lockedPitch(0.3, 62, wide) > 0.3);
-  assert.ok(lockedPitch(-0.3, 62, wide) < -0.3);
+  const wide = 70;
+  assert.ok(lockedPitch(0.2, 62, wide) > 0.2);
+  assert.ok(lockedPitch(-0.2, 62, wide) < -0.2);
   assert.equal(lockedPitch(0, 62, wide), 0, "level stays level");
 });
 
@@ -100,11 +111,75 @@ test("a backdrop at 100% framing is the camera's own lens, so the lock is a no-o
 });
 
 test("no pitch can fold the backdrop over", () => {
-  const wide = backdropFov(62, 25);
+  const wide = 80;
   for (const pitch of [-3, -Math.PI / 2, -1.2, 1.2, Math.PI / 2, 3]) {
     const corrected = lockedPitch(pitch, 62, wide);
     assert.ok(Number.isFinite(corrected), `pitch ${pitch} produced ${corrected}`);
     assert.ok(Math.abs(corrected) < Math.PI / 2, "and stays in front of the lens");
     assert.equal(Math.sign(corrected), Math.sign(pitch) || 0, "and never flips direction");
+  }
+});
+
+
+// The artifact this was written for: at 25% framing and a 12 degree tilt the
+// backdrop lens reached 135 degrees, so the frame edge passed 79 degrees from
+// the horizon — into the pole of the equirectangular image, where the ceiling
+// smears into radial streaks across the top of the render. The framing
+// percentage alone cannot prevent that, because it does not know the tilt.
+test("the backdrop's frame edge never passes the pole limit", () => {
+  const wide = backdropFov(62, 25);
+  for (const degrees of [0, 5, 12, 20, 31, 45, 60, 80]) {
+    const pitch = (degrees * Math.PI) / 180;
+    const fov = safeBackdropFov(62, wide, pitch);
+    const edge = degrees + fov / 2;
+    assert.ok(
+      edge <= BACKDROP_EDGE_LIMIT + 1e-9 || fov === 62,
+      `at ${degrees}° the edge reaches ${edge.toFixed(1)}° with a ${fov.toFixed(1)}° lens`,
+    );
+  }
+});
+
+test("a tilt past the limit falls back to the camera's own lens, never narrower", () => {
+  const wide = backdropFov(62, 25);
+  assert.equal(safeBackdropFov(62, wide, Math.PI / 3), 62, "60° down is a plain one-pass backdrop");
+  assert.equal(safeBackdropFov(62, wide, Math.PI / 2), 62, "and straight down is too");
+  for (const degrees of [0, 10, 25, 40, 70])
+    assert.ok(safeBackdropFov(62, wide, (degrees * Math.PI) / 180) >= 62, "the backdrop pass never narrows the lens");
+});
+
+test("a level camera still gets the widening the framing asked for, within the limit", () => {
+  const wide = backdropFov(62, 25);
+  const level = safeBackdropFov(62, wide, 0);
+  assert.ok(level > 62, "zooming the backdrop out still does something");
+  assert.ok(level <= 2 * BACKDROP_EDGE_LIMIT, "but not past the pole");
+  assert.equal(safeBackdropFov(62, backdropFov(62, 100), 0), 62, "100% framing is the camera's lens at any tilt");
+});
+
+// Where the lens is already at the limit for the tilt, the correction has no
+// room and the lock stops rather than shearing. The scene narrows the lens
+// until the two fit; this pins the behaviour of the arithmetic on its own.
+test("a lens at the limit leaves the lock no room, and it stands down", () => {
+  // A lens exactly wide enough to put the edge on the limit at 10° of tilt.
+  const atLimit = 2 * (BACKDROP_EDGE_LIMIT - 10);
+  const pitch = (10 * Math.PI) / 180;
+  assert.ok(
+    Math.abs(lockedPitch(pitch, 62, atLimit) - pitch) < 1e-9,
+    "the correction is clamped back to the camera's own pitch, so nothing is gained and nothing shears",
+  );
+});
+
+test("the lock cannot push the frame edge past the limit either", () => {
+  const wide = backdropFov(62, 25);
+  for (const degrees of [5, 12, 20, 30]) {
+    const pitch = (degrees * Math.PI) / 180;
+    const fov = safeBackdropFov(62, wide, pitch);
+    const corrected = (Math.abs(lockedPitch(pitch, 62, fov)) * 180) / Math.PI;
+    assert.ok(
+      // Past the tilt where widening is possible at all the backdrop is the
+      // camera's own lens, and the frame edge is then wherever the booth's own
+      // view puts it — there is no second projection left to shear.
+      corrected + fov / 2 <= BACKDROP_EDGE_LIMIT + 1e-9 || fov === 62,
+      `the lock put the edge at ${(corrected + fov / 2).toFixed(1)}° at ${degrees}° of tilt`,
+    );
   }
 });

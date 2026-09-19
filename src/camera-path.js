@@ -97,6 +97,19 @@ export const MOVES = {
     describe: "A long, level pass across the display walls. The move for showing every panel.",
     at: (e) => ({ radius: lerp(1.15, 1.15, e), theta: (-72 + 144 * e) * DEG, phi: (4 - 8 * e) * DEG, lift: 0 }),
   },
+  // A Ken Burns: the documentary move, borrowed from stills. A slow, almost
+  // imperceptible push with a touch of drift, so the frame is never quite
+  // still and never visibly moving either. It is the one move here that is
+  // about the artwork rather than about the booth, which is why it swings so
+  // little — a slow pass across a painting reads as looking at it, and the
+  // same pass across a room reads as looking for something.
+  kenburns: {
+    label: "Ken Burns · slow drift",
+    seconds: 16,
+    ease: smootherstep,
+    describe: "A very slow push with a little drift, the way a documentary moves over a still. Frame one piece and let it breathe.",
+    at: (e) => ({ radius: lerp(1.12, 0.9, e), theta: (-7 + 14 * e) * DEG, phi: (2.5 - 5 * e) * DEG, lift: lerp(-0.03, 0.03, e) }),
+  },
 };
 // The fifth entry of the Camera move menu. It is not a move — it is the door to
 // a timeline the user builds themselves — so it is named here but has no entry

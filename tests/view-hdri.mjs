@@ -153,6 +153,9 @@ try {
   assert.equal(aimed.order, 'YXZ', 'pan-then-tilt order keeps the horizon level');
   assert.equal(aimed.backdropOrder, 'YXZ', 'the backdrop pass inherits the same order');
 
+  // The pole limit the assertions below share, restated from src/scene.js.
+  const view_edge_limit = 52;
+
   // Horizon lock. The backdrop's wider lens compresses the same pitch, so a
   // locked backdrop camera has to be pitched further than the real one for the
   // photographed horizon to stay nailed to the floor. Off, the two match and
@@ -160,8 +163,11 @@ try {
   const pitched = await page.evaluate(() => {
     const view = window.__booth.scene;
     const read = () => {
-      view.camera.position.set(3.2, 0.5, 3.2);
-      view.controls.target.set(0, 2.4, 0);
+      // A gentle tilt: past about 20 degrees the lens is already at the pole
+      // limit and the backdrop falls back to the camera's own, where there is
+      // nothing to correct. See BACKDROP_EDGE_LIMIT.
+      view.camera.position.set(3.2, 1.5, 3.2);
+      view.controls.target.set(0, 2.0, 0);
       view.camera.lookAt(view.controls.target);
       view.controls.update();
       view.renderFrame();
@@ -169,7 +175,12 @@ try {
         const e = new (Object.getPrototypeOf(view.scene.backgroundRotation).constructor)();
         return e.setFromQuaternion(q, 'YXZ').x;
       };
-      return { camera: euler(view.camera.quaternion), backdrop: euler(view.backdropCamera.quaternion) };
+      return {
+        camera: euler(view.camera.quaternion),
+        backdrop: euler(view.backdropCamera.quaternion),
+        fov: view.backdropCamera.fov,
+        cameraFov: view.camera.fov,
+      };
     };
     view.backdropLock = true;
     const locked = read();
@@ -178,7 +189,8 @@ try {
     view.backdropLock = true;
     return { locked, loose };
   });
-  assert.ok(Math.abs(pitched.locked.camera) > 0.15, `the camera should be pitched, got ${pitched.locked.camera}`);
+  assert.ok(Math.abs(pitched.locked.camera) > 0.08, `the camera should be pitched, got ${pitched.locked.camera}`);
+  assert.ok(pitched.locked.fov > pitched.locked.cameraFov, 'the backdrop is still drawn through a wider lens at this tilt');
   assert.ok(
     Math.abs(pitched.locked.backdrop) > Math.abs(pitched.locked.camera) + 0.01,
     `locked backdrop pitch ${pitched.locked.backdrop} should exceed the camera's ${pitched.locked.camera}`,
@@ -187,6 +199,40 @@ try {
     Math.abs(pitched.loose.backdrop - pitched.loose.camera) < 1e-6,
     'unlocked, the backdrop simply copies the camera — the drifting horizon this toggle fixes',
   );
+
+  // The artifact that sent this back for a second round: at 25% framing and a
+  // small tilt the backdrop lens reached 135 degrees, so the top of the frame
+  // sampled the equirectangular pole and came back as radial smear. The lens
+  // is now bounded by how far from the horizon the frame edge lands.
+  const pole = await page.evaluate(() => {
+    const view = window.__booth.scene;
+    const project = window.__booth.project;
+    project.booth.backdropFraming = 25;
+    window.__booth.mutate(() => {});
+    const T = Object.getPrototypeOf(view.scene.backgroundRotation).constructor;
+    const readAt = (y, ty) => {
+      view.camera.position.set(0, y, 5.6);
+      view.controls.target.set(0, ty, 0);
+      view.camera.lookAt(view.controls.target);
+      view.controls.update();
+      view.renderFrame();
+      const pitch = Math.abs(new T().setFromQuaternion(view.backdropCamera.quaternion, 'YXZ').x) * 180 / Math.PI;
+      return { fov: view.backdropCamera.fov, edge: pitch + view.backdropCamera.fov / 2, cameraFov: view.camera.fov };
+    };
+    const out = { level: readAt(1.5, 1.35), tilted: readAt(2.2, 1.0), steep: readAt(3.6, 0.4) };
+    // Leave the camera level: the framing screenshots below compare two lenses,
+    // and at a steep tilt both fall back to the camera's own — the same frame
+    // twice, which would fail for the wrong reason.
+    readAt(1.5, 1.35);
+    return out;
+  });
+  for (const [name, frame] of Object.entries(pole))
+    assert.ok(
+      frame.edge <= view_edge_limit + 1e-6 || frame.fov === frame.cameraFov,
+      `${name}: the backdrop frame edge reached ${frame.edge.toFixed(1)}° with a ${frame.fov.toFixed(1)}° lens`,
+    );
+  assert.ok(pole.level.fov > pole.level.cameraFov, 'a level camera still gets the wide backdrop the framing asked for');
+  assert.ok(pole.steep.fov <= pole.level.fov, 'and a steep one gets less of it, not more');
 
   // The framing has to reach the screen, not just the camera object.
   const canvas = page.locator('#viewport canvas, canvas').first();

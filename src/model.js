@@ -40,6 +40,14 @@ export function blankProject() {
       // Keeps the photographed horizon fixed against the floor when the camera
       // pitches; see lockedPitch in scene.js.
       backdropLock: true,
+      // Whether the spotlight housings are drawn beside the fixed light rail.
+      // "auto" hides them under an indoor preset, where the hall's own track
+      // lighting is already in the picture. Optional: a backup written before
+      // it existed loads with the same default.
+      fixtures: "auto",
+      // Figures for scale. Optional and empty by default, so a schema-1 backup
+      // written before they existed loads unchanged; see src/people.js.
+      people: [],
       walls: {
         back: { enabled: true, width: 120, height: 96 },
         left: { enabled: true, width: 120, height: 96 },
@@ -189,6 +197,17 @@ export function validateProject(p) {
   if (p.booth.backdropFraming !== undefined && !finite(p.booth.backdropFraming, 25, 100)) fail();
   if (p.booth.backdropTilt !== undefined && !finite(p.booth.backdropTilt, -45, 45)) fail();
   if (p.booth.backdropLock !== undefined && typeof p.booth.backdropLock !== "boolean") fail();
+  if (p.booth.fixtures !== undefined && !["auto", "always", "never"].includes(p.booth.fixtures)) fail();
+  if (p.booth.people !== undefined) {
+    if (!Array.isArray(p.booth.people) || p.booth.people.length > 6) fail();
+    for (const person of p.booth.people) {
+      if (!person || typeof person !== "object") fail();
+      if (!["woman", "man"].includes(person.kind)) fail();
+      if (!finite(person.height, 48, 84)) fail();
+      if (!finite(person.x, -600, 600) || !finite(person.z, -600, 600)) fail();
+      if (person.rotation !== undefined && !finite(person.rotation, -360, 360)) fail();
+    }
+  }
   const ids = new Set();
   for (const a of p.art) {
     if (

@@ -4,10 +4,11 @@ import { makeTent, environment } from "./environment.js";
 import { signTexture } from "./signage.js";
 import { edgeMaterial } from "./edge-material.js";
 import { TextureCache } from "./texture-cache.js";
-import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY } from "./lighting.js";
+import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY, showFixtures } from "./lighting.js";
 import { GROUND_CONSUMER, TENT_CONSUMER, TENT_WEAVE, WALL_CONSUMER, WALL_SET, UV_METRE, SurfaceTextures } from "./surfaces.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
 import { IN, constrain, scalePanel } from "./model.js";
+import { makePerson } from "./people.js";
 import { frameTimes, resolveMove, samplePath } from "./camera-path.js";
 import { fadeAt, isTimeline, timelineSeconds } from "./timeline.js";
 import { flareGhosts, flareSource } from "./flare.js";
@@ -64,6 +65,28 @@ export const BACKDROP_FRAMING = 65;
 // that wide shears an equirectangular lookup badly enough that the hall ceiling
 // smears into streaks. 25 is the widest that still reads as a room.
 export const BACKDROP_FRAMING_MIN = 25;
+// ...but 25 was judged on a level camera, and that is only half the rule.
+//
+// What shears an equirectangular lookup is not the lens on its own: it is how
+// far from the horizon the frame's edge reaches. The edge sits at
+// |pitch| + fov/2, so a 135 degree backdrop lens is fine looking straight out
+// and catastrophic tilted 12 degrees down — the frame edge passes 79 degrees,
+// into the pole, where a whole row of pixels is one point and the ceiling
+// smears into radial streaks. That is the "weird artifact" the wide zoom
+// produced in practice, and no framing percentage alone can prevent it.
+//
+// So the limit is stated where it actually lives, as an angle from the
+// horizon, and the backdrop lens is narrowed per frame to respect it. Tilt
+// far enough and the backdrop simply stops widening — it falls back towards
+// the camera's own lens, which is the one-pass behaviour that never shears.
+export const BACKDROP_EDGE_LIMIT = 52;
+export function safeBackdropFov(cameraFov, wideFov, pitch, limit = BACKDROP_EDGE_LIMIT) {
+  const pitchDegrees = Math.abs(((Number(pitch) || 0) * 180) / Math.PI);
+  const allowed = 2 * Math.max(0, (Number(limit) || BACKDROP_EDGE_LIMIT) - pitchDegrees);
+  // Never narrower than the camera's own lens: the backdrop pass exists to
+  // widen, and matching the camera is the same picture the single pass draws.
+  return Math.max(cameraFov, Math.min(wideFov, allowed));
+}
 // Drawing the backdrop through a wider lens has a side effect that reads as a
 // second bug: the horizon slides.
 //
@@ -82,14 +105,24 @@ export const BACKDROP_FRAMING_MIN = 25;
 // Only pitch. Yaw could be scaled by the same argument, but a 360 degree orbit
 // would then spin the backdrop nearly twice — the horizon is what drifts and
 // the horizon is what this locks.
-export const lockedPitch = (pitch, fov, wideFov) => {
+//
+// The correction is bounded by the same edge limit, and for the same reason:
+// over-rotating a wide lens is the fastest way into the pole. Where the bound
+// bites, the horizon drifts a little rather than shearing a lot — a compromise
+// that only appears at tilts where there was no un-sheared answer anyway.
+export const lockedPitch = (pitch, fov, wideFov, limit = BACKDROP_EDGE_LIMIT) => {
   const narrow = Math.tan((Math.min(179, Math.max(1, fov)) * Math.PI) / 360);
   const wide = Math.tan((Math.min(179, Math.max(1, wideFov)) * Math.PI) / 360);
   if (!(narrow > 0) || !(wide > 0)) return pitch;
+  // No widening, nothing to correct: the backdrop is the camera's own lens and
+  // the single pass already agrees with itself.
+  if (wide <= narrow) return pitch;
   // Clamped to a quarter turn: past that the scaling is asking a lens to show
   // something behind it, and atan would fold the image over.
   const clamped = Math.min(Math.PI / 2.2, Math.max(-Math.PI / 2.2, pitch));
-  return Math.atan(Math.tan(clamped) * (wide / narrow));
+  const corrected = Math.atan(Math.tan(clamped) * (wide / narrow));
+  const ceiling = Math.max(0, (((Number(limit) || BACKDROP_EDGE_LIMIT) * Math.PI) / 180) - (wideFov * Math.PI) / 360);
+  return Math.min(ceiling, Math.max(-ceiling, corrected));
 };
 export const backdropFov = (fov, framing = BACKDROP_FRAMING) => {
   const clamped = Math.min(100, Math.max(BACKDROP_FRAMING_MIN, Number(framing) || BACKDROP_FRAMING));
@@ -176,6 +209,7 @@ export class BoothScene {
     this.backdropCamera = new T.PerspectiveCamera(FOV, 1, 0.1, 10);
     this.backdropFraming = BACKDROP_FRAMING;
     this.backdropLock = true;
+    this.backdropEdgeLimit = BACKDROP_EDGE_LIMIT;
     // What the overlay pass draws over a finished frame: a fade to black and an
     // optional lens flare. Both belong to a clip, not to the booth, so the
     // default is "nothing at all" and every recording restores it.
@@ -213,16 +247,36 @@ export class BoothScene {
     this.backdropScene.backgroundRotation.copy(this.scene.backgroundRotation);
     this.backdropScene.backgroundRotation.order = this.scene.backgroundRotation.order;
     this.backdropCamera.aspect = this.camera.aspect;
-    this.backdropCamera.fov = backdropFov(this.camera.fov, this.backdropFraming);
-    this.backdropCamera.updateProjectionMatrix();
     this.camera.updateMatrixWorld();
+    // The lens is chosen with the camera's tilt in hand, not from the framing
+    // alone: see BACKDROP_EDGE_LIMIT. A wide lens plus a tilt is what reaches
+    // the pole, so the two are bounded together or not at all.
+    const tilt = new T.Euler().setFromQuaternion(this.camera.quaternion, "YXZ").x;
+    const asked = backdropFov(this.camera.fov, this.backdropFraming);
+    // The lens and the lock settle together. The lock rotates the backdrop
+    // further than the camera, which pushes the frame edge closer to the pole,
+    // so a lens chosen from the camera's own tilt would leave no room for it
+    // and the limit would silently switch the lock off at exactly the wide
+    // framings that need it. Two passes converge: each narrower lens asks for
+    // less correction, and less correction needs less room.
+    let lens = safeBackdropFov(this.camera.fov, asked, tilt, this.backdropEdgeLimit);
+    if (this.backdropLock)
+      for (let i = 0; i < 2; i++)
+        lens = safeBackdropFov(
+          this.camera.fov,
+          asked,
+          lockedPitch(tilt, this.camera.fov, lens, this.backdropEdgeLimit),
+          this.backdropEdgeLimit,
+        );
+    this.backdropCamera.fov = lens;
+    this.backdropCamera.updateProjectionMatrix();
     this.backdropCamera.quaternion.copy(this.camera.quaternion);
     // Horizon lock: see lockedPitch. YXZ, so pitch can be scaled on its own
     // without the yaw rolling the image — the same reason backgroundRotation is
     // a YXZ Euler.
     if (this.backdropLock) {
       const euler = new T.Euler().setFromQuaternion(this.camera.quaternion, "YXZ");
-      euler.x = lockedPitch(euler.x, this.camera.fov, this.backdropCamera.fov);
+      euler.x = lockedPitch(tilt, this.camera.fov, this.backdropCamera.fov, this.backdropEdgeLimit);
       this.backdropCamera.quaternion.setFromEuler(euler);
     }
     // The booth has to draw over the backdrop rather than clear it away, so
@@ -683,6 +737,7 @@ export class BoothScene {
         }
       }
     }
+    const fixtures = showFixtures(p.booth.fixtures, p.booth.envPreset);
     for (const l of p.lights) {
       const light = new T.SpotLight(
         temperature(l.kelvin),
@@ -701,6 +756,9 @@ export class BoothScene {
       light.shadow.camera.near = 0.1;
       light.shadow.camera.far = 20;
       this.group.add(light, light.target);
+      // The housing and its glow are the fixture, not the light: hiding them
+      // indoors changes what the picture shows, never what it is lit by.
+      if (!fixtures) continue;
       const housing = new T.Mesh(
         new T.CylinderGeometry(0.045, 0.055, 0.13, 16),
         rough("#25282b"),
@@ -727,6 +785,14 @@ export class BoothScene {
       this.group.add(glow);
     }
     this.box(W, 0.025, 0.025, 0, H - 0.025, D * 0.2, rough("#2e3032"));
+    // Figures for scale. They are part of the picture, not of the booth: the
+    // hanging guide ignores them and nothing can be hung on one.
+    for (const person of p.booth.people || []) {
+      const figure = makePerson(person.kind, person.height);
+      figure.position.set((person.x || 0) * IN, 0, (person.z || 0) * IN);
+      figure.rotation.y = ((person.rotation || 0) * Math.PI) / 180;
+      this.group.add(figure);
+    }
     if (p.booth.tent) this.group.add(makeTent(W,D,H,p.booth.tentStyle || "classic"));
     // Photographed canvas on every fabric panel in the scene, when its files
     // are present. Asked of the whole group rather than of the tent just added,

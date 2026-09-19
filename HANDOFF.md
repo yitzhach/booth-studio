@@ -18,6 +18,8 @@ Extend it; do not rebuild it.
   `scene.previewMove()` and `scene.recordVideo()`.
 - **The backdrop is drawn in its own pass**, through a lens wider than the
   camera's, so the surroundings can be pulled back without a wide-angle booth.
+- **Five fixed camera moves**, including **Ken Burns · slow drift** — a very
+  slow push with a touch of drift, for framing one piece rather than the room.
 - **Custom video mode is done.** Export → Video → Camera move → **Custom** opens
   a non-modal timeline: compose a shot in the viewport, press Add keyframe,
   orbit, repeat. Per-keyframe time, hold and ramp, fade in/out, and an optional
@@ -31,6 +33,24 @@ Extend it; do not rebuild it.
   the camera tilted; `lockedPitch` in `src/scene.js` over-rotates the backdrop
   camera by the ratio of the two lenses' tangents. Pitch only — scaling yaw the
   same way would spin the backdrop nearly twice in a full orbit.
+- **The backdrop lens is bounded by the pole, not by the framing slider.**
+  `BACKDROP_EDGE_LIMIT` (52°) caps how far from the horizon the backdrop's
+  frame edge may land, and `safeBackdropFov()` narrows the lens per frame to
+  respect it. This was a real reported artifact: at 25% framing and a 12°
+  tilt the lens reached 135°, the top of the frame sampled the equirectangular
+  pole, and the render came back as radial smear across the upper half. Tilt
+  far enough and the backdrop stops widening and falls back to the camera's own
+  lens, which never shears. The lens and the horizon lock settle together in
+  two passes, so the limit cannot silently switch the lock off.
+- **Spotlight housings hide themselves indoors.** Under `tradeshow` or `home`
+  the hall's own track lighting is already in frame, so the booth's fixtures
+  are clutter hanging in mid-air. Lighting → Spotlight fixtures: Auto (the
+  default), Always show, Never show. The rail above the booth always stays;
+  only the housings go, and the light itself is unchanged.
+- **People for scale.** Layout → People: add a woman (5′6″) or a man (6′0″),
+  up to six, each with editable height, position and facing. `src/people.js`
+  builds them; they are stylised on purpose, and excluded from the hanging
+  guide.
 - **The backdrop is aimed from the Layout panel.** Layout → Surroundings →
   Backdrop: a zoom slider with -/+/reset buttons, plus pan (horizontal) and
   tilt (vertical). `+`/`-` on the keyboard zoom the viewport camera.
@@ -80,7 +100,11 @@ Extend it; do not rebuild it.
 6. **Two ground-texture sets — presets and a user-uploaded library.** Requested
    after an upload was found to override the preset picker, which is today's
    design and reads as a broken dropdown. Planned in `FUTURE_BUILD.md`; not
-   started.
+   started. **This is the most likely explanation of any "the ground texture
+   does nothing" report** — check `booth.groundAsset` before the loader.
+7. **Figures are stylised mannequins.** No faces, no clothing, mid-grey. If
+   they need to read as a crowd rather than as scale references, that is a
+   different asset and a different phase.
 
 Custom video mode is **done** and is no longer on this list; see Now.
 
@@ -160,9 +184,9 @@ this and neither is visible from the repository.
 
 ```sh
 npm ci
-npm test                 # 157 Node tests
+npm test                 # 171 Node tests
 npm run build
-npm run test:view        # camera, city, env presets, HDRI, ground, tent, walls, video, timeline
+npm run test:view        # camera, city, env presets, HDRI, ground, tent, walls, video, timeline, people
 npm run test:browser     # 18 end-to-end checks
 node tests/wall-assets.mjs
 ```
@@ -232,6 +256,15 @@ hidden a failure once. Run each suite directly.
 - **Quality is a supersampling factor, not a ceiling.** `min(devicePixelRatio,
   quality)` renders at 1x on the 1x monitor most desktops have, and edges
   stair-step however high the setting. `tests/render-scale.test.js` pins it.
+- **What shears an equirectangular backdrop is the frame edge, not the lens.**
+  The zoom floor was judged on a level camera, which is half the rule: the edge
+  sits at |pitch| + fov/2, so a 135 degree backdrop lens is fine looking
+  straight out and catastrophic tilted 12 degrees down — the top of the frame
+  lands in the pole, where a whole row of pixels is one point, and the render
+  comes back as radial smear. `BACKDROP_EDGE_LIMIT` states the rule where it
+  lives, as an angle from the horizon, and the lens is narrowed per frame to
+  respect it. A framing percentage on its own cannot prevent this, because it
+  does not know the tilt.
 - **The backdrop zoom floor is 25%, and 15% was tried and rejected.** Lower
   framing means a wider lens, and past about 25 an equirectangular lookup
   shears: the hall ceiling smears into radial streaks. The floor is a judgement
@@ -241,6 +274,11 @@ hidden a failure once. Run each suite directly.
   axes of one tripod head; under three's default XYZ order a pan applied after
   a tilt rolls the image, and a rolled panorama reads as the entire hall
   leaning over. `tests/view-hdri.mjs` pins the order and asserts roll stays 0.
+- **Figures are lit by the same spotlights as the artwork, so they were made
+  darker than the walls.** A figure lighter than the panels blows out under a
+  spotlight into a white post, and a white post beside a painting competes with
+  it. Mid-grey, flattened front to back, with daylight between the legs: that
+  gap is the whole difference between a person and a bollard at any distance.
 - **The tent weave is exaggerated 3x** over its literal depth. A true-depth
   weave on a white, brightly lit, tone-mapped roof is invisible. That is a
   rendering choice, not a measurement, and it is commented as one.
@@ -256,6 +294,7 @@ hidden a failure once. Run each suite directly.
   expressed as time, and why the fade is drawn rather than exposed.
 - `src/timeline.js`, `src/flare.js` — the keyframe sampler and the flare's
   arithmetic. Both pure, both covered in Node.
+- `src/people.js` — the figures, their canon proportions and their defaults.
 - `FUTURE_BUILD.md` — requested, deliberately not started.
 - `docs/HDRI-ASSETS.md`, `docs/TEXTURE-ASSETS.md` — adding asset files.
 - `AI_EXPORT_PHASE.md` — only for AI-export implementation.

@@ -49,6 +49,26 @@ export const ENV_PRESETS = {
 };
 export const DEFAULT_PRESET = "studio";
 
+// Which presets put the booth under a roof. Indoors the hall supplies its own
+// track lighting, so the booth's own fixtures are visual clutter hanging in
+// mid-air beside it — the rail reads as the light source and the housings read
+// as a bug. Outdoors and in the neutral studio there is no hall, so the
+// fixtures are the only thing telling you where the light comes from.
+export const INDOOR_PRESETS = new Set(["tradeshow", "home"]);
+export const isIndoor = (preset) => INDOOR_PRESETS.has(preset || DEFAULT_PRESET);
+
+// Whether the spotlight housings are drawn. "auto" is the default and means
+// "not indoors"; the other two are for someone who disagrees with that, which
+// is a judgement about their own booth and not ours to override.
+export const FIXTURE_MODES = {
+  auto: "Auto · hidden indoors",
+  always: "Always show",
+  never: "Never show",
+};
+export const DEFAULT_FIXTURES = "auto";
+export const showFixtures = (mode, preset) =>
+  (mode || DEFAULT_FIXTURES) === "always" ? true : (mode || DEFAULT_FIXTURES) === "never" ? false : !isIndoor(preset);
+
 // Artwork fidelity. "accurate" keeps the environment out of the artwork's
 // shading so uploaded colour reads true; the lighting studio's own spotlights
 // still fall on it, which a MeshBasicMaterial would discard. "scene" lets the
