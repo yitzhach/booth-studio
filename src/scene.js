@@ -7,7 +7,7 @@ import { TextureCache } from "./texture-cache.js";
 import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY, showFixtures } from "./lighting.js";
 import { GROUND_CONSUMER, TENT_CONSUMER, TENT_WEAVE, WALL_CONSUMER, WALL_SET, UV_METRE, SurfaceTextures } from "./surfaces.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
-import { IN, PEDESTAL, boothPedestals, constrain, constrainPanel, constrainPedestal, findPanel, findPedestal, isArtShow, lightBarSpec, isPanelKey, scalePanel, wallKeys, wallSpec } from "./model.js";
+import { IN, PEDESTAL, boothPedestals, constrain, groundKind, groundUpload, constrainPanel, constrainPedestal, findPanel, findPedestal, isArtShow, lightBarSpec, isPanelKey, scalePanel, wallKeys, wallSpec } from "./model.js";
 import { lightBarBounce, lightBarFixtures, lightBarOptics, lightBarRail } from "./lightbar.js";
 import { makePerson } from "./people.js";
 import { frameTimes, resolveMove, samplePath } from "./camera-path.js";
@@ -285,8 +285,32 @@ export class BoothScene {
   }
   // The live loop, in one place: the video recorder stops it so that nothing
   // renders between the frames it is encoding, and starts it again afterwards.
+  /**
+   * Shadow maps during a drag. An art-show booth has nine shadow-casting
+   * heads over it, and re-rendering all of them for every pointer event is
+   * what makes a dragged picture stutter. Shadows are left as they are for
+   * the length of the gesture and refreshed once when it ends — the artwork
+   * itself tracks the cursor, which is what the gesture is about.
+   */
+  touchShadows() {
+    if (this.drag) this.shadowsStale = true;
+    else this.renderer.shadowMap.needsUpdate = true;
+  }
+  settleShadows() {
+    if (!this.shadowsStale) return;
+    this.shadowsStale = false;
+    this.renderer.shadowMap.needsUpdate = true;
+  }
+  /** Apply the most recent pointer move, if one arrived since the last frame. */
+  flushDrag() {
+    const e = this.pendingMove;
+    if (!e) return;
+    this.pendingMove = null;
+    this.applyDrag?.(e);
+  }
   startLoop() {
     this.renderer.setAnimationLoop(() => {
+      this.flushDrag();
       if (!this.host.hidden) {
         this.clampToGround();
         this.controls.update();
@@ -581,7 +605,7 @@ export class BoothScene {
     this.disposeGroup();
     this.textureCache.retain([
       ...p.art.filter(a => a.asset).map(a => ({ id: a.asset, edits: a.edits, data: p.assets[a.asset]?.data })),
-      ...[p.booth.surroundAsset, p.booth.groundAsset].filter(Boolean)
+      ...[p.booth.surroundAsset, groundUpload(p)].filter(Boolean)
         .map(id => ({ id, edits: null, data: p.assets[id]?.data })),
     ]);
     this.artObjects = [];
@@ -590,6 +614,8 @@ export class BoothScene {
     this.pedestalObjects = [];
     this.pedestalFrames = {};
     this.resizeHandles = [];
+    // The old outlines went with the group that was just disposed.
+    this.selectionObjects = [];
     this.frames = {};
     const W = p.booth.width * IN,
       D = p.booth.depth * IN,
@@ -634,18 +660,20 @@ export class BoothScene {
       this.scene.backgroundRotation.x = (p.booth.backdropTilt || 0) * Math.PI / 180;
       this.scene.fog = null;
     }).catch(() => {});
-    // A photographed ground surface, when its files are present. The user's own
-    // ground photo outranks it, exactly as a user panorama outranks a preset
-    // backdrop, and with no files the procedural canvas above stays.
-    if (!p.booth.groundAsset) this.surfaces.load(p.booth.ground).then(set => {
+    // A photographed ground surface, when its files are present. The floor is
+    // one choice from one list, so a shipped kind and the user's own
+    // photograph are alternatives here rather than one overriding the other;
+    // with no files the procedural canvas above stays.
+    const groundPhoto = groundUpload(p);
+    if (!groundPhoto) this.surfaces.load(groundKind(p)).then(set => {
       if (this.revision !== rev || !set) return;
       const floor = this.group.getObjectByName("environment-ground");
       if (this.surfaces.applyTo(floor, set)) this.renderer.shadowMap.needsUpdate = true;
     }).catch(() => {});
-    // The user's own photograph wins, so the texture set the ground was holding
-    // is handed back rather than left on the GPU behind it.
-    if (p.booth.groundAsset) this.surfaces.release(GROUND_CONSUMER);
-    if (p.booth.groundAsset) this.texture(p.booth.groundAsset).then(t => {
+    // A photograph is showing, so the texture set the ground was holding is
+    // handed back rather than left on the GPU behind it.
+    if (groundPhoto) this.surfaces.release(GROUND_CONSUMER);
+    if (groundPhoto) this.texture(groundPhoto).then(t => {
       if (this.revision !== rev) return;
       const floor = this.group.getObjectByName("environment-ground"), map = t.clone();
       map.mapping = T.UVMapping;
@@ -689,19 +717,8 @@ export class BoothScene {
       );
       wallMesh.userData.wall = wall;
       this.wallObjects.push(wallMesh);
-      // The same blue outline artwork gets, for the same reason: a free-standing
-      // wall is a thing you pick up, and it has to say when it is the thing the
-      // sliders and the mouse are about to move.
-      if (wall === this.selectedPanel) {
-        const edge = new T.LineSegments(
-          new T.EdgesGeometry(wallMesh.geometry),
-          new T.LineBasicMaterial({ color: "#78b4ff" }),
-        );
-        edge.position.copy(wallMesh.position);
-        edge.scale.set(1.004, 1.004, 1.2);
-        edge.userData.editorOnly = true;
-        g.add(edge);
-      }
+      // The blue outline it gets when selected is drawn by applySelection(),
+      // so that picking a wall does not rebuild the scene to show it.
       // A fabric pro-panel finish: the weave, not the carpet's own colour. The
       // user picked that colour and this is a tool for judging artwork against
       // it, so only the relief and the sheen are taken and `keepColor` leaves
@@ -771,6 +788,9 @@ export class BoothScene {
       );
       box.userData.artId = a.id;
       this.artObjects.push(box);
+      // applySelection() outlines this box and places the handles against the
+      // size it was built at, since the group carries the live scale.
+      this.artGroups.get(a.id).box = box;
       let iw = a.w,
         ih = a.h;
       const asset = p.assets[a.asset];
@@ -819,24 +839,6 @@ export class BoothScene {
             }
           })
           .catch(() => {});
-      }
-      if (a.id === selected) {
-        const edge = new T.LineSegments(
-          new T.EdgesGeometry(box.geometry),
-          new T.LineBasicMaterial({ color: "#78b4ff" }),
-        );
-        edge.scale.set(1.007, 1.007, 1.007);
-        art.add(edge);
-        this.selectionEdge = edge;
-        if (this.scaleId === a.id) {
-          for (const [sx, sy] of [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]]) {
-            const handle = new T.Mesh(new T.SphereGeometry(.045, 16, 10),
-              new T.MeshBasicMaterial({color:"#91beff"}));
-            handle.position.set(sx*a.w*IN/2, sy*a.h*IN/2, a.thickness*IN/2 + .008);
-            handle.userData = {artId:a.id, editorOnly:true, sx, sy, stretch: sx === 0 || sy === 0};
-            handle.renderOrder = 10; art.add(handle); this.resizeHandles.push(handle);
-          }
-        }
       }
     }
     const fixtures = showFixtures(p.booth.fixtures, p.booth.envPreset, p.booth.venue);
@@ -925,10 +927,85 @@ export class BoothScene {
         }) || applied;
       if (applied) this.renderer.shadowMap.needsUpdate = true;
     }).catch(() => {});
+    this.applySelection();
     if (!this.initialized) {
       this.initialized = true;
       this.setView("perspective");
     }
+  }
+  /**
+   * Selection visuals, and nothing else: the blue outline on a work, its eight
+   * scale handles, and the outline a free-standing wall or a pedestal gets.
+   * Selecting used to go through `update()`, which disposes and rebuilds the
+   * scene — every wall, every texture, the HDRI — so a double-click on a
+   * picture cost a full rebuild before the handles appeared. It is the same
+   * rule `movePanel` follows: a rebuild is for a change of what is in the
+   * scene, not for a change of what is selected.
+   */
+  setSelection(selected, selectedPanel = null, selectedPedestal = null) {
+    this.selected = selected;
+    this.selectedPanel = findPanel(this.p, selectedPanel) ? selectedPanel : null;
+    this.selectedPedestal = findPedestal(this.p, selectedPedestal) ? selectedPedestal : null;
+    if (this.scaleId !== selected) this.scaleId = null;
+    this.applySelection();
+  }
+  /** Redraw the outlines from the current selection. Cheap and idempotent. */
+  applySelection() {
+    for (const object of this.selectionObjects || []) {
+      object.parent?.remove(object);
+      object.geometry?.dispose();
+      object.material?.dispose();
+    }
+    this.selectionObjects = [];
+    this.resizeHandles = [];
+    const outline = (geometry, parent) => {
+      const edge = new T.LineSegments(
+        geometry,
+        new T.LineBasicMaterial({ color: "#78b4ff" }),
+      );
+      edge.userData.editorOnly = true;
+      parent.add(edge);
+      this.selectionObjects.push(edge);
+      return edge;
+    };
+    this.selectionEdge = null;
+    const entry = this.selected && this.artGroups.get(this.selected);
+    const a = entry && this.p.art.find((x) => x.id === this.selected);
+    if (entry?.box && a) {
+      this.selectionEdge = outline(new T.EdgesGeometry(entry.box.geometry), entry.group);
+      this.selectionEdge.scale.set(1.007, 1.007, 1.007);
+      if (this.scaleId === a.id) {
+        for (const [sx, sy] of [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]]) {
+          const handle = new T.Mesh(new T.SphereGeometry(.045, 16, 10),
+            new T.MeshBasicMaterial({color:"#91beff"}));
+          // The group carries the work's scale, so the handles are placed in
+          // the unscaled geometry the box was built at.
+          handle.position.set(sx*entry.initial.w*IN/2, sy*entry.initial.h*IN/2, entry.initial.thickness*IN/2 + .008);
+          handle.userData = {artId:a.id, editorOnly:true, sx, sy, stretch: sx === 0 || sy === 0};
+          handle.renderOrder = 10;
+          entry.group.add(handle);
+          this.selectionObjects.push(handle);
+          this.resizeHandles.push(handle);
+        }
+      }
+    }
+    const wallMesh = this.wallObjects.find((m) => m.userData.wall === this.selectedPanel);
+    if (this.selectedPanel && wallMesh?.parent) {
+      const edge = outline(new T.EdgesGeometry(wallMesh.geometry), wallMesh.parent);
+      edge.position.copy(wallMesh.position);
+      edge.scale.set(1.004, 1.004, 1.2);
+    }
+    const ped = this.selectedPedestal && findPedestal(this.p, this.selectedPedestal);
+    const pedFrame = ped && this.pedestalFrames[ped.id];
+    if (pedFrame) {
+      const edge = outline(
+        new T.EdgesGeometry(new T.BoxGeometry(ped.width * IN, ped.height * IN, ped.depth * IN)),
+        pedFrame,
+      );
+      edge.position.set(0, (ped.height * IN) / 2, 0);
+      edge.scale.setScalar(1.02);
+    }
+    this.renderFrame();
   }
   /**
    * The light bar and its heads. Nine directional fixtures spotting the three
@@ -1047,16 +1124,6 @@ export class BoothScene {
       );
       top.userData.pedestal = ped.id;
       this.pedestalObjects.push(top);
-      if (ped.id === this.selectedPedestal) {
-        const edge = new T.LineSegments(
-          new T.EdgesGeometry(new T.BoxGeometry(w, h, d)),
-          new T.LineBasicMaterial({ color: "#78b4ff" }),
-        );
-        edge.position.set(0, h / 2, 0);
-        edge.scale.setScalar(1.02);
-        edge.userData.editorOnly = true;
-        g.add(edge);
-      }
     }
   }
   /**
@@ -1071,7 +1138,7 @@ export class BoothScene {
     const g = this.pedestalFrames[ped.id];
     if (!g) return;
     placePedestal(g, ped);
-    this.renderer.shadowMap.needsUpdate = true;
+    this.touchShadows();
   }
   /** The pedestal under the pointer, or null. Artwork and walls win the pick. */
   pickPedestal() {
@@ -1108,7 +1175,7 @@ export class BoothScene {
     if (a.stretch && entry.plane) {
       entry.plane.scale.set(initial.w / entry.imageWidth, initial.h / entry.imageHeight, 1);
     }
-    this.renderer.shadowMap.needsUpdate = true;
+    this.touchShadows();
   }
   setView(view) {
     this.view = view;
@@ -1221,7 +1288,7 @@ export class BoothScene {
     const frame = this.frames["panel:" + panel.id];
     if (!frame) return;
     placePanelFrame(frame, panel);
-    this.renderer.shadowMap.needsUpdate = true;
+    this.touchShadows();
   }
   wallDrop(e, a) {
     this.point(e); this.group.updateMatrixWorld(true);
@@ -1348,7 +1415,16 @@ export class BoothScene {
       c.setPointerCapture(e.pointerId);
       this.onSelect(id);
     }, true);
+    // A high-rate mouse or trackpad fires several pointermove events per
+    // displayed frame, and each one here raycasts, restands the thing being
+    // dragged and re-renders its shadows. Only the last one before a frame is
+    // drawn can be seen, so the rest is work thrown away: the event is stored
+    // and applied once, from the render loop.
     c.addEventListener("pointermove", e => {
+      if (!this.drag) return;
+      this.pendingMove = e;
+    });
+    this.applyDrag = (e) => {
       if (!this.drag) return;
       this.point(e);
       if (this.drag.key) {
@@ -1392,10 +1468,14 @@ export class BoothScene {
           x:Math.round((local.x/IN-d.dx)/grid)*grid,
           y:Math.round((local.y/IN-d.dy)/grid)*grid}));
       }
-    });
+    };
     c.addEventListener("pointerup", e => {
       if (this.drag) {
+        // The last move still pending has to land before the drag ends, or a
+        // quick flick finishes an inch short of where it was released.
+        this.flushDrag();
         this.drag = null; this.down = null; this.controls.enabled = true;
+        this.settleShadows();
         if (c.hasPointerCapture(e.pointerId)) c.releasePointerCapture(e.pointerId);
         this.onEnd();
         return;

@@ -20,7 +20,12 @@ export function blankProject() {
       // an exhibition hall around it. Optional, so a schema-1 backup written
       // before it existed loads as the outdoor booth it was.
       venue: "outdoor",
+      // The floor: either a shipped kind or "upload:<asset id>", one choice
+      // from one list. See GROUND_KINDS below for why it holds both.
       ground: "studio",
+      // The kind to come back to when an uploaded ground is deleted. Optional,
+      // and only ever a preset kind.
+      groundPreset: "studio",
       horizon: "studio",
       neighbors: false,
       neighborLayout: "inline",
@@ -209,6 +214,7 @@ export function applyVenue(p, venue) {
     // A hall has a roof of its own; a canopy indoors is a contradiction.
     b.tent = false;
     b.ground = "studio";
+    b.groundPreset = "studio";
     b.horizon = "studio";
     // The neutral studio environment, not whatever photographed hall was
     // selected before. An HDRI of a warehouse or an outdoor art fair behind a
@@ -372,6 +378,76 @@ export function mismatch(p, a) {
       0.015
   );
 }
+// The floor is one choice from two groups: the six shipped PBR kinds, and the
+// user's own photographs. `booth.ground` holds either — a kind, or
+// "upload:<asset id>" — which is the widened-enum move `a.wall` uses in
+// WALLS_PHASE.md. Before this an upload sat in `booth.groundAsset` and
+// silently outranked the kind, so picking Grass appeared to do nothing; that
+// was two different things competing for one slot, and it was reported as a
+// broken dropdown three times. `booth.groundAsset` is still read — see
+// groundUpload and adoptGroundAsset — and the floor it names is never dropped.
+export const GROUND_KINDS = ["studio", "grass", "concrete", "asphalt", "carpet", "wood"];
+export const GROUND_UPLOAD = "upload:";
+const uploadRef = (value) =>
+  typeof value === "string" && value.startsWith(GROUND_UPLOAD)
+    ? value.slice(GROUND_UPLOAD.length)
+    : null;
+/** The asset id of the photograph covering the floor, or null for a kind. */
+export function groundUpload(p) {
+  const chosen = uploadRef(p.booth?.ground);
+  // An id with no asset behind it is not a floor; groundKind then answers.
+  if (chosen && p.assets?.[chosen]) return chosen;
+  // A backup read straight into the scene without passing through
+  // adoptGroundAsset still shows the photograph it was saved with.
+  const legacy = p.booth?.groundAsset;
+  return legacy && p.assets?.[legacy] ? legacy : null;
+}
+/** The shipped kind to draw, or null while a photograph covers the floor. */
+export function groundKind(p) {
+  if (groundUpload(p)) return null;
+  for (const value of [p.booth?.ground, p.booth?.groundPreset])
+    if (GROUND_KINDS.includes(value)) return value;
+  return "studio";
+}
+/** The user's uploaded grounds, as the picker's second group. */
+export const groundLibrary = (p) =>
+  Object.entries(p.assets || {})
+    .filter(([, asset]) => asset?.role === "ground")
+    .map(([id, asset]) => ({ id, name: asset.name || "Ground photograph" }));
+/** Choose a floor: a kind, or "upload:<asset id>". */
+export function selectGround(p, value) {
+  const upload = uploadRef(value);
+  if (upload) {
+    if (p.assets?.[upload]) p.booth.ground = GROUND_UPLOAD + upload;
+    return;
+  }
+  if (!GROUND_KINDS.includes(value)) return;
+  p.booth.ground = value;
+  p.booth.groundPreset = value;
+}
+/** Delete a library entry, falling back to the last preset if it was showing. */
+export function removeGroundUpload(p, assetId) {
+  if (p.assets?.[assetId]?.role !== "ground") return;
+  // Shared with a placement — only the floor's claim on it is given up.
+  if (!p.art.some((a) => a.asset === assetId) && p.photo?.asset !== assetId)
+    delete p.assets[assetId];
+  if (p.booth.groundAsset === assetId) p.booth.groundAsset = null;
+  if (uploadRef(p.booth.ground) === assetId)
+    p.booth.ground = GROUND_KINDS.includes(p.booth.groundPreset)
+      ? p.booth.groundPreset
+      : "studio";
+}
+/** Read an older backup's single ground override as the first library entry. */
+export function adoptGroundAsset(p) {
+  const id = p.booth?.groundAsset;
+  if (!id || !p.assets?.[id]) return p;
+  p.assets[id].role = "ground";
+  if (GROUND_KINDS.includes(p.booth.ground) && p.booth.groundPreset === undefined)
+    p.booth.groundPreset = p.booth.ground;
+  p.booth.ground = GROUND_UPLOAD + id;
+  p.booth.groundAsset = null;
+  return p;
+}
 export const MAX_PANELS = 8;
 const finite = (n, min, max) =>
   typeof n === "number" && Number.isFinite(n) && n >= min && n <= max;
@@ -404,9 +480,19 @@ export function validateProject(p) {
     typeof p.booth.tent !== "boolean"
   )
     fail();
-  for (const [key, values] of Object.entries({tentStyle:["classic","peak","barrel","dome"],ground:["studio","grass","concrete","asphalt","carpet","wood"],horizon:["studio","open","park","urban"],wallFinish:["smooth","fabric"]})) {
+  for (const [key, values] of Object.entries({tentStyle:["classic","peak","barrel","dome"],horizon:["studio","open","park","urban"],wallFinish:["smooth","fabric"]})) {
     if (p.booth[key] !== undefined && !values.includes(p.booth[key])) fail();
   }
+  // A kind, or an upload id that names an asset actually in this backup.
+  if (
+    p.booth.ground !== undefined &&
+    !GROUND_KINDS.includes(p.booth.ground) &&
+    !(typeof p.booth.ground === "string" &&
+      p.booth.ground.startsWith(GROUND_UPLOAD) &&
+      p.assets[p.booth.ground.slice(GROUND_UPLOAD.length)])
+  )
+    fail();
+  if (p.booth.groundPreset !== undefined && !GROUND_KINDS.includes(p.booth.groundPreset)) fail();
   if (p.booth.neighbors !== undefined && typeof p.booth.neighbors !== "boolean") fail();
   if (p.booth.venue !== undefined && !["outdoor", "artshow"].includes(p.booth.venue)) fail();
   // The panel module, the light bar and the hall are all optional records.
@@ -605,7 +691,9 @@ export function validateProject(p) {
     )
       fail();
   }
-  return p;
+  // Normalisation, after everything above has been checked: an older backup's
+  // single ground override becomes an ordinary entry in the library.
+  return adoptGroundAsset(p);
 }
 export const escapeHTML = (s) =>
   String(s).replace(

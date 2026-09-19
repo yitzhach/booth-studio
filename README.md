@@ -26,7 +26,9 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 - Two booth venues. The **Art show** tool switches the booth to an indoor convention booth: seamless white pro-panel walls (144″ back, 120″ sides, 144″ tall by default), no canopy, a light bar across the front carrying nine directional heads that spot each wall, and an optional white exhibition hall with 30 ft ceilings and neighbouring booths. Booth dimensions, wall dimensions and the individual display panel (38″ by default) are all typed in inches, and the walls can be rebuilt from the panel module. See `ART_SHOW_PHASE.md`.
 - The **Walls** tool holds everything that stands on the booth floor: free-standing display walls, and pedestals (44″ × 12″ × 12″ by default, solid top, for cards, a tablet or a guest book). Double-click a pedestal in the booth to pick it up, then drag it across the floor or use its sliders. Both are measured in inches from the centre of the floor.
 - Environment presets light the booth from an HDRI and can supply a photographed backdrop; without those files a preset keeps the procedural surroundings. See `docs/HDRI-ASSETS.md`.
-- Ground surfaces (studio, grass, concrete, asphalt, carpet, wood) use real PBR texture sets when their files are present, tiled from the surface's real-world size; otherwise the procedural canvas ground. See `docs/TEXTURE-ASSETS.md`.
+- Ground surfaces (studio, grass, concrete, asphalt, carpet, wood) use real PBR texture sets when their files are present, tiled from the surface's real-world size; otherwise the procedural canvas ground. See `docs/TEXTURE-ASSETS.md`. Your own
+  top-down photographs join the same picker as a second group and are chosen
+  the same way; selecting a preset always switches the floor back.
 - Dragging artwork snaps to 1 inch by default; the Snap 1″ toolbar button turns it off for fine placement.
 - Perspective orbit reaches ground level for low looking-up views; the floor plane, not a fixed angle, is the limit.
 - Urban horizon builds a seeded three-ring skyline with textured facades, lit windows, setbacks and rooftop clutter.

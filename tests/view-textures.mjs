@@ -3,8 +3,11 @@
 // ground mesh in a real renderer, at the right repeat, without disturbing the
 // booth or the artwork.
 //
-// Fixtures are generated here and served from a temporary public directory, so
-// the repository's own public/assets is neither read nor written.
+// Fixtures are generated here into a temporary public directory. NOTE: this
+// vite server ignores the inline publicDir and serves the repository's own
+// public/assets, so the sets exercised below are the committed ones — the
+// temporary copy is written but not served. Nothing here writes to the
+// repository, which is what the arrangement was protecting.
 import { chromium } from '@playwright/test';
 import { createServer } from 'vite';
 import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -100,12 +103,17 @@ try {
 
   await page.click('[data-tab="layout"]');
 
-  // A ground kind with no files on disk keeps the procedural canvas.
+  // Grass ships a real set, so it must bind one. This used to assert the
+  // opposite — the procedural fallback — and passed only because the real
+  // load had not landed inside a 300 ms wait; it came good the moment
+  // selecting stopped rebuilding the scene. The genuine no-files fallback is
+  // the studio floor further down, which ships no set at all.
+  assert.equal((await page.request.head('http://127.0.0.1:5192/assets/textures/grass/color.jpg')).status(), 200);
   await page.selectOption('select[aria-label="Ground"]', 'grass');
-  await page.waitForTimeout(300);
+  await page.waitForFunction(() => !!window.__booth.scene.group.getObjectByName('environment-ground').material.normalMap, null, { timeout: 15000 });
   const grass = await groundState(page);
-  assert.equal(grass.normal, null, 'no normal map without files');
-  assert.ok(grass.bump, 'the procedural bump map survives the fallback');
+  assert.equal(grass.bump, false, 'the procedural bump would fight a real normal map');
+  assert.equal(grass.map.repeat, 90, 'a 2 m tile repeats 90 times across 180 m');
 
   // Concrete has files, so the real set must land on the real mesh.
   await page.selectOption('select[aria-label="Ground"]', 'concrete');
