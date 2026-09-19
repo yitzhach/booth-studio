@@ -15,11 +15,13 @@ Extend it; do not rebuild it.
   pole limit, people for scale, indoor fixture hiding, the Ken Burns move, the
   Video tab with its batch list and the overhead lens flare are all on `main`
   and live.
-- **Unmerged, on `claude/confident-noether-xafmqn`:** the ground library, and
-  then the four fixes below it — selection without a rebuild, the drag
-  smoothing, the artwork position sliders, and the hall switching off in a
-  photographed environment. Merging that branch is the deploy, and **item 1
-  of Next cannot be judged until it is merged.**
+- **Merged and deployed 2026-09-19, later the same day:** the ground library,
+  selection without a rebuild, the drag smoothing, the artwork position
+  sliders, the hall switching off in a photographed environment, and the
+  light bar's controls repeated in Lighting. Nothing is sitting unmerged on a
+  branch. **Check `window.BOOTH_BUILD` against the commit before believing a
+  fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
+  twice been reported as not working while the build was still running.
 - The photoreal phase (`PBR_PHASE.md`) is done through Phase 4: HDRI lighting,
   PBR ground surfaces, the tent canvas and a fabric wall finish. Assets are
   committed and live. `public/assets` is 28 MB of a ~50 MB budget.
