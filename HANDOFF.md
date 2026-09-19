@@ -10,9 +10,10 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-18** — the art-show booth, the pedestals, the two
-  new tools and the light-bar diffusion slider are all on `main` and live.
-  Nothing is sitting unmerged on a branch.
+- **Last deploy: 2026-09-19** — the art-show booth, the pedestals, the two new
+  tools, the light-bar diffusion slider, the backdrop pole limit, people for
+  scale, indoor fixture hiding and the Ken Burns move are all on `main` and
+  live. Nothing is sitting unmerged on a branch.
 - The photoreal phase (`PBR_PHASE.md`) is done through Phase 4: HDRI lighting,
   PBR ground surfaces, the tent canvas and a fabric wall finish. Assets are
   committed and live. `public/assets` is 28 MB of a ~50 MB budget.
@@ -100,7 +101,19 @@ Extend it; do not rebuild it.
    - Whether the hall reads as a hall, and whether a seamless white wall wants
      the fabric finish on (`wallFinish: "fabric"` works on an art-show booth).
    `ART_SHOW_PHASE.md` says which knob to turn first for each.
-2. **The two shipped backdrops are 1024×512 and read soft.** This is the one
+2. **Two reports could not be reproduced, and need numbers from the machine
+   that saw them.** "Ground textures — grass, concrete — do not show up, just
+   the background" and "the tent frame showed but not the fabric". On `main`,
+   in a real browser here, all six ground kinds load, bind and render
+   distinctly (grass comes out green in a screenshot) and every tent style
+   draws its canvas. The third report from the same round — the backdrop
+   filling the top of the frame as a smear — **was** reproduced and is fixed;
+   see the pole limit above. For the other two, get `window.BOOTH_ASSETS` and
+   `window.BOOTH_BUILD` from the browser seeing it before touching code: the
+   two known causes are an uploaded ground photograph outranking the ground
+   kind (item 7) and a stale deploy, and neither is visible from the
+   repository. Both look exactly like a broken dropdown.
+3. **The two shipped backdrops are 1024×512 and read soft.** This is the one
    open bug with a known fix. Both were prepped from Poly Haven's **1K** HDRI,
    and `tools/hdri-prep.mjs` will not stretch a backdrop past its source. Re-prep
    from the **4K** download and the softness goes:
@@ -111,14 +124,21 @@ Extend it; do not rebuild it.
    **No agent session can do this** — polyhaven.com is refused by the sandbox
    egress proxy, as is the workers.dev production host. It needs a human with a
    browser. `docs/HDRI-ASSETS.md` is step by step.
-3. **H.264 output is unverified on real hardware.** Open Chromium builds ship no
+4. **H.264 output is unverified on real hardware.** Open Chromium builds ship no
    H.264 *encoder*, so every sandbox run exercises the VP9 fallback instead.
    That does prove the whole encoder-to-muxer pipeline with real encoder bytes,
    and mp4box.js validated the container — but nobody has opened an
    `avc1`/`avcC` file from Chrome or Safari in QuickTime. If a clip will not
    play, start here.
-4. **Unverified on real hardware** — things no one has confirmed by eye,
+5. **Unverified on real hardware** — things no one has confirmed by eye,
    because no agent session can load the live site:
+   - **Nobody has looked at a figure standing in a booth**, at the backdrop
+     zoomed wide after the pole limit landed, or at a Ken Burns clip. The
+     figures' heights are pinned in metres by a test that reads the meshes
+     back, and the pole limit is pinned against the arithmetic it comes from,
+     so those are not guesses; how a stylised mannequin reads beside real
+     artwork, and whether 52° is the right place to stop widening, are
+     judgements made on renders in a sandbox.
    - **Nobody has looked at an art-show booth.** See item 1 — it is the whole
      of that item. The measurements are pinned by tests that read the meshes
      back and the nine spotlights are checked against the arithmetic that
@@ -150,20 +170,22 @@ Extend it; do not rebuild it.
      `canvas` is a one-line change to a finer weave.
    - Is the tent weave visible? Its relief is exaggerated 3x (`TENT_WEAVE`)
      because a true-depth weave on a white roof washes out.
-5. **A `home` HDRI** is still missing — an interior with windows on one side.
+6. **A `home` HDRI** is still missing — an interior with windows on one side.
    That preset falls back procedurally until someone downloads one.
-6. **Two ground-texture sets — presets and a user-uploaded library.** Requested
+7. **Two ground-texture sets — presets and a user-uploaded library.** Requested
    after an upload was found to override the preset picker, which is today's
    design and reads as a broken dropdown. Planned in `FUTURE_BUILD.md`; not
    started. **This is the most likely explanation of any "the ground texture
-   does nothing" report** — check `booth.groundAsset` before the loader.
-7. **Figures are stylised mannequins.** No faces, no clothing, mid-grey. If
+   does nothing" report** — check `booth.groundAsset` before the loader, and
+   see item 2.
+8. **Figures are stylised mannequins.** No faces, no clothing, mid-grey. If
    they need to read as a crowd rather than as scale references, that is a
    different asset and a different phase.
 
 Free-standing walls — placement, art on both faces, and now click-and-drag
-with sliders — custom video mode, and the indoor art-show booth are **done**
-and are no longer on this list; see Now.
+with sliders — custom video mode with its keyframe timeline, fades and
+tracking lens flare, the Ken Burns move, people for scale, and the indoor
+art-show booth are **done** and are no longer on this list; see Now.
 
 ## Diagnosing "the texture isn't showing"
 
