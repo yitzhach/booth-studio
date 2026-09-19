@@ -80,3 +80,27 @@ export function flareSource(lights) {
   if (!Array.isArray(lights) || !lights.length) return null;
   return lights.reduce((best, l) => ((l?.power ?? 0) > (best?.power ?? -1) ? l : best), null) || null;
 }
+
+// The unseen source: 20 feet over the centre of the booth, standing in for the
+// sun or a hall's high bay. Nothing is drawn there and nothing is lit by it —
+// it exists only to say where the flare comes from, which is why it can sit in
+// a booth with no spotlights at all and why it does not touch the render's
+// exposure. Inches, like every other measurement in this app.
+export const OVERHEAD = { x: 0, y: 240, z: 0 };
+export const FLARE_SOURCES = {
+  overhead: "Overhead · unseen light 20 ft up",
+  spot: "Brightest spotlight",
+};
+export const DEFAULT_FLARE_SOURCE = "overhead";
+export const resolveFlareSource = (id) => (FLARE_SOURCES[id] ? id : DEFAULT_FLARE_SOURCE);
+
+/**
+ * Where the flare comes from, in inches, for either kind of source. Returns
+ * null only when a spotlight was asked for and there is none — the overhead
+ * source is always there, which is the point of it.
+ */
+export function flareOrigin(source, lights) {
+  if (resolveFlareSource(source) === "overhead") return { ...OVERHEAD };
+  const light = flareSource(lights);
+  return light ? { x: light.x, y: light.y, z: light.z } : null;
+}

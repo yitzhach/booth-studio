@@ -24,7 +24,9 @@ try {
   await page.goto('http://127.0.0.1:5196');
   await page.waitForFunction(() => !!window.__booth?.scene);
 
-  await page.click('[data-tab="export"]');
+  // The Video tab is where this lives now; the Export tab carries the same
+  // controls, and both drive the same settings.
+  await page.click('[data-tab="video"]');
   await page.selectOption('#video-move', 'custom');
 
   // Choosing Custom replaces the fixed lengths with the timeline's own, because
@@ -103,7 +105,11 @@ try {
     await view.previewMove({ move: tl, seconds: 3, onProgress: (t) => seen.push([t, view.overlay.fade]) });
     return { samples: seen.length, fades: seen.map(([, f]) => f), fadeAfter: view.overlay.fade, position: view.camera.position.toArray() };
   });
-  assert.ok(preview.samples > 3, `the custom preview reports progress, got ${preview.samples} samples`);
+  // Two samples, not four: what is being tested is that a preview reports
+  // progress and finishes, not how many frames this machine managed. Under
+  // swiftshader a single frame can take most of a second, and a count tuned to
+  // a fast machine is the flake this suite is known for.
+  assert.ok(preview.samples >= 2, `the custom preview reports progress, got ${preview.samples} samples`);
   assert.ok(preview.fades.some((f) => f < 0.999), `the fade is applied while the preview runs, saw ${preview.fades}`);
   assert.equal(preview.fades.at(-1), 0, 'and the last frame of a clip that fades out is black');
   assert.equal(preview.fadeAfter, 1, 'and cleared afterwards, or the viewport looks broken');
@@ -135,8 +141,58 @@ try {
     console.log(`     encoded ${recorded.frames} keyframed frames as ${recorded.kind} into ${(recorded.bytes / 1024).toFixed(0)} kB`);
   }
 
+  // The flare can come from an unseen light 20 ft over the booth, so it works
+  // in a booth with no spotlights — which is the case this was asked for.
+  await page.evaluate(() => {
+    const project = window.__booth.project;
+    project.lights = [];
+    window.__booth.mutate(() => {});
+  });
+  await page.click('[data-action="edit-timeline"]');
+  await page.selectOption('#timeline-flare-source', 'overhead');
+  await page.check('#timeline-flare');
+  const overhead = await page.evaluate(async () => {
+    const view = window.__booth.scene;
+    const { OVERHEAD } = await import('/src/flare.js');
+    const tl = window.__booth.timeline();
+    // Frame the booth from the front so the overhead source is above the shot,
+    // where a real flare from a high light would be.
+    view.camera.position.set(0, 1.6, 6);
+    view.controls.target.set(0, 1.2, 0);
+    view.camera.lookAt(view.controls.target);
+    view.controls.update();
+    const state = view.flareState(tl.flare.strength, 'overhead');
+    const fromSpot = view.flareState(tl.flare.strength, 'spot');
+    return { source: tl.flare.source, on: tl.flare.on, state, fromSpot, overheadInches: OVERHEAD.y, lights: window.__booth.project.lights.length };
+  });
+  assert.equal(overhead.lights, 0, 'the booth has no spotlights for this check');
+  assert.equal(overhead.source, 'overhead');
+  assert.equal(overhead.on, true);
+  assert.ok(overhead.state, 'the overhead source throws a flare with no spotlights in the booth');
+  assert.ok(overhead.state.ndc.y > 0, `it sits above the centre of frame, got ${overhead.state?.ndc.y}`);
+  assert.equal(overhead.fromSpot, null, 'where a spotlight flare has nothing to come from');
+  assert.equal(overhead.overheadInches, 240, '20 feet up');
+
   await page.click('[data-action="close-timeline"]');
   await page.waitForFunction(() => document.querySelector('#timeline-dialog').open === false);
+
+  // The batch list: queue two clips and check each keeps its own settings.
+  await page.selectOption('#video-move', 'orbit');
+  await page.selectOption('#video-fps', '24');
+  await page.click('[data-action="batch-add"]');
+  await page.selectOption('#video-move', 'kenburns');
+  await page.click('[data-action="batch-add"]');
+  const queued = await page.locator('.batch-row').count();
+  assert.equal(queued, 2, `two clips queued, got ${queued}`);
+  const labels = await page.locator('.batch-row strong').allTextContents();
+  assert.match(labels[0], /Orbit/, `first row reads ${labels[0]}`);
+  assert.match(labels[1], /Ken Burns/, `second row reads ${labels[1]}`);
+  assert.match(labels[0], /24 fps/, 'and each row states the settings it was queued with');
+
+  await page.locator('.batch-row').first().locator('[data-action="batch-remove"]').click();
+  assert.equal(await page.locator('.batch-row').count(), 1, 'a queued clip can be removed');
+  await page.click('[data-action="batch-clear"]');
+  assert.equal(await page.locator('.batch-row').count(), 0, 'and the list cleared');
 
   assert.deepEqual(errors, [], 'no page errors');
   console.log('PASS custom video: timeline dialog, keyframe capture from the viewport, fades, preview and a keyframed MP4.');

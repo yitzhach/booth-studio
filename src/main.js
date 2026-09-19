@@ -8,6 +8,7 @@ import {
 import { SIZES, DEFAULT_SIZE, FPS, DEFAULT_FPS, videoSupported, pickCodec } from "./video.js";
 import { applyImageEdits, DEFAULT_IMAGE_EDITS, normalizeImageEdits } from "./image-edit.js";
 import { PEOPLE, MAX_PEOPLE, MIN_HEIGHT, MAX_HEIGHT, newPerson, personHeight } from "./people.js";
+import { FLARE_SOURCES, DEFAULT_FLARE_SOURCE, OVERHEAD } from "./flare.js";
 import "@fontsource/dm-sans/400.css";
 import "@fontsource/dm-sans/500.css";
 import "@fontsource/dm-sans/600.css";
@@ -170,6 +171,11 @@ async function boot() {
     // other video setting this is view state: it is not saved with the booth,
     // is not in the undo history and does not touch schema 1.
     videoTimeline = null,
+    // The batch list: clips queued with the settings they were queued with, so
+    // a list built over ten minutes of composing still renders what was asked
+    // for rather than whatever the panel says when Export all is pressed.
+    videoBatch = [],
+    videoBatchAt = -1,
     videoSeconds = MOVES[DEFAULT_MOVE].seconds,
     videoFps = DEFAULT_FPS,
     videoSize = DEFAULT_SIZE,
@@ -211,7 +217,7 @@ async function boot() {
   selected = p.art[0]?.id;
   document.querySelector("#app").innerHTML =
     `<header><a class="brand" href="#" aria-label="Booth Studio">${icon("box")}<span>Artist OS</span></a><span class="app-badge">Booth Studio</span><div class="project"><input id="project-name" aria-label="Project name" maxlength="120" value="${e(p.name)}"/>${icon("chevron-down")}</div><div class="save-status" id="save-status" role="status">Opening…</div>${btn("help", "Help", "help-circle", "icon-only")}<div class="avatar">IA</div></header>
-<div class="workspace"><aside class="library" id="library"></aside><main class="editor"><div class="toolbar"><div class="toolgroup">${btn("select", "Select", "mouse-pointer-2", "active")}${btn("move", "Move", "move")}${btn("snap", "Snap 1″", "grid-2x2", "active")}</div><div class="toolgroup">${btn("undo", "Undo", "undo-2", "icon-only")}${btn("redo", "Redo", "redo-2", "icon-only")}</div><div class="mode-switch"><button data-action="mode-3d">3D booth</button><button data-action="mode-photo">Photo</button></div>${btn("export-tab", "Export", "download", "export-top")}</div><div class="viewport"><div id="scene"></div><div id="photo" hidden></div><div class="scene-label"><span class="eyebrow" id="mode-label">MEASURED WORKSPACE</span><strong id="scene-title"></strong><span id="scene-subtitle"></span></div><div id="photo-empty" hidden><div>${icon("image-plus")}<h2>Start with your booth shot</h2><p>Add artwork and adjust its four corners to match the wall perspective.</p>${btn("upload-photo", "Upload booth photo", "plus", "primary")}</div></div><div class="viewport-bottom"><div class="view-switch" id="view-switch"><button data-view="perspective" class="active">Perspective</button><button data-view="back">Back</button><button data-view="left">Left</button><button data-view="right">Right</button><button data-view="plan">Plan</button></div><div class="zoom-controls"><span class="zoom-label">Zoom</span>${btn("zoom-out", "Zoom out", "minus", "icon-only")}${btn("zoom-in", "Zoom in", "plus", "icon-only")}${btn("reset-view", "Reset view", "rotate-ccw", "icon-only")}</div></div></div><div class="statusbar"><span id="gesture-hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</span><span id="selection-status"></span></div></main><aside class="inspector"><div class="inspector-tabs">${["art", "layout", "show", "walls", "lighting", "export"].map((t, i) => `<button data-tab="${t}">${icon(["image", "layout-panel-left", "building-2", "columns-2", "lightbulb", "download"][i])}<span>${["Artwork", "Layout", "Art show", "Walls", "Lighting", "Export"][i]}</span></button>`).join("")}</div><div id="inspector-content"></div></aside></div><footer><span class="footer-brand">${icon("box")} BOOTH STUDIO <small>Prototype 01</small><small id="build-stamp" title="Version ${BUILD.version} · built ${BUILD.time} · commit ${BUILD.commit}">v${BUILD.version} · ${BUILD.short} UTC · ${BUILD.commit}</small></span><span>Your images. Your space. Your arrangement.</span><span id="network">Local workspace</span></footer><input type="file" id="art-input" accept="image/jpeg,image/png" multiple hidden/><input type="file" id="replace-input" accept="image/jpeg,image/png" hidden/><input type="file" id="photo-input" accept="image/jpeg,image/png" hidden/><input type="file" id="surround-input" accept="image/jpeg,image/png" hidden/><input type="file" id="ground-input" accept="image/jpeg,image/png" hidden/><input type="file" id="backup-input" accept=".json,.booth" hidden/><div id="toast" role="status"></div><dialog id="dialog"><div id="dialog-content"></div></dialog><dialog id="image-editor"><div id="image-editor-content"></div></dialog><dialog id="timeline-dialog" class="timeline-dialog"><div id="timeline-content"></div></dialog>`;
+<div class="workspace"><aside class="library" id="library"></aside><main class="editor"><div class="toolbar"><div class="toolgroup">${btn("select", "Select", "mouse-pointer-2", "active")}${btn("move", "Move", "move")}${btn("snap", "Snap 1″", "grid-2x2", "active")}</div><div class="toolgroup">${btn("undo", "Undo", "undo-2", "icon-only")}${btn("redo", "Redo", "redo-2", "icon-only")}</div><div class="mode-switch"><button data-action="mode-3d">3D booth</button><button data-action="mode-photo">Photo</button></div>${btn("export-tab", "Export", "download", "export-top")}</div><div class="viewport"><div id="scene"></div><div id="photo" hidden></div><div class="scene-label"><span class="eyebrow" id="mode-label">MEASURED WORKSPACE</span><strong id="scene-title"></strong><span id="scene-subtitle"></span></div><div id="photo-empty" hidden><div>${icon("image-plus")}<h2>Start with your booth shot</h2><p>Add artwork and adjust its four corners to match the wall perspective.</p>${btn("upload-photo", "Upload booth photo", "plus", "primary")}</div></div><div class="viewport-bottom"><div class="view-switch" id="view-switch"><button data-view="perspective" class="active">Perspective</button><button data-view="back">Back</button><button data-view="left">Left</button><button data-view="right">Right</button><button data-view="plan">Plan</button></div><div class="zoom-controls"><span class="zoom-label">Zoom</span>${btn("zoom-out", "Zoom out", "minus", "icon-only")}${btn("zoom-in", "Zoom in", "plus", "icon-only")}${btn("reset-view", "Reset view", "rotate-ccw", "icon-only")}</div></div></div><div class="statusbar"><span id="gesture-hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</span><span id="selection-status"></span></div></main><aside class="inspector"><div class="inspector-tabs">${["art", "layout", "show", "walls", "lighting", "video", "export"].map((t, i) => `<button data-tab="${t}">${icon(["image", "layout-panel-left", "building-2", "columns-2", "lightbulb", "video", "download"][i])}<span>${["Artwork", "Layout", "Art show", "Walls", "Lighting", "Video", "Export"][i]}</span></button>`).join("")}</div><div id="inspector-content"></div></aside></div><footer><span class="footer-brand">${icon("box")} BOOTH STUDIO <small>Prototype 01</small><small id="build-stamp" title="Version ${BUILD.version} · built ${BUILD.time} · commit ${BUILD.commit}">v${BUILD.version} · ${BUILD.short} UTC · ${BUILD.commit}</small></span><span>Your images. Your space. Your arrangement.</span><span id="network">Local workspace</span></footer><input type="file" id="art-input" accept="image/jpeg,image/png" multiple hidden/><input type="file" id="replace-input" accept="image/jpeg,image/png" hidden/><input type="file" id="photo-input" accept="image/jpeg,image/png" hidden/><input type="file" id="surround-input" accept="image/jpeg,image/png" hidden/><input type="file" id="ground-input" accept="image/jpeg,image/png" hidden/><input type="file" id="backup-input" accept=".json,.booth" hidden/><div id="toast" role="status"></div><dialog id="dialog"><div id="dialog-content"></div></dialog><dialog id="image-editor"><div id="image-editor-content"></div></dialog><dialog id="timeline-dialog" class="timeline-dialog"><div id="timeline-content"></div></dialog>`;
   let scene;
   try {
     scene = new BoothScene(
@@ -631,7 +637,7 @@ async function boot() {
     } catch {
       videoCodec = null;
     }
-    if (tab === "export") renderInspector();
+    if (tab === "export" || tab === "video") renderInspector();
   }
 
   // A figure lands in front of the back wall and a little to the side of the
@@ -740,9 +746,118 @@ async function boot() {
       })
       .join("");
     document.querySelector("#timeline-content").innerHTML =
-      `<div class="panel-heading"><h2>Custom camera timeline</h2>${btn("close-timeline", "Close", "x", "icon-only")}</div><p class="muted">Compose a shot in the viewport behind this panel, then add it as a keyframe. Each keyframe is the exact view you captured. Times set the speed between them; the ramp is what makes a move read as a camera rather than a scrub.</p><label class="setting-label">Clip length<input type="number" id="timeline-seconds" min="${MIN_SECONDS}" max="${MAX_SECONDS}" step="1" value="${seconds}" aria-label="Clip length in seconds"/></label><div class="key-list">${rows}</div>${tl.keys.length < MAX_KEYS ? btn("timeline-add", "Add keyframe from this view", "plus", "primary wide") : `<p class="muted">${MAX_KEYS} keyframes is the limit. Delete one to add another.</p>`}<section><h3>Fades</h3><div class="field-pair"><label class="setting-label">Fade in<input type="number" id="timeline-fade-in" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.in.toFixed(1)}" aria-label="Fade in seconds"/></label><label class="setting-label">Fade out<input type="number" id="timeline-fade-out" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.out.toFixed(1)}" aria-label="Fade out seconds"/></label></div><p class="muted">Seconds of black at each end. Zero disables. The fade is drawn over the finished frame, so it reaches real black rather than a dark wash.</p></section><section><h3>Lens flare</h3><label class="check-field"><input type="checkbox" id="timeline-flare" ${tl.flare.on ? "checked" : ""} ${noLights ? "disabled" : ""}/>Lens flare from the brightest spotlight</label>${noLights ? `<p class="muted">This booth has no spotlights, so there is nothing for a flare to come from. Add one in Lighting.</p>` : `${range("Flare strength", "flare-strength", Math.round(tl.flare.strength * 100), 0, 100, 1, "timeline", "%")}<p class="muted">The flare tracks the camera: its ghosts sit on the line from the light through the centre of frame, and it fades out as the light leaves the shot.</p>`}</section><div class="button-row">${busyPreview ? btn("stop-preview", "Stop preview", "x") : btn("preview-move", "Preview", "play")}${btn("close-timeline", "Done", "check", "primary")}</div>`;
+      `<div class="panel-heading"><h2>Custom camera timeline</h2>${btn("close-timeline", "Close", "x", "icon-only")}</div><p class="muted">Compose a shot in the viewport behind this panel, then add it as a keyframe. Each keyframe is the exact view you captured. Times set the speed between them; the ramp is what makes a move read as a camera rather than a scrub.</p><label class="setting-label">Clip length<input type="number" id="timeline-seconds" min="${MIN_SECONDS}" max="${MAX_SECONDS}" step="1" value="${seconds}" aria-label="Clip length in seconds"/></label><div class="key-list">${rows}</div>${tl.keys.length < MAX_KEYS ? btn("timeline-add", "Add keyframe from this view", "plus", "primary wide") : `<p class="muted">${MAX_KEYS} keyframes is the limit. Delete one to add another.</p>`}<section><h3>Fades</h3><div class="field-pair"><label class="setting-label">Fade in<input type="number" id="timeline-fade-in" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.in.toFixed(1)}" aria-label="Fade in seconds"/></label><label class="setting-label">Fade out<input type="number" id="timeline-fade-out" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.out.toFixed(1)}" aria-label="Fade out seconds"/></label></div><p class="muted">Seconds of black at each end. Zero disables. The fade is drawn over the finished frame, so it reaches real black rather than a dark wash.</p></section><section><h3>Lens flare</h3><label class="check-field"><input type="checkbox" id="timeline-flare" ${tl.flare.on ? "checked" : ""}/>Lens flare during the move</label><label class="setting-label">Comes from<select id="timeline-flare-source" aria-label="Lens flare source">${Object.entries(FLARE_SOURCES).map(([k, v]) => `<option value="${k}" ${tl.flare.source === k ? "selected" : ""} ${k === "spot" && noLights ? "disabled" : ""}>${e(v)}</option>`).join("")}</select></label>${tl.flare.source === "spot" && noLights ? `<p class="warn-note">This booth has no spotlights, so a flare from one would never appear. Use the overhead source, or add a spotlight in Lighting.</p>` : ""}${range("Flare strength", "flare-strength", Math.round(tl.flare.strength * 100), 0, 100, 1, "timeline", "%")}<p class="muted">${tl.flare.source === "overhead" ? `An unseen light ${Math.round(OVERHEAD.y / 12)} ft over the centre of the booth, standing in for the sun or a hall's high bay. Nothing is drawn there and nothing is lit by it — only the flare says it is there.` : "The brightest spotlight in the booth."} The flare tracks the camera: its ghosts sit on the line from that light through the centre of frame, and it fades out as the light leaves the shot.</p></section><div class="button-row">${busyPreview ? btn("stop-preview", "Stop preview", "x") : btn("preview-move", "Preview", "play")}${btn("close-timeline", "Done", "check", "primary")}</div>`;
     refreshIcons();
   }
+  // The batch list. A clip is queued with a copy of the settings it was queued
+  // with — including a snapshot of the timeline where the move is Custom —
+  // because the point of a batch is to compose four different shots and then
+  // walk away, and settings that followed the panel would render the last one
+  // four times.
+  function batchLabel(job) {
+    const move = job.move === CUSTOM_MOVE ? "Custom timeline" : resolveMove(job.move).label;
+    return `${move} · ${job.seconds}s · ${job.fps} fps · ${SIZES[job.size]?.label.split(" · ")[0] || job.size}`;
+  }
+  function batchSection() {
+    if (!videoSupported()) return "";
+    const rows = videoBatch
+      .map((job, i) => {
+        const state = busyVideo && videoBatchAt === i ? "Rendering…" : videoBatchAt > i ? "Done" : "Queued";
+        return `<div class="batch-row" data-job="${job.id}"><div class="key-head"><strong>${i + 1}. ${e(batchLabel(job))}</strong><span class="muted">${state}</span></div><div class="button-row">${btn("batch-use", "Load these settings", "rotate-ccw")}${busyVideo ? "" : btn("batch-remove", "Remove", "trash-2")}</div></div>`;
+      })
+      .join("");
+    return `<section><h3>Batch <span>${videoBatch.length} ${videoBatch.length === 1 ? "clip" : "clips"}</span></h3><p class="muted">Queue several clips and render them in one go. Each one keeps the settings it was queued with, including its own timeline, so you can compose a shot, add it, recompose and add another. They render in order and download as they finish.</p><div class="button-row">${btn("batch-add", "Add current settings", "plus")}${videoBatch.length && !busyVideo ? btn("batch-clear", "Clear list", "trash-2") : ""}</div>${rows}${videoBatch.length ? (busyVideo ? btn("cancel-video", "Cancel", "x", "wide") : btn("batch-export", `Export all ${videoBatch.length}`, "download", "primary wide")) : ""}${videoBatch.length ? `<p class="muted">A batch renders every frame of every clip, so it takes as long as the clips add up to — several minutes for four 1080p moves. The camera comes back where you left it.</p>` : ""}</section>`;
+  }
+
+  // The panel's settings as a renderable clip. A Custom move carries a frozen
+  // copy of the timeline rather than a reference to it, so a queued clip is not
+  // quietly rewritten by the next keyframe someone adds.
+  function currentClip() {
+    const custom = videoMove === CUSTOM_MOVE;
+    const tl = custom ? structuredClone(timeline()) : null;
+    return {
+      move: videoMove,
+      timeline: tl,
+      seconds: custom ? tl.seconds : videoSeconds,
+      fps: videoFps,
+      size: videoSize,
+    };
+  }
+  // Renders one clip or a whole batch, in order, downloading each as it lands.
+  // A batch is not a different code path: it is this loop with more than one
+  // entry, which is what keeps a single export and a batch honest with each
+  // other.
+  async function runClips(jobs) {
+    busy = busyVideo = true;
+    videoAbort = new AbortController();
+    videoBatchAt = jobs === videoBatch ? 0 : -1;
+    renderInspector();
+    // The progress element is written to directly rather than through
+    // renderInspector: redrawing the whole panel a few hundred times would
+    // itself slow the render it is reporting on.
+    const status = (note) => {
+      const bar = document.querySelector(".video-progress progress");
+      const label = document.querySelector(".video-progress span");
+      if (bar) bar.value = videoProgress;
+      if (label)
+        label.textContent = `${note}${Math.round(videoProgress * 100)}% · frame ${videoFrame} of ${videoFrames}`;
+    };
+    let done = 0;
+    let vp9 = false;
+    try {
+      for (const [index, job] of jobs.entries()) {
+        videoBatchAt = jobs === videoBatch ? index : -1;
+        videoProgress = 0;
+        videoFrame = 0;
+        videoFrames = frameTimes(job.seconds, job.fps).count;
+        const note = jobs.length > 1 ? `Clip ${index + 1} of ${jobs.length} · ` : "";
+        status(note);
+        const recorded = await scene.recordVideo({
+          // A timeline where the move is Custom, one of the fixed moves
+          // otherwise. Everything downstream — the recorder, the encoder, the
+          // muxer — sees the same (t) -> pose contract either way.
+          move: job.move === CUSTOM_MOVE ? normalizeTimeline(job.timeline) : job.move,
+          seconds: job.seconds,
+          fps: job.fps,
+          size: job.size,
+          signal: videoAbort.signal,
+          onProgress: (fraction) => {
+            videoProgress = fraction;
+            videoFrame = Math.round(fraction * videoFrames);
+            status(note);
+          },
+        });
+        const suffix = jobs.length > 1 ? `-${index + 1}` : "";
+        download(recorded.blob, `${safeName()}-${job.move}${suffix}.mp4`);
+        vp9 = vp9 || recorded.kind === "vp09";
+        done += 1;
+      }
+      // Which codec landed decides what can open the file, so it is said out
+      // loud. VP9 is the fallback for a browser with no H.264 encoder, and
+      // QuickTime Player cannot open VP9 — someone handed that file without
+      // being told just sees their player refuse their own export.
+      if (vp9)
+        toast(
+          "Exported as VP9, because this browser cannot encode H.264. It plays in Chrome, Edge and VLC, but not in QuickTime Player — use Chrome or Safari for a QuickTime-ready file.",
+          true,
+        );
+      else if (done > 1) toast(`${done} clips exported.`);
+      else toast(`${jobs[0].seconds}s MP4 exported · ${videoFrames} frames at ${jobs[0].fps} fps.`);
+    } catch (err) {
+      // A cancelled batch keeps the clips it already wrote: they are on disk
+      // and saying otherwise would be a lie.
+      if (err?.name === "AbortError")
+        toast(done ? `Cancelled after ${done} ${done === 1 ? "clip" : "clips"}.` : "Recording cancelled.");
+      else toast(err.message, true);
+    } finally {
+      busy = busyVideo = false;
+      videoAbort = null;
+      videoProgress = 0;
+      videoBatchAt = -1;
+      renderInspector();
+    }
+  }
+
   // Says what will come out, in the terms that matter: whether QuickTime
   // Player will open it. Nothing is claimed until the probe has answered.
   function videoCodecLine() {
@@ -783,6 +898,11 @@ async function boot() {
         index = photoMode ? photoLightIndex : lightIndex,
         light = lights[index];
       html = `<div class="panel-heading"><h2>${photoMode ? "Photo lighting" : "Lighting studio"}</h2>${icon("lightbulb")}</div><p class="muted">${photoMode ? "Reversible light overlays. A single photo cannot recover geometry or physically relight the booth." : "Light your real geometry. Wall gaps and panel thickness shape the cast shadows."}</p><div class="button-row">${btn("daylight", "Daylight", "sun")}${btn("warm", "Warm", "lightbulb")}</div>${!photoMode ? `<section>${range("Ambient illumination", "ambient", p.ambient, 0, 4, 0.05)}<label class="setting-label">Spotlight fixtures<select aria-label="Spotlight fixtures" data-field="fixtures" data-scope="booth">${Object.entries(FIXTURE_MODES).map(([k, v]) => `<option value="${k}" ${(p.booth.fixtures || DEFAULT_FIXTURES) === k ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label><p class="muted">${showFixtures(p.booth.fixtures, p.booth.envPreset, p.booth.venue) ? "The housings are drawn where each spotlight sits." : `Housings are hidden${isIndoor(p.booth.envPreset, p.booth.venue) ? (p.booth.venue === "artshow" ? " because an art-show booth has its own light bar overhead" : " because this is an indoor environment, where the hall's own track lighting is already in the picture") : ""}. The rail above the booth stays, and the light itself is unchanged.`}</p></section>` : ""}<section><h3>${photoMode ? "Light overlays" : "Spotlights"} <span>${lights.length} / ${photoMode ? 8 : 4}</span></h3><div class="light-picker">${lights.map((l, i) => `<button data-light="${i}" class="${index === i ? "active" : ""}">${i + 1}</button>`).join("")}${lights.length < (photoMode ? 8 : 4) ? btn("add-light", "Add", "plus", "icon-only") : ""}</div>${light ? `${range("Brightness", "power", light.power, 0, photoMode ? 1 : 300, photoMode ? 0.05 : 5, photoMode ? "photoLight" : "light")}${range("Temperature", "kelvin", light.kelvin, 2700, 6500, 100, photoMode ? "photoLight" : "light", " K")}${photoMode ? `${range("Horizontal", "x", light.x, 0, 1, 0.01, "photoLight")}${range("Vertical", "y", light.y, 0, 1, 0.01, "photoLight")}${range("Radius", "radius", light.radius, 0.02, 0.8, 0.01, "photoLight")}` : `<h4>Light position · inches</h4>${field("Left / right", "x", light.x, -360, 360, 1, "in", "light")}${field("Height", "y", light.y, 0, 160, 1, "in", "light")}${field("Front / back", "z", light.z, -360, 360, 1, "in", "light")}<h4>Aim at · inches</h4>${field("Target X", "tx", light.tx, -360, 360, 1, "in", "light")}${field("Target height", "ty", light.ty, 0, 160, 1, "in", "light")}${field("Target Z", "tz", light.tz, -360, 360, 1, "in", "light")}<p class="muted">Origin: center of floor. +X right, +Z toward the entrance. Height starts at the floor.</p>`}${btn("delete-light", "Remove light", "trash-2", "wide")}` : ""}</section>`;
+    }
+    if (tab === "video") {
+      html = p.mode === "photo"
+        ? `<div class="panel-heading"><h2>Video</h2>${icon("video")}</div><div class="empty-inspector"><p>Video records a camera move through the 3D booth. Photo mode has a single photograph and no camera to move, so there is nothing to record. Switch to the 3D booth.</p></div>`
+        : `<div class="panel-heading"><h2>Video</h2>${icon("video")}</div><p class="muted">Everything about moving pictures in one place: the move, the clip, the timeline and a batch list. The Export tab keeps the same controls beside the PNG and the guide, and they are the same settings — this is not a second set.</p>${videoSection()}${batchSection()}<section><h3>Stills</h3><p class="muted">The frame you are looking at, as a PNG, without controls or outlines. The full image options are in Export.</p>${btn("export-image", "Export PNG · 4096 px", "download", "wide")}</section>`;
     }
     if (tab === "export") {
       html = `<div class="panel-heading"><h2>Export your booth</h2>${icon("download")}</div><p class="muted">A clean image of the current ${p.mode === "photo" ? "photo composition" : "camera view"}, without controls or selection outlines.</p><section><h3>Image size</h3><select id="export-size" aria-label="Export image width"><option value="2048">2048 px wide · Fast</option><option value="4096" selected>4096 px wide · High resolution</option></select><p class="muted">PNG · Current aspect ratio${p.mode === "photo" ? ". Enlarging a small source cannot restore missing detail." : ". Preview textures are capped at 2048 px per artwork; originals remain in the backup."}</p>${btn("export-image", "Export PNG", "download", "primary wide")}</section>${p.mode === "photo" ? "" : videoSection()}<section><h3>Installation guide</h3><p class="muted">Measured wall elevations, panel sizes, and left/bottom placement references. Open the downloaded HTML to print or save as PDF. Photo overlays are excluded.</p>${btn("guide", "Download hanging guide", "layout-panel-left", "wide")}</section><section><h3>Keep your work</h3>${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Includes original artwork and photo files, booth layout, and lighting.</p></section><section><h3>Preview quality</h3><select id="quality" aria-label="Preview quality"><option value="1" ${quality === 1 ? "selected" : ""}>Efficient · Older devices</option><option value="2" ${quality === 2 ? "selected" : ""}>Balanced</option><option value="3" ${quality === 3 ? "selected" : ""}>High detail</option></select></section>`;
@@ -1283,7 +1403,10 @@ async function boot() {
       b.disabled = true;
       b.textContent = "Rendering…";
       try {
-        const width = Number(document.querySelector("#export-size").value),
+        // The Video tab offers the same PNG without the size menu beside it,
+        // so the menu is read when it is there and the high setting assumed
+        // when it is not.
+        const width = Number(document.querySelector("#export-size")?.value) || 4096,
           blob = await (p.mode === "photo"
             ? photo.export(width)
             : scene?.export(width));
@@ -1303,61 +1426,48 @@ async function boot() {
     "export-video": async () => {
       if (busy || busyVideo) return;
       if (!scene) return toast("3D is not available, so there is no view to record.", true);
-      busy = busyVideo = true;
-      videoAbort = new AbortController();
-      videoProgress = 0;
-      videoFrame = 0;
-      // What is actually recorded: a timeline where the menu says Custom, one of
-      // the four fixed moves otherwise. Everything downstream — the recorder,
-      // the encoder, the muxer — sees the same (t) -> pose contract either way.
-      const move = videoMove === CUSTOM_MOVE ? timeline() : videoMove;
-      const seconds = videoMove === CUSTOM_MOVE ? move.seconds : videoSeconds;
-      videoFrames = frameTimes(seconds, videoFps).count;
+      // One clip is a batch of one. Everything below it — the progress
+      // reporting, the codec warning, the camera coming back — is the same
+      // work either way, so it is written once.
+      await runClips([currentClip()]);
+    },
+    "batch-add": () => {
+      if (!scene) return toast("3D is not available, so there is no view to record.", true);
+      videoBatch = [...videoBatch, { id: uid(), ...currentClip() }];
       renderInspector();
-      // The progress element is written to directly rather than through
-      // renderInspector: redrawing the whole panel a few hundred times would
-      // itself slow the render it is reporting on.
-      const status = () => {
-        const bar = document.querySelector(".video-progress progress");
-        const label = document.querySelector(".video-progress span");
-        if (bar) bar.value = videoProgress;
-        if (label)
-          label.textContent = `${Math.round(videoProgress * 100)}% · frame ${videoFrame} of ${videoFrames}`;
-      };
-      try {
-        const recorded = await scene.recordVideo({
-          move,
-          seconds,
-          fps: videoFps,
-          size: videoSize,
-          signal: videoAbort.signal,
-          onProgress: (fraction) => {
-            videoProgress = fraction;
-            videoFrame = Math.round(fraction * videoFrames);
-            status();
-          },
-        });
-        download(recorded.blob, `${safeName()}-${videoMove}.mp4`);
-        // Which codec landed decides what can open the file, so it is said out
-        // loud. VP9 is the fallback for a browser with no H.264 encoder, and
-        // QuickTime Player cannot open VP9 — someone handed that file without
-        // being told just sees their player refuse their own export.
-        if (recorded.kind === "vp09")
-          toast(
-            "Exported as VP9, because this browser cannot encode H.264. It plays in Chrome, Edge and VLC, but not in QuickTime Player — use Chrome or Safari for a QuickTime-ready file.",
-            true,
-          );
-        else
-          toast(`${seconds}s MP4 exported · ${videoFrames} frames at ${videoFps} fps · ${recorded.label}.`);
-      } catch (err) {
-        if (err?.name === "AbortError") toast("Recording cancelled.");
-        else toast(err.message, true);
-      } finally {
-        busy = busyVideo = false;
-        videoAbort = null;
-        videoProgress = 0;
-        renderInspector();
-      }
+      toast(`Queued ${batchLabel(videoBatch.at(-1))}.`);
+    },
+    "batch-remove": (button) => {
+      if (busyVideo) return;
+      const id = button?.closest("[data-job]")?.dataset.job;
+      videoBatch = videoBatch.filter((job) => job.id !== id);
+      renderInspector();
+    },
+    "batch-clear": () => {
+      if (busyVideo) return;
+      videoBatch = [];
+      renderInspector();
+    },
+    // Puts a queued clip's settings back in the panel, which is how you check
+    // what you queued — and how you edit a queued timeline: load it, change it,
+    // remove the old row and add it again.
+    "batch-use": (button) => {
+      const job = videoBatch.find((x) => x.id === button?.closest("[data-job]")?.dataset.job);
+      if (!job) return;
+      videoMove = job.move;
+      videoSeconds = job.seconds;
+      videoFps = job.fps;
+      videoSize = job.size;
+      if (job.timeline) videoTimeline = normalizeTimeline(job.timeline);
+      probeCodec();
+      renderInspector();
+      toast("Settings loaded into the panel.");
+    },
+    "batch-export": async () => {
+      if (busy || busyVideo) return;
+      if (!scene) return toast("3D is not available, so there is no view to record.", true);
+      if (!videoBatch.length) return toast("The batch list is empty.", true);
+      await runClips(videoBatch);
     },
     "add-woman": () => addPerson("woman"),
     "add-man": () => addPerson("man"),
@@ -1680,6 +1790,12 @@ async function boot() {
     if (el.id === "timeline-flare") {
       const tl = timeline();
       videoTimeline = normalizeTimeline({ ...tl, flare: { ...tl.flare, on: el.checked } });
+      renderTimelineDialog();
+      return;
+    }
+    if (el.id === "timeline-flare-source") {
+      const tl = timeline();
+      videoTimeline = normalizeTimeline({ ...tl, flare: { ...tl.flare, source: el.value } });
       renderTimelineDialog();
       return;
     }

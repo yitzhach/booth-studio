@@ -24,6 +24,21 @@ Extend it; do not rebuild it.
   camera's, so the surroundings can be pulled back without a wide-angle booth.
 - **Five fixed camera moves**, including **Ken Burns · slow drift** — a very
   slow push with a touch of drift, for framing one piece rather than the room.
+- **Video has its own tab.** Inspector → **Video**: the move, the clip length,
+  the frame rate, the resolution, the preview, the MP4 button, the timeline and
+  a **batch list** — queue several clips and render them in one go, each
+  keeping the settings it was queued with (including a frozen copy of its
+  timeline). The Export tab still carries the same video controls beside the
+  PNG and the guide; they are the same settings, not a second set. A single
+  export and a batch run through one loop, `runClips()`, so they cannot drift
+  apart.
+- **The lens flare can come from an unseen overhead light.** Timeline → Lens
+  flare → Comes from: **Overhead** (the default) is an imaginary source 20 ft
+  over the centre of the booth, standing in for the sun or a hall's high bay —
+  nothing is drawn there and nothing is lit by it, so it works in a booth with
+  no spotlights at all. **Brightest spotlight** is the old behaviour, and is
+  offered but disabled when there are no spotlights. `OVERHEAD` and
+  `flareOrigin()` in `src/flare.js`.
 - **Custom video mode is done.** Export → Video → Camera move → **Custom** opens
   a non-modal timeline: compose a shot in the viewport, press Add keyframe,
   orbit, repeat. Per-keyframe time, hold and ramp, fade in/out, and an optional
@@ -270,7 +285,7 @@ this and neither is visible from the repository.
 
 ```sh
 npm ci
-npm test                 # 200 Node tests
+npm test                 # 205 Node tests
 npm run build
 npm run test:view        # camera, city, env presets, HDRI, ground, tent, walls, video, timeline, people, panels, art show
 npm run test:browser     # 19 end-to-end checks

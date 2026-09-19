@@ -21,6 +21,7 @@
 // camera-path imports this module back, so anything used while this one is
 // still evaluating — the easing table below — has to be defined here.
 import { toSpherical, fromSpherical } from "./camera-path.js";
+import { resolveFlareSource, DEFAULT_FLARE_SOURCE } from "./flare.js";
 
 // 6t^5 - 15t^4 + 10t^3, the same curve the fixed moves ease with: zero velocity
 // and zero acceleration at both ends, so a keyframe is a pose the camera
@@ -89,7 +90,7 @@ export const emptyTimeline = (position, target) => ({
   seconds: DEFAULT_SECONDS,
   keys: [keyFrom(position, target, 0), keyFrom(position, target, 1)],
   fade: { in: 0, out: 0 },
-  flare: { on: false, strength: 0.6 },
+  flare: { on: false, strength: 0.6, source: DEFAULT_FLARE_SOURCE },
 });
 
 /**
@@ -138,6 +139,9 @@ export function normalizeTimeline(raw, fallbackPose) {
     flare: {
       on: !!raw?.flare?.on,
       strength: clamp(raw?.flare?.strength ?? 0.6, 0, 1),
+      // Which light it comes from. The overhead one is imaginary and always
+      // available; a spotlight is real and may not exist.
+      source: resolveFlareSource(raw?.flare?.source),
     },
   };
 }

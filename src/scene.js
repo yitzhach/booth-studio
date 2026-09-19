@@ -12,7 +12,7 @@ import { lightBarBounce, lightBarFixtures, lightBarOptics, lightBarRail } from "
 import { makePerson } from "./people.js";
 import { frameTimes, resolveMove, samplePath } from "./camera-path.js";
 import { fadeAt, isTimeline, timelineSeconds } from "./timeline.js";
-import { flareGhosts, flareSource } from "./flare.js";
+import { flareGhosts, flareOrigin } from "./flare.js";
 import { DEFAULT_SIZE, SIZES, evenSize, recordMp4, videoSupported } from "./video.js";
 // How far behind its frame plane a wall's slab sits, in metres. Half the
 // slab's thickness plus the sliver that keeps art from z-fighting the face.
@@ -438,13 +438,14 @@ export class BoothScene {
     this.overlayCache = { scene, camera, fade, ghosts };
     return this.overlayCache;
   }
-  // Where the flare comes from this frame: the brightest spotlight, projected
-  // into the same -1..1 space the ghosts are placed in. Null when the booth has
-  // no lights, which is what lets the panel say so rather than doing nothing.
-  flareState(strength) {
-    const light = flareSource(this.p?.lights);
-    if (!light) return null;
-    const ndc = new T.Vector3(light.x * IN, light.y * IN, light.z * IN).project(this.camera);
+  // Where the flare comes from this frame, projected into the same -1..1 space
+  // the ghosts are placed in. Either the brightest spotlight — which may not
+  // exist, and then there is no flare — or the unseen overhead source, which
+  // always does: see OVERHEAD in src/flare.js.
+  flareState(strength, source) {
+    const origin = flareOrigin(source, this.p?.lights);
+    if (!origin) return null;
+    const ndc = new T.Vector3(origin.x * IN, origin.y * IN, origin.z * IN).project(this.camera);
     return { ndc: { x: ndc.x, y: ndc.y, z: ndc.z }, strength };
   }
   // Allow the lowest polar angle that still keeps the camera above the floor
@@ -1538,7 +1539,7 @@ export class BoothScene {
         // Fades and flares are functions of t, so the wall-clock preview and the
         // frame-indexed recording get the same answer without sharing a loop.
         this.overlay = overlay
-          ? { fade: fadeAt(overlay, t), flare: overlay.flare?.on ? this.flareState(overlay.flare.strength) : null }
+          ? { fade: fadeAt(overlay, t), flare: overlay.flare?.on ? this.flareState(overlay.flare.strength, overlay.flare.source) : null }
           : { fade: 1, flare: null };
         this.renderFrame();
         onProgress(t);
@@ -1639,7 +1640,7 @@ export class BoothScene {
           const t = clip.at(i);
           const frame = samplePath(move, base, t);
           this.overlay = overlay
-            ? { fade: fadeAt(overlay, t), flare: overlay.flare?.on ? this.flareState(overlay.flare.strength) : null }
+            ? { fade: fadeAt(overlay, t), flare: overlay.flare?.on ? this.flareState(overlay.flare.strength, overlay.flare.source) : null }
             : { fade: 1, flare: null };
           this.camera.position.set(...frame.position);
           this.controls.target.set(...frame.target);

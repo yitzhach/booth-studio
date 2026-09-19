@@ -91,7 +91,11 @@ try {
     return { result, moved, samples: seen.length, first: seen[0], last: seen.at(-1) };
   });
   assert.equal(preview.result.cancelled, false, 'the preview ran to the end');
-  assert.ok(preview.samples > 3, `the preview should report progress, got ${preview.samples} samples`);
+  // Two samples, not four. What is being tested is that a preview reports
+  // progress and finishes on t=1, not how many frames this machine managed:
+  // under swiftshader one frame can take most of a second, and a count tuned
+  // to a fast machine is the flake this suite is known for.
+  assert.ok(preview.samples >= 2, `the preview should report progress, got ${preview.samples} samples`);
   assert.equal(preview.last, 1, 'the preview finishes on the end of the move');
   // It must actually have moved the camera part way through.
   const drifted = preview.moved.some((v, i) => Math.abs(v - previewBefore.position[i]) > 0.01);

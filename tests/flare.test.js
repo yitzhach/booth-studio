@@ -54,3 +54,34 @@ test("the flare comes from the brightest spotlight, or from nothing at all", () 
   assert.equal(flareSource(undefined), null);
   assert.equal(flareSource([{ power: 40 }, { power: 220 }, { power: 90 }]).power, 220);
 });
+
+// Where the flare comes from. A spotlight is real and may not exist; the
+// overhead source is imaginary and always does, which is the point of it.
+import { OVERHEAD, FLARE_SOURCES, DEFAULT_FLARE_SOURCE, resolveFlareSource, flareOrigin } from "../src/flare.js";
+
+test("the overhead source is 20 feet over the centre of the booth", () => {
+  assert.equal(OVERHEAD.y, 240, "240 inches is 20 feet");
+  assert.equal(OVERHEAD.x, 0);
+  assert.equal(OVERHEAD.z, 0);
+});
+
+test("the overhead source exists in a booth with no lights at all", () => {
+  assert.deepEqual(flareOrigin("overhead", []), { x: 0, y: 240, z: 0 });
+  assert.deepEqual(flareOrigin("overhead", undefined), { x: 0, y: 240, z: 0 });
+  assert.equal(flareOrigin("spot", []), null, "where a spotlight flare simply has no source");
+});
+
+test("a spotlight source is the brightest spotlight's own position", () => {
+  const lights = [
+    { x: -28, y: 91, z: 24, power: 40 },
+    { x: 28, y: 91, z: 24, power: 220 },
+  ];
+  assert.deepEqual(flareOrigin("spot", lights), { x: 28, y: 91, z: 24 });
+});
+
+test("an unknown source falls back to one that works", () => {
+  assert.equal(resolveFlareSource("sunbeam"), DEFAULT_FLARE_SOURCE);
+  assert.equal(resolveFlareSource(undefined), DEFAULT_FLARE_SOURCE);
+  assert.ok(FLARE_SOURCES[DEFAULT_FLARE_SOURCE], "and the default is one of the offered sources");
+  assert.deepEqual(flareOrigin("sunbeam", []), { x: 0, y: 240, z: 0 }, "so a bad id still throws a flare");
+});

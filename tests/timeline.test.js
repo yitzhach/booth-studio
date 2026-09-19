@@ -170,3 +170,10 @@ test("poseBetween lifts the target with the camera when the floor intervenes", (
   assert.ok(position[1] >= 0.1199);
   assert.ok(target[1] > 0.05, "so the framing is kept rather than tipped upwards");
 });
+
+test("a timeline records which light its flare comes from", () => {
+  const tl = normalizeTimeline({ keys: [], flare: { on: true, strength: 0.5, source: "spot" } });
+  assert.equal(tl.flare.source, "spot");
+  assert.equal(normalizeTimeline({ flare: { source: "nonsense" } }).flare.source, "overhead", "and falls back to the one that always exists");
+  assert.equal(normalizeTimeline({}).flare.source, "overhead");
+});

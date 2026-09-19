@@ -1549,3 +1549,15 @@ dialog li {
   padding: 12px;
   margin: 10px 0;
 }
+
+/* A queued clip in the Video tab's batch list. Same card as a keyframe row and
+   a figure's row: a small record with its own fields and a delete. */
+.batch-row {
+  border: 1px solid var(--line, #d8d5cf);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 8px 0;
+}
+.batch-row .button-row {
+  margin-top: 6px;
+}
