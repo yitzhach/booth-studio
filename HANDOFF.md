@@ -14,7 +14,12 @@ Extend it; do not rebuild it.
   the pedestals, the Walls tool, the light-bar diffusion slider, the backdrop
   pole limit, people for scale, indoor fixture hiding, the Ken Burns move, the
   Video tab with its batch list and the overhead lens flare are all on `main`
-  and live. Nothing is sitting unmerged on a branch.
+  and live.
+- **Unmerged, on `claude/confident-noether-xafmqn`:** the ground library, and
+  then the four fixes below it — selection without a rebuild, the drag
+  smoothing, the artwork position sliders, and the hall switching off in a
+  photographed environment. Merging that branch is the deploy, and **item 1
+  of Next cannot be judged until it is merged.**
 - The photoreal phase (`PBR_PHASE.md`) is done through Phase 4: HDRI lighting,
   PBR ground surfaces, the tent canvas and a fabric wall finish. Assets are
   committed and live. `public/assets` is 28 MB of a ~50 MB budget.
@@ -26,6 +31,37 @@ Extend it; do not rebuild it.
   nothing to remove before a preset works. `booth.ground` holds a kind or
   `"upload:<asset id>"`; an older backup's `booth.groundAsset` is read as the
   first entry of the library and never dropped. `GROUND_LIBRARY_PHASE.md`.
+- **Selecting a work rebuilds nothing.** It used to go through `render()`,
+  which disposes and rebuilds the whole scene — every wall, every texture, the
+  HDRI — to draw one blue outline, which is why the handles were slow to
+  appear on a double-click. `applySelection()` in `src/scene.js` draws the
+  outline and the eight handles, and is the one path both the rebuild and a
+  plain click use; `renderSelection()` in `src/main.js` is what a click costs
+  now. `tests/view-responsive.mjs` pins it against `scene.revision`, the
+  rebuild counter — if a future change makes selecting rebuild again, that
+  test fails rather than the app merely feeling slow.
+- **A drag is one move per frame, and shadows wait for the end of it.** Nine
+  shadow-casting heads over an art-show booth were re-rendered on every
+  pointer event, several times per displayed frame. Moves are now applied once
+  per frame from the render loop (`flushDrag`) and shadows are refreshed when
+  the gesture ends (`touchShadows` / `settleShadows`). Shadows are therefore
+  frozen mid-drag, deliberately.
+- **Artwork can be placed with a slider.** Artwork → Placement: Slide
+  left / right and Slide up / down beside the two edge fields. The travel is
+  the wall less the work's own size, so the end of the slider is the work
+  flush with the edge. One undo step per gesture, through `constrain()` and
+  `updateArtwork()` — the same edit as typing the number.
+- **An art-show booth no longer stands in its own hall in a photographed
+  environment.** The hall's white walls used to cut across the photograph as
+  a band at mid-height. Choosing any environment but the neutral studio now
+  switches the hall off, and the toggle is repeated in Layout beside the
+  environment picker. The booth, its walls, its light bar and the panel
+  module are untouched: this is the room, not the booth. It is a default, not
+  a lock — tick it again and the hall comes back.
+- **The light bar is adjustable from the Lighting tool too.** Brightness,
+  temperature and diffusion are mirrored there, because that is where someone
+  looks for lighting; they are the same settings as in Art show, not a second
+  set. How many heads and how high stay in Art show.
 - **Video export is done.** Four eased camera moves, a live preview, and an MP4
   written by hand. `src/camera-path.js`, `src/video.js`,
   `scene.previewMove()` and `scene.recordVideo()`.
@@ -210,11 +246,24 @@ Extend it; do not rebuild it.
      because a true-depth weave on a white roof washes out.
 6. **A `home` HDRI** is still missing — an interior with windows on one side.
    That preset falls back procedurally until someone downloads one.
-7. **Nobody has looked at the new ground picker.** Two labelled groups in one
-   dropdown — see Now. Whether they read as obviously as intended, and whether
-   "Delete this ground photograph" is clear enough that nobody expects it to
-   merely deselect, are judgements about a picker on a live site.
-8. **Figures are stylised mannequins.** No faces, no clothing, mid-grey. If
+7. **Nobody has looked at the new ground picker, the artwork sliders, or an
+   art-show booth in a photographed environment.** All three are on the
+   unmerged branch — see Now. Whether two labelled groups in one dropdown
+   read as obviously as intended; whether "Delete this ground photograph"
+   sounds like a delete rather than a deselect; whether the placement sliders
+   have useful travel on a 10 ft wall; and whether an art-show booth without
+   its hall sits convincingly in a photographed one. All judgements on a live
+   site.
+8. **Is it actually faster now?** Selecting no longer rebuilds the scene and a
+   drag no longer re-renders nine shadow maps per pointer event, both pinned
+   by `tests/view-responsive.mjs` — but "pinned" means the rebuild does not
+   happen, not that it feels smooth on your machine. If a drag still stutters,
+   the next two candidates, in order: preview quality is a supersampling
+   factor (Export → Preview quality · Efficient renders at 1x), and the nine
+   light-bar heads each cast a shadow. Dropping `castShadow` on the washers is
+   the honest fix for the second, and with diffusion up their shadows are
+   mostly fill anyway.
+9. **Figures are stylised mannequins.** No faces, no clothing, mid-grey. If
    they need to read as a crowd rather than as scale references, that is a
    different asset and a different phase.
 
@@ -304,7 +353,7 @@ the picker became one list.
 npm ci
 npm test                 # 214 Node tests
 npm run build
-npm run test:view        # camera, city, env presets, HDRI, ground, ground library, tent, walls, video, timeline, people, panels, art show
+npm run test:view        # camera, city, env presets, HDRI, ground, ground library, tent, walls, video, timeline, people, panels, responsiveness, art show
 npm run test:browser     # 19 end-to-end checks
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
 ```
@@ -432,6 +481,21 @@ hidden a failure once. Run each suite directly.
   claim their set under `wall:<key>`, and the three perimeter walls are
   forever. A panel is not, so `surfaces.releaseMatching()` now hands back every
   `wall:` claim that is not in the current wall list on each rebuild.
+- **A test that passes because the app was slow will fail when it gets
+  faster.** `tests/view-textures.mjs` asserted that the grass floor keeps its
+  procedural canvas "without files" — but grass ships files, and the
+  assertion only held because the real set had not finished loading inside a
+  300 ms wait. Making selection stop rebuilding the scene freed the main
+  thread and the load landed in time, so a correctness improvement read as a
+  regression. It now asserts that grass binds its own set. Before believing a
+  browser failure, check whether the assertion was true for the reason it
+  claims.
+- **That suite's temporary `publicDir` is not served.** Its header said
+  fixtures came from a temp directory and the repository's `public/assets`
+  was untouched. The second half is true; the first is not — this vite server
+  ignores the inline `publicDir` and serves the committed assets, so the sets
+  those tests exercise are the real ones. Harmless, now written down, and the
+  reason the grass case could not simply be "delete the files".
 - **The video suites' preview flakiness was fixed, not re-run.** They read the
   camera 220-250 ms after starting a preview and asserted it had moved; under
   swiftshader the first frame can take most of a second, so the read landed
@@ -464,6 +528,9 @@ hidden a failure once. Run each suite directly.
 - `src/timeline.js`, `src/flare.js` — the keyframe sampler and the flare's
   arithmetic. Both pure, both covered in Node.
 - `src/people.js` — the figures, their canon proportions and their defaults.
+- `applySelection()` / `renderSelection()` — what a click costs, in
+  `src/scene.js` and `src/main.js`. Read both before making selection do
+  anything more; they exist to keep a rebuild out of a click.
 - `GROUND_LIBRARY_PHASE.md` — presets and uploaded grounds as one list: the
   widened `booth.ground`, why the library is a filter over the assets rather
   than a second list, and how an older backup's override is adopted.
