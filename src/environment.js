@@ -1,5 +1,5 @@
 import * as T from 'three';
-import { neighborPlacements, IN } from './model.js';
+import { neighborPlacements, hallSpec, isArtShow, IN } from './model.js';
 export const TENTS = {classic:'Classic pop-up', peak:'High peak', barrel:'Barrel roof · TrimLine-inspired', dome:'Soft dome'};
 const material = (color, extra={}) => new T.MeshStandardMaterial({color,roughness:.85,...extra});
 function mesh(g,geo,mat) { const m=new T.Mesh(geo,mat);m.castShadow=true;m.receiveShadow=true;g.add(m);return m; }
@@ -158,6 +158,50 @@ function makeCity(parent) {
  }
  return city;
 }
+// ---- Indoor exhibition hall ---------------------------------------------
+// A convention hall is a white box, and at the size of one the only parts a
+// booth ever sees are the floor, the far walls and — barely — the ceiling.
+// So it is drawn as exactly that: five inward-facing planes, no geometry in
+// between. BackSide on a single box would have done it in one mesh, but the
+// ceiling has to be switchable on its own (30 feet up is usually out of
+// frame, and drawing it costs a wash of grey over everything).
+const HALL_SPAN = 110; // metres across. Far enough that the walls read as distance, not as a room.
+export function makeHall(g, b) {
+ const spec = hallSpec(b);
+ const hall = new T.Group(); hall.name = 'exhibition-hall'; g.add(hall);
+ const ceiling = spec.ceiling * IN;
+ // Hall surfaces are lit, not lighting: they receive shadow so a booth's
+ // floor shadow lands on the aisle, and cast none, because a 110m plane in a
+ // shadow camera is a shadow map spent on nothing.
+ const surface = (color, w, h, pos, rot) => {
+  const m = new T.Mesh(new T.PlaneGeometry(w, h), material(color, { side: T.FrontSide }));
+  m.position.set(...pos); m.rotation.set(...rot); m.receiveShadow = true; m.castShadow = false;
+  hall.add(m); return m;
+ };
+ // No floor of its own: `environment-ground` is already a 180m plane the
+ // ground-texture machinery owns, and a second floor just under it would be
+ // a plane nobody ever sees. The hall is its walls and its ceiling.
+ const half = HALL_SPAN / 2;
+ for (const [x, z, ry] of [[0, -half, 0], [0, half, Math.PI], [-half, 0, Math.PI / 2], [half, 0, -Math.PI / 2]])
+  surface('#eceae5', HALL_SPAN, ceiling, [x, ceiling / 2, z], [0, ry, 0]);
+ if (spec.showCeiling)
+  surface('#c9c7c3', HALL_SPAN, HALL_SPAN, [0, ceiling, 0], [Math.PI / 2, 0, 0]);
+ return hall;
+}
+// A neighbouring art-show booth: the same three white walls, no canopy. What
+// a booth beside yours actually looks like indoors, and cheap enough that a
+// hall full of them stays one draw call each.
+function neighborArtBooth(g, n, b) {
+ const booth = new T.Group(); booth.name = 'neighbor-' + n.side; g.add(booth);
+ booth.position.set(n.x * IN, 0, n.z * IN);
+ const W = 120 * IN, D = 120 * IN, H = (b.walls?.back?.height || 144) * IN;
+ const skin = material('#f1efea');
+ const wall = (w, x, z, ry) => { const m = mesh(booth, new T.BoxGeometry(w, H, .055), skin); m.position.set(x, H / 2, z); m.rotation.y = ry; };
+ wall(W, 0, -D / 2, 0);
+ wall(D, -W / 2, 0, Math.PI / 2);
+ wall(D, W / 2, 0, Math.PI / 2);
+ return booth;
+}
 export function environment(scene,g,b){const kind=b.ground||'studio',setting=b.horizon||'studio';
  if(setting==='studio'){scene.background=new T.Color('#b5b4b0');scene.fog=null;}
  else{scene.background=skyTexture();scene.fog=new T.Fog(HAZE,setting==='urban'?40:24,setting==='urban'?92:75);}
@@ -166,7 +210,12 @@ export function environment(scene,g,b){const kind=b.ground||'studio',setting=b.h
  if(kind!=='studio'){floor.material.bumpMap=textures.get(kind);floor.material.bumpScale=kind==='grass'?.025:.008;}
  if(setting==='park'&&!b.surroundAsset)for(let i=0;i<24;i++){const angle=i/24*Math.PI*2,dist=19+(i%4)*3,x=Math.cos(angle)*dist,z=Math.sin(angle)*dist;const trunk=mesh(g,new T.CylinderGeometry(.17,.24,3.5,7),material('#625746'));trunk.position.set(x,1.7,z);for(let j=0;j<3;j++){const crown=mesh(g,new T.SphereGeometry(1.6+j*.12,12,8),material(['#687951','#75855b','#536b48'][j]));crown.position.set(x+Math.sin(i+j)*.75,3.8+j*.65,z+Math.cos(i+j)*.65);crown.scale.y=1.1;}}
  if(setting==='urban'&&!b.surroundAsset)makeCity(g);
+ // Indoors the hall is the horizon: no sky, no fog, and the surrounding
+ // booths are walls rather than canopies.
+ const hall = isArtShow(b) && hallSpec(b).on;
+ if(hall){scene.background=new T.Color('#e4e2dd');scene.fog=null;makeHall(g,b);}
  for(const n of neighborPlacements(b)){
+ if(hall){neighborArtBooth(g,n,b);continue;}
  const t=makeTent(120*IN,120*IN,96*IN,'classic');t.name='neighbor-'+n.side;
  t.position.set(n.x*IN,0,n.z*IN);g.add(t);
  const wall=mesh(t,new T.BoxGeometry(3,2.2,.04),material('#d6d1c5'));wall.position.set(0,1.1,-1.5);

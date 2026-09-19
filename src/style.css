@@ -744,6 +744,27 @@ h4 {
   margin-top: 18px;
   padding-top: 2px;
 }
+/* A free-standing wall's row: its name beside the button that removes it. */
+.wall-setting .panel-heading {
+  margin: 12px 0 8px;
+}
+.wall-setting .panel-heading h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 550;
+}
+/* The wall the viewport outlined in blue is the wall these controls move, so
+   the panel says so in the same blue rather than leaving the two unconnected. */
+.wall-setting.selected {
+  border-top-color: #78b4ff;
+  border-left: 2px solid #78b4ff;
+  margin-left: -10px;
+  padding-left: 8px;
+  border-radius: 2px;
+}
+.wall-setting .panel-heading .badge {
+  margin-left: 8px;
+}
 .light-picker {
   display: flex;
   gap: 8px;

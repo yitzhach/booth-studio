@@ -10,6 +10,9 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
+- **Last deploy: 2026-09-18** — the art-show booth, the pedestals, the two
+  new tools and the light-bar diffusion slider are all on `main` and live.
+  Nothing is sitting unmerged on a branch.
 - The photoreal phase (`PBR_PHASE.md`) is done through Phase 4: HDRI lighting,
   PBR ground surfaces, the tent canvas and a fabric wall finish. Assets are
   committed and live. `public/assets` is 28 MB of a ~50 MB budget.
@@ -54,12 +57,49 @@ Extend it; do not rebuild it.
 - **The backdrop is aimed from the Layout panel.** Layout → Surroundings →
   Backdrop: a zoom slider with -/+/reset buttons, plus pan (horizontal) and
   tilt (vertical). `+`/`-` on the keyboard zoom the viewport camera.
+- **The indoor art-show booth is done.** Two new inspector tabs. **Art show**
+  switches `booth.venue` to `"artshow"`: seamless white walls (144″ back, 120″
+  sides, 144″ tall), no canopy, a light bar across the front with nine
+  directional heads spotting the three walls, and a white exhibition hall with
+  30 ft ceilings around it. Booth dimensions, wall dimensions and the
+  individual display panel (38″ default) are all typed in inches; `Rebuild
+  walls from this panel` snaps the walls to whole panels. **Walls** holds the
+  free-standing walls — moved out of Layout — and the new pedestals (44 × 12 ×
+  12 by default, solid top, double-click in the booth to pick one up and drag
+  it). `src/lightbar.js` derives the nine fixtures from the booth's own
+  measurements; `ART_SHOW_PHASE.md` is the record of what was decided.
+- **The light bar is diffused**, after the first look reported it as harsh.
+  Art show → Light bar → **Diffusion** (0..1, default 0.7) opens the beams
+  until they overlap into a wash, fades their rims, fills their shadows
+  instead of stacking nine hard ones, trims the fixtures back as they widen,
+  and adds a bounce fill standing in for the white hall. `lightBarOptics()`
+  and `lightBarBounce()` in `src/lightbar.js` are the whole of it, both pure.
+  **Diffusion 0 reproduces the old lighting exactly** — it is a setting, not
+  a replacement — and the browser test asserts that after dragging it to zero.
+- **Free-standing interior walls are done.** Layout → Free-standing walls: add
+  a panel, type its width, height, X/Z position and rotation in inches, and
+  hang art on either face through the usual Location dropdown. `booth.panels`
+  is a separate optional list beside `booth.walls`, so every older backup still
+  loads; `wallSpec()` in `src/model.js` is the one place that answers "what am
+  I measuring against" for a perimeter wall and a panel alike.
+  `WALLS_PHASE.md` is now the record of what was decided.
 
 ## Next
 
-1. **`WALLS_PHASE.md`** — free-standing interior walls you can place and hang
-   art on. Requested, planned, not built. Read that file; it explains the
-   schema-1 compatibility constraint that shapes the whole design.
+1. **Look at the art-show booth on the live site and set Diffusion.** This is
+   the first thing to do and it needs a human, not a session: no agent can
+   load production. Open Art show, and judge in this order —
+   - **Diffusion** (Light bar, default 0.7) is the one number in the softening
+     pass that was chosen rather than derived. Still harsh? Drag it up. Gone
+     flat and washed out? Drag it down. 0 restores the original hard lighting
+     exactly, so the slider is safe to explore.
+   - **Fixture brightness (60) and 3500K** are the next two judgement calls.
+   - Whether nine shadow-casting spots are affordable on your machine. If not,
+     the honest fix is dropping `castShadow` on the washers, not cutting their
+     number — with diffusion up, their shadows are mostly fill anyway.
+   - Whether the hall reads as a hall, and whether a seamless white wall wants
+     the fabric finish on (`wallFinish: "fabric"` works on an art-show booth).
+   `ART_SHOW_PHASE.md` says which knob to turn first for each.
 2. **The two shipped backdrops are 1024×512 and read soft.** This is the one
    open bug with a known fix. Both were prepped from Poly Haven's **1K** HDRI,
    and `tools/hdri-prep.mjs` will not stretch a backdrop past its source. Re-prep
@@ -77,8 +117,23 @@ Extend it; do not rebuild it.
    and mp4box.js validated the container — but nobody has opened an
    `avc1`/`avcC` file from Chrome or Safari in QuickTime. If a clip will not
    play, start here.
-4. **Unverified on real hardware, older** — things no one has confirmed by
-   eye, because no agent session can load the live site:
+4. **Unverified on real hardware** — things no one has confirmed by eye,
+   because no agent session can load the live site:
+   - **Nobody has looked at an art-show booth.** See item 1 — it is the whole
+     of that item. The measurements are pinned by tests that read the meshes
+     back and the nine spotlights are checked against the arithmetic that
+     placed them, so nothing there is a guess; what is left is all judgement.
+   - **Nobody has looked at a booth with free-standing walls in it.** Where a
+     panel stands is pinned by a test that reads the mesh's world matrix back,
+     so that is not a guess, and a click-and-drag in a real browser is covered
+     by `tests/view-panels.mjs`. Whether a 72″ divider at the centre of a
+     10 × 10 booth reads as useful, whether the fabric weave looks right at a
+     panel's width, and whether dragging a wall *feels* right — the
+     select-then-drag rule, the floor-plane grab, the 1″ snap — are judgements
+     that need a hand on a mouse. Rotating a panel by dragging is the obvious
+     next refinement and was deliberately left out: it needs a handle of its
+     own, and a wall that spins when you meant to slide it is worse than a
+     typed angle.
    - The custom timeline and the lens flare are covered by tests in a real
      browser, but nobody has *looked* at a keyframed clip. The flare's ghost
      spacing, its warmth ramp and the fade lengths are judgement calls made
@@ -106,7 +161,9 @@ Extend it; do not rebuild it.
    they need to read as a crowd rather than as scale references, that is a
    different asset and a different phase.
 
-Custom video mode is **done** and is no longer on this list; see Now.
+Free-standing walls — placement, art on both faces, and now click-and-drag
+with sliders — custom video mode, and the indoor art-show booth are **done**
+and are no longer on this list; see Now.
 
 ## Diagnosing "the texture isn't showing"
 
@@ -184,11 +241,11 @@ this and neither is visible from the repository.
 
 ```sh
 npm ci
-npm test                 # 171 Node tests
+npm test                 # 197 Node tests
 npm run build
-npm run test:view        # camera, city, env presets, HDRI, ground, tent, walls, video, timeline, people
-npm run test:browser     # 18 end-to-end checks
-node tests/wall-assets.mjs
+npm run test:view        # camera, city, env presets, HDRI, ground, tent, walls, video, timeline, people, panels, art show
+npm run test:browser     # 19 end-to-end checks
+BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
 ```
 
 The sandbox has WebGL via swiftshader, but the pinned Playwright expects a
@@ -205,7 +262,13 @@ hidden a failure once. Run each suite directly.
 ## Rules that are easy to break
 
 - Preserve schema-1 backup compatibility. Optional fields and widened enums are
-  fine; changed meaning is not. `WALLS_PHASE.md` turns on this.
+  fine; changed meaning is not. `booth.panels` and the widened `a.wall` are the
+  worked example; `WALLS_PHASE.md` explains how it was kept. The art-show
+  booth added five more optional keys — `venue`, `artShow`, `lightBar`, `hall`
+  and `pedestals` — the same way, and `lightBar.diffusion` later became a
+  sixth, nested inside one of them. `artShowPanel()` / `lightBarSpec()` /
+  `hallSpec()` are the only things that read any of them, so `undefined` means
+  the defaults everywhere.
 - **Never alter stored original image data.** Edits belong to placements.
 - The city skyline must stay **seeded**, never `Math.random`: it rebuilds on
   every `update()` and would reshuffle on each edit. `tests/view-city.mjs`
@@ -279,6 +342,37 @@ hidden a failure once. Run each suite directly.
   spotlight into a white post, and a white post beside a painting competes with
   it. Mid-grey, flattened front to back, with daylight between the legs: that
   gap is the whole difference between a person and a bollard at any distance.
+- **A drag and a typed number must be one edit, through one function.** A
+  panel's frame placement is three lines of trigonometry; having the drag
+  carry its own copy would mean a dragged wall landing somewhere a typed wall
+  would not. `placePanelFrame()` is called by the scene build and by
+  `movePanel()`, and `tests/view-panels.mjs` drags a panel and then reads the
+  mesh's world matrix against the number the drag stored.
+- **Rebuilding the scene per pixel of a drag is not an option.** `update()`
+  disposes and rebuilds everything. Artwork already had `updateArtwork()` for
+  this; a panel got `movePanel()`, which is cheap only because everything a
+  panel carries — its exterior frame, its posts, the art on both faces — is a
+  child of the panel's own frame group.
+- **A click target that big needs a first click that does nothing.** Selecting
+  on the first click and dragging only once selected is what keeps a free-
+  standing wall from being shoved across the floor by someone reaching for an
+  orbit. The Move tool is the deliberate exception.
+- **One lookup function is cheaper than six generalisations.** Three fixed
+  walls were assumed in six places. Rather than teach each about panels,
+  `wallSpec(p, key)` answers "what am I measuring against" for either kind and
+  returns `null` for a wall that is gone — which every caller already knew how
+  to treat, because it looks like a hidden wall.
+- **A per-consumer texture cache leaks when a consumer can be deleted.** Walls
+  claim their set under `wall:<key>`, and the three perimeter walls are
+  forever. A panel is not, so `surfaces.releaseMatching()` now hands back every
+  `wall:` claim that is not in the current wall list on each rebuild.
+- **`tests/view-video.mjs`, `tests/view-timeline.mjs` and `tests/environment.mjs`
+  are flaky in this sandbox**, and it is not a regression to chase. All three
+  have assertions timed against wall clock — a preview must report progress, a
+  4096px export must finish inside 30s — and swiftshader is slow enough to
+  miss them at random. `view-video` and `environment` fail on `main` as well;
+  `view-timeline` passed and then failed on two consecutive runs of the same
+  commit. Re-run before believing any of the three.
 - **The tent weave is exaggerated 3x** over its literal depth. A true-depth
   weave on a white, brightly lit, tone-mapped roof is invisible. That is a
   rendering choice, not a measurement, and it is commented as one.
@@ -287,7 +381,11 @@ hidden a failure once. Run each suite directly.
 
 - `README.md` — commands, architecture, stable behavior.
 - `PBR_PHASE.md` — HDRI lighting and PBR surfaces, and what each phase found.
-- `WALLS_PHASE.md` — the next feature, planned in full.
+- `WALLS_PHASE.md` — free-standing interior walls: the schema-compatibility
+  problem and every decision taken around it.
+- `ART_SHOW_PHASE.md` — the indoor art-show booth: the venue switch, why the
+  light bar is scenery rather than spotlights, why the panel module does not
+  own the walls, and what still needs eyes.
 - `src/camera-path.js`, `src/video.js` — the camera moves and the MP4 writer.
   Both carry their reasoning in comments; neither needs a phase document.
 - `CUSTOM_VIDEO_PHASE.md` — custom video mode: the keyframe model, why speed is

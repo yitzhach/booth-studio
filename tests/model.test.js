@@ -5,6 +5,8 @@ import {
   demoProject,
   validateProject,
   constrain,
+  constrainPanel,
+  panelRange,
   boundWarning,
   mismatch,
   homography,
@@ -12,6 +14,11 @@ import {
   IN,
   neighborPlacements,
   scalePanel,
+  MAX_PANELS,
+  panelKey,
+  wallKeys,
+  wallLabel,
+  wallSpec,
 } from "../src/model.js";
 import { hangingGuide } from "../src/guide.js";
 import { DEFAULT_IMAGE_EDITS, editedAspect, hasImageEdits, normalizeImageEdits } from "../src/image-edit.js";
@@ -138,7 +145,7 @@ test("hanging guide separates inside and outside wall coordinates and escapes la
   Object.assign(p.art[1],{face:"outside",kind:"label",title:"<b>Outside title</b>"});
   const g=hangingGuide(p);
   assert.match(g,/Back wall · inside/);assert.match(g,/Back wall · outside/);
-  assert.match(g,/facing the wall from outside/);
+  assert.match(g,/facing the wall from the outside/);
   assert.ok(g.includes("&lt;b&gt;Outside title&lt;/b&gt;"));
   assert.ok(!g.includes("<b>Outside title</b>"));
 });
@@ -204,4 +211,99 @@ test("backdrop tilt round-trips, stays optional, and rejects an out-of-range aim
     bad.booth[key] = value;
     assert.throws(() => validateProject(bad), `${key}=${value} must be rejected`);
   }
+});
+
+// Free-standing panels. The schema constraint is the whole reason this was a
+// phase: `booth.panels` is optional, so a backup written before it existed
+// must open unchanged, and `a.wall` is a widened enum, not a changed one.
+test("a schema-1 backup with no panels key still validates", () => {
+  const p = demoProject();
+  delete p.booth.panels;
+  assert.equal(validateProject(p), p);
+  // And every helper still answers for the three perimeter walls.
+  assert.deepEqual(wallKeys(p), ["back", "left", "right"]);
+  assert.equal(wallSpec(p, "back").width, 120);
+});
+
+test("a panel round-trips, and art may reference it by key", () => {
+  const p = demoProject();
+  const panel = { id: "abc", name: "Center panel", width: 72, height: 84, x: 0, z: 12, rotation: 45 };
+  p.booth.panels = [panel];
+  p.art.push({ id: "art-on-panel", asset: null, title: "On the panel",
+    wall: panelKey("abc"), x: 4, y: 30, w: 24, h: 30, thickness: 1.5, offset: 0.75 });
+  assert.equal(validateProject(p), p);
+  assert.deepEqual(wallKeys(p), ["back", "left", "right", "panel:abc"]);
+  assert.equal(wallSpec(p, "panel:abc").width, 72);
+  assert.equal(wallSpec(p, "panel:abc").height, 84);
+  assert.equal(wallLabel(p, "panel:abc"), "Center panel");
+  // A key naming a panel that is gone reads as missing, not as a crash.
+  p.booth.panels = [];
+  assert.equal(wallSpec(p, "panel:abc"), null);
+  assert.match(boundWarning(p, p.art.at(-1)), /no longer exists/);
+  assert.deepEqual(constrain(p, p.art.at(-1)), { ...p.art.at(-1) });
+});
+
+test("art on a panel is clamped to that panel, not to a booth wall", () => {
+  const p = blankProject();
+  p.booth.panels = [{ id: "one", width: 36, height: 60, x: 0, z: 0, rotation: 0 }];
+  const a = { id: "x", asset: null, title: "t", wall: panelKey("one"),
+    x: 200, y: 200, w: 24, h: 30, thickness: 1.5, offset: 0.75 };
+  const held = constrain(p, a);
+  assert.equal(held.x, 12, "36 wide less a 24 wide panel");
+  assert.equal(held.y, 30, "60 tall less a 30 tall panel");
+});
+
+test("an invalid panel, or art naming a panel that is absent, is rejected", () => {
+  const bad = (mutate) => {
+    const p = demoProject();
+    mutate(p);
+    assert.throws(() => validateProject(p), /not a valid Booth Studio v1 backup/);
+  };
+  bad((p) => (p.booth.panels = [{ id: "a", width: 4, height: 60, x: 0, z: 0, rotation: 0 }]));
+  bad((p) => (p.booth.panels = [{ id: "a", width: 36, height: 60, x: 0, z: 0, rotation: 400 }]));
+  bad((p) => (p.booth.panels = [{ id: "a", width: 36, height: 60, x: 0, z: 0 }]));
+  // A colon in an id would make "panel:<id>" ambiguous.
+  bad((p) => (p.booth.panels = [{ id: "a:b", width: 36, height: 60, x: 0, z: 0, rotation: 0 }]));
+  bad((p) => {
+    p.booth.panels = [
+      { id: "a", width: 36, height: 60, x: 0, z: 0, rotation: 0 },
+      { id: "a", width: 36, height: 60, x: 0, z: 0, rotation: 0 },
+    ];
+  });
+  bad((p) => (p.art[0].wall = "panel:missing"));
+  bad((p) => (p.booth.panels = Array.from({ length: MAX_PANELS + 1 }, (_, i) =>
+    ({ id: "p" + i, width: 36, height: 60, x: 0, z: 0, rotation: 0 }))));
+});
+
+test("the hanging guide gives a panel its own elevation and where it stands", () => {
+  const p = demoProject();
+  p.booth.panels = [{ id: "one", name: "Center panel", width: 72, height: 84, x: -6, z: 18, rotation: 90 }];
+  p.art.push({ id: "on-panel", asset: null, title: "Front piece", wall: "panel:one",
+    x: 4, y: 30, w: 24, h: 30, thickness: 1.5, offset: 0.75 });
+  const g = hangingGuide(p);
+  assert.match(g, /Center panel · front · 72 × 84 in/);
+  assert.match(g, /standing -6.0″ right \/ 18.0″ forward of centre, turned 90°/);
+  assert.match(g, /Front piece/);
+  // A panel's empty back face is skipped, the way an empty exterior face is.
+  assert.equal(/Center panel · back/.test(g), false);
+});
+
+test("a dragged free-standing wall stays inside the footprint", () => {
+  const p = demoProject();
+  const panel = { id: "one", width: 72, height: 84, x: 0, z: 0, rotation: 0 };
+  assert.deepEqual(panelRange(p), { x: p.booth.width / 2, z: p.booth.depth / 2 });
+  // Inside the booth, a drag is taken as measured.
+  assert.deepEqual(constrainPanel(p, { ...panel, x: -18.5, z: 24 }),
+    { ...panel, x: -18.5, z: 24 });
+  // Past either edge, it stops at the footprint line rather than walking out
+  // of the booth it is furniture for.
+  const out = constrainPanel(p, { ...panel, x: 900, z: -900 });
+  assert.equal(out.x, p.booth.width / 2);
+  assert.equal(out.z, -p.booth.depth / 2);
+  // Nothing else about the wall is touched by a move.
+  assert.equal(out.width, 72);
+  assert.equal(out.rotation, 0);
+  // A wider booth gives a longer drag.
+  p.booth.width = 240;
+  assert.equal(constrainPanel(p, { ...panel, x: 900, z: 0 }).x, 120);
 });

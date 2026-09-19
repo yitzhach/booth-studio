@@ -289,6 +289,13 @@ export class SurfaceTextures {
     this.claims.delete(consumer);
     this.drop(consumer, id);
   }
+  // Releases every consumer under a prefix that is not in `keep`. A deleted
+  // free-standing panel takes its wall consumer with it; without this its
+  // claim would hold the set alive for the rest of the session.
+  releaseMatching(prefix, keep) {
+    for (const consumer of [...this.claims.keys()])
+      if (consumer.startsWith(prefix) && !keep.has(consumer)) this.release(consumer);
+  }
   // Disposes one consumer's clones, and the set itself once the last consumer
   // has let go of it.
   drop(consumer, id) {

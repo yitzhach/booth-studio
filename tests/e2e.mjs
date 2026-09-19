@@ -281,6 +281,18 @@ try {
   pass(
     "Photo light overlays and high-resolution export retain original aspect ratio",
   );
+  // A free-standing panel, with art on it, must survive the round trip — the
+  // whole point of adding `booth.panels` beside `booth.walls` rather than
+  // widening `walls` itself.
+  await page.evaluate(() => {
+    window.__booth.mutate(() => {
+      const p = window.__booth.project;
+      p.booth.panels = [{ id: "e2e-panel", name: "Divider", width: 60, height: 84, x: 12, z: -6, rotation: 30 }];
+      p.art[0].wall = "panel:e2e-panel";
+      p.art[0].x = 2;
+      p.art[0].y = 24;
+    });
+  });
   const backupDL = page.waitForEvent("download");
   await page.locator('[data-action="backup"]').click();
   await (await backupDL).saveAs(path.join(out, "roundtrip.json"));
@@ -306,9 +318,31 @@ try {
     await page.evaluate(() => window.__booth.project.photo.layers.length),
     1,
   );
-  pass(
-    "Portable backup round-trip restores original assets, photo layers and lighting",
+  assert.deepEqual(
+    await page.evaluate(() => window.__booth.project.booth.panels),
+    [{ id: "e2e-panel", name: "Divider", width: 60, height: 84, x: 12, z: -6, rotation: 30 }],
   );
+  assert.equal(
+    await page.evaluate(() => window.__booth.project.art[0].wall),
+    "panel:e2e-panel",
+  );
+  pass(
+    "Portable backup round-trip restores original assets, photo layers, lighting and free-standing walls",
+  );
+  // And a backup written before panels existed still opens: strip the key the
+  // way a schema-1 file from an older build has it stripped.
+  const legacy = { ...backupJSON };
+  legacy.booth = { ...backupJSON.booth };
+  delete legacy.booth.panels;
+  legacy.art = backupJSON.art.map((a) =>
+    a.wall.startsWith("panel:") ? { ...a, wall: "back" } : a);
+  legacy.name = "Legacy schema-1";
+  await fs.writeFile(path.join(out, "legacy.json"), JSON.stringify(legacy));
+  await page.locator("#backup-input").setInputFiles(path.join(out, "legacy.json"));
+  await page.locator("#confirm-go").click();
+  assert.equal(await page.getByLabel("Project name").inputValue(), "Legacy schema-1");
+  assert.equal(await page.evaluate(() => window.__booth.project.art[0].wall), "back");
+  pass("A schema-1 backup with no panels key still opens unchanged");
   await page.waitForFunction(() =>
     document.querySelector("#save-status").textContent.includes("Saved"),
   );

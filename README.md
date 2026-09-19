@@ -22,7 +22,9 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 
 ## Current behavior
 
-- Booth sizes, back/left/right walls, four tent forms, lighting and procedural/photo surroundings.
+- Booth sizes, back/left/right walls, free-standing interior walls you can click and drag across the floor, four tent forms, lighting and procedural/photo surroundings.
+- Two booth venues. The **Art show** tool switches the booth to an indoor convention booth: seamless white pro-panel walls (144″ back, 120″ sides, 144″ tall by default), no canopy, a light bar across the front carrying nine directional heads that spot each wall, and an optional white exhibition hall with 30 ft ceilings and neighbouring booths. Booth dimensions, wall dimensions and the individual display panel (38″ by default) are all typed in inches, and the walls can be rebuilt from the panel module. See `ART_SHOW_PHASE.md`.
+- The **Walls** tool holds everything that stands on the booth floor: free-standing display walls, and pedestals (44″ × 12″ × 12″ by default, solid top, for cards, a tablet or a guest book). Double-click a pedestal in the booth to pick it up, then drag it across the floor or use its sliders. Both are measured in inches from the centre of the floor.
 - Environment presets light the booth from an HDRI and can supply a photographed backdrop; without those files a preset keeps the procedural surroundings. See `docs/HDRI-ASSETS.md`.
 - Ground surfaces (studio, grass, concrete, asphalt, carpet, wood) use real PBR texture sets when their files are present, tiled from the surface's real-world size; otherwise the procedural canvas ground. See `docs/TEXTURE-ASSETS.md`.
 - Dragging artwork snaps to 1 inch by default; the Snap 1″ toolbar button turns it off for fine placement.
@@ -38,7 +40,7 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 - Non-destructive rotate, flip, exposure, contrast, saturation, temperature and tint.
 - Image-edit preview is live; edits can be copied and pasted between placements.
 - Artist signs and small artwork labels use the same wall-placement system.
-- PNG exports at 2048/4096 px and printable measured hanging guides.
+- PNG exports at 2048/4096 px and printable measured hanging guides. A guide also lists any pedestals and, for an art-show booth, every light-bar fixture and what it is aimed at.
 - People for scale: stylised figures at real heights — 5′6″ and 6′0″ by default, each editable — placed from Layout → People. `src/people.js`.
 - Spotlight housings hide themselves under an indoor environment preset, where the hall's own track lighting is already in the picture. Lighting → Spotlight fixtures overrides it either way; the rail always stays.
 - Custom video mode: a timeline of your own keyframes, each captured from the viewport, with per-keyframe time, hold and ramp, fade in and out, and an optional lens flare that tracks the camera. It renders through the same `(t) -> pose` contract the fixed moves do, so the encoder and the muxer are untouched; see `CUSTOM_VIDEO_PHASE.md`.
@@ -68,7 +70,7 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 ## Architecture
 
 - `src/main.js`: interface, actions, inspector and undo/redo.
-- `src/model.js`: schema validation, geometry and wall constraints.
+- `src/model.js`: schema validation, geometry and wall constraints. `wallSpec()` answers for a perimeter wall and a free-standing panel alike; every wall lookup goes through it.
 - `src/scene.js`: Three.js booth, artwork interaction, lighting, the backdrop pass, and image and video export.
 - `src/timeline.js`, `src/flare.js`: custom camera timelines and the lens flare's arithmetic. Pure, and covered in Node.
 - `src/camera-path.js`: the filmic camera moves. Pure geometry — no three.js, no DOM — so every move is covered in Node.
@@ -89,6 +91,6 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 
 ## Verification
 
-Run `npm test` (128 tests) and `npm run build` for every change. When a WebGL-capable browser is available, also run `npm run test:browser`, `npm run test:view`, and `node tests/wall-assets.mjs` — all three are green. In the cloud sandbox, prefix them with `BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium`. Test desktop plus iPhone/iPad interaction and a 4096 export.
+Run `npm test` (162 tests) and `npm run build` for every change. When a WebGL-capable browser is available, also run `npm run test:browser`, `npm run test:view`, and `node tests/wall-assets.mjs` — all three are green. In the cloud sandbox, prefix them with `BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium`. Test desktop plus iPhone/iPad interaction and a 4096 export.
 
 For a new development chat, read only `HANDOFF.md` first. Read this file when commands or architecture are needed. Read `PBR_PHASE.md` when working on HDRI lighting or PBR surfaces, `docs/HDRI-ASSETS.md` and `docs/TEXTURE-ASSETS.md` to add the asset files, and `AI_EXPORT_PHASE.md` only when implementing the paid AI export phase. `docs/ORIGINAL-HANDOFF.md` is historical reference, not current instructions.
