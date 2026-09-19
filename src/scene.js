@@ -7,7 +7,7 @@ import { TextureCache } from "./texture-cache.js";
 import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY, showFixtures } from "./lighting.js";
 import { GROUND_CONSUMER, TENT_CONSUMER, TENT_WEAVE, WALL_CONSUMER, WALL_SET, UV_METRE, SurfaceTextures } from "./surfaces.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
-import { IN, PEDESTAL, boothPedestals, constrain, constrainPanel, constrainPedestal, findPanel, findPedestal, isArtShow, lightBarSpec, isPanelKey, scalePanel, wallKeys, wallSpec } from "./model.js";
+import { IN, PEDESTAL, boothPedestals, constrain, groundKind, groundUpload, constrainPanel, constrainPedestal, findPanel, findPedestal, isArtShow, lightBarSpec, isPanelKey, scalePanel, wallKeys, wallSpec } from "./model.js";
 import { lightBarBounce, lightBarFixtures, lightBarOptics, lightBarRail } from "./lightbar.js";
 import { makePerson } from "./people.js";
 import { frameTimes, resolveMove, samplePath } from "./camera-path.js";
@@ -581,7 +581,7 @@ export class BoothScene {
     this.disposeGroup();
     this.textureCache.retain([
       ...p.art.filter(a => a.asset).map(a => ({ id: a.asset, edits: a.edits, data: p.assets[a.asset]?.data })),
-      ...[p.booth.surroundAsset, p.booth.groundAsset].filter(Boolean)
+      ...[p.booth.surroundAsset, groundUpload(p)].filter(Boolean)
         .map(id => ({ id, edits: null, data: p.assets[id]?.data })),
     ]);
     this.artObjects = [];
@@ -634,18 +634,20 @@ export class BoothScene {
       this.scene.backgroundRotation.x = (p.booth.backdropTilt || 0) * Math.PI / 180;
       this.scene.fog = null;
     }).catch(() => {});
-    // A photographed ground surface, when its files are present. The user's own
-    // ground photo outranks it, exactly as a user panorama outranks a preset
-    // backdrop, and with no files the procedural canvas above stays.
-    if (!p.booth.groundAsset) this.surfaces.load(p.booth.ground).then(set => {
+    // A photographed ground surface, when its files are present. The floor is
+    // one choice from one list, so a shipped kind and the user's own
+    // photograph are alternatives here rather than one overriding the other;
+    // with no files the procedural canvas above stays.
+    const groundPhoto = groundUpload(p);
+    if (!groundPhoto) this.surfaces.load(groundKind(p)).then(set => {
       if (this.revision !== rev || !set) return;
       const floor = this.group.getObjectByName("environment-ground");
       if (this.surfaces.applyTo(floor, set)) this.renderer.shadowMap.needsUpdate = true;
     }).catch(() => {});
-    // The user's own photograph wins, so the texture set the ground was holding
-    // is handed back rather than left on the GPU behind it.
-    if (p.booth.groundAsset) this.surfaces.release(GROUND_CONSUMER);
-    if (p.booth.groundAsset) this.texture(p.booth.groundAsset).then(t => {
+    // A photograph is showing, so the texture set the ground was holding is
+    // handed back rather than left on the GPU behind it.
+    if (groundPhoto) this.surfaces.release(GROUND_CONSUMER);
+    if (groundPhoto) this.texture(groundPhoto).then(t => {
       if (this.revision !== rev) return;
       const floor = this.group.getObjectByName("environment-ground"), map = t.clone();
       map.mapping = T.UVMapping;

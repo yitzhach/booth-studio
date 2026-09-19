@@ -18,6 +18,14 @@ Extend it; do not rebuild it.
 - The photoreal phase (`PBR_PHASE.md`) is done through Phase 4: HDRI lighting,
   PBR ground surfaces, the tent canvas and a fabric wall finish. Assets are
   committed and live. `public/assets` is 28 MB of a ~50 MB budget.
+- **The ground is one list with two groups.** Layout → Surroundings → Ground
+  now holds **Preset grounds** (the six shipped PBR kinds) and **Your
+  photographs** (uploads, each named) in one picker, and selecting either
+  switches the floor. This removes the upload-outranks-preset behaviour that
+  was reported three times as a broken dropdown: there is no override and
+  nothing to remove before a preset works. `booth.ground` holds a kind or
+  `"upload:<asset id>"`; an older backup's `booth.groundAsset` is read as the
+  first entry of the library and never dropped. `GROUND_LIBRARY_PHASE.md`.
 - **Video export is done.** Four eased camera moves, a live preview, and an MP4
   written by hand. `src/camera-path.js`, `src/video.js`,
   `scene.previewMove()` and `scene.recordVideo()`.
@@ -132,10 +140,11 @@ Extend it; do not rebuild it.
    draws its canvas. The third report from the same round — the backdrop
    filling the top of the frame as a smear — **was** reproduced and is fixed;
    see the pole limit above. For the other two, get `window.BOOTH_ASSETS` and
-   `window.BOOTH_BUILD` from the browser seeing it before touching code: the
-   two known causes are an uploaded ground photograph outranking the ground
-   kind (item 7) and a stale deploy, and neither is visible from the
-   repository. Both look exactly like a broken dropdown.
+   `window.BOOTH_BUILD` from the browser seeing it before touching code. Of
+   the two known causes, an uploaded ground photograph outranking the ground
+   kind **can no longer happen** — presets and uploads are one list now. That
+   leaves a stale deploy, which is not visible from the repository and looks
+   exactly like a broken dropdown.
 3. **The two shipped backdrops are 1024×512 and read soft.** This is the one
    open bug with a known fix. Both were prepped from Poly Haven's **1K** HDRI,
    and `tools/hdri-prep.mjs` will not stretch a backdrop past its source. Re-prep
@@ -201,12 +210,10 @@ Extend it; do not rebuild it.
      because a true-depth weave on a white roof washes out.
 6. **A `home` HDRI** is still missing — an interior with windows on one side.
    That preset falls back procedurally until someone downloads one.
-7. **Two ground-texture sets — presets and a user-uploaded library.** Requested
-   after an upload was found to override the preset picker, which is today's
-   design and reads as a broken dropdown. Planned in `FUTURE_BUILD.md`; not
-   started. **This is the most likely explanation of any "the ground texture
-   does nothing" report** — check `booth.groundAsset` before the loader, and
-   see item 2.
+7. **Nobody has looked at the new ground picker.** Two labelled groups in one
+   dropdown — see Now. Whether they read as obviously as intended, and whether
+   "Delete this ground photograph" is clear enough that nobody expects it to
+   merely deselect, are judgements about a picker on a live site.
 8. **Figures are stylised mannequins.** No faces, no clothing, mid-grey. If
    they need to read as a crowd rather than as scale references, that is a
    different asset and a different phase.
@@ -224,11 +231,13 @@ This came up twice and was guessed at twice. Do not guess a third time.
 whether it loaded and what it found. `window.BOOTH_BUILD` gives the deployed
 commit. `window.__booth` is dev-only.
 
-Two real causes found so far, both of which look like "the dropdown is broken":
+Two real causes were found, and one of them no longer exists:
 
-- **An uploaded ground photograph outranks the Ground kind entirely.** The
-  panel now says so while it is happening. Layout → Surroundings → Remove
-  ground texture.
+- ~~**An uploaded ground photograph outranks the Ground kind entirely.**~~
+  **Fixed.** Presets and uploads are two groups of one picker, so a preset
+  always switches the floor and there is nothing to remove first. An older
+  backup's upload opens as the first entry of the library. If a report from
+  before this shipped mentions Remove ground texture, that is why.
 - **A ground kind whose files are missing** falls back to the procedural
   surface silently. That is by design; `BOOTH_ASSETS` is how you tell that
   apart from a bug.
@@ -245,9 +254,10 @@ every set `loaded` with all four maps at a 2 m tile, and HEAD on every
 `color.jpg` returned 200 `image/jpeg`. The selector, the loader and the
 renderer are not the bug. If it recurs it is state or staleness on that
 browser, so get **`window.BOOTH_ASSETS` and `window.BOOTH_BUILD` from the
-machine seeing it** before touching code — the two known causes (an uploaded
-ground photo outranking the kind, and a stale deploy) both look exactly like
-this and neither is visible from the repository.
+machine seeing it** before touching code. The remaining known cause is a stale
+deploy, which looks exactly like this and is not visible from the repository;
+the other one, an uploaded ground photo outranking the kind, was removed when
+the picker became one list.
 
 ## Diagnosing "the video won't play"
 
@@ -292,9 +302,9 @@ this and neither is visible from the repository.
 
 ```sh
 npm ci
-npm test                 # 205 Node tests
+npm test                 # 214 Node tests
 npm run build
-npm run test:view        # camera, city, env presets, HDRI, ground, tent, walls, video, timeline, people, panels, art show
+npm run test:view        # camera, city, env presets, HDRI, ground, ground library, tent, walls, video, timeline, people, panels, art show
 npm run test:browser     # 19 end-to-end checks
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
 ```
@@ -319,7 +329,12 @@ hidden a failure once. Run each suite directly.
   and `pedestals` — the same way, and `lightBar.diffusion` later became a
   sixth, nested inside one of them. `artShowPanel()` / `lightBarSpec()` /
   `hallSpec()` are the only things that read any of them, so `undefined` means
-  the defaults everywhere.
+  the defaults everywhere. The ground library then widened `booth.ground` from
+  an enum of kinds to "a kind **or** `upload:<asset id>`" and added one
+  optional key, `groundPreset` — a widened enum and an optional field, the two
+  moves that are allowed. `booth.groundAsset` still opens and still shows its
+  floor; `adoptGroundAsset()` reads it as the first library entry rather than
+  dropping it.
 - **Never alter stored original image data.** Edits belong to placements.
 - The city skyline must stay **seeded**, never `Math.random`: it rebuilds on
   every `update()` and would reshuffle on each edit. `tests/view-city.mjs`
@@ -449,7 +464,10 @@ hidden a failure once. Run each suite directly.
 - `src/timeline.js`, `src/flare.js` — the keyframe sampler and the flare's
   arithmetic. Both pure, both covered in Node.
 - `src/people.js` — the figures, their canon proportions and their defaults.
-- `FUTURE_BUILD.md` — requested, deliberately not started.
+- `GROUND_LIBRARY_PHASE.md` — presets and uploaded grounds as one list: the
+  widened `booth.ground`, why the library is a filter over the assets rather
+  than a second list, and how an older backup's override is adopted.
+- `FUTURE_BUILD.md` — requested, deliberately not started. Currently empty.
 - `docs/HDRI-ASSETS.md`, `docs/TEXTURE-ASSETS.md` — adding asset files.
 - `AI_EXPORT_PHASE.md` — only for AI-export implementation.
 - `docs/ORIGINAL-HANDOFF.md` — historical; ignore unless you need old
