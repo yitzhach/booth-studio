@@ -55,7 +55,13 @@ export const DEFAULT_PRESET = "studio";
 // as a bug. Outdoors and in the neutral studio there is no hall, so the
 // fixtures are the only thing telling you where the light comes from.
 export const INDOOR_PRESETS = new Set(["tradeshow", "home"]);
-export const isIndoor = (preset) => INDOOR_PRESETS.has(preset || DEFAULT_PRESET);
+// A venue of "artshow" is indoors whatever the environment picker says: the
+// art-show booth stands in its own white hall with a light bar over it, and
+// that hall is the thing the fixtures would be duplicating. The environment
+// preset is a separate question — it defaults to the neutral studio there —
+// so both are asked.
+export const isIndoor = (preset, venue) =>
+  venue === "artshow" || INDOOR_PRESETS.has(preset || DEFAULT_PRESET);
 
 // Whether the spotlight housings are drawn. "auto" is the default and means
 // "not indoors"; the other two are for someone who disagrees with that, which
@@ -66,8 +72,8 @@ export const FIXTURE_MODES = {
   never: "Never show",
 };
 export const DEFAULT_FIXTURES = "auto";
-export const showFixtures = (mode, preset) =>
-  (mode || DEFAULT_FIXTURES) === "always" ? true : (mode || DEFAULT_FIXTURES) === "never" ? false : !isIndoor(preset);
+export const showFixtures = (mode, preset, venue) =>
+  (mode || DEFAULT_FIXTURES) === "always" ? true : (mode || DEFAULT_FIXTURES) === "never" ? false : !isIndoor(preset, venue);
 
 // Artwork fidelity. "accurate" keeps the environment out of the artwork's
 // shading so uploaded colour reads true; the lighting studio's own spotlights

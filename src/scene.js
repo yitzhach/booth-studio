@@ -838,7 +838,7 @@ export class BoothScene {
         }
       }
     }
-    const fixtures = showFixtures(p.booth.fixtures, p.booth.envPreset);
+    const fixtures = showFixtures(p.booth.fixtures, p.booth.envPreset, p.booth.venue);
     for (const l of p.lights) {
       const light = new T.SpotLight(
         temperature(l.kelvin),

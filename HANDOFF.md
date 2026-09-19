@@ -46,11 +46,18 @@ Extend it; do not rebuild it.
   far enough and the backdrop stops widening and falls back to the camera's own
   lens, which never shears. The lens and the horizon lock settle together in
   two passes, so the limit cannot silently switch the lock off.
+- **An art-show booth opens neutral.** The venue switch now also sets the
+  environment preset to the neutral studio, alongside the studio floor and
+  horizon it already set: a photographed warehouse behind a seamless white
+  indoor booth is one venue's light on another's walls. All three stay
+  editable afterwards — it is a default, not a lock.
 - **Spotlight housings hide themselves indoors.** Under `tradeshow` or `home`
   the hall's own track lighting is already in frame, so the booth's fixtures
   are clutter hanging in mid-air. Lighting → Spotlight fixtures: Auto (the
   default), Always show, Never show. The rail above the booth always stays;
-  only the housings go, and the light itself is unchanged.
+  only the housings go, and the light itself is unchanged. An art-show booth
+  counts as indoors whatever the environment picker says, because it has its
+  own light bar overhead.
 - **People for scale.** Layout → People: add a woman (5′6″) or a man (6′0″),
   up to six, each with editable height, position and facing. `src/people.js`
   builds them; they are stylised on purpose, and excluded from the hanging
@@ -263,7 +270,7 @@ this and neither is visible from the repository.
 
 ```sh
 npm ci
-npm test                 # 197 Node tests
+npm test                 # 200 Node tests
 npm run build
 npm run test:view        # camera, city, env presets, HDRI, ground, tent, walls, video, timeline, people, panels, art show
 npm run test:browser     # 19 end-to-end checks

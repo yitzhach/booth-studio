@@ -240,3 +240,27 @@ test("diffusion outside 0..1 is not a project", () => {
   p.booth.lightBar = { ...lightBarSpec(p.booth), diffusion: 1.5 };
   assert.throws(() => validateProject(p));
 });
+
+// Switching venue also switches the surroundings. An HDRI of a warehouse or an
+// outdoor fair behind a seamless white indoor booth is one venue's light and
+// another's walls, and it reads exactly as wrong as it is.
+test("an art-show booth opens in the neutral studio environment", () => {
+  const p = blankProject();
+  p.booth.envPreset = "tradeshow";
+  p.booth.ground = "grass";
+  p.booth.horizon = "park";
+  applyVenue(p, "artshow");
+  assert.equal(p.booth.envPreset, "studio");
+  assert.equal(p.booth.ground, "studio");
+  assert.equal(p.booth.horizon, "studio");
+  assert.doesNotThrow(() => validateProject(p));
+});
+
+test("but the environment stays editable afterwards, and going back outdoors leaves it alone", () => {
+  const p = blankProject();
+  applyVenue(p, "artshow");
+  p.booth.envPreset = "tradeshow";
+  assert.doesNotThrow(() => validateProject(p), "a photographed hall is still a legal choice indoors");
+  applyVenue(p, "outdoor");
+  assert.equal(p.booth.envPreset, "tradeshow", "leaving the art show does not reach into the picker");
+});

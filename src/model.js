@@ -210,6 +210,12 @@ export function applyVenue(p, venue) {
     b.tent = false;
     b.ground = "studio";
     b.horizon = "studio";
+    // The neutral studio environment, not whatever photographed hall was
+    // selected before. An HDRI of a warehouse or an outdoor art fair behind a
+    // seamless white indoor booth is the surroundings of one venue lit onto
+    // another, and it reads exactly as wrong as it is. Like everything else
+    // here it is a default: the Environment picker still works afterwards.
+    b.envPreset = "studio";
     b.wallFinish = "smooth";
     b.artShow = { ...artShowPanel(b), height: spec.wallHeight };
     b.lightBar = { ...lightBarSpec(b), on: true };
