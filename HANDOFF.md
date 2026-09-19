@@ -10,10 +10,11 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-19** — the art-show booth, the pedestals, the two new
-  tools, the light-bar diffusion slider, the backdrop pole limit, people for
-  scale, indoor fixture hiding and the Ken Burns move are all on `main` and
-  live. Nothing is sitting unmerged on a branch.
+- **Last deploy: 2026-09-19** — the art-show booth and its neutral defaults,
+  the pedestals, the Walls tool, the light-bar diffusion slider, the backdrop
+  pole limit, people for scale, indoor fixture hiding, the Ken Burns move, the
+  Video tab with its batch list and the overhead lens flare are all on `main`
+  and live. Nothing is sitting unmerged on a branch.
 - The photoreal phase (`PBR_PHASE.md`) is done through Phase 4: HDRI lighting,
   PBR ground surfaces, the tent canvas and a fabric wall finish. Assets are
   committed and live. `public/assets` is 28 MB of a ~50 MB budget.
@@ -154,6 +155,12 @@ Extend it; do not rebuild it.
    play, start here.
 5. **Unverified on real hardware** — things no one has confirmed by eye,
    because no agent session can load the live site:
+   - **Nobody has looked at the Video tab, a batch export or the overhead
+     lens flare.** The batch list is covered in a real browser (queue two
+     clips, check each keeps its own settings, remove one, clear the list) and
+     the overhead flare is checked to throw in a booth with no spotlights, but
+     where the flare's ghosts fall over a real render, and whether a batch of
+     four 1080p clips is a reasonable wait on a real machine, are judgements.
    - **Nobody has looked at a figure standing in a booth**, at the backdrop
      zoomed wide after the pole limit landed, or at a Ken Burns clip. The
      figures' heights are pinned in metres by a test that reads the meshes
@@ -410,13 +417,18 @@ hidden a failure once. Run each suite directly.
   claim their set under `wall:<key>`, and the three perimeter walls are
   forever. A panel is not, so `surfaces.releaseMatching()` now hands back every
   `wall:` claim that is not in the current wall list on each rebuild.
-- **`tests/view-video.mjs`, `tests/view-timeline.mjs` and `tests/environment.mjs`
-  are flaky in this sandbox**, and it is not a regression to chase. All three
-  have assertions timed against wall clock — a preview must report progress, a
-  4096px export must finish inside 30s — and swiftshader is slow enough to
-  miss them at random. `view-video` and `environment` fail on `main` as well;
-  `view-timeline` passed and then failed on two consecutive runs of the same
-  commit. Re-run before believing any of the three.
+- **The video suites' preview flakiness was fixed, not re-run.** They read the
+  camera 220-250 ms after starting a preview and asserted it had moved; under
+  swiftshader the first frame can take most of a second, so the read landed
+  before the move began. They now sample from inside the preview's own
+  progress callback, which only fires once a frame is drawn. If you write a
+  browser assertion timed against wall clock in this repo, expect it to fail
+  here at random — time it against something the renderer did instead.
+- **`tests/environment.mjs` is still flaky in this sandbox**, and it is not a
+  regression to chase. All three
+  Its assertions are timed against wall clock — a 4096px export must finish
+  inside 30s — and swiftshader is slow enough to miss that at random. Re-run
+  before believing it.
 - **The tent weave is exaggerated 3x** over its literal depth. A true-depth
   weave on a white, brightly lit, tone-mapped roof is invisible. That is a
   rendering choice, not a measurement, and it is commented as one.
