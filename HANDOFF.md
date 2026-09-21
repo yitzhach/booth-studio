@@ -22,13 +22,13 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
-- **Unmerged, on `claude/nice-hawking-dynrum`:** fast edit mode, the light
-  bar's two widened ranges, trade show as a white hall with the warehouse
-  split out as its own preset, a hide switch and placement/scale sliders for
-  the figures, and neighbouring booths that match this booth's size and face
-  the right way. All five came from looking at the live site. Every suite is
-  green on the branch: 218 Node tests, all eleven view suites, the browser
-  suite and `wall-assets`.
+- **Merged and deployed 2026-09-21:** fast edit mode, the light bar's two
+  widened ranges, trade show as a white hall with the warehouse split out as
+  its own preset, a hide switch and placement/scale sliders for the figures,
+  and neighbouring booths that match this booth's size and face the right way.
+  All five came from looking at the live site. Nothing is sitting unmerged on
+  a branch. Every suite was green before the merge: 218 Node tests, all eleven
+  view suites, the browser suite and `wall-assets`.
 - The photoreal phase (`PBR_PHASE.md`) is done through Phase 4: HDRI lighting,
   PBR ground surfaces, the tent canvas and a fabric wall finish. Assets are
   committed and live. `public/assets` is 28 MB of a ~50 MB budget.
@@ -273,7 +273,7 @@ Extend it; do not rebuild it.
    sounds like a delete rather than a deselect; and whether the placement
    sliders have useful travel on a 10 ft wall. All judgements on a live site.
 
-   **Nor at anything on the branch** — see Now. Specifically: whether trade
+   **Nor at anything in the 2026-09-21 merge** — see Now. Specifically: whether trade
    show now reads as the white hall it is meant to be; whether the warehouse
    is worth keeping as its own preset at 1024px (see item 3 — it is the soft
    one); whether the figures' new sliders have useful travel, given they reach
