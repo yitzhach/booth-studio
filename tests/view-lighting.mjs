@@ -21,7 +21,7 @@ try {
  // The control exists and offers every preset.
  await page.click('[data-tab="layout"]');
  const options=await page.$$eval('select[aria-label="Environment"] option',o=>o.map(x=>x.value));
- assert.deepEqual(options,['studio','tradeshow','artfair','home'],'all presets offered');
+ assert.deepEqual(options,['studio','tradeshow','warehouse','artfair','home'],'all presets offered');
 
  // Selecting an asset-backed preset with no assets on disk must not throw and
  // must not strip the procedural backdrop the horizon setting supplies.

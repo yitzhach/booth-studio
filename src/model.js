@@ -170,18 +170,50 @@ export const OUTDOOR = {
 };
 /** The individual display panel an art-show wall is built from. */
 export const ART_SHOW_PANEL = { width: 38, height: 144, linked: false };
+// The top of the Diffusion scale. It was 1 — "a fully frosted head" — until a
+// booth was looked at on a real monitor and reported as still harsh with the
+// slider at its maximum. The scale now runs to 3, and the extra travel is not
+// more frost: past 1 the hall itself takes over, opening the cones until they
+// stop reading as cones at all and letting the bounce off white walls do the
+// lighting. See `lightBarOptics`, which is where the two halves are written
+// out and where the reason each number stops where it does is recorded.
+//
+// **0..1 means exactly what it meant before.** Widening the range would have
+// been worthless if it moved the numbers underneath an already-composed booth:
+// a backup saved at 0.7 must light identically today. `lightBarOptics` is
+// piecewise for that reason alone, and `tests/artshow.test.js` pins the old
+// endpoints against literals rather than against the curve that produces them.
+export const DIFFUSION_MAX = 3;
+// What the Fixture brightness slider offers, which is deliberately not what
+// the schema accepts. A bar was judged on a real monitor at 70 and called
+// "beyond bright", so 300 was three hundred units of slider nobody can use:
+// the whole useful range was squeezed into the first fifth of the travel, in
+// steps of 5, which is why the control felt like it had two settings.
+//
+// The schema still accepts 0..300 and always will — narrowing a stored range
+// would refuse to open a backup that is already on someone's disk, which is
+// the one thing schema 1 must never do. A booth saved above this keeps its
+// value and widens its own slider instead; see `lightBarLevels` in main.js.
+export const LIGHT_BAR_POWER_SLIDER_MAX = 70;
 export const LIGHT_BAR = {
   on: true,
   height: 132,
   count: 9,
   power: 60,
   kelvin: 3500,
-  // How diffused the wall wash is, 0..1. A real art-fair bar carries a frost
-  // or a barn-door diffuser over each head, and the hall's white walls bounce
-  // the rest; a bare point source aimed at a wall is what makes nine heads
-  // read as nine hot pools with nine crossing shadows behind every pedestal.
-  // 0 is the bare source, 1 is a fully frosted wash. See `lightBarOptics`.
-  diffusion: 0.7,
+  // How diffused the wall wash is, 0..DIFFUSION_MAX. A real art-fair bar
+  // carries a frost or a barn-door diffuser over each head, and the hall's
+  // white walls bounce the rest; a bare point source aimed at a wall is what
+  // makes nine heads read as nine hot pools with nine crossing shadows behind
+  // every pedestal. 0 is the bare source, 1 is a fully frosted head, 3 is a
+  // booth lit mostly by the room. See `lightBarOptics`.
+  //
+  // The default was 0.7 and is 1.5: 0.7 was a number chosen rather than
+  // derived, and the first person to judge it on a real monitor said it was
+  // still harsh. 1.5 is half again past what the old scale could reach at all.
+  // It is a judgement made by eye, which is exactly the kind of thing a later
+  // diff will "clean up" back to a rounder number — don't.
+  diffusion: 1.5,
 };
 // 30 foot ceilings, as asked. The ceiling itself is off by default: it is
 // almost always out of frame, and drawing it puts a grey wash over the booth.
@@ -520,7 +552,7 @@ export function validateProject(p) {
       l.count !== Math.round(l.count) ||
       !finite(l.power, 0, 300) ||
       !finite(l.kelvin, 2700, 6500) ||
-      (l.diffusion !== undefined && !finite(l.diffusion, 0, 1))
+      (l.diffusion !== undefined && !finite(l.diffusion, 0, DIFFUSION_MAX))
     )
       fail();
   }
@@ -575,6 +607,9 @@ export function validateProject(p) {
   if (p.booth.backdropTilt !== undefined && !finite(p.booth.backdropTilt, -45, 45)) fail();
   if (p.booth.backdropLock !== undefined && typeof p.booth.backdropLock !== "boolean") fail();
   if (p.booth.fixtures !== undefined && !["auto", "always", "never"].includes(p.booth.fixtures)) fail();
+  // Whether the figures are drawn. Optional and absent from every backup
+  // written before it, so undefined means "shown", which is what they all say.
+  if (p.booth.showPeople !== undefined && typeof p.booth.showPeople !== "boolean") fail();
   if (p.booth.people !== undefined) {
     if (!Array.isArray(p.booth.people) || p.booth.people.length > 6) fail();
     for (const person of p.booth.people) {
@@ -737,16 +772,31 @@ export function convex(q) {
   });
 }
 
-/** Neighbors use nominal footprint-edge gaps in inches, not center spacing. */
+/**
+ * Neighbors use nominal footprint-edge gaps in inches, not center spacing.
+ *
+ * Each neighbour is the same size as this booth. A hall sells a row of equal
+ * pitches, so a 10 x 20 stand beside two hardcoded 10 x 10 ones was drawing a
+ * row that no hall lays out — and, because the gap was measured to a 120-inch
+ * neighbour's centre, a booth that was not 120 inches deep also put its
+ * neighbours at the wrong distance. Both numbers come from `b` now.
+ *
+ * Each placement also carries which way its booth faces. The one behind is
+ * turned around: it opens onto the next aisle, so what this booth sees over
+ * its back wall is the back of another booth, not the inside of one. Left and
+ * right share this booth's aisle and so share its facing.
+ */
 export function neighborPlacements(b) {
   if (!b.neighbors) return [];
   const layout = b.neighborLayout || "inline", gap = b.neighborGap ?? 24;
-  const result = [], size = 120;
+  const result = [], width = b.width, depth = b.depth;
+  const at = (side, x, z, rotation) => ({ side, x, z, rotation, width, depth });
   if (layout !== "island") {
-    if (layout !== "corner-left") result.push({side:"left", x:-(b.width/2 + gap + size/2), z:0});
-    if (layout !== "corner-right") result.push({side:"right", x:b.width/2 + gap + size/2, z:0});
+    if (layout !== "corner-left") result.push(at("left", -(b.width/2 + gap + width/2), 0, 0));
+    if (layout !== "corner-right") result.push(at("right", b.width/2 + gap + width/2, 0, 0));
   }
-  if (b.neighborRear && layout !== "island") result.push({side:"rear", x:0, z:-(b.depth/2 + (b.rearGap ?? gap) + size/2)});
+  if (b.neighborRear && layout !== "island")
+    result.push(at("rear", 0, -(b.depth/2 + (b.rearGap ?? gap) + depth/2), 180));
   return result;
 }
 /** Uniform size adjustment preserves image proportions and the panel's center. */

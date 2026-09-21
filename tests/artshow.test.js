@@ -5,6 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   ART_SHOW,
+  DIFFUSION_MAX,
   MAX_PEDESTALS,
   OUTDOOR,
   PEDESTAL,
@@ -235,10 +236,84 @@ test("the bounce tracks the bar's own output and stops when it does", () => {
   assert.equal(lightBarBounce(p), 0, "no bar, no bounce");
 });
 
-test("diffusion outside 0..1 is not a project", () => {
+test("diffusion outside 0..DIFFUSION_MAX is not a project", () => {
   const p = artShow();
-  p.booth.lightBar = { ...lightBarSpec(p.booth), diffusion: 1.5 };
+  p.booth.lightBar = { ...lightBarSpec(p.booth), diffusion: DIFFUSION_MAX + 0.01 };
   assert.throws(() => validateProject(p));
+  p.booth.lightBar = { ...lightBarSpec(p.booth), diffusion: -0.01 };
+  assert.throws(() => validateProject(p));
+  // The range was widened from 1 to 3 rather than moved. A booth saved at the
+  // old maximum is still a project, which is the whole point of widening.
+  p.booth.lightBar = { ...lightBarSpec(p.booth), diffusion: 1 };
+  validateProject(p);
+  p.booth.lightBar = { ...lightBarSpec(p.booth), diffusion: DIFFUSION_MAX };
+  validateProject(p);
+});
+
+// The reason the optics curve is piecewise. Someone composed a booth against
+// the lighting that 0.7 produced; widening the slider must not relight it.
+test("widening the scale did not move anything underneath 1", () => {
+  // These are the values the 0..1 table produced before the scale was widened,
+  // written out as literals on purpose: checking the curve against itself
+  // would pass no matter what the curve became.
+  const before = {
+    0: { angle: Math.PI / 8, penumbra: 0.45, shadowIntensity: 1, normalBias: 0.004, powerScale: 1 },
+    0.5: { angle: 0.5454154, penumbra: 0.715, shadowIntensity: 0.66, normalBias: 0.009, powerScale: 0.84 },
+    0.7: { angle: 0.6065019, penumbra: 0.821, shadowIntensity: 0.524, normalBias: 0.011, powerScale: 0.776 },
+    1: { angle: Math.PI / 4.5, penumbra: 0.98, shadowIntensity: 0.32, normalBias: 0.014, powerScale: 0.68 },
+  };
+  for (const [d, want] of Object.entries(before)) {
+    const got = lightBarOptics({ ...LIGHT_BAR, diffusion: +d });
+    for (const key of Object.keys(want))
+      assert.ok(
+        Math.abs(got[key] - want[key]) < 5e-4,
+        `diffusion ${d}: ${key} was ${want[key]} and is now ${got[key]}`,
+      );
+  }
+});
+
+test("past 1 the levers keep going the same way, with no step at the join", () => {
+  const at = (d) => lightBarOptics({ ...LIGHT_BAR, diffusion: d });
+  // Continuity: the two halves meet, rather than the slider jumping as it
+  // crosses the old maximum.
+  const join = at(1), justPast = at(1.0001);
+  for (const key of ["angle", "penumbra", "shadowIntensity", "normalBias", "powerScale"])
+    assert.ok(Math.abs(join[key] - justPast[key]) < 1e-3, `${key} steps at the join`);
+
+  // Monotonic the whole way, in the direction each lever softens.
+  let prev = at(0);
+  for (let d = 0.1; d <= DIFFUSION_MAX + 1e-9; d += 0.1) {
+    const now = at(d);
+    assert.ok(now.angle >= prev.angle, `angle narrows at ${d}`);
+    assert.ok(now.penumbra >= prev.penumbra, `penumbra sharpens at ${d}`);
+    assert.ok(now.shadowIntensity <= prev.shadowIntensity, `shadow darkens at ${d}`);
+    assert.ok(now.powerScale <= prev.powerScale, `softer arrives brighter at ${d}`);
+    prev = now;
+  }
+
+  const top = at(DIFFUSION_MAX);
+  assert.ok(top.penumbra <= 1, "penumbra is a fraction of the cone");
+  assert.ok(top.angle < Math.PI / 2, "a spotlight's cone is still a cone");
+  assert.ok(
+    top.shadowIntensity > 0,
+    "the last of the contact shadow is held on to: at 0 every pedestal floats",
+  );
+  // Clamped, not wrapped: a backup that somehow carries more is lit like 3.
+  assert.deepEqual(at(DIFFUSION_MAX + 5), top, "above the top of the scale is the top of the scale");
+  assert.deepEqual(at(-5), at(0), "below the bottom is the bottom");
+});
+
+test("the bounce ceiling rises past 1 and is unchanged below it", () => {
+  const p = artShow();
+  const bounceAt = (diffusion, power = 300) => {
+    p.booth.lightBar = { ...lightBarSpec(p.booth), diffusion, power };
+    return lightBarBounce(p);
+  };
+  // A bright bar is the only thing that ever reaches the cap, so it is the
+  // only thing that can show the cap moved. At and below 1 it is still 0.6.
+  assert.equal(bounceAt(1), 0.6, "the old ceiling still holds at the old maximum");
+  assert.equal(bounceAt(0.7), 0.6, "and below it");
+  assert.ok(bounceAt(DIFFUSION_MAX) > 0.6, "past 1 the room is allowed to do more of the work");
 });
 
 // Switching venue also switches the surroundings. An HDRI of a warehouse or an
@@ -246,7 +321,7 @@ test("diffusion outside 0..1 is not a project", () => {
 // another's walls, and it reads exactly as wrong as it is.
 test("an art-show booth opens in the neutral studio environment", () => {
   const p = blankProject();
-  p.booth.envPreset = "tradeshow";
+  p.booth.envPreset = "warehouse";
   p.booth.ground = "grass";
   p.booth.horizon = "park";
   applyVenue(p, "artshow");
@@ -259,8 +334,8 @@ test("an art-show booth opens in the neutral studio environment", () => {
 test("but the environment stays editable afterwards, and going back outdoors leaves it alone", () => {
   const p = blankProject();
   applyVenue(p, "artshow");
-  p.booth.envPreset = "tradeshow";
+  p.booth.envPreset = "warehouse";
   assert.doesNotThrow(() => validateProject(p), "a photographed hall is still a legal choice indoors");
   applyVenue(p, "outdoor");
-  assert.equal(p.booth.envPreset, "tradeshow", "leaving the art show does not reach into the picker");
+  assert.equal(p.booth.envPreset, "warehouse", "leaving the art show does not reach into the picker");
 });

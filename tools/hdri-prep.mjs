@@ -300,7 +300,7 @@ const USAGE = `Usage: node tools/hdri-prep.mjs <source.hdr|source.exr> <preset> 
   --license <text>  asset licence                (default ${DEFAULTS.license})
   --out <dir>       output directory             (default public/assets/hdri/<preset>)
 
-Presets that take assets: tradeshow, artfair, home.`;
+Presets that take assets: warehouse, artfair, home.`;
 
 export function parseArgs(argv) {
   const positional = [];

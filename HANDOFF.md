@@ -22,6 +22,13 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **Unmerged, on `claude/nice-hawking-dynrum`:** fast edit mode, the light
+  bar's two widened ranges, trade show as a white hall with the warehouse
+  split out as its own preset, a hide switch and placement/scale sliders for
+  the figures, and neighbouring booths that match this booth's size and face
+  the right way. All five came from looking at the live site. Every suite is
+  green on the branch: 218 Node tests, all eleven view suites, the browser
+  suite and `wall-assets`.
 - The photoreal phase (`PBR_PHASE.md`) is done through Phase 4: HDRI lighting,
   PBR ground surfaces, the tent canvas and a fabric wall finish. Assets are
   committed and live. `public/assets` is 28 MB of a ~50 MB budget.
@@ -113,7 +120,8 @@ Extend it; do not rebuild it.
   horizon it already set: a photographed warehouse behind a seamless white
   indoor booth is one venue's light on another's walls. All three stay
   editable afterwards — it is a default, not a lock.
-- **Spotlight housings hide themselves indoors.** Under `tradeshow` or `home`
+- **Spotlight housings hide themselves indoors.** Under `tradeshow`,
+  `warehouse` or `home`
   the hall's own track lighting is already in frame, so the booth's fixtures
   are clutter hanging in mid-air. Lighting → Spotlight fixtures: Auto (the
   default), Always show, Never show. The rail above the booth always stays;
@@ -159,11 +167,22 @@ Extend it; do not rebuild it.
 1. **Look at the art-show booth on the live site and set Diffusion.** This is
    the first thing to do and it needs a human, not a session: no agent can
    load production. Open Art show, and judge in this order —
-   - **Diffusion** (Light bar, default 0.7) is the one number in the softening
-     pass that was chosen rather than derived. Still harsh? Drag it up. Gone
-     flat and washed out? Drag it down. 0 restores the original hard lighting
-     exactly, so the slider is safe to explore.
-   - **Fixture brightness (60) and 3500K** are the next two judgement calls.
+   - **Diffusion** (Light bar, default 1.5 on a 0..3 scale) is the one number
+     in the softening pass that was chosen rather than derived. It was 0.7 on
+     a 0..1 scale, was judged still harsh at its old maximum, and the scale
+     was widened rather than moved: **0..1 is bit-identical to what it always
+     was**, so a booth composed against 0.7 lights exactly as it did. Past 1
+     the hall takes over — cones opened until they stop reading as cones, and
+     the bounce off white walls doing the lighting. Still harsh at 1.5? Drag
+     it up; 3 is the top. Flat and washed out? Drag it down. 0 restores the
+     original hard lighting exactly, so the slider is safe to explore. If 3 is
+     still not enough, the next lever is the bounce cap in `lightBarBounce`,
+     not more cone.
+   - **Fixture brightness** is the next judgement call. 70 was reported as
+     "beyond bright", so the slider is now 0..70 in steps of 2 rather than
+     0..300 in steps of 5 — the schema still accepts 0..300 and always will,
+     and a booth saved brighter widens its own slider. The default is still
+     60. **3500K** is the other one.
    - Whether nine shadow-casting spots are affordable on your machine. If not,
      the honest fix is dropping `castShadow` on the washers, not cutting their
      number — with diffusion up, their shadows are mostly fill anyway.
@@ -188,7 +207,7 @@ Extend it; do not rebuild it.
    and `tools/hdri-prep.mjs` will not stretch a backdrop past its source. Re-prep
    from the **4K** download and the softness goes:
    ```sh
-   node tools/hdri-prep.mjs ~/Downloads/burnt_warehouse_4k.exr tradeshow \
+   node tools/hdri-prep.mjs ~/Downloads/burnt_warehouse_4k.exr warehouse \
      --credit "Burnt Warehouse (Poly Haven)"
    ```
    **No agent session can do this** — polyhaven.com is refused by the sandbox
@@ -248,23 +267,35 @@ Extend it; do not rebuild it.
      because a true-depth weave on a white roof washes out.
 6. **A `home` HDRI** is still missing — an interior with windows on one side.
    That preset falls back procedurally until someone downloads one.
-7. **Nobody has looked at the new ground picker, the artwork sliders, or an
-   art-show booth in a photographed environment.** All three are on the
-   unmerged branch — see Now. Whether two labelled groups in one dropdown
+7. **Nobody has looked at the new ground picker or the artwork sliders.**
+   Both are on `main` and live. Whether two labelled groups in one dropdown
    read as obviously as intended; whether "Delete this ground photograph"
-   sounds like a delete rather than a deselect; whether the placement sliders
-   have useful travel on a 10 ft wall; and whether an art-show booth without
-   its hall sits convincingly in a photographed one. All judgements on a live
-   site.
-8. **Is it actually faster now?** Selecting no longer rebuilds the scene and a
-   drag no longer re-renders nine shadow maps per pointer event, both pinned
-   by `tests/view-responsive.mjs` — but "pinned" means the rebuild does not
-   happen, not that it feels smooth on your machine. If a drag still stutters,
-   the next two candidates, in order: preview quality is a supersampling
-   factor (Export → Preview quality · Efficient renders at 1x), and the nine
-   light-bar heads each cast a shadow. Dropping `castShadow` on the washers is
-   the honest fix for the second, and with diffusion up their shadows are
-   mostly fill anyway.
+   sounds like a delete rather than a deselect; and whether the placement
+   sliders have useful travel on a 10 ft wall. All judgements on a live site.
+
+   **Nor at anything on the branch** — see Now. Specifically: whether trade
+   show now reads as the white hall it is meant to be; whether the warehouse
+   is worth keeping as its own preset at 1024px (see item 3 — it is the soft
+   one); whether the figures' new sliders have useful travel, given they reach
+   four feet past the booth on purpose so a visitor can stand in the aisle;
+   whether a row of same-size neighbours reads better than the old fixed
+   10 x 10 ones; and whether the fast edit toggle is worth its place in the
+   toolbar or wants to be automatic.
+8. **Is it actually faster now?** It was reported as still stuttering, and
+   **Fast edit** is the answer: a toolbar toggle that drops the shadow passes
+   and the supersampling together for the length of an edit, with full quality
+   restored for every export and every recording. A fresh session still opens
+   at full quality, so nothing changes for anyone who never presses it.
+   `tests/view-responsive.mjs` pins that the shadows and the pixel ratio both
+   go, that the materials are rebuilt so they come back, and that an export
+   from inside fast edit still renders its shadows.
+
+   What is **not** yet known is whether that is enough on a real machine. If a
+   drag still stutters with fast edit on, the remaining candidates, in order:
+   the backdrop's second pass (deliberately left alone, because skipping it
+   reframes the hall mid-gesture and a picture that moves under your hand is
+   worse than a slow one), then the figures, then dropping `castShadow` on the
+   light-bar washers permanently rather than only in fast edit.
 9. **Figures are stylised mannequins.** No faces, no clothing, mid-grey. If
    they need to read as a crowd rather than as scale references, that is a
    different asset and a different phase.
@@ -353,7 +384,7 @@ the picker became one list.
 
 ```sh
 npm ci
-npm test                 # 214 Node tests
+npm test                 # 218 Node tests
 npm run build
 npm run test:view        # camera, city, env presets, HDRI, ground, ground library, tent, walls, video, timeline, people, panels, responsiveness, art show
 npm run test:browser     # 19 end-to-end checks
@@ -371,6 +402,18 @@ BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium npm run test:view
 so `npm test | grep PASS` exits 0 even when the suite fails. This has already
 hidden a failure once. Run each suite directly.
 
+The same trap wears a second costume, and it has now caught someone too:
+`npm run test:view > log; echo $?; grep PASS log` reports the **grep's** exit
+status, not the suite's, so a run that died halfway reads as a pass because
+the log it left behind still had PASS lines in it from the suites that ran
+before the failure. Print the suite's own `$?` immediately after it and read
+*that* number. Count the PASS lines as well: eleven suites means eleven.
+
+**Do not edit `src/` while a view suite is running.** The suites drive a live
+vite dev server, so saving a module hot-reloads the page mid-assertion and the
+run dies on `window.__booth` being undefined. That is not a flake and not a
+regression — it is the editor and the test sharing one server.
+
 ## Rules that are easy to break
 
 - Preserve schema-1 backup compatibility. Optional fields and widened enums are
@@ -386,6 +429,19 @@ hidden a failure once. Run each suite directly.
   moves that are allowed. `booth.groundAsset` still opens and still shows its
   floor; `adoptGroundAsset()` reads it as the first library entry rather than
   dropping it.
+- **Never narrow a stored range; widen the slider instead.** The schema is a
+  promise to backups already on disk, so `finite(l.power, 0, 300)` stays 0..300
+  even though the Fixture brightness slider now offers 0..70. A value past what
+  the slider offers widens that slider for the one booth carrying it, rather
+  than being clamped the moment the panel is drawn. `panelSlider`, `artSlider`,
+  `personSlider` and `lightBarLevels` all make this move; it is the pattern.
+  Widening a stored range — `diffusion` from 0..1 to 0..3 — is allowed, and is
+  only safe because the old stretch of the curve was left bit-identical.
+- **A view setting must never reach an export.** Fast edit, preview quality and
+  the selection outlines are all about this machine, not about the booth.
+  `export()` and `recordMp4()` each put full quality back before they draw a
+  frame and restore it in a `finally`. A PNG with the shadows missing because
+  of how someone's laptop felt that afternoon is not a booth drawing.
 - **Never alter stored original image data.** Edits belong to placements.
 - The city skyline must stay **seeded**, never `Math.random`: it rebuilds on
   every `update()` and would reshuffle on each edit. `tests/view-city.mjs`
@@ -510,6 +566,45 @@ hidden a failure once. Run each suite directly.
   Its assertions are timed against wall clock — a 4096px export must finish
   inside 30s — and swiftshader is slow enough to miss that at random. Re-run
   before believing it.
+- **Figures are in the exports, whatever `people.js` used to say.** Its comment
+  claimed they were hidden from the PNG and the video "the way the grid and
+  handles are", but `export()` and `recordMp4()` hide `isLineSegments` and
+  `userData.editorOnly`, and a figure is neither — it carries `userData.person`
+  and nothing reads it. That is the right behaviour, since a scale reference
+  earns its keep in a render, but it means **Layout -> People -> Show the
+  figures is the only way to take one out of an export**. The comment now says
+  so. A comment describing behaviour is worth checking against the code that
+  implements it before you rely on it.
+- **Toggling `shadowMap.enabled` under a built scene does nothing on its own.**
+  Whether a material samples a shadow map is compiled into its program, so the
+  booth goes on drawing the shadows it was compiled with, and switching them
+  back on leaves them missing. Every material needs `needsUpdate` on the way in
+  and on the way out. One recompile on a button press is a hitch nobody minds;
+  the bug is thinking it is free, and doing it per frame.
+- **A preset id is not a preset property.** The rule switching an art-show
+  booth's hall off in a photographed environment was written `value !==
+  "studio"`, which was correct for exactly as long as studio was the only
+  preset without an HDRI. The moment trade show became a white hall of its own,
+  a booth standing in a white hall had its white hall switched off. Ask the
+  preset what it *is* — `preset.hdri` — not which one it happens to be.
+- **The folder name was the only thing that said "trade show".** The
+  burnt-warehouse HDRI lived in `assets/hdri/tradeshow/` and its own
+  `meta.json` had said *Burnt Warehouse* since the day it was generated. Brick
+  and girders behind seamless white art-show walls was reported as a bug in the
+  booth; it was a bug in a directory name. If an asset carries provenance, read
+  it before trusting the path it sits at.
+- **A neighbour booth is this booth's size.** Three hardcoded 120-inch shells
+  meant a 10 x 20 stand was measured against 10 x 10 neighbours, and — because
+  the gap is measured to the neighbour's centre — a booth of any other depth
+  also put them at the wrong distance. The one behind is turned 180 degrees:
+  it opens onto the next aisle, so what you see over your own back wall is the
+  back of a booth, not the inside of one.
+- **A test literal must come from the old code, not from your head.** The
+  piecewise diffusion curve is pinned by writing out the values the 0..1 table
+  produced *before* it was widened. Two of those were computed by hand and one
+  was wrong by 0.02 radians, which the test caught on its first run — which is
+  the point: checking a curve against itself would have passed whatever the
+  curve became.
 - **The tent weave is exaggerated 3x** over its literal depth. A true-depth
   weave on a white, brightly lit, tone-mapped roof is invisible. That is a
   rendering choice, not a measurement, and it is commented as one.

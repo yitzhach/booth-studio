@@ -22,9 +22,27 @@ export const ENV_PRESETS = {
     exposure: 1.15,
     envIntensity: 1,
   },
+  // A white hall, and nothing photographed in it. This preset carried the
+  // burnt-warehouse HDRI until someone put an art-show booth in it and got
+  // brick, girders and a dark ceiling behind seamless white walls: a trade
+  // show is a convention centre, not a warehouse, and the photograph was
+  // answering a question nobody asked. The warehouse is still here — it is
+  // its own preset below, which is where someone who wants it goes.
+  //
+  // No `hdri`, so the procedural surroundings and the booth's own exhibition
+  // hall stand, and the floor is the texture-free studio grey rather than a
+  // concrete photograph.
   tradeshow: {
     label: "Trade show · exhibition hall",
-    hdri: "tradeshow",
+    hdri: null,
+    ground: "studio",
+    horizon: "studio",
+    exposure: 1.0,
+    envIntensity: 1,
+  },
+  warehouse: {
+    label: "Warehouse · photographed",
+    hdri: "warehouse",
     ground: "concrete",
     horizon: "studio",
     exposure: 1.0,
@@ -54,7 +72,7 @@ export const DEFAULT_PRESET = "studio";
 // mid-air beside it — the rail reads as the light source and the housings read
 // as a bug. Outdoors and in the neutral studio there is no hall, so the
 // fixtures are the only thing telling you where the light comes from.
-export const INDOOR_PRESETS = new Set(["tradeshow", "home"]);
+export const INDOOR_PRESETS = new Set(["tradeshow", "warehouse", "home"]);
 // A venue of "artshow" is indoors whatever the environment picker says: the
 // art-show booth stands in its own white hall with a light bar over it, and
 // that hall is the thing the fixtures would be duplicating. The environment

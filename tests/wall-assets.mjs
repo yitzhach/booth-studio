@@ -19,6 +19,25 @@ try {
    const s=window.__booth.scene;
    return ['left','right','rear'].map(n=>!!s.group.getObjectByName('neighbor-'+n));
  }),[false,true,true]);
+ // The booth behind opens onto the next aisle, not onto this one. Before it
+ // was turned around, the view over the back wall was into a stranger's stand.
+ const around=await page.evaluate(()=>{
+   const s=window.__booth.scene,out={};
+   for(const n of ['right','rear']){
+     const g=s.group.getObjectByName('neighbor-'+n);
+     out[n]={rotation:g.rotation.y,z:g.position.z};
+   }
+   out.boothDepth=window.__booth.project.booth.depth;
+   return out;
+ });
+ assert.ok(Math.abs(around.rear.rotation-Math.PI)<1e-6,'the booth behind faces away');
+ assert.equal(around.right.rotation,0,'the one alongside shares this aisle, so it shares this facing');
+ // 48in edge to edge between two booths of this depth, stated as the
+ // arithmetic rather than as the number it works out to.
+ assert.ok(
+   Math.abs(around.rear.z*(1/0.0254)+(around.boothDepth/2+48+around.boothDepth/2))<1e-6,
+   'and stands a rear gap away from a booth its own size',
+ );
  await page.locator('[data-tab="art"]').click();
  await page.locator('#library [data-action="add-sign"]').click();
  for(const [label,value] of [['Artist name','Isaac Anderson'],['City / State','Somerset, KY'],['Medium','Mixed media']]){

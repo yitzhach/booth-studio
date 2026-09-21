@@ -115,8 +115,77 @@ try {
   assert.ok(fixtures.indoor.rails >= 1, 'the rail above the booth stays whatever the housings do');
   assert.equal(fixtures.studio.rails, fixtures.indoor.rails, 'the upper row is the same row in both');
 
+  // ---- The hide switch --------------------------------------------------
+  // Taking a clean shot without a person in it must not cost the placements:
+  // a figure is put where it is on purpose, next to a particular wall.
+  const figureCount = () => page.evaluate(() => {
+    let n = 0;
+    window.__booth.scene.group.traverse((o) => { if (o.isGroup && o.userData?.person) n += 1; });
+    return n;
+  });
+  const placedBefore = await page.evaluate(() => JSON.stringify(window.__booth.project.booth.people));
+  const showToggle = page.locator('input[data-scope="booth"][data-field="showPeople"]');
+  assert.equal(await showToggle.count(), 1, 'the switch is where the figures are');
+  assert.ok(await showToggle.isChecked(), 'and starts on');
+
+  await showToggle.uncheck();
+  await page.waitForTimeout(500);
+  assert.equal(await figureCount(), 0, 'hiding takes every figure out of the scene');
+  assert.equal(await page.evaluate(() => (window.__booth.project.booth.people || []).length), 2,
+    'but the figures themselves are kept, not deleted');
+  assert.equal(await page.evaluate(() => JSON.stringify(window.__booth.project.booth.people)), placedBefore,
+    'with every placement exactly as it was');
+
+  await showToggle.check();
+  await page.waitForTimeout(500);
+  assert.equal(await figureCount(), 2, 'and they come back where they stood');
+  assert.equal(await page.evaluate(() => JSON.stringify(window.__booth.project.booth.people)), placedBefore);
+
+  // ---- Placement and scale sliders --------------------------------------
+  // The point of these is that they move a figure without rebuilding the
+  // booth around it, the same deal a wall's sliders get.
+  const revision = () => page.evaluate(() => window.__booth.scene.revision);
+  const firstId = await page.evaluate(() => window.__booth.project.booth.people[0].id);
+  const standsAt = (id) => page.evaluate((key) => {
+    const g = window.__booth.scene.personFrames[key];
+    return g ? { x: g.position.x, z: g.position.z } : null;
+  }, id);
+
+  const xSlider = page.locator(`input[type="range"][data-scope="person-${firstId}"][data-field="x"]`);
+  const zSlider = page.locator(`input[type="range"][data-scope="person-${firstId}"][data-field="z"]`);
+  const hSlider = page.locator(`input[type="range"][data-scope="person-${firstId}"][data-field="height"]`);
+  assert.equal(await xSlider.count(), 1, 'a figure has a left/right slider');
+  assert.equal(await zSlider.count(), 1, 'and a front/back one');
+  assert.equal(await hSlider.count(), 1, 'and one for its height');
+
+  // The travel reaches past the booth, because a visitor standing in the
+  // aisle looking in is half of what these figures are for.
+  assert.ok(Number(await xSlider.getAttribute('max')) > 60,
+    'the placement slider reaches past the 10ft booth into the aisle');
+
+  const beforeMove = await revision();
+  await xSlider.fill('-40');
+  await xSlider.dispatchEvent('input');
+  await page.waitForTimeout(250);
+  assert.equal(await revision(), beforeMove, 'moving a figure rebuilds nothing');
+  assert.ok(Math.abs((await standsAt(firstId)).x - -40 * 0.0254) < 1e-6,
+    'and the figure is standing where the slider says, in metres');
+  assert.equal(await page.evaluate(() => window.__booth.project.booth.people[0].x), -40,
+    'with the project carrying the same number');
+
+  // Height is in the geometry, so this one does rebuild the figure — but only
+  // the figure. A shorter person is not a scaled-down taller one.
+  await hSlider.fill('60');
+  await hSlider.dispatchEvent('input');
+  await page.waitForTimeout(250);
+  assert.equal(await revision(), beforeMove, 'changing a height rebuilds nothing but the figure');
+  assert.equal(await page.evaluate(() => window.__booth.project.booth.people[0].height), 60);
+  assert.ok(Math.abs((await standsAt(firstId)).x - -40 * 0.0254) < 1e-6,
+    'and the rebuilt figure is still standing where it was put');
+  assert.equal(await figureCount(), 2, 'with no second copy of it left behind');
+
   assert.deepEqual(errors, [], 'no page errors');
-  console.log('PASS people for scale at real heights, and spotlight housings hidden indoors with the rail kept.');
+  console.log('PASS people for scale at real heights, hide switch, placement and scale sliders, and spotlight housings hidden indoors with the rail kept.');
 } finally {
   await browser.close();
   await server.close();

@@ -51,6 +51,26 @@ test("a project carrying figures still validates, and a broken one does not", ()
   assert.throws(() => validateProject(tooMany), /not a valid Booth Studio/);
 });
 
+test("the hide switch is optional, and absent means shown", () => {
+  const p = blankProject();
+  p.booth.people = [newPerson("woman", "a")];
+  // Every backup written before the switch existed has no `showPeople` at all,
+  // and every one of them meant "shown".
+  assert.equal(p.booth.showPeople, undefined);
+  assert.doesNotThrow(() => validateProject(p));
+  for (const value of [true, false]) {
+    p.booth.showPeople = value;
+    assert.doesNotThrow(() => validateProject(p));
+  }
+  // Hiding keeps the figures: the list is what makes switching back free.
+  p.booth.showPeople = false;
+  assert.equal(p.booth.people.length, 1, "hidden is not deleted");
+  for (const bad of ["yes", 1, null]) {
+    p.booth.showPeople = bad;
+    assert.throws(() => validateProject(p), /not a valid Booth Studio/);
+  }
+});
+
 test("a schema-1 backup with no people at all still opens", () => {
   const old = blankProject();
   delete old.booth.people;

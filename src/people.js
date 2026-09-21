@@ -62,8 +62,12 @@ export function makePerson(kind = DEFAULT_PERSON, inches = 0) {
     const mesh = new T.Mesh(geometry, skin);
     mesh.position.set(x, y, z);
     mesh.castShadow = true;
-    // Not selectable and not exported: a figure is a scale reference, so it is
-    // hidden from the PNG and the video the way the grid and handles are.
+    // Marks the mesh as part of a figure. Note what this does *not* do: it is
+    // not `editorOnly`, so a figure is in the PNG and in the video, unlike the
+    // grid and the selection handles. That is deliberate — a person is part of
+    // the picture, and a render is where the scale reference earns its keep —
+    // but it means Layout -> People -> Show the figures is the only way to take
+    // one out of an export. This comment claimed the opposite for a while.
     mesh.userData.person = true;
     group.add(mesh);
     return mesh;
@@ -111,6 +115,17 @@ export function makePerson(kind = DEFAULT_PERSON, inches = 0) {
     arm.scale.z = 0.9;
   }
   group.userData.person = true;
+  return group;
+}
+
+/**
+ * Where a figure stands, in one function, because a slider and a typed number
+ * must land in the same place. `BoothScene.update` calls it when the scene is
+ * built and `movePerson` calls it on every pixel of a drag.
+ */
+export function placePerson(group, person) {
+  group.position.set((person.x || 0) * IN, 0, (person.z || 0) * IN);
+  group.rotation.y = ((person.rotation || 0) * Math.PI) / 180;
   return group;
 }
 

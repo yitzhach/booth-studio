@@ -6,6 +6,9 @@ import { blankProject, validateProject } from "../src/model.js";
 
 test("indoors is the presets with a roof over them", () => {
   assert.equal(isIndoor("tradeshow"), true);
+  // Trade show stopped being a photograph and stayed a room: it is still a
+  // hall with its own overhead lighting, so the housings still hide.
+  assert.equal(isIndoor("warehouse"), true);
   assert.equal(isIndoor("home"), true);
   assert.equal(isIndoor("artfair"), false, "an outdoor art fair has no hall lighting to borrow");
   assert.equal(isIndoor("studio"), false);
