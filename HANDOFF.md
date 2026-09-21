@@ -566,6 +566,15 @@ regression — it is the editor and the test sharing one server.
   Its assertions are timed against wall clock — a 4096px export must finish
   inside 30s — and swiftshader is slow enough to miss that at random. Re-run
   before believing it.
+- **Figures are in the exports, whatever `people.js` used to say.** Its comment
+  claimed they were hidden from the PNG and the video "the way the grid and
+  handles are", but `export()` and `recordMp4()` hide `isLineSegments` and
+  `userData.editorOnly`, and a figure is neither — it carries `userData.person`
+  and nothing reads it. That is the right behaviour, since a scale reference
+  earns its keep in a render, but it means **Layout -> People -> Show the
+  figures is the only way to take one out of an export**. The comment now says
+  so. A comment describing behaviour is worth checking against the code that
+  implements it before you rely on it.
 - **Toggling `shadowMap.enabled` under a built scene does nothing on its own.**
   Whether a material samples a shadow map is compiled into its program, so the
   booth goes on drawing the shadows it was compiled with, and switching them
