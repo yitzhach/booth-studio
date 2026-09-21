@@ -29,11 +29,11 @@ Extend it; do not rebuild it.
   All five came from looking at the live site. Every suite was green before
   the merge: 218 Node tests, all eleven view suites, the browser suite and
   `wall-assets`.
-- **On the branch `claude/nice-hawking-dynrum`, not yet merged:** uploading
-  files an original instead of hanging it, fixture brightness as a percentage,
-  fast edit arming itself on a double-tap, and the four things that made a
-  booth full of uploaded photographs slow. All four came from a 2014 iMac in
-  Chrome and from a phone. The four bullets below are that branch.
+- **Merged and deployed 2026-09-21 (later):** uploading files an original
+  instead of hanging it, fixture brightness as a percentage, fast edit arming
+  itself on a double-tap, and the four things that made a booth full of uploaded
+  photographs slow. All four came from a 2014 iMac in Chrome and from a phone.
+  `claude/nice-hawking-dynrum` is now on `main`.
 - **Uploading files an original; tapping one hangs it.** Choosing several
   images at once used to hang every one of them on the back wall at the same
   x and y. Coplanar artwork has no depth order, so the wall flashed through
@@ -338,22 +338,7 @@ Extend it; do not rebuild it.
      because a true-depth weave on a white roof washes out.
 6. **A `home` HDRI** is still missing — an interior with windows on one side.
    That preset falls back procedurally until someone downloads one.
-7. **Nobody has looked at anything on `claude/nice-hawking-dynrum`.** Four
-   things, all of them answers to reports from a real browser, none of them
-   seen there yet:
-   - Whether uploading and then tapping reads as obviously as it should. The
-     upload toast says the files went to the library and the card says "Tap to
-     hang it", but the gesture is new and the old one hung things for you.
-   - Whether 50 is right for fixture brightness now that the slider means
-     something different, and whether the `Set brightness to 50` note under an
-     old booth's stretched slider reads as an offer rather than a warning.
-   - Whether fast edit arming itself on a double-tap is welcome or startling.
-     It is the start of a drag, so it should be invisible — but the shadows go
-     as it comes on, and that is a visible change nobody asked for in that
-     moment.
-   - **Whether any of the speed work is enough on the 2014 iMac.** Everything
-     measured is in the tests; what is not known is how it feels. See item 8.
-8. **Nobody has looked at the ground picker or the artwork sliders.**
+7. **Nobody has looked at the ground picker or the artwork sliders.**
    Both are on `main` and live. Whether two labelled groups in one dropdown
    read as obviously as intended; whether "Delete this ground photograph"
    sounds like a delete rather than a deselect; and whether the placement
@@ -368,16 +353,18 @@ Extend it; do not rebuild it.
    10 x 10 ones; and whether the fast edit toggle is worth its place in the
    toolbar. That last one is half answered: it is now automatic on a
    double-tap and also a switch in Layout, and the toolbar button stays.
-9. **Is it actually faster now?** Reported still slow on a 2014 iMac in
+
+   **Also newly on `main` (2026-09-21 later):** whether uploading and then
+   tapping reads as obvious, whether 50 is right for fixture brightness with
+   the percentage slider, and whether fast edit arming itself on a double-tap
+   is welcome or startling. **Whether the speed fixes are enough on a 2014
+   iMac** — see item 8 below.
+8. **Is it actually faster now?** Reported still slow on a 2014 iMac in
    Chrome — and, tellingly, **fast with the sample panels and slow with
    uploaded photographs**. That last part was the diagnosis: four separate
-   places treated a 25 MB base64 original as free. The undo history and every
-   save stringified all of them on every edit, every re-render of the library
-   and the inspector pointed `<img>` tags at them, textures decoded them whole
-   before shrinking them, and IndexedDB was handed the lot 350 ms after each
-   edit. All four are fixed on the branch — see Now — and **Fast edit** is
-   still there on top of that, now arming itself on a double-tap and no longer
-   costing a full re-render to switch on.
+   places treated a 25 MB base64 original as free. All four are fixed on `main`
+   now, and **Fast edit** is still there on top of that, now arming itself on a
+   double-tap and no longer costing a full re-render to switch on.
 
    What is **not** yet known is whether it is enough on that iMac, or on a
    phone. If a drag still stutters with fast edit on, the remaining candidates,
@@ -388,7 +375,7 @@ Extend it; do not rebuild it.
    edit. Below that: a click still rebuilds the library and the inspector as
    HTML strings, which is now cheap but not free, and `Export → Preview
    quality → Efficient` is worth trying on a 2014 machine.
-10. **Figures are stylised mannequins.** No faces, no clothing, mid-grey. If
+9. **Figures are stylised mannequins.** No faces, no clothing, mid-grey. If
    they need to read as a crowd rather than as scale references, that is a
    different asset and a different phase.
 
