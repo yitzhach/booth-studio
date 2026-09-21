@@ -16,6 +16,8 @@ import {
   hallSpec,
   isArtShow,
   LIGHT_BAR,
+  LIGHT_BAR_POWER_SLIDER_MAX,
+  LIGHT_BAR_POWER_STEP,
   lightBarSpec,
   panelCount,
   relinkArtShowWalls,
@@ -338,4 +340,24 @@ test("but the environment stays editable afterwards, and going back outdoors lea
   assert.doesNotThrow(() => validateProject(p), "a photographed hall is still a legal choice indoors");
   applyVenue(p, "outdoor");
   assert.equal(p.booth.envPreset, "warehouse", "leaving the art show does not reach into the picker");
+});
+
+test("fixture brightness is a percentage of a bar that reads right", () => {
+  // The slider is 0..100 and the middle of it is the default. That is the
+  // whole promise: 50 is what a new booth opens at, 100 is twice it, and the
+  // stored unit underneath is the light's own power.
+  assert.equal(LIGHT_BAR_POWER_SLIDER_MAX, 100);
+  assert.equal((LIGHT_BAR_POWER_SLIDER_MAX / 2) * LIGHT_BAR_POWER_STEP, LIGHT_BAR.power);
+  assert.equal(LIGHT_BAR.power, 8);
+  assert.equal(LIGHT_BAR_POWER_SLIDER_MAX * LIGHT_BAR_POWER_STEP, 16);
+  // The stored range is untouched and stays untouched: a backup saved at the
+  // old default, or at anything else the schema ever accepted, still opens.
+  for (const power of [0, 8, 60, 70, 300]) {
+    const p = artShow();
+    p.booth.lightBar = { ...lightBarSpec(p.booth), power };
+    assert.equal(validateProject(p).booth.lightBar.power, power);
+  }
+  const p = artShow();
+  p.booth.lightBar = { ...lightBarSpec(p.booth), power: 300.01 };
+  assert.throws(() => validateProject(p));
 });

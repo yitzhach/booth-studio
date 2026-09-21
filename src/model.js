@@ -185,21 +185,33 @@ export const ART_SHOW_PANEL = { width: 38, height: 144, linked: false };
 // endpoints against literals rather than against the curve that produces them.
 export const DIFFUSION_MAX = 3;
 // What the Fixture brightness slider offers, which is deliberately not what
-// the schema accepts. A bar was judged on a real monitor at 70 and called
-// "beyond bright", so 300 was three hundred units of slider nobody can use:
-// the whole useful range was squeezed into the first fifth of the travel, in
-// steps of 5, which is why the control felt like it had two settings.
+// the schema accepts. The slider is a percentage of a bar that reads right:
+// 0 is dark, 50 is the default, 100 is twice the default and already more
+// than anyone wanted. The stored unit is unchanged and unchangeable — the
+// schema accepts 0..300 and always will, because narrowing a stored range
+// would refuse to open a backup that is already on someone's disk — so the
+// slider carries a scale instead, and `LIGHT_BAR_POWER_STEP` stored units is
+// one point of it.
 //
-// The schema still accepts 0..300 and always will — narrowing a stored range
-// would refuse to open a backup that is already on someone's disk, which is
-// the one thing schema 1 must never do. A booth saved above this keeps its
-// value and widens its own slider instead; see `lightBarLevels` in main.js.
-export const LIGHT_BAR_POWER_SLIDER_MAX = 70;
+// The numbers underneath moved twice, both times after someone looked at a
+// real monitor. 300 units of travel in steps of 5 squeezed the whole useful
+// range into the first fifth, so the control felt like it had two settings;
+// 70 was then called "beyond bright" and 60 — the old default — was still
+// much too hot. 8 stored units is where the bar was judged to look right, so
+// 8 is what the middle of the slider means and what a new booth opens at.
+//
+// A booth saved brighter than 100 keeps its value and widens its own slider
+// rather than being dragged down the moment the panel is drawn; see
+// `lightBarLevels` in main.js. That is why this is a slider maximum and not a
+// clamp, and it is the same move as `panelSlider`, `artSlider` and the
+// diffusion scale above.
+export const LIGHT_BAR_POWER_SLIDER_MAX = 100;
+export const LIGHT_BAR_POWER_STEP = 0.16;
 export const LIGHT_BAR = {
   on: true,
   height: 132,
   count: 9,
-  power: 60,
+  power: 8,
   kelvin: 3500,
   // How diffused the wall wash is, 0..DIFFUSION_MAX. A real art-fair bar
   // carries a frost or a barn-door diffuser over each head, and the hall's
@@ -380,6 +392,39 @@ export function constrain(p, a) {
     x: Math.max(0, Math.min(a.x, w - a.w)),
     y: Math.max(0, Math.min(a.y, h - a.h)),
   };
+}
+/** What the app leaves between two placements it positioned for you, in inches. */
+export const PLACEMENT_GAP = 6;
+/**
+ * Where a placement the app positions lands so that it is not sitting on top
+ * of one already there. Two panels at the same x, y and wall gap are coplanar,
+ * and coplanar artwork does not read as two pictures — it reads as one picture
+ * flickering, because the depth buffer has no way to choose between them. That
+ * flicker was the visible half of uploading several images at once.
+ *
+ * It walks right along the row it was asked for, then down a row, then up,
+ * and gives up quietly rather than refusing to place anything: an overlap the
+ * user can drag apart beats a file that seems not to have arrived.
+ */
+export function openSpot(p, a) {
+  const wall = wallSpec(p, a.wall);
+  if (!wall) return { ...a };
+  const face = a.face || "inside";
+  const taken = p.art.filter(
+    (o) => o.id !== a.id && o.wall === a.wall && (o.face || "inside") === face,
+  );
+  const clear = (x, y) =>
+    !taken.some(
+      (o) => x < o.x + o.w && o.x < x + a.w && y < o.y + o.h && o.y < y + a.h,
+    );
+  const rows = [];
+  for (let y = a.y; y >= 0; y -= a.h + PLACEMENT_GAP) rows.push(y);
+  for (let y = a.y + a.h + PLACEMENT_GAP; y + a.h <= wall.height; y += a.h + PLACEMENT_GAP)
+    rows.push(y);
+  for (const y of rows)
+    for (let x = a.x; x + a.w <= wall.width + 0.001; x += a.w + PLACEMENT_GAP)
+      if (clear(x, y)) return { ...a, x: +x.toFixed(3), y: +y.toFixed(3) };
+  return { ...a };
 }
 /**
  * The travel of a free-standing wall's position sliders and of a drag across

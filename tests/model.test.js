@@ -6,6 +6,8 @@ import {
   validateProject,
   constrain,
   constrainPanel,
+  openSpot,
+  PLACEMENT_GAP,
   panelRange,
   boundWarning,
   mismatch,
@@ -319,4 +321,35 @@ test("a dragged free-standing wall stays inside the footprint", () => {
   // A wider booth gives a longer drag.
   p.booth.width = 240;
   assert.equal(constrainPanel(p, { ...panel, x: 900, z: 0 }).x, 120);
+});
+test("a placement the app positions never lands on one already there", () => {
+  const p = demoProject();
+  p.art = [];
+  const a = { id: "one", wall: "back", face: "inside", x: 12, y: 30, w: 24, h: 24 };
+  // An empty wall takes the spot it was asked for, untouched.
+  assert.deepEqual(openSpot(p, a), { ...a });
+  // With that spot taken, the next one steps right by its own width plus the
+  // gap rather than sitting coplanar with it — which is what flickered.
+  p.art = [a];
+  const second = openSpot(p, { ...a, id: "two" });
+  assert.equal(second.x, 12 + 24 + PLACEMENT_GAP);
+  assert.equal(second.y, 30);
+  // A row that is full drops to the row below, stepping by the height.
+  p.art = [];
+  const wide = p.booth.walls.back.width;
+  for (let x = 12; x + 24 <= wide; x += 24 + PLACEMENT_GAP)
+    p.art.push({ ...a, id: "row-" + x, x });
+  const next = openSpot(p, { ...a, id: "three" });
+  assert.equal(next.y, 30 - 24 - PLACEMENT_GAP);
+  assert.equal(next.x, 12);
+  // A wall with no room anywhere gives back the spot it was asked for rather
+  // than refusing: an overlap can be dragged apart, a missing panel cannot.
+  p.art = [{ ...a, id: "everything", x: 0, y: 0, w: wide, h: p.booth.walls.back.height }];
+  assert.deepEqual(openSpot(p, { ...a, id: "four" }), { ...a, id: "four" });
+  // A different wall is a different surface, so it is not consulted.
+  p.art = [{ ...a, id: "left", wall: "left" }];
+  assert.deepEqual(openSpot(p, { ...a, id: "five" }), { ...a, id: "five" });
+  // Nor is the other face of the same wall.
+  p.art = [{ ...a, id: "outside", face: "outside" }];
+  assert.deepEqual(openSpot(p, { ...a, id: "six" }), { ...a, id: "six" });
 });

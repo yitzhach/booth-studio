@@ -295,6 +295,12 @@ header {
   font-size: 10px;
   color: #929da8;
 }
+/* An original that is in the library but not on any wall. Uploading files it
+   here and hangs nothing, so this is the state a new upload arrives in and it
+   has to say what to do about it. */
+.art-card.unplaced small {
+  color: #8fc0f0;
+}
 .thumb {
   width: 52px;
   height: 65px;

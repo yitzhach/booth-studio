@@ -129,9 +129,34 @@ try {
         buffer: fixture,
       })),
     );
+  // Uploading files originals in the library and hangs nothing. Five files
+  // used to become five coplanar panels in one spot on the back wall, which
+  // is what made an upload flash through its own images.
+  await page.waitForFunction(
+    () => Object.keys(window.__booth.project.assets).length === 6,
+  );
+  assert.equal(
+    await page.evaluate(
+      () => window.__booth.project.art.filter((a) => a.asset).length,
+    ),
+    1,
+  );
+  assert.equal(await page.locator(".library .art-card.unplaced").count(), 5);
+  pass("Uploading five originals files them in the library and hangs none");
+  for (let i = 0; i < 5; i++)
+    await page.locator(".library .art-card.unplaced").first().click();
   await page.waitForFunction(
     () => window.__booth.project.art.filter((a) => a.asset).length === 6,
   );
+  // Tapped placements never land on each other: coplanar art is the flicker.
+  assert.equal(
+    await page.evaluate(() => {
+      const hung = window.__booth.project.art.filter((a) => a.asset);
+      return new Set(hung.map((a) => [a.wall, a.face || "inside", a.x, a.y].join("/"))).size;
+    }),
+    6,
+  );
+  pass("Tapping each library original hangs it on a spot of its own");
   await page.locator('[data-tab="art"]').click();
   await page.getByLabel("Wall location").selectOption("left-inside");
   await page.getByLabel("Left edge", { exact: true }).fill("18");

@@ -1425,8 +1425,14 @@ export class BoothScene {
   }
   bind() {
     const c = this.renderer.domElement;
+    // Double-clicking artwork arms its move-and-scale handles, which is the
+    // start of a drag, and a drag is the one thing fast edit exists for. So
+    // the gesture that says "I am about to arrange this" turns it on. It is
+    // still only a view setting — nothing about the booth changed, exports
+    // put full quality back — and the toolbar toggle turns it off again.
     const activateTransform = (id) => {
       this.scaleId = id;
+      this.setDraft(true);
       this.onSelect(id);
     };
     c.addEventListener("dblclick", e => {

@@ -143,15 +143,26 @@ try {
   assert.equal(await power.count(), 1, 'and so is the bar\'s brightness');
 
   // The two ranges, both reported from a real monitor: 70 was called "beyond
-  // bright", and the old maximum diffusion of 1 was still harsh.
-  assert.equal(await power.getAttribute('max'), '70', 'brightness tops out where it stops being useful');
-  assert.equal(await power.getAttribute('step'), '2', 'and moves in steps small enough to judge');
+  // bright", 60 was still much too hot, and the old maximum diffusion of 1 was
+  // still harsh. Brightness is now a percentage of a bar judged to read right,
+  // so the slider is 0..100 and the middle of it is the default.
+  assert.equal(await power.getAttribute('max'), '100', 'brightness is a percentage, not a stored unit');
+  assert.equal(await power.getAttribute('step'), '1', 'and moves in steps small enough to judge');
+  assert.equal(await power.inputValue(), '50', 'and a fresh booth opens in the middle of it');
   assert.equal(await diffusion.getAttribute('max'), '3', 'diffusion reaches past the old ceiling of 1');
 
+  // The stored unit underneath is the light's own power and never the slider
+  // point: 50 on the slider is 8 stored units, which is what the renderer
+  // reads. Get this backwards and a booth opens 6x too bright.
+  assert.equal(await page.evaluate(() => window.__booth.project.booth.lightBar.power), 8);
   await power.fill('64');
   await power.dispatchEvent('change');
   await page.waitForTimeout(500);
-  assert.equal(await page.evaluate(() => window.__booth.project.booth.lightBar.power), 64);
+  assert.equal(await page.evaluate(() => window.__booth.project.booth.lightBar.power), 64 * 0.16);
+  await power.fill('50');
+  await power.dispatchEvent('change');
+  await page.waitForTimeout(500);
+  assert.equal(await page.evaluate(() => window.__booth.project.booth.lightBar.power), 8);
 
   // Past the old ceiling, and it sticks: this is the value that could not be
   // reached at all before.
@@ -165,18 +176,27 @@ try {
   assert.equal(await page.evaluate(() => window.__booth.project.booth.lightBar.diffusion), 0);
 
   // A booth saved brighter than the slider offers widens its own slider rather
-  // than being quietly dragged down to 70 the moment the panel is drawn. This
-  // is the schema-1 case: 0..300 is still a project and must still be editable.
+  // than being quietly dragged down the moment the panel is drawn. This is the
+  // schema-1 case: 0..300 is still a project and must still be editable.
   await page.evaluate(() => { window.__booth.project.booth.lightBar.power = 150; });
   // Leaving the tab and coming back is what redraws the inspector, which is
   // the moment a slider would clamp a value it thinks is out of range.
   await page.click('[data-tab="art"]');
   await page.click('[data-tab="lighting"]');
   await page.waitForTimeout(400);
-  assert.equal(await page.locator('input[data-scope="lightBar"][data-field="power"]').getAttribute('max'), '150',
+  assert.equal(await page.locator('input[data-scope="lightBar"][data-field="power"]').getAttribute('max'), String(Math.ceil(150 / 0.16)),
     'an older, brighter bar keeps its value and widens its slider');
   assert.equal(await page.evaluate(() => window.__booth.project.booth.lightBar.power), 150,
     'and is not clamped by being looked at');
+  // And it says so, with the one drag back rather than a number to work out.
+  assert.equal(await page.locator('[data-action="bar-default"]').count(), 1,
+    'a bar stored above the scale offers the way back to the default');
+  await page.click('[data-action="bar-default"]');
+  await page.waitForTimeout(400);
+  assert.equal(await page.evaluate(() => window.__booth.project.booth.lightBar.power), 8,
+    'which sets the stored unit, not the slider point');
+  assert.equal(await page.locator('input[data-scope="lightBar"][data-field="power"]').getAttribute('max'), '100',
+    'and the slider goes back to the scale it belongs on');
 
   // ---- Fast edit: the quality escape hatch ------------------------------
   // The honest answer to "a drag still stutters": nine shadow-casting heads
@@ -222,6 +242,60 @@ try {
   assert.equal(await ratio(), fullRatio, 'at the supersampling it had before');
   assert.ok(!(await page.evaluate(() => document.querySelector('[data-action="draft"]').classList.contains('active'))),
     'and the button stops claiming otherwise');
+
+  // ---- Fast edit costs nothing to reach ---------------------------------
+  // A toggle is a view setting, so it must not rebuild the scene. It used to
+  // go through render(), which rebuilds every wall, texture and light and
+  // redraws the library and the whole inspector — the control whose job is to
+  // make the app faster cost a pause of its own on the way in.
+  const beforeToggle = await revision(page);
+  await page.click('[data-action="draft"]');
+  await page.waitForTimeout(250);
+  assert.equal(await page.evaluate(() => window.__booth.scene.draft), true);
+  assert.equal(await revision(page), beforeToggle, 'turning fast edit on rebuilds nothing');
+  await page.click('[data-action="draft"]');
+  await page.waitForTimeout(250);
+  assert.equal(await page.evaluate(() => window.__booth.scene.draft), false);
+  assert.equal(await revision(page), beforeToggle, 'and neither does turning it off');
+
+  // Layout carries the same switch, where someone arranging a booth is
+  // already looking. The two controls drive one flag and stay in step.
+  await page.click('[data-tab="layout"]');
+  await page.waitForTimeout(200);
+  await page.check('[data-draft]');
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => window.__booth.scene.draft), true,
+    'the Layout switch turns fast edit on');
+  assert.ok(await page.evaluate(() => document.querySelector('[data-action="draft"]').classList.contains('active')),
+    'and the toolbar button follows it');
+  await page.click('[data-action="draft"]');
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => document.querySelector('[data-draft]').checked), false,
+    'and the toolbar button turns the Layout switch back off');
+  assert.equal(await page.evaluate(() => JSON.stringify(window.__booth.project).includes('"draft"')), false,
+    'neither control puts anything in the project');
+
+  // ---- Double-tapping artwork arms fast edit with the handles ------------
+  // Double-tapping is how the move-and-scale handles come up, and handles are
+  // the start of a drag. The gesture that says "I am arranging this" is the
+  // one that should drop the shadows for it.
+  const artPoint = async (id) => page.evaluate((artId) => {
+    const scene = window.__booth.scene;
+    scene.group.updateMatrixWorld(true);
+    const mesh = scene.artObjects.find((o) => o.userData.artId === artId);
+    const v = mesh.getWorldPosition(mesh.position.clone()).project(scene.camera);
+    const r = scene.renderer.domElement.getBoundingClientRect();
+    return [r.left + ((v.x + 1) / 2) * r.width, r.top + ((1 - v.y) / 2) * r.height];
+  }, id);
+  const [ax, ay] = await artPoint(first);
+  await page.mouse.dblclick(ax, ay);
+  await page.waitForTimeout(400);
+  assert.ok((await handles(page)) > 0, 'double-tapping artwork arms its scale handles');
+  assert.equal(await page.evaluate(() => window.__booth.scene.draft), true,
+    'and comes into fast edit with them');
+  assert.ok(await page.evaluate(() => document.querySelector('[data-action="draft"]').classList.contains('active')),
+    'and the toolbar button says so');
+  await page.evaluate(() => window.__booth.scene.setDraft(false));
 
   // Leaving draft has two obligations, and both are consumed by the very next
   // frame — so they are read inside one synchronous evaluate, before the loop
