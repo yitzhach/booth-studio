@@ -32,7 +32,7 @@ function quadrants(width, height) {
 
 const root = new URL('..', import.meta.url).pathname;
 const publicDir = await mkdtemp(join(tmpdir(), 'booth-public-'));
-const presetDir = join(publicDir, 'assets', 'hdri', 'tradeshow');
+const presetDir = join(publicDir, 'assets', 'hdri', 'warehouse');
 const image = quadrants(256, 128);
 const intensity = headroom(image);
 await cp(join(root, 'public'), publicDir, { recursive: true });
@@ -58,10 +58,10 @@ try {
 
   // The asset files have to be reachable at the paths the presets name, or
   // every assertion below would pass on the procedural fallback instead.
-  assert.equal((await page.request.head('http://127.0.0.1:5191/assets/hdri/tradeshow/light.hdr')).status(), 200);
+  assert.equal((await page.request.head('http://127.0.0.1:5191/assets/hdri/warehouse/light.hdr')).status(), 200);
 
   await page.click('[data-tab="layout"]');
-  await page.selectOption('select[aria-label="Environment"]', 'tradeshow');
+  await page.selectOption('select[aria-label="Environment"]', 'warehouse');
   await page.waitForFunction(() => !!window.__booth.scene.scene.environment, null, { timeout: 15000 });
 
   const applied = await page.evaluate(() => {

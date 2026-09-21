@@ -174,9 +174,9 @@ test("prepare will not stretch a backdrop past its source", async (t) => {
 });
 
 test("the command line defaults to the preset's asset directory", () => {
-  const args = parseArgs(["hall.exr", "tradeshow"]);
+  const args = parseArgs(["hall.exr", "warehouse"]);
   assert.equal(args.source, "hall.exr");
-  assert.equal(args.outDir, join("public", "assets", "hdri", "tradeshow"));
+  assert.equal(args.outDir, join("public", "assets", "hdri", "warehouse"));
   assert.equal(args.lightWidth, DEFAULTS.lightWidth);
   assert.equal(args.backgroundWidth, DEFAULTS.backgroundWidth);
   const custom = parseArgs(["hall.exr", "home", "--bg", "4096", "--quality", "70", "--out", "/tmp/x"]);

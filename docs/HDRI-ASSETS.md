@@ -15,17 +15,20 @@ yours to do, and the files get committed to the repo.
 Three presets take assets. Each one is a folder with two or three files:
 
 ```
-public/assets/hdri/tradeshow/light.hdr     1K equirectangular HDR   ~1–3 MB
-public/assets/hdri/tradeshow/bg.jpg        2K or 4K JPG             ~0.5–2 MB
-public/assets/hdri/tradeshow/meta.json     written by the tool      <1 KB
+public/assets/hdri/warehouse/light.hdr     1K equirectangular HDR   ~1–3 MB
+public/assets/hdri/warehouse/bg.jpg        2K or 4K JPG             ~0.5–2 MB
+public/assets/hdri/warehouse/meta.json     written by the tool      <1 KB
 
 public/assets/hdri/artfair/…               same three files
 public/assets/hdri/home/…                  same three files
 ```
 
-The folder names are fixed — `tradeshow`, `artfair`, `home` — and so are the
-file names. The `studio` preset deliberately has none; it is the default and the
-zero-asset fallback.
+The folder names are fixed — `warehouse`, `artfair`, `home` — and so are the
+file names. `studio` and `tradeshow` deliberately have none: `studio` is the
+default and the zero-asset fallback, and `tradeshow` is a white exhibition hall
+drawn procedurally, which is the point of it. This folder was called
+`tradeshow` until the preset it served stopped being photographed; the asset
+inside never changed and its `meta.json` always said *Burnt Warehouse*.
 
 **Why two files rather than one.** `light.hdr` is only ever filtered into a
 reflection probe. Nobody sees its pixels, so 1K is plenty and 4K is waste.
@@ -45,7 +48,7 @@ perfectly good look, and half the download.
 
 | Folder | Search for | What you want to see |
 | - | - | - |
-| `tradeshow` | *warehouse*, *exhibition*, *hangar*, *studio* | a large indoor space with overhead lighting, no strong sun |
+| `warehouse` | *warehouse*, *exhibition*, *hangar*, *factory* | a large indoor space with overhead lighting, no strong sun |
 | `artfair` | *park*, *plaza*, *courtyard*, *market* | open sky, soft daylight, ideally overcast |
 | `home` | *living room*, *interior*, *apartment* | windows on one side, warm interior light |
 
@@ -109,11 +112,11 @@ looks like the place. Route B fixes it.
 2. Run:
 
 ```sh
-node tools/hdri-prep.mjs ~/Downloads/warehouse_4k.exr tradeshow --bg 4096 \
+node tools/hdri-prep.mjs ~/Downloads/warehouse_4k.exr warehouse --bg 4096 \
   --credit "Warehouse by Sergej Majboroda (Poly Haven)"
 ```
 
-That writes all three files into `public/assets/hdri/tradeshow/`, correctly
+That writes all three files into `public/assets/hdri/warehouse/`, correctly
 named, with the headroom measured and recorded in `meta.json` so the backdrop's
 brightness comes out right.
 

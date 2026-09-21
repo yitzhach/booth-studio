@@ -7,7 +7,7 @@
 // measurements. So the bar is described by five numbers and the fixtures are
 // derived from them — which also makes the arithmetic a pure function this
 // file can hand to Node, rather than something only a renderer can answer.
-import { LIGHT_BAR, lightBarSpec, wallSpec } from "./model.js";
+import { DIFFUSION_MAX, LIGHT_BAR, lightBarSpec, wallSpec } from "./model.js";
 // The walls a fixture can be assigned to, left to right along the bar, so the
 // heads fan outward from the middle instead of crossing over each other.
 const WALL_ORDER = ["left", "back", "right"];
@@ -100,6 +100,13 @@ export function lightBarRail(p) {
 /** Linear blend, for reading the optics table below as "bare … frosted". */
 const mix = (a, b, t) => a + (b - a) * t;
 /**
+ * The slider's value, clamped and defaulted in one place. Both readers below
+ * need it and they disagreed once already: a clamp written twice is a clamp
+ * that will be widened once.
+ */
+const diffusion = (bar) =>
+  Math.min(DIFFUSION_MAX, Math.max(0, bar.diffusion ?? LIGHT_BAR.diffusion));
+/**
  * What `diffusion` means to a renderer, as one pure function so the numbers
  * can be read in Node and so there is one place to argue with them.
  *
@@ -124,15 +131,37 @@ const mix = (a, b, t) => a + (b - a) * t;
  * softened — and "softer" that arrives brighter reads as a failed slider.
  */
 export function lightBarOptics(bar) {
-  const d = Math.min(1, Math.max(0, bar.diffusion ?? 0.7));
+  const d = diffusion(bar);
+  // Below 1 this is the original table, untouched, because a booth saved at
+  // 0.7 has to light exactly as it did the day it was saved.
+  if (d <= 1)
+    return {
+      angle: mix(Math.PI / 8, Math.PI / 4.5, d),
+      penumbra: mix(0.45, 0.98, d),
+      shadowIntensity: mix(1, 0.32, d),
+      // A grazing wide cone lights a wall at a shallow angle, where a shadow map
+      // self-shadows into stripes. More normal bias is the cost of the wider cone.
+      normalBias: mix(0.004, 0.014, d),
+      powerScale: mix(1, 0.68, d),
+    };
+  // Above 1 the levers keep moving in the same directions, from exactly the
+  // values the first half ends on, so the curve has no step in it at d = 1.
+  const t = (d - 1) / (DIFFUSION_MAX - 1);
   return {
-    angle: mix(Math.PI / 8, Math.PI / 4.5, d),
-    penumbra: mix(0.45, 0.98, d),
-    shadowIntensity: mix(1, 0.32, d),
-    // A grazing wide cone lights a wall at a shallow angle, where a shadow map
-    // self-shadows into stripes. More normal bias is the cost of the wider cone.
-    normalBias: mix(0.004, 0.014, d),
-    powerScale: mix(1, 0.68, d),
+    // 40° to 60°. Not wider: three's own limit is 90°, but a cone past about
+    // 60 no longer falls off across the wall it is aimed at, and a wall washer
+    // that lights the whole booth evenly is a ceiling light, not a wall wash.
+    angle: mix(Math.PI / 4.5, Math.PI / 3, t),
+    // 1 is the whole cone spent fading. There is no rim at any distance.
+    penumbra: mix(0.98, 1, t),
+    // Not 0. A shadow that disappears entirely takes the contact with it and
+    // every pedestal starts floating; 0.08 is a held-onto hint of a footprint.
+    shadowIntensity: mix(0.32, 0.08, t),
+    normalBias: mix(0.014, 0.02, t),
+    // The cone's area roughly doubles again over this half, so the fixtures
+    // come down by about the same proportion they did over the first half —
+    // for the same reason: softer must not arrive brighter.
+    powerScale: mix(0.68, 0.46, t),
   };
 }
 /**
@@ -143,8 +172,14 @@ export function lightBarOptics(bar) {
  */
 export function lightBarBounce(p) {
   const bar = lightBarSpec(p.booth);
-  const d = Math.min(1, Math.max(0, bar.diffusion ?? 0.7));
+  const d = diffusion(bar);
   if (!bar.on || d <= 0) return 0;
   const output = (bar.count * bar.power) / (LIGHT_BAR.count * LIGHT_BAR.power);
-  return Math.min(0.6, d * 0.5 * output);
+  // The ceiling on the bounce rises with the slider rather than being one
+  // number, because past 1 the bounce is the point: that is what "the room is
+  // doing the lighting" means. It is still 0.6 at d = 1 and below, so a bright
+  // bar on an already-composed booth keeps the haze it was composed against —
+  // the cap is the only thing here a wide bar could ever reach.
+  const cap = 0.6 + 0.25 * Math.min(1, Math.max(0, (d - 1) / (DIFFUSION_MAX - 1)));
+  return Math.min(cap, d * 0.5 * output);
 }

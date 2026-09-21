@@ -48,7 +48,7 @@ test("every preset declares a ground, horizon and exposure", () => {
 
 test("preset paths split lighting from the visible backdrop", () => {
   assert.equal(presetPaths(resolvePreset(DEFAULT_PRESET)), null);
-  const paths = presetPaths(resolvePreset("tradeshow"));
+  const paths = presetPaths(resolvePreset("warehouse"));
   assert.match(paths.light, /\.hdr$/);
   assert.match(paths.background, /\.jpg$/);
   assert.match(paths.meta, /meta\.json$/);
@@ -79,11 +79,11 @@ test("a failed asset load leaves the procedural environment intact", async () =>
     loadHDR: () => Promise.reject(new Error("404")),
     loadBackground: () => Promise.reject(new Error("404")),
   });
-  const result = await lighting.apply(scene, "tradeshow");
+  const result = await lighting.apply(scene, "warehouse");
   assert.equal(result.environment, false);
   assert.equal(scene.environment, null);
   assert.equal(scene.background, "procedural");
-  assert.equal(renderer.toneMappingExposure, ENV_PRESETS.tradeshow.exposure);
+  assert.equal(renderer.toneMappingExposure, ENV_PRESETS.warehouse.exposure);
 });
 
 test("a loaded preset sets environment and background", async () => {

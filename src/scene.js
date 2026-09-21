@@ -242,7 +242,13 @@ export class BoothScene {
     // of them — a white tent roof against a dark backdrop still stair-steps:
     // sample counts are the driver's choice and ANGLE often gives few.
     // Supersampling does not ask permission.
-    this.renderer.setPixelRatio(renderScale());
+    // The Export panel's Preview quality, kept here rather than only in the
+    // inspector because draft mode has to be able to put it back.
+    this.quality = 2;
+    // Draft mode is off on load: the booth should look like itself the first
+    // time it is seen, and someone who never drags anything never needs this.
+    this.draft = false;
+    this.renderer.setPixelRatio(renderScale(this.quality));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.autoUpdate = false;
     this.renderer.shadowMap.type = T.PCFSoftShadowMap;
@@ -292,6 +298,55 @@ export class BoothScene {
    * the length of the gesture and refreshed once when it ends — the artwork
    * itself tracks the cursor, which is what the gesture is about.
    */
+  /**
+   * Draft mode: the viewport's quality escape hatch, and the honest answer to
+   * "dragging still stutters on my machine".
+   *
+   * Two things cost a nine-head art-show booth most of its frame, and neither
+   * of them is the geometry:
+   *
+   * - **Nine shadow-casting spots are nine depth passes.** `touchShadows`
+   *   already holds them still for the length of a gesture, which is what
+   *   made a drag track the cursor at all — but the first frame after the
+   *   gesture, and every frame of an orbit, still pays for all nine.
+   * - **Quality is a supersampling factor.** At Balanced the renderer draws
+   *   four fragments for every pixel on the 1x monitor most desktops have.
+   *
+   * Draft mode drops both. It is a view setting and not a project one: it is
+   * not in the backup, not in the undo history and not in schema 1, because
+   * how fast someone's laptop is has nothing to do with what their booth
+   * looks like. For the same reason it cannot reach an export — see
+   * `export()` and `recordMp4()`, which both put full quality back first.
+   *
+   * What it deliberately does not touch: the backdrop's own pass. Skipping it
+   * would change how the hall is framed, and a picture that reframes itself
+   * when you pick up a tool is worse than one that renders a little slower.
+   */
+  setDraft(on) {
+    const draft = !!on;
+    if (draft === this.draft) return;
+    this.draft = draft;
+    this.renderer.shadowMap.enabled = !draft;
+    this.renderer.setPixelRatio(draft ? 1 : renderScale(this.quality));
+    // Whether a material samples a shadow map is compiled into its program,
+    // so flipping `shadowMap.enabled` under a built scene is not enough on its
+    // own: without this the booth keeps drawing the shadows it was compiled
+    // with, and turning them back on leaves them missing. One recompile on a
+    // button press is a hitch nobody minds; per frame it would be the bug.
+    this.scene.traverse((o) => {
+      const m = o.material;
+      if (!m) return;
+      if (Array.isArray(m)) m.forEach((one) => (one.needsUpdate = true));
+      else m.needsUpdate = true;
+    });
+    if (!draft) this.renderer.shadowMap.needsUpdate = true;
+    this.resize();
+  }
+  /** Preview quality, remembered so draft mode can restore the right one. */
+  setQuality(quality) {
+    this.quality = quality;
+    if (!this.draft) this.renderer.setPixelRatio(renderScale(quality));
+  }
   touchShadows() {
     if (this.drag) this.shadowsStale = true;
     else this.renderer.shadowMap.needsUpdate = true;
@@ -1704,6 +1759,13 @@ export class BoothScene {
     // Damping interpolates towards a target over wall-clock time. On a path
     // driven frame by frame it would smear every frame towards the last one.
     this.controls.enableDamping = false;
+    // Same rule as `export()`: a recording is a delivered file, so full
+    // quality goes back before the first frame is drawn and draft mode is
+    // restored afterwards. A clip is rendered offline anyway — nothing about
+    // it is timed against this machine — so there is nothing to gain by
+    // leaving the shadows off and a whole clip to lose.
+    const wasDraft = this.draft;
+    this.setDraft(false);
     try {
       this.renderer.setPixelRatio(1);
       this.renderer.setSize(width, height, false);
@@ -1752,6 +1814,7 @@ export class BoothScene {
       this.resize();
       this.controls.update();
       this.renderer.shadowMap.needsUpdate = true;
+      this.setDraft(wasDraft);
       this.startLoop();
     }
   }
@@ -1766,6 +1829,12 @@ export class BoothScene {
       throw new Error(
         "This device cannot render that export size. Choose 2048 px.",
       );
+    // An export is the artefact someone shows a jury. Draft mode is about how
+    // this machine feels to drag on, and it has no business in a delivered
+    // file: a booth exported with the shadows switched off is not the booth.
+    // Below the size check, so a refused export leaves the mode as it found it.
+    const wasDraft = this.draft;
+    this.setDraft(false);
     const pixel = this.renderer.getPixelRatio();
     const hidden = [];
     this.group.traverse((o) => {
@@ -1788,6 +1857,7 @@ export class BoothScene {
       hidden.forEach((o) => (o.visible = true));
       this.renderer.setPixelRatio(pixel);
       this.resize();
+      this.setDraft(wasDraft);
     }
   }
 }

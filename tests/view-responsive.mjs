@@ -99,7 +99,23 @@ try {
     'an art-show booth opens in its own hall');
 
   await page.click('[data-tab="layout"]');
+
+  // Trade show is a white exhibition hall and shows no photograph, so an
+  // art-show booth in it keeps its own hall: these are the same room. It used
+  // to carry the burnt-warehouse HDRI, which put brick and girders behind
+  // seamless white walls and then switched the hall off on top of that.
   await page.selectOption('select[aria-label="Environment"]', 'tradeshow');
+  await page.waitForTimeout(700);
+  assert.equal(await page.evaluate(() => window.__booth.project.booth.hall.on), true,
+    'trade show is a hall, not a photograph, so the hall stays');
+  assert.ok(await page.evaluate(() => !!window.__booth.scene.group.getObjectByName('exhibition-hall')),
+    'and its white walls are still standing');
+  assert.equal(await page.evaluate(() => window.__booth.project.booth.ground), 'studio',
+    'on the texture-free neutral floor, not a concrete photograph');
+
+  // The warehouse is where the photograph went, and there the hall does come
+  // off: its back wall would cut across the picture as a white band.
+  await page.selectOption('select[aria-label="Environment"]', 'warehouse');
   await page.waitForTimeout(700);
   assert.equal(await page.evaluate(() => window.__booth.project.booth.hall.on), false,
     'choosing a photographed environment switches the hall off');
@@ -125,17 +141,113 @@ try {
   const power = page.locator('input[data-scope="lightBar"][data-field="power"]');
   assert.equal(await diffusion.count(), 1, 'diffusion is in the Lighting tool too');
   assert.equal(await power.count(), 1, 'and so is the bar\'s brightness');
-  await power.fill('150');
+
+  // The two ranges, both reported from a real monitor: 70 was called "beyond
+  // bright", and the old maximum diffusion of 1 was still harsh.
+  assert.equal(await power.getAttribute('max'), '70', 'brightness tops out where it stops being useful');
+  assert.equal(await power.getAttribute('step'), '2', 'and moves in steps small enough to judge');
+  assert.equal(await diffusion.getAttribute('max'), '3', 'diffusion reaches past the old ceiling of 1');
+
+  await power.fill('64');
   await power.dispatchEvent('change');
   await page.waitForTimeout(500);
-  assert.equal(await page.evaluate(() => window.__booth.project.booth.lightBar.power), 150);
+  assert.equal(await page.evaluate(() => window.__booth.project.booth.lightBar.power), 64);
+
+  // Past the old ceiling, and it sticks: this is the value that could not be
+  // reached at all before.
+  await diffusion.fill('2.5');
+  await diffusion.dispatchEvent('change');
+  await page.waitForTimeout(500);
+  assert.equal(await page.evaluate(() => window.__booth.project.booth.lightBar.diffusion), 2.5);
   await diffusion.fill('0');
   await diffusion.dispatchEvent('change');
   await page.waitForTimeout(500);
   assert.equal(await page.evaluate(() => window.__booth.project.booth.lightBar.diffusion), 0);
 
+  // A booth saved brighter than the slider offers widens its own slider rather
+  // than being quietly dragged down to 70 the moment the panel is drawn. This
+  // is the schema-1 case: 0..300 is still a project and must still be editable.
+  await page.evaluate(() => { window.__booth.project.booth.lightBar.power = 150; });
+  // Leaving the tab and coming back is what redraws the inspector, which is
+  // the moment a slider would clamp a value it thinks is out of range.
+  await page.click('[data-tab="art"]');
+  await page.click('[data-tab="lighting"]');
+  await page.waitForTimeout(400);
+  assert.equal(await page.locator('input[data-scope="lightBar"][data-field="power"]').getAttribute('max'), '150',
+    'an older, brighter bar keeps its value and widens its slider');
+  assert.equal(await page.evaluate(() => window.__booth.project.booth.lightBar.power), 150,
+    'and is not clamped by being looked at');
+
+  // ---- Fast edit: the quality escape hatch ------------------------------
+  // The honest answer to "a drag still stutters": nine shadow-casting heads
+  // and a supersampled buffer, both dropped for the length of an edit.
+  const shadowsOn = () => page.evaluate(() => window.__booth.scene.renderer.shadowMap.enabled);
+  const ratio = () => page.evaluate(() => window.__booth.scene.renderer.getPixelRatio());
+
+  assert.equal(await shadowsOn(), true, 'a fresh session opens at full quality');
+  assert.equal(await page.evaluate(() => window.__booth.scene.draft), false);
+  const fullRatio = await ratio();
+
+  await page.click('[data-action="draft"]');
+  await page.waitForTimeout(400);
+  assert.equal(await page.evaluate(() => window.__booth.scene.draft), true);
+  assert.equal(await shadowsOn(), false, 'fast edit drops the nine shadow passes');
+  assert.equal(await ratio(), 1, 'and renders one fragment per pixel');
+  assert.ok(await page.evaluate(() => document.querySelector('[data-action="draft"]').classList.contains('active')),
+    'and the button says so');
+
+  // The booth itself is untouched. This is a view setting: it is not in the
+  // project, so it cannot reach a backup, the undo history or schema 1.
+  assert.equal(await page.evaluate(() => 'draft' in window.__booth.project), false,
+    'fast edit is not project data');
+  assert.equal(await page.evaluate(() => JSON.stringify(window.__booth.project).includes('"draft"')), false);
+
+  // An export is a delivered file and never a draft one, whatever the viewport
+  // is set to. The shadows have to be back before the frame is read.
+  const duringExport = await page.evaluate(async () => {
+    const scene = window.__booth.scene;
+    let seen = null;
+    const real = scene.renderFrame.bind(scene);
+    scene.renderFrame = () => { seen ??= scene.renderer.shadowMap.enabled; return real(); };
+    try { await scene.export(1024); } finally { scene.renderFrame = real; }
+    return seen;
+  });
+  assert.equal(duringExport, true, 'an export renders with its shadows even from fast edit');
+  assert.equal(await page.evaluate(() => window.__booth.scene.draft), true,
+    'and hands fast edit back afterwards');
+
+  await page.click('[data-action="draft"]');
+  await page.waitForTimeout(400);
+  assert.equal(await shadowsOn(), true, 'full quality comes back');
+  assert.equal(await ratio(), fullRatio, 'at the supersampling it had before');
+  assert.ok(!(await page.evaluate(() => document.querySelector('[data-action="draft"]').classList.contains('active'))),
+    'and the button stops claiming otherwise');
+
+  // Leaving draft has two obligations, and both are consumed by the very next
+  // frame — so they are read inside one synchronous evaluate, before the loop
+  // can run. Timing either of these against wall clock is how you write a test
+  // that passes on a slow machine and fails on a fast one.
+  const leaving = await page.evaluate(() => {
+    const scene = window.__booth.scene;
+    const lit = [];
+    scene.scene.traverse((o) => { if (o.material && !Array.isArray(o.material)) lit.push(o.material); });
+    const before = lit.map((m) => m.version);
+    scene.setDraft(true);
+    scene.setDraft(false);
+    return {
+      queued: scene.renderer.shadowMap.needsUpdate,
+      recompiled: lit.some((m, i) => m.version > before[i]),
+    };
+  });
+  // Stale shadow maps would come back as the shapes the booth had when fast
+  // edit was switched on, which is worse than having none.
+  assert.equal(leaving.queued, true, 'the shadow maps are queued to be redrawn, not left stale');
+  // Whether a material samples a shadow map is compiled into its program. Miss
+  // this and the shadows never come back, however the renderer is configured.
+  assert.equal(leaving.recompiled, true, 'and the materials are rebuilt to sample them again');
+
   assert.deepEqual(errors, [], 'no page errors');
-  console.log('PASS selecting rebuilds nothing, artwork sliders, hall off in a photographed environment, light bar in Lighting.');
+  console.log('PASS selecting rebuilds nothing, artwork sliders, hall off in a photographed environment, light bar ranges, fast edit.');
 } finally {
   await browser.close();
   await server.close();
