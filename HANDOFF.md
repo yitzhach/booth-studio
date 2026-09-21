@@ -28,6 +28,83 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **Merged and deployed 2026-09-21, later the same day:** exports in a frame
+  you choose, careful rendering for video, the drawn drop shadow that finally
+  makes a wall gap visible, an eye beside every spotlight, a universal edge
+  colour, a seven-colour palette with a Previous button, and the edge finish
+  the next work inherits. The bullets below are that work.
+- **An export has a shape now, and it is not the browser window's.** Both the
+  PNG and the MP4 took their aspect ratio from the viewport, so a file came
+  out whatever size the window happened to be — reported as "it exports at the
+  same dimensions I have the viewing window at". Export → Frame and Video →
+  Frame now offer **This window** (the default, and bit-identical to the old
+  behaviour), **Desktop · widescreen 16:9**, **Phone · vertical 9:16**,
+  **Instagram · square 1:1**, **Instagram · portrait 4:5** and **Custom size**,
+  with the still's size now given as pixels **on the long side** so a vertical
+  frame is 1080 × 1920 rather than 1920 × 3413.
+  - `src/framing.js` is the whole of it and is pure: `frameSize(id, {long,
+    viewport, custom})` answers for a still and for a clip alike, which is what
+    keeps the two from drifting apart. Both sides always come out even, because
+    H.264 encodes in macroblocks.
+  - A frame that is not the window's shape shows more or less at the sides:
+    the camera keeps its vertical field of view and the width follows the
+    ratio. `export()` sets `camera.aspect` and restores it in the same
+    `finally` as everything else — a camera left disagreeing with the canvas is
+    what a stretched export looks like.
+  - The frame is a **view setting**, remembered per browser in `booth.view`
+    beside the fast-edit lock. It says where a file is going, not anything
+    about the booth, so it is not in the backup and not in schema 1. A queued
+    batch clip keeps the frame it was queued with, the way it already kept its
+    own timeline.
+  - Photo mode keeps taking a width: a photograph has a shape of its own and a
+    frame there would crop or letterbox someone's own picture.
+- **Careful rendering, for the glitches on export.** Video → **Careful
+  rendering** (on by default) draws each frame a second time after yielding to
+  the browser, then captures it. A frame read straight after the draw call that
+  produced it can still carry the previous frame's backdrop, shadow map or a
+  texture that had not finished uploading, which is exactly what a glitched
+  clip looks like. It roughly doubles the encode; off is the setting for a
+  machine that keeps up. `settleFrame` in `recordMp4` is the mechanism, and a
+  still is now drawn twice for the same reason — one frame with no second
+  chance.
+- **Hung work throws a shadow, and a wall gap is finally visible.** The gap
+  could only be seen by putting your eye along the wall and looking down it,
+  because nothing in the picture said the work was floating — and the light
+  that would cast that shadow is often a diffused wash with no direction left
+  in it. So the shadow is **drawn, not lit**: a soft dark card on the wall
+  behind each work, sized from that work's own wall gap.
+  - Lighting → **Drop shadow**: darker/lighter, further/closer, softer/harder,
+    each 0..100, and an on/off. `src/dropshadow.js` is pure and holds all the
+    arithmetic; `scene.artShadow()` turns a plan into one plane whose canvas is
+    cached by shape, so twenty works do not build twenty textures.
+  - `booth.dropShadow` is optional, so an older backup opens with the defaults
+    — the picture it was saved as, plus the shadow it would have had.
+  - It is scenery, like the light bar's housings, so it is in every export.
+- **A spotlight can be hidden instead of deleted.** An eye beside each light in
+  Lighting → Spotlights. Deleting was the only way to take a light out of a
+  composition and it threw away the aim that took longest to set. `l.on` is
+  optional and absent means showing, which is what every light in every older
+  backup means; a hidden light is not built at all, and a lens flare will not
+  come from one.
+- **One edge colour for the whole booth, if you want it.** Artwork →
+  **Universal edge colour for every work** switches `booth.edgeUniversal` on
+  and `booth.edgeColor` answers for every placement. It is a rule, not a
+  rewrite: each work keeps its own `edgeColor` and gets it back when the switch
+  goes off. **Paint every work this colour** is the other thing someone might
+  mean, and writes the colour into the works themselves. `edgeColorOf()` in
+  `src/model.js` is the one place that decides which of the two is showing, and
+  the hanging guide prints it.
+- **The last edge finish is what the next work starts with.** The edge colour,
+  the edge material and the thickness of the last work you set are carried to
+  the next original hung on a wall — per browser, like the palette, and only
+  ever a starting value.
+- **Seven saved colours and a Previous button, under every colour swatch.** The
+  operating system's own colour window cannot be added to, so the palette sits
+  in the panel directly beneath the swatch: up to seven saved colours (`+`
+  saves, shift-click forgets), and **Previous**, which is the colour that
+  control held before the one it holds now. `src/swatches.js` is the list
+  arithmetic; both the palette and the per-control history are per browser and
+  never enter a backup.
 - **Merged and deployed 2026-09-21:** fast edit mode, the light bar's two
   widened ranges, trade show as a white hall with the warehouse split out as
   its own preset, a hide switch and placement/scale sliders for the figures,
@@ -292,7 +369,31 @@ Extend it; do not rebuild it.
 
 ## Next
 
-1. **Look at the art-show booth on the live site and set Diffusion.** This is
+1. **Nobody has looked at any of the 2026-09-21 finishing work.** All of it is
+   on `main`. Judgements that need a browser and a pair of eyes:
+   - **The drop shadow's three defaults** (darkness 40, distance 45, softness
+     55) were chosen against a 0.75″ wall gap in a sandbox render, which is
+     exactly the kind of judgement a render here cannot make. Set a work's
+     wall gap to 2″, look at it head-on, and drag the three sliders. If it
+     reads as a sticker rather than a hung object, softness first; if the
+     piece looks like it is hovering, distance down. 0 darkness is no shadow
+     at all, so the whole range is safe to explore.
+   - **Whether a vertical or square export frames the booth usefully.** The
+     camera keeps its vertical field of view and the width follows the ratio,
+     so a 9:16 clip shows the walls and loses the aisle. If a vertical frame
+     wants a wider view, that is a zoom before exporting — or an argument for
+     the frame adjusting the lens, which was deliberately not done, because a
+     lens that changes with the frame means the preview is not the export.
+   - **Whether careful rendering actually fixes the glitches**, and whether
+     doubling the render is a price worth paying by default on a 2014 iMac.
+     It is a checkbox; off is one click.
+   - Whether seven swatches and Previous are the right two controls, and
+     whether shift-click is discoverable enough for forgetting one. The
+     tooltip says so and nothing else does.
+   - Whether the edge finish being inherited by the next work is welcome or
+     surprising. It is the last one *set*, which is not the same as the last
+     one hung.
+2. **Look at the art-show booth on the live site and set Diffusion.** This is
    the first thing to do and it needs a human, not a session: no agent can
    load production. Open Art show, and judge in this order —
    - **Diffusion** (Light bar, default 1.5 on a 0..3 scale) is the one number
@@ -320,7 +421,7 @@ Extend it; do not rebuild it.
    - Whether the hall reads as a hall, and whether a seamless white wall wants
      the fabric finish on (`wallFinish: "fabric"` works on an art-show booth).
    `ART_SHOW_PHASE.md` says which knob to turn first for each.
-2. **Two reports could not be reproduced, and need numbers from the machine
+3. **Two reports could not be reproduced, and need numbers from the machine
    that saw them.** "Ground textures — grass, concrete — do not show up, just
    the background" and "the tent frame showed but not the fabric". On `main`,
    in a real browser here, all six ground kinds load, bind and render
@@ -333,7 +434,7 @@ Extend it; do not rebuild it.
    kind **can no longer happen** — presets and uploads are one list now. That
    leaves a stale deploy, which is not visible from the repository and looks
    exactly like a broken dropdown.
-3. **The two shipped backdrops are 1024×512 and read soft.** This is the one
+4. **The two shipped backdrops are 1024×512 and read soft.** This is the one
    open bug with a known fix. Both were prepped from Poly Haven's **1K** HDRI,
    and `tools/hdri-prep.mjs` will not stretch a backdrop past its source. Re-prep
    from the **4K** download and the softness goes:
@@ -344,13 +445,13 @@ Extend it; do not rebuild it.
    **No agent session can do this** — polyhaven.com is refused by the sandbox
    egress proxy, as is the workers.dev production host. It needs a human with a
    browser. `docs/HDRI-ASSETS.md` is step by step.
-4. **H.264 output is unverified on real hardware.** Open Chromium builds ship no
+5. **H.264 output is unverified on real hardware.** Open Chromium builds ship no
    H.264 *encoder*, so every sandbox run exercises the VP9 fallback instead.
    That does prove the whole encoder-to-muxer pipeline with real encoder bytes,
    and mp4box.js validated the container — but nobody has opened an
    `avc1`/`avcC` file from Chrome or Safari in QuickTime. If a clip will not
    play, start here.
-5. **Unverified on real hardware** — things no one has confirmed by eye,
+6. **Unverified on real hardware** — things no one has confirmed by eye,
    because no agent session can load the live site:
    - **Nobody has looked at the Video tab, a batch export or the overhead
      lens flare.** The batch list is covered in a real browser (queue two
@@ -365,7 +466,7 @@ Extend it; do not rebuild it.
      so those are not guesses; how a stylised mannequin reads beside real
      artwork, and whether 52° is the right place to stop widening, are
      judgements made on renders in a sandbox.
-   - **Nobody has looked at an art-show booth.** See item 1 — it is the whole
+   - **Nobody has looked at an art-show booth.** See item 2 — it is the whole
      of that item. The measurements are pinned by tests that read the meshes
      back and the nine spotlights are checked against the arithmetic that
      placed them, so nothing there is a guess; what is left is all judgement.
@@ -396,9 +497,9 @@ Extend it; do not rebuild it.
      `canvas` is a one-line change to a finer weave.
    - Is the tent weave visible? Its relief is exaggerated 3x (`TENT_WEAVE`)
      because a true-depth weave on a white roof washes out.
-6. **A `home` HDRI** is still missing — an interior with windows on one side.
+7. **A `home` HDRI** is still missing — an interior with windows on one side.
    That preset falls back procedurally until someone downloads one.
-7. **Nobody has looked at the four things in the earlier 2026-09-21 merge.**
+8. **Nobody has looked at the four things in the earlier 2026-09-21 merge.**
    All of them are answers to reports from a real browser; none has been seen
    there since:
    - Whether uploading and then tapping reads as obviously as it should. The
@@ -412,8 +513,8 @@ Extend it; do not rebuild it.
      as it comes on, and that is a visible change nobody asked for in that
      moment.
    - **Whether any of the speed work is enough on the 2014 iMac.** Everything
-     measured is in the tests; what is not known is how it feels. See item 8.
-8. **Nobody has looked at the ground picker or the artwork sliders.**
+     measured is in the tests; what is not known is how it feels. See item 10.
+9. **Nobody has looked at the ground picker or the artwork sliders.**
    Both are on `main` and live. Whether two labelled groups in one dropdown
    read as obviously as intended; whether "Delete this ground photograph"
    sounds like a delete rather than a deselect; and whether the placement
@@ -428,7 +529,7 @@ Extend it; do not rebuild it.
    10 x 10 ones; and whether the fast edit toggle is worth its place in the
    toolbar. That last one is half answered: it is now automatic on a
    double-tap and also a switch in Layout, and the toolbar button stays.
-9. **Is it actually faster now?** Reported still slow on a 2014 iMac in
+10. **Is it actually faster now?** Reported still slow on a 2014 iMac in
    Chrome — and, tellingly, **fast with the sample panels and slow with
    uploaded photographs**. That last part was the diagnosis: four separate
    places treated a 25 MB base64 original as free. The undo history and every
@@ -448,7 +549,7 @@ Extend it; do not rebuild it.
    edit. Below that: a click still rebuilds the library and the inspector as
    HTML strings, which is now cheap but not free, and `Export → Preview
    quality → Efficient` is worth trying on a 2014 machine.
-10. **Nobody has looked at a booth row, at the fast edit lock, or at an
+11. **Nobody has looked at a booth row, at the fast edit lock, or at an
    uploaded photograph the right way up.** All three are on `main`. Judgements
    waiting on a live site:
    - Whether a row of booths reads as an aisle at the default 24″ gap, and
@@ -470,7 +571,7 @@ Extend it; do not rebuild it.
    - A row booth is drawn plain: three walls, this booth's colour, no light
      bar, no seam posts, no fabric weave. Whether that reads as a neighbour
      or as an unfinished version of your own booth is a judgement.
-11. **Figures are stylised mannequins.** No faces, no clothing, mid-grey. If
+12. **Figures are stylised mannequins.** No faces, no clothing, mid-grey. If
    they need to read as a crowd rather than as scale references, that is a
    different asset and a different phase.
 
@@ -558,9 +659,9 @@ the picker became one list.
 
 ```sh
 npm ci
-npm test                 # 235 Node tests
+npm test                 # 259 Node tests
 npm run build
-npm run test:view        # camera, city, env presets, HDRI, ground, ground library, tent, walls, video, timeline, people, panels, responsiveness, art show, booth row
+npm run test:view        # camera, city, env presets, HDRI, ground, ground library, tent, walls, video, timeline, people, panels, responsiveness, art show, booth row, finishing
 npm run test:browser     # 25 end-to-end checks
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
 ```
@@ -638,6 +739,44 @@ regression — it is the editor and the test sharing one server.
 
 ## Things learned the hard way
 
+- **An export that inherits the window's shape is not an export size.** Both
+  the PNG and the MP4 read their aspect ratio off the canvas, and the code
+  said so plainly — "height follows width, from the viewport" — which reads
+  like fidelity to what was composed and is actually the browser window
+  deciding what a delivered file is. The fix is not a resize afterwards: a
+  16:9 file cropped to 9:16 has the booth cut out of it. The frame has to be
+  chosen before the frame is drawn, and the camera set up for it.
+- **A frame that is not the canvas's needs the camera told.** `setSize` alone
+  stretches the picture, because `camera.aspect` still describes the old
+  shape. It is set beside the size and restored in the same `finally`, which
+  is the same rule the draft mode and the pixel ratio already follow there.
+- **What is on the GPU when you read the canvas is not what you asked for one
+  line earlier.** Rendering is asynchronous, so a frame captured immediately
+  after its draw call can still carry the previous frame's backdrop pass,
+  shadow map or a texture that finished uploading a moment too late. That is
+  what "glitches on export" was. Drawing it twice with a yield between is the
+  cheap, honest fix; it costs double and it is a setting for that reason.
+- **A shadow that is lit is not a shadow you control.** The wall gap was
+  invisible head-on because the thing that would cast it — a raking spotlight
+  — is often diffused into a wash with no direction left in it, and because
+  nine shadow maps cannot be spent on one batten. Drawing it as a card on the
+  wall makes it three sliders instead of a lighting setup, puts it in every
+  export, and costs one transparent plane per work.
+- **Hiding is not deleting, and the difference is the aim.** A spotlight's
+  position and target are the slowest thing in the app to get right, and
+  deleting was the only way to take one out of a picture. One optional
+  boolean, absent meaning showing, buys the whole feature and keeps every
+  older backup.
+- **A universal setting should be a rule, not a rewrite.** Painting every
+  work's `edgeColor` on the way in would be a one-way door: switching the
+  option off afterwards could not put back what each work carried. So the
+  booth's colour answers for every work while the switch is on, each
+  placement keeps its own, and the rewrite is a separate button that says
+  what it does.
+- **The system colour picker is a closed window.** Nothing can be added
+  inside `<input type="color">`'s panel, so "save a colour in the picker"
+  becomes a row of swatches under it. Worth knowing before designing around
+  the native control.
 - **A spherical backdrop is framed by field of view alone.** Moving the camera
   cannot pull it back, because the background is a lookup by view direction. So
   "the backdrop is too zoomed in" and "the backdrop is blurry" are one bug: a
@@ -849,6 +988,11 @@ regression — it is the editor and the test sharing one server.
 - `GROUND_LIBRARY_PHASE.md` — presets and uploaded grounds as one list: the
   widened `booth.ground`, why the library is a filter over the assets rather
   than a second list, and how an older backup's override is adopted.
+- `src/framing.js` — the shape of a delivered file: one pure function that
+  answers for a still and a clip alike, and why the camera is told about it.
+- `src/dropshadow.js` — the drawn drop shadow, its three sliders, and why a
+  wall gap needed one.
+- `src/swatches.js` — the seven saved colours and the Previous button.
 - `FUTURE_BUILD.md` — requested, deliberately not started. Currently empty.
 - `docs/HDRI-ASSETS.md`, `docs/TEXTURE-ASSETS.md` — adding asset files.
 - `AI_EXPORT_PHASE.md` — only for AI-export implementation.

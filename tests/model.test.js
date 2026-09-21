@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 import {
   blankProject,
   demoProject,
+  DEFAULT_EDGE_COLOR,
+  dropShadowSpec,
+  edgeColorOf,
+  lightVisible,
   validateProject,
   constrain,
   constrainPanel,
@@ -352,4 +356,59 @@ test("a placement the app positions never lands on one already there", () => {
   // Nor is the other face of the same wall.
   p.art = [{ ...a, id: "outside", face: "outside" }];
   assert.deepEqual(openSpot(p, { ...a, id: "six" }), { ...a, id: "six" });
+});
+
+// ---------------------------------------------------------------------------
+// The drop shadow, the universal edge colour and a hidden spotlight: three
+// optional additions, so the test that matters most is that a backup written
+// before any of them existed still opens.
+
+test("a backup with no drop shadow, no universal edge and no light switch still opens", () => {
+  const p = blankProject();
+  delete p.booth.dropShadow;
+  delete p.booth.edgeUniversal;
+  delete p.booth.edgeColor;
+  for (const l of p.lights) delete l.on;
+  assert.doesNotThrow(() => validateProject(structuredClone(p)));
+  // And absent means the defaults, everywhere that reads them.
+  assert.equal(dropShadowSpec(p.booth).on, true);
+  assert.equal(edgeColorOf(p.booth, {}), DEFAULT_EDGE_COLOR);
+  assert.equal(lightVisible(p.lights[0]), true);
+});
+
+test("a drop shadow outside 0..100, or a light switch that is not a switch, is refused", () => {
+  const bad = (change) => {
+    const p = structuredClone(blankProject());
+    change(p);
+    assert.throws(() => validateProject(p));
+  };
+  bad((p) => (p.booth.dropShadow.darkness = 101));
+  bad((p) => (p.booth.dropShadow.distance = -1));
+  bad((p) => (p.booth.dropShadow.on = "yes"));
+  bad((p) => (p.booth.dropShadow = "dark"));
+  bad((p) => (p.booth.edgeColor = "black"));
+  bad((p) => (p.booth.edgeUniversal = 1));
+  bad((p) => (p.lights[0].on = "off"));
+});
+
+test("a universal edge colour answers for every work without rewriting any of them", () => {
+  const p = blankProject();
+  const work = { edgeColor: "#123456" };
+  assert.equal(edgeColorOf(p.booth, work), "#123456");
+  p.booth.edgeUniversal = true;
+  p.booth.edgeColor = "#abcdef";
+  assert.equal(edgeColorOf(p.booth, work), "#abcdef");
+  assert.equal(work.edgeColor, "#123456", "the work itself is untouched");
+  p.booth.edgeUniversal = false;
+  assert.equal(edgeColorOf(p.booth, work), "#123456", "so switching the rule off puts it back");
+});
+
+test("a hidden spotlight keeps everything that made it worth aiming", () => {
+  const p = blankProject();
+  const light = p.lights[0];
+  const aim = { x: light.x, y: light.y, tx: light.tx, ty: light.ty, power: light.power };
+  light.on = false;
+  assert.equal(lightVisible(light), false);
+  assert.doesNotThrow(() => validateProject(structuredClone(p)));
+  for (const [key, value] of Object.entries(aim)) assert.equal(light[key], value);
 });

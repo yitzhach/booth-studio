@@ -350,6 +350,14 @@ export async function recordMp4({
   height,
   bitrate,
   drawFrame,
+  // Called after drawFrame and before the frame is handed to the encoder.
+  // The renderer's work is asynchronous on the GPU, so a frame read straight
+  // after the draw call that produced it can still carry the previous one's
+  // backdrop, shadow map or a texture that had not finished uploading — which
+  // is what "glitches on export" looked like. A settle draws it again after
+  // yielding. Optional, because on a machine that keeps up it is paying twice
+  // for nothing.
+  settleFrame = null,
   onProgress = () => {},
   signal,
 }) {
@@ -387,6 +395,7 @@ export async function recordMp4({
       if (signal?.aborted) throw new DOMException("Recording cancelled", "AbortError");
       if (failure) throw failure;
       const source = await drawFrame(i);
+      if (settleFrame) await settleFrame(i);
       const frame = new VideoFrame(source, { timestamp: Math.round(i * microseconds), duration: Math.round(microseconds) });
       try {
         // A keyframe every two seconds: long enough not to cost much, short

@@ -3,12 +3,13 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { makeTent, environment } from "./environment.js";
 import { signTexture } from "./signage.js";
 import { edgeMaterial } from "./edge-material.js";
+import { dropShadowSpec, shadowPlan, shadowKey } from "./dropshadow.js";
 import { TextureCache } from "./texture-cache.js";
 import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY, showFixtures } from "./lighting.js";
 import { GROUND_CONSUMER, TENT_CONSUMER, TENT_WEAVE, WALL_CONSUMER, WALL_SET, UV_METRE, SurfaceTextures } from "./surfaces.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
 import { decodeAt, isPreflipped } from "./image-source.js";
-import { IN, PEDESTAL, boothPedestals, constrain, groundKind, groundUpload, constrainPanel, constrainPedestal, findPanel, findPedestal, isArtShow, lightBarSpec, isPanelKey, scalePanel, wallKeys, wallSpec } from "./model.js";
+import { IN, PEDESTAL, boothPedestals, edgeColorOf, lightVisible, constrain, groundKind, groundUpload, constrainPanel, constrainPedestal, findPanel, findPedestal, isArtShow, lightBarSpec, isPanelKey, scalePanel, wallKeys, wallSpec } from "./model.js";
 import { lightBarBounce, lightBarFixtures, lightBarOptics, lightBarRail } from "./lightbar.js";
 import { makePerson, placePerson } from "./people.js";
 import { rowLayout } from "./row.js";
@@ -23,6 +24,7 @@ import { frameTimes, resolveMove, samplePath } from "./camera-path.js";
 import { fadeAt, isTimeline, timelineSeconds } from "./timeline.js";
 import { flareGhosts, flareOrigin } from "./flare.js";
 import { DEFAULT_SIZE, SIZES, evenSize, recordMp4, videoSupported } from "./video.js";
+import { DEFAULT_FRAME, frameSize } from "./framing.js";
 // How far behind its frame plane a wall's slab sits, in metres. Half the
 // slab's thickness plus the sliver that keeps art from z-fighting the face.
 const WALL_SLAB_OFFSET = 0.031;
@@ -250,6 +252,9 @@ export class BoothScene {
     // measurement. The button turns it off for fine placement.
     this.snap = true;
     this.textureCache = new TextureCache();
+    // Drop-shadow canvases, cached by shape rather than by work. They outlive
+    // a rebuild on purpose: the shapes do not change when a wall does.
+    this.shadowTextures = new Map();
     this.scene = new T.Scene();
     this.scene.background = new T.Color("#b5b4b0");
     this.renderer = new T.WebGLRenderer({
@@ -577,7 +582,9 @@ export class BoothScene {
   // exist, and then there is no flare — or the unseen overhead source, which
   // always does: see OVERHEAD in src/flare.js.
   flareState(strength, source) {
-    const origin = flareOrigin(source, this.p?.lights);
+    // Hidden spotlights are not in the picture, so a flare cannot come from
+    // one: the ghosts would trail from a light nothing is lit by.
+    const origin = flareOrigin(source, (this.p?.lights || []).filter(lightVisible));
     if (!origin) return null;
     const ndc = new T.Vector3(origin.x * IN, origin.y * IN, origin.z * IN).project(this.camera);
     return { ndc: { x: ndc.x, y: ndc.y, z: ndc.z }, strength };
@@ -624,6 +631,75 @@ export class BoothScene {
       this.camera.bottom = -span / 2;
     }
     this.camera.updateProjectionMatrix();
+  }
+  /**
+   * The soft card of shadow a hung work throws onto the wall behind it.
+   *
+   * Drawn rather than lit, for the reason src/dropshadow.js states: the light
+   * that would cast it is often a diffused wash with no direction left in it,
+   * and a wall gap nobody can see is a measurement nobody can check. It is a
+   * child of the work's own group, so it moves, scales and hides with the
+   * work and needs nothing per frame.
+   *
+   * The canvas is cached by shape — two works of similar proportions share
+   * one — and the cache is emptied rather than grown past a couple of dozen
+   * entries, since every entry is a 256px greyscale texture.
+   */
+  artShadow(p, a, parent) {
+    const plan = shadowPlan(dropShadowSpec(p.booth), a);
+    if (!plan.on || plan.opacity <= 0.002) return null;
+    const key = shadowKey(plan);
+    if (!this.shadowTextures.has(key)) {
+      if (this.shadowTextures.size > 24) {
+        for (const tex of this.shadowTextures.values()) tex.dispose();
+        this.shadowTextures.clear();
+      }
+      const size = 256,
+        canvas = document.createElement("canvas");
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, size, size);
+      // The work-sized core, drawn white on black: white is opaque shadow.
+      // The blur is what a penumbra is, and it is why the plane is padded —
+      // a blur that reaches the edge of the canvas is a shadow cut off
+      // square, which reads as a second rectangle on the wall.
+      ctx.filter = `blur(${Math.max(0.5, plan.blur * size)}px)`;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(
+        plan.insetX * size,
+        plan.insetY * size,
+        size * (1 - plan.insetX * 2),
+        size * (1 - plan.insetY * 2),
+      );
+      ctx.filter = "none";
+      const tex = new T.CanvasTexture(canvas);
+      tex.colorSpace = T.NoColorSpace;
+      this.shadowTextures.set(key, tex);
+    }
+    const mesh = new T.Mesh(
+      new T.PlaneGeometry(plan.width * IN, plan.height * IN),
+      new T.MeshBasicMaterial({
+        color: 0x000000,
+        alphaMap: this.shadowTextures.get(key),
+        transparent: true,
+        opacity: plan.opacity,
+        // On the wall, not in it: writing depth would make the card fight the
+        // artwork in front of it at grazing angles.
+        depthWrite: false,
+      }),
+    );
+    // Local to the work's own group, whose origin is the centre of the work
+    // at its wall gap. Back to the wall face, then a hair in front of it.
+    mesh.position.set(
+      plan.dx * IN,
+      plan.dy * IN,
+      -((a.offset + a.thickness / 2) * IN + 0.003) + 0.0015,
+    );
+    mesh.userData.artShadow = a.id;
+    mesh.renderOrder = -1;
+    parent.add(mesh);
+    return mesh;
   }
   disposeGroup() {
     this.group.traverse((o) => {
@@ -935,11 +1011,12 @@ export class BoothScene {
         0,
         0,
         0,
-        edgeMaterial(a),
+        edgeMaterial(a, edgeColorOf(p.booth, a)),
         art,
       );
       box.userData.artId = a.id;
       this.artObjects.push(box);
+      this.artShadow(p, a, art);
       // applySelection() outlines this box and places the handles against the
       // size it was built at, since the group carries the live scale.
       this.artGroups.get(a.id).box = box;
@@ -995,6 +1072,12 @@ export class BoothScene {
     }
     const fixtures = showFixtures(p.booth.fixtures, p.booth.envPreset, p.booth.venue);
     for (const l of p.lights) {
+      // A hidden spotlight is still in the list, still carries its position,
+      // its aim and its power, and is simply not built. That is the whole
+      // difference between hiding one and deleting one: deleting was the only
+      // way to take a light out of a composition, and it threw away the aim
+      // that took the longest to set.
+      if (!lightVisible(l)) continue;
       const light = new T.SpotLight(
         temperature(l.kelvin),
         l.power,
@@ -1865,7 +1948,7 @@ export class BoothScene {
   // a finally block: this drives the same camera the user is holding, and
   // leaving it parked mid-move after a cancelled recording would look like the
   // viewport had broken.
-  async recordVideo({ move, seconds, fps, size, onProgress = () => {}, signal } = {}) {
+  async recordVideo({ move, seconds, fps, size, frame = DEFAULT_FRAME, custom, settle = true, onProgress = () => {}, signal } = {}) {
     if (!videoSupported())
       throw new Error(
         "This browser cannot encode video. Chrome, Edge and Safari 16.4 or newer can; Export PNG works everywhere.",
@@ -1875,12 +1958,19 @@ export class BoothScene {
     await Promise.allSettled(this.textureCache.pending());
     const preset = SIZES[size] || SIZES[DEFAULT_SIZE];
     const canvas = this.renderer.domElement;
-    const aspect = canvas.width / canvas.height;
-    // The clip keeps the viewport's aspect ratio rather than letterboxing into
-    // a fixed frame, so what is recorded is what was composed. Height follows
-    // width, and both are forced even because H.264 encodes in macroblocks.
-    const width = evenSize(preset.width);
-    const height = evenSize(width / aspect);
+    // The frame is chosen now, not inherited from the window. "This window"
+    // is still an option and still the default, and it is the old behaviour
+    // exactly: the viewport's own aspect, height following width. The named
+    // frames — widescreen, vertical, square — state their ratio instead, so a
+    // clip for a phone is 1080 x 1920 whatever shape the browser is. Both
+    // sides are forced even because H.264 encodes in macroblocks.
+    const shape = frameSize(frame, {
+      long: preset.height ? Math.max(preset.width, preset.height) : preset.width,
+      viewport: canvas.width / canvas.height,
+      custom,
+    });
+    const width = evenSize(shape.width);
+    const height = evenSize(shape.height);
     const max = this.renderer.capabilities.maxTextureSize;
     if (width > max || height > max)
       throw new Error("This device cannot render that clip size. Choose 720p.");
@@ -1955,6 +2045,20 @@ export class BoothScene {
           this.renderFrame();
           return canvas;
         },
+        // Careful rendering. Reported as glitches on export: a frame captured
+        // while a texture upload, a shadow map or the backdrop's second pass
+        // was still landing comes out with a wall, a shadow or the
+        // surroundings from the frame before. Drawing each frame a second
+        // time, after yielding to the browser, costs roughly double the
+        // encode and buys a frame whose GPU work has certainly finished. It
+        // is a setting rather than a rule because on a fast machine it is
+        // paying twice for nothing.
+        settleFrame: settle
+          ? async () => {
+              await new Promise((r) => setTimeout(r, 0));
+              this.renderFrame();
+            }
+          : null,
       });
       return { ...recorded, width, height, fps, seconds: clip.count / fps };
     } finally {
@@ -1977,14 +2081,27 @@ export class BoothScene {
       this.startLoop();
     }
   }
-  async export(width) {
+  /**
+   * A still.
+   *
+   * `long` is the longer side in pixels — the old "4096 px wide", generalised,
+   * because a vertical phone frame at 4096 wide would be 7281 tall and no
+   * device will render it. `frame` names the shape: "view" keeps the window's
+   * own aspect, which is what this always did, and the rest state a ratio and
+   * get the camera set up for it. A camera whose aspect is not the canvas's is
+   * the whole bug behind a stretched export, so it is set here and restored in
+   * the finally beside everything else.
+   */
+  async export(long, { frame = DEFAULT_FRAME, custom } = {}) {
     await Promise.allSettled(this.textureCache.pending());
     const canvas = this.renderer.domElement,
       w = canvas.width,
-      h = canvas.height,
-      ratio = w / h;
+      h = canvas.height;
+    const shape = frameSize(frame, { long, viewport: w / h, custom });
+    const width = shape.width,
+      height = shape.height;
     const max = this.renderer.capabilities.maxTextureSize;
-    if (width > max || width / ratio > max)
+    if (width > max || height > max)
       throw new Error(
         "This device cannot render that export size. Choose 2048 px.",
       );
@@ -1995,6 +2112,7 @@ export class BoothScene {
     const wasDraft = this.draft;
     this.setDraft(false);
     const pixel = this.renderer.getPixelRatio();
+    const wasAspect = this.camera.aspect;
     const hidden = [];
     this.group.traverse((o) => {
       if (o.isLineSegments || o.userData.editorOnly) {
@@ -2004,7 +2122,16 @@ export class BoothScene {
     });
     try {
       this.renderer.setPixelRatio(1);
-      this.renderer.setSize(width, Math.round(width / ratio), false);
+      this.renderer.setSize(width, height, false);
+      if (this.camera.isPerspectiveCamera) {
+        this.camera.aspect = width / height;
+        this.camera.updateProjectionMatrix();
+      }
+      // Twice, for the same reason a recorded frame is drawn twice: the
+      // backdrop's second pass and any texture that has just arrived land on
+      // the first draw at the new size, and a still is one frame with no
+      // second chance.
+      this.renderFrame();
       this.renderFrame();
       return await new Promise((res, rej) =>
         canvas.toBlob(
@@ -2015,6 +2142,7 @@ export class BoothScene {
     } finally {
       hidden.forEach((o) => (o.visible = true));
       this.renderer.setPixelRatio(pixel);
+      if (this.camera.isPerspectiveCamera) this.camera.aspect = wasAspect;
       this.resize();
       this.setDraft(wasDraft);
     }

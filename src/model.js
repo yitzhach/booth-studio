@@ -1,4 +1,5 @@
 import { editedAspect, validImageEdits } from "./image-edit.js";
+import { DROP_SHADOW, dropShadowSpec } from "./dropshadow.js";
 import { hasRow, normalizeRow, rowLayout, MAX_SLOTS, MIN_SPACE, MAX_SPACE, MAX_GAP } from "./row.js";
 export const IN = 0.0254;
 export const uid = () => globalThis.crypto.randomUUID();
@@ -57,6 +58,20 @@ export function blankProject() {
       // lighting is already in the picture. Optional: a backup written before
       // it existed loads with the same default.
       fixtures: "auto",
+      // The drawn shadow every hung work throws onto the wall behind it, and
+      // with it the only thing that makes a wall gap visible from anywhere
+      // but along the wall. Optional: a backup written before it existed
+      // loads with these defaults, which is the same picture it was saved as
+      // plus a shadow it would have had if this had existed. See
+      // src/dropshadow.js.
+      dropShadow: { ...DROP_SHADOW },
+      // A single edge colour for every work in the booth. Off by default, so
+      // each placement keeps its own `edgeColor`; switched on, one colour
+      // answers for all of them and the per-work swatch says where it comes
+      // from. Two optional keys, never a changed meaning: `a.edgeColor` is
+      // still what a work carries and still what it goes back to.
+      edgeUniversal: false,
+      edgeColor: "#b7a68b",
       // Figures for scale. Optional and empty by default, so a schema-1 backup
       // written before they existed loads unchanged; see src/people.js.
       people: [],
@@ -767,12 +782,26 @@ export function validateProject(p) {
     )
       fail();
   }
+  // The drawn drop shadow. Absent is the default everywhere, so this only
+  // has to refuse a value that is present and wrong.
+  if (p.booth.dropShadow !== undefined) {
+    const s = p.booth.dropShadow;
+    if (!s || typeof s !== "object") fail();
+    if (s.on !== undefined && typeof s.on !== "boolean") fail();
+    for (const key of ["darkness", "distance", "softness"])
+      if (s[key] !== undefined && !finite(s[key], 0, 100)) fail();
+  }
+  if (p.booth.edgeUniversal !== undefined && typeof p.booth.edgeUniversal !== "boolean") fail();
+  if (p.booth.edgeColor !== undefined && !/^#[0-9a-f]{6}$/i.test(p.booth.edgeColor)) fail();
   if (!finite(p.ambient, 0, 4)) fail();
   for (const l of p.lights) {
     for (const key of ["x", "z", "tx", "tz"])
       if (!finite(l[key], -360, 360)) fail();
     for (const key of ["y", "ty"]) if (!finite(l[key], 0, 160)) fail();
     if (!finite(l.power, 0, 300) || !finite(l.kelvin, 2700, 6500)) fail();
+    // Hidden rather than deleted. Absent means shown, which is what every
+    // light in every older backup means.
+    if (l.on !== undefined && typeof l.on !== "boolean") fail();
   }
   if (
     !Array.isArray(p.photo.layers) ||
@@ -896,3 +925,19 @@ export function scalePanel(p, a, factor) {
   const w = a.w * f, h = a.h * f;
   return constrain(p, {...a, w, h, x:a.x + (a.w-w)/2, y:a.y + (a.h-h)/2});
 }
+
+/**
+ * The colour a work's edges are painted. A booth can hold one universal edge
+ * colour for every work in it; with that off — the default — each placement
+ * keeps its own, which is what it has always carried and what it returns to.
+ * One function so the renderer, the inspector's swatch and the hanging guide
+ * cannot disagree about which colour is showing.
+ */
+export const DEFAULT_EDGE_COLOR = "#b7a68b";
+export const edgeColorOf = (booth, art = {}) =>
+  booth?.edgeUniversal && booth.edgeColor
+    ? booth.edgeColor
+    : art.edgeColor || DEFAULT_EDGE_COLOR;
+/** Whether a spotlight is showing. Absent means yes; see validate(). */
+export const lightVisible = (light) => light?.on !== false;
+export { dropShadowSpec };

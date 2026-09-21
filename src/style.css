@@ -1614,3 +1614,76 @@ dialog li {
   margin: 0;
   flex: 0 0 96px;
 }
+
+/* The saved palette under a colour control. The fixed finish swatches above
+   it keep the plain `.swatches` rules; these add the two buttons that are not
+   colours — Save, and Previous with its label. */
+.color-block {
+  margin: 14px 0;
+}
+.saved-swatches {
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 8px 0 0;
+  gap: 8px;
+}
+.saved-swatches .swatch-save {
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px dashed #74818c;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+}
+.saved-swatches .swatch-previous {
+  width: auto;
+  height: 24px;
+  min-height: 0;
+  padding: 0 10px 0 8px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.saved-swatches .swatch-previous span {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  /* The chip is the colour itself, so the word on it has to survive both a
+     white swatch and a black one. */
+  color: #fff;
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.85);
+}
+/* A spotlight and the eye that hides it, as one control. */
+.light-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.light-picker .eye {
+  width: 28px;
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+}
+.light-picker .eye.off {
+  color: #7c6a4a;
+}
+.light-picker .eye i {
+  width: 15px;
+  height: 15px;
+}
+/* Two numbers side by side: a custom frame's width and height. */
+.field-row {
+  display: flex;
+  gap: 10px;
+}
+.field-row .field {
+  flex: 1;
+}

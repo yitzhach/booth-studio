@@ -278,6 +278,20 @@ try {
       assert.ok(result.codec.endsWith(expected), `codec ${result.codec} should declare level ${expected}`);
     }
     console.log(`     encoded ${result.frames} frames with ${codec.codec} into ${(result.bytes / 1024).toFixed(0)} kB, as ${result.entry}/${result.configuration}`);
+
+    // A chosen frame, not the browser window's. The reported bug was that a
+    // clip came out the shape of the viewport; a vertical frame in a
+    // landscape window is the shortest way to say it no longer does.
+    const vertical = await page.evaluate(async () => {
+      const view = window.__booth.scene;
+      const canvas = view.renderer.domElement;
+      const recorded = await view.recordVideo({ move: 'orbit', seconds: 0.5, fps: 24, size: 720, frame: 'phone', settle: false });
+      return { width: recorded.width, height: recorded.height, viewport: canvas.width / canvas.height };
+    });
+    assert.ok(vertical.viewport > 1, 'the window is landscape');
+    assert.ok(vertical.height > vertical.width, `a phone clip is taller than it is wide, got ${vertical.width} x ${vertical.height}`);
+    assert.equal(vertical.width % 2, 0, 'and both sides are even, as the encoder requires');
+    assert.equal(vertical.height % 2, 0);
   }
 
   // The recording drives the user's own camera, so it has to give it back.

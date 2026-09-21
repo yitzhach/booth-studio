@@ -2,10 +2,15 @@ import * as T from "three";
 
 // Neutral procedural maps keep the chosen pigment independent of the texture.
 const maps = new Map();
-export function edgeMaterial(art) {
+/**
+ * `color` is passed in rather than read off the placement, because a booth can
+ * hold one universal edge colour for every work in it. `edgeColorOf()` in
+ * model.js is the one place that decides which of the two is showing.
+ */
+export function edgeMaterial(art, color) {
   const kind = art.edgeTexture || "plain";
   const material = new T.MeshStandardMaterial({
-    color: art.edgeColor || "#b7a68b",
+    color: color || art.edgeColor || "#b7a68b",
     roughness: kind === "metal" ? .32 : kind === "wood" ? .72 : .92,
     metalness: kind === "metal" ? .8 : 0,
   });
