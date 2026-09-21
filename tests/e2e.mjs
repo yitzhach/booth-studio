@@ -166,7 +166,8 @@ try {
   const decoded = await page.evaluate(async () => {
     const project = window.__booth.project;
     const id = project.art.find((a) => a.asset).asset;
-    const image = (await window.__booth.scene.texture(id)).image;
+    const texture = await window.__booth.scene.texture(id);
+    const image = texture.image;
     const canvas = document.createElement("canvas");
     canvas.width = image.width;
     canvas.height = image.height;
@@ -175,13 +176,22 @@ try {
     const at = (fx, fy) => [
       ...ctx.getImageData(Math.round(canvas.width * fx), Math.round(canvas.height * fy), 1, 1).data,
     ].slice(0, 3);
+    // What ends up at the top of the wall is not simply the top of the
+    // decoded image. WebGL does not apply `flipY` to an ImageBitmap, so an
+    // original on its way to a texture is decoded already flipped and
+    // uploaded with the flag off; the two compose to the way up it was taken.
+    // `flipY` is therefore the mapping from image rows to wall rows, and
+    // sampling through it is what pins the orientation end to end.
+    const top = texture.flipY ? 0.15 : 0.85;
+    const bottom = texture.flipY ? 0.85 : 0.15;
     return {
       size: [image.width, image.height],
       source: [project.assets[id].width, project.assets[id].height],
-      topLeft: at(0.25, 0.15),
-      topRight: at(0.75, 0.15),
-      bottomLeft: at(0.25, 0.85),
-      bottomRight: at(0.75, 0.85),
+      flipY: texture.flipY,
+      topLeft: at(0.25, top),
+      topRight: at(0.75, top),
+      bottomLeft: at(0.25, bottom),
+      bottomRight: at(0.75, bottom),
     };
   });
   const reddest = (c) => c[0] > c[1] && c[0] > c[2];
@@ -192,7 +202,10 @@ try {
   assert.ok(reddest(decoded.bottomLeft), `bottom left stays pale yellow, got ${decoded.bottomLeft}`);
   assert.ok(greenest(decoded.bottomRight), `bottom right stays green, got ${decoded.bottomRight}`);
   assert.deepEqual(decoded.size, decoded.source, "a small original is decoded whole, never upscaled");
-  pass("An uploaded original decodes the way up it was uploaded");
+  // The one that was reported: every uploaded photograph came out upside
+  // down once originals were decoded through createImageBitmap.
+  assert.equal(decoded.flipY, false, "an unedited original is uploaded pre-flipped, with flipY off");
+  pass("An uploaded original hangs the way up it was uploaded");
 
   // Thumbnails: the library and the inspector show these, not the originals,
   // and both are rebuilt on every click.

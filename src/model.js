@@ -1,4 +1,5 @@
 import { editedAspect, validImageEdits } from "./image-edit.js";
+import { hasRow, normalizeRow, rowLayout, MAX_SLOTS, MIN_SPACE, MAX_SPACE, MAX_GAP } from "./row.js";
 export const IN = 0.0254;
 export const uid = () => globalThis.crypto.randomUUID();
 export function blankProject() {
@@ -411,7 +412,13 @@ export function openSpot(p, a) {
   if (!wall) return { ...a };
   const face = a.face || "inside";
   const taken = p.art.filter(
-    (o) => o.id !== a.id && o.wall === a.wall && (o.face || "inside") === face,
+    // A booth of its own is a wall of its own: two works at the same spot on
+    // the same wall of two different booths are not on top of each other.
+    (o) =>
+      o.id !== a.id &&
+      o.wall === a.wall &&
+      (o.face || "inside") === face &&
+      (o.booth || null) === (a.booth || null),
   );
   const clear = (x, y) =>
     !taken.some(
@@ -571,6 +578,23 @@ export function validateProject(p) {
     fail();
   if (p.booth.groundPreset !== undefined && !GROUND_KINDS.includes(p.booth.groundPreset)) fail();
   if (p.booth.neighbors !== undefined && typeof p.booth.neighbors !== "boolean") fail();
+  // The booth row. Optional, so every backup written before it existed loads
+  // as the one booth it described. Every id is checked here because the slot
+  // a work hangs in is looked up by id below.
+  if (p.booth.row !== undefined) {
+    const r = p.booth.row;
+    if (!r || typeof r !== "object" || !Array.isArray(r.slots) || r.slots.length > MAX_SLOTS) fail();
+    if (r.gap !== undefined && !finite(r.gap, 0, MAX_GAP)) fail();
+    const slotIds = new Set();
+    for (const slot of r.slots) {
+      if (!slot || typeof slot !== "object" || typeof slot.id !== "string" || !slot.id || slotIds.has(slot.id)) fail();
+      if (!["booth", "space"].includes(slot.kind)) fail();
+      if (slot.kind === "space" && !finite(slot.width, MIN_SPACE, MAX_SPACE)) fail();
+      if (slot.name !== undefined && (typeof slot.name !== "string" || slot.name.length > 200)) fail();
+      slotIds.add(slot.id);
+    }
+    if (typeof r.home !== "string" || !r.slots.some(s => s.id === r.home && s.kind === "booth")) fail();
+  }
   if (p.booth.venue !== undefined && !["outdoor", "artshow"].includes(p.booth.venue)) fail();
   // The panel module, the light bar and the hall are all optional records.
   // Undefined means "the defaults above", which is exactly what every backup
@@ -711,6 +735,9 @@ export function validateProject(p) {
     for (const key of ["artistName", "city", "medium", "price"])
       if (a[key] !== undefined && (typeof a[key] !== "string" || a[key].length > 200)) fail();
     if (a.sourceId !== undefined && (typeof a.sourceId !== "string" || a.sourceId.length > 200)) fail();
+    // Which booth of the row it hangs in. Absent means this booth, which is
+    // what every work in every older backup means.
+    if (a.booth !== undefined && !(typeof a.booth === "string" && boothSlotIds(p.booth).has(a.booth))) fail();
     if (a.edits !== undefined && !validImageEdits(a.edits)) fail();
     if (a.stretch !== undefined && typeof a.stretch !== "boolean") fail();
     if (a.edgeTexture !== undefined && !["plain", "concrete", "wood", "metal"].includes(a.edgeTexture)) fail();
@@ -839,12 +866,19 @@ export function convex(q) {
  * its back wall is the back of another booth, not the inside of one. Left and
  * right share this booth's aisle and so share its facing.
  */
+/** The ids of the booths in a row, home included. */
+export function boothSlotIds(booth) {
+  return new Set(rowLayout(booth).filter(s => s.kind === "booth").map(s => s.id));
+}
 export function neighborPlacements(b) {
   if (!b.neighbors) return [];
   const layout = b.neighborLayout || "inline", gap = b.neighborGap ?? 24;
   const result = [], width = b.width, depth = b.depth;
   const at = (side, x, z, rotation) => ({ side, x, z, rotation, width, depth });
-  if (layout !== "island") {
+  // A row is the aisle drawn by hand, so the decorative booths either side
+  // would stand inside it. The one behind is a different axis and stays: a
+  // row says nothing about what backs onto it.
+  if (layout !== "island" && !hasRow(b)) {
     if (layout !== "corner-left") result.push(at("left", -(b.width/2 + gap + width/2), 0, 0));
     if (layout !== "corner-right") result.push(at("right", b.width/2 + gap + width/2, 0, 0));
   }

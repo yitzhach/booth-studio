@@ -1567,3 +1567,50 @@ dialog li {
 .batch-row .button-row {
   margin-top: 6px;
 }
+
+/* The lock beside Fast edit: auto, held on, or held off. It carries its state
+   as a word rather than a third icon, because "which lock is that" is exactly
+   the question a lock icon cannot answer. */
+.toolbar button.draft-lock span {
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+}
+.toolbar button.draft-lock.active.locked-off {
+  background: #43342e;
+  color: #ffb59a;
+}
+
+/* Layout → Booth row: the aisle, slot by slot. */
+.row-side h4 {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  font-weight: 550;
+  color: #b9c2cc;
+}
+.row-slots {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.row-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border: 1px solid #2e353d;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.row-slot.home {
+  border-color: #3d5878;
+  background: #1b2430;
+}
+.row-slot small {
+  color: #8b95a1;
+}
+.row-slot .setting-label {
+  margin: 0;
+  flex: 0 0 96px;
+}

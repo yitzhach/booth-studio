@@ -7,10 +7,11 @@ import { TextureCache } from "./texture-cache.js";
 import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY, showFixtures } from "./lighting.js";
 import { GROUND_CONSUMER, TENT_CONSUMER, TENT_WEAVE, WALL_CONSUMER, WALL_SET, UV_METRE, SurfaceTextures } from "./surfaces.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
-import { decodeAt } from "./image-source.js";
+import { decodeAt, isPreflipped } from "./image-source.js";
 import { IN, PEDESTAL, boothPedestals, constrain, groundKind, groundUpload, constrainPanel, constrainPedestal, findPanel, findPedestal, isArtShow, lightBarSpec, isPanelKey, scalePanel, wallKeys, wallSpec } from "./model.js";
 import { lightBarBounce, lightBarFixtures, lightBarOptics, lightBarRail } from "./lightbar.js";
 import { makePerson, placePerson } from "./people.js";
+import { rowLayout } from "./row.js";
 /**
  * The longest edge a preview texture is decoded to. An original stays whole
  * in the project and in a backup; this is what the wall is shown at, and it
@@ -25,6 +26,15 @@ import { DEFAULT_SIZE, SIZES, evenSize, recordMp4, videoSupported } from "./vide
 // How far behind its frame plane a wall's slab sits, in metres. Half the
 // slab's thickness plus the sliver that keeps art from z-fighting the face.
 const WALL_SLAB_OFFSET = 0.031;
+/**
+ * Which wall frame a piece of artwork hangs on. A work in the home booth
+ * names no booth and keys by its wall alone, which is exactly what every
+ * frame was keyed by before rows existed; a work in a row booth is prefixed
+ * with that booth's slot id, because the same three walls stand once per
+ * booth in the aisle.
+ */
+export const frameKey = (a) =>
+  (a.booth ? a.booth + ":" : "") + a.wall + (a.face === "outside" ? "-outside" : "");
 // The orbit camera may drop below the booth's centre of interest to give a
 // low, looking-up perspective. It is stopped by the ground, not by a fixed
 // angle: MIN_CAMERA_Y keeps the eye just above the floor plane, and
@@ -254,6 +264,9 @@ export class BoothScene {
     // The Export panel's Preview quality, kept here rather than only in the
     // inspector because draft mode has to be able to put it back.
     this.quality = 2;
+    // Fast edit follows the gesture unless someone has locked it; see
+    // setDraftPolicy.
+    this.draftPolicy = "auto";
     // Draft mode is off on load: the booth should look like itself the first
     // time it is seen, and someone who never drags anything never needs this.
     this.draft = false;
@@ -350,6 +363,39 @@ export class BoothScene {
     });
     if (!draft) this.renderer.shadowMap.needsUpdate = true;
     this.resize();
+  }
+  /**
+   * Who decides when fast edit is on. **auto** is the default and is the
+   * gesture answering for itself: arming a work's handles turns it on,
+   * letting go of that work turns it off, so the quality drop lasts exactly
+   * as long as the arranging does. **on** and **off** are the lock beside the
+   * toolbar button — someone who has judged it for their own machine should
+   * not have it changed back under them, in either direction.
+   *
+   * The policy is a view setting like the mode it governs: not in the backup,
+   * not in the undo history, not in schema 1.
+   */
+  setDraftPolicy(policy) {
+    this.draftPolicy = ["auto", "on", "off"].includes(policy) ? policy : "auto";
+    if (this.draftPolicy === "on") this.setDraft(true);
+    if (this.draftPolicy === "off") this.setDraft(false);
+    return this.draftPolicy;
+  }
+  /**
+   * The armed work is no longer being arranged. Under the auto policy that is
+   * the end of fast edit; under a lock it changes nothing but the handles.
+   */
+  letGoOfArt() {
+    this.scaleId = null;
+    this.releaseDraft();
+  }
+  /** A gesture is starting on a piece of artwork. */
+  armDraft() {
+    if ((this.draftPolicy || "auto") === "auto") this.setDraft(true);
+  }
+  /** That artwork has been let go of. */
+  releaseDraft() {
+    if ((this.draftPolicy || "auto") === "auto") this.setDraft(false);
   }
   /** Preview quality, remembered so draft mode can restore the right one. */
   setQuality(quality) {
@@ -633,11 +679,21 @@ export class BoothScene {
       // Decoded straight to the size the wall wants. This used to unpack the
       // whole original — up to 100 megapixels of it — and then shrink it on a
       // 2D canvas, which is most of what made a booth full of uploads heavy
-      // on an older machine. No `imageOrientation` is asked for, so this is
-      // the way up an `<img>` gave, and `flipY` stays at three's default.
-      let src = await decodeAt(asset.data, asset.width, asset.height, ART_TEXTURE_MAX);
+      // on an older machine.
+      //
+      // An unedited original goes straight onto the GPU, so it is decoded
+      // already flipped: WebGL does not apply `texture.flipY` to an
+      // ImageBitmap, which is what hung every uploaded photograph upside
+      // down. An edited one is drawn onto a canvas first — rotating a
+      // pre-flipped image turns the wrong way — so it is decoded the way up
+      // it was taken and the texture flips it in the usual way.
+      let src = await decodeAt(asset.data, asset.width, asset.height, ART_TEXTURE_MAX, {
+        upload: !edited,
+      });
+      const preflipped = isPreflipped(src);
       if (edited) src = applyImageEdits(src, edits);
       const texture = new T.Texture(src);
+      texture.flipY = !preflipped;
       texture.colorSpace = T.SRGBColorSpace;
       texture.anisotropy = Math.min(
         8,
@@ -670,6 +726,10 @@ export class BoothScene {
     this.artObjects = [];
     this.artGroups = new Map();
     this.wallObjects = [];
+    // The other booths' walls. Kept apart from this booth's, which are what
+    // the wall picker and the selection outline are about, but offered to a
+    // drop so an original can be dragged straight onto a neighbour's wall.
+    this.rowWallObjects = [];
     this.pedestalObjects = [];
     this.pedestalFrames = {};
     this.personFrames = {};
@@ -825,8 +885,40 @@ export class BoothScene {
       this.box(width, 0.025, 0.08, width / 2, height, 0.0, rough("#26292b"), g);
     }
     this.surfaces.releaseMatching(WALL_CONSUMER, wallConsumers);
+    // The rest of the aisle. Every other booth in the row is this booth's
+    // size and stands on the same line, offset along X; its three walls are
+    // real geometry with real frames, so artwork hung in it is positioned,
+    // picked and dragged by exactly the code that hangs artwork at home.
+    // They are drawn plain — no seam posts, no fabric weave, no light bar —
+    // because they are the neighbours, and the booth being planned is the
+    // one that deserves the detail.
+    for (const slot of rowLayout(p.booth)) {
+      if (slot.kind !== "booth" || slot.home) continue;
+      const stand = new T.Group();
+      stand.name = "row-booth-" + slot.id;
+      stand.position.x = slot.x * IN;
+      this.group.add(stand);
+      for (const wall of ["back", "left", "right"]) {
+        const config = p.booth.walls[wall];
+        if (!config?.enabled) continue;
+        const g = this.wallFrame(wall);
+        stand.add(g);
+        this.frames[slot.id + ":" + wall] = g;
+        const width = config.width * IN,
+          height = config.height * IN;
+        const slab = this.box(width, height, 0.055, width / 2, height / 2, -WALL_SLAB_OFFSET, rough(p.booth.color), g);
+        slab.userData.wall = wall;
+        slab.userData.booth = slot.id;
+        this.rowWallObjects.push(slab);
+        const exterior = new T.Group();
+        exterior.position.set(width, 0, -0.063);
+        exterior.rotation.y = Math.PI;
+        g.add(exterior);
+        this.frames[slot.id + ":" + wall + "-outside"] = exterior;
+      }
+    }
     for (const a of p.art) {
-      const frame = this.frames[a.wall + (a.face === "outside" ? "-outside" : "")];
+      const frame = this.frames[frameKey(a)];
       if (!frame || !wallSpec(p, a.wall)?.enabled) continue;
       const art = new T.Group();
       this.artGroups.set(a.id, { group: art, initial: { ...a } });
@@ -1344,7 +1436,7 @@ export class BoothScene {
     this.ray.setFromCamera(this.pointer, this.camera);
   }
   artFrame(a) {
-    return this.frames[a.wall + (a.face === "outside" ? "-outside" : "")];
+    return this.frames[frameKey(a)];
   }
   pickArt() {
     this.group.updateMatrixWorld(true);
@@ -1397,13 +1489,17 @@ export class BoothScene {
   }
   wallDrop(e, a) {
     this.point(e); this.group.updateMatrixWorld(true);
-    const hit = this.ray.intersectObjects(this.wallObjects, false)[0];
+    const hit = this.ray.intersectObjects([...this.wallObjects, ...(this.rowWallObjects || [])], false)[0];
     if (!hit || Math.abs(hit.face.normal.z) < .9) return null;
     const wall = hit.object.userData.wall, face = hit.face.normal.z > 0 ? "inside" : "outside";
-    const frame = this.frames[wall + (face === "outside" ? "-outside" : "")];
+    // Dropping onto a wall says which booth as well as which wall: the work
+    // belongs to the booth it was let go of over, whichever one the row
+    // picker happened to be pointing at.
+    const booth = hit.object.userData.booth || undefined;
+    const frame = this.frames[frameKey({ booth, wall, face })];
     const local = frame.worldToLocal(hit.point.clone());
     const grid = this.snap ? 1 : .01;
-    return constrain(this.p, {...a, wall, face,
+    return constrain(this.p, {...a, booth, wall, face,
       x:Math.round((local.x/IN-a.w/2)/grid)*grid,
       y:Math.round((local.y/IN-a.h/2)/grid)*grid});
   }
@@ -1435,7 +1531,7 @@ export class BoothScene {
     // put full quality back — and the toolbar toggle turns it off again.
     const activateTransform = (id) => {
       this.scaleId = id;
-      this.setDraft(true);
+      this.armDraft();
       this.onSelect(id);
     };
     c.addEventListener("dblclick", e => {
@@ -1598,6 +1694,7 @@ export class BoothScene {
           const id = pedestalHit.object.userData.pedestal;
           this.lastTap = null;
           this.down = null;
+          this.letGoOfArt();
           this.selectedPedestal = id;
           this.onSelectPedestal(id);
           return;
@@ -1607,6 +1704,7 @@ export class BoothScene {
           const key = panelHit.object.userData.wall;
           this.lastTap = null;
           this.down = null;
+          this.letGoOfArt();
           this.selectedPanel = key;
           this.onSelectPanel(key);
           return;
@@ -1630,6 +1728,11 @@ export class BoothScene {
           this.lastTap = null;
           activateTransform(id);
         } else {
+          // Clicking anywhere but the work whose handles are armed is letting
+          // go of it — the floor, the wall behind it, or another work. In
+          // auto that is what turns fast edit back off, so the shadows and the
+          // supersampling come back the moment the arranging stops.
+          if (id !== this.scaleId) this.letGoOfArt();
           this.lastTap = id ? { id, time: now, x: e.clientX, y: e.clientY } : null;
           this.onSelect(id);
         }

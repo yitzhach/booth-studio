@@ -7,6 +7,12 @@ Extend it; do not rebuild it.
 
 ## Now
 
+- `CLAUDE.md` is loaded automatically at the start of every session. It holds
+  the owner's standing instruction — **reports in chat are extremely concise,
+  grammar sacrificed for concision, abbreviations and symbols welcome** — and
+  the rules that bite. It does not need to be asked for again. That rule is
+  about chat only: code comments, commit messages and this file stay in full
+  prose, because a cold session has nothing else to read.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
@@ -29,6 +35,59 @@ Extend it; do not rebuild it.
   All five came from looking at the live site. Every suite was green before
   the merge: 218 Node tests, all eleven view suites, the browser suite and
   `wall-assets`.
+- **Merged and deployed 2026-09-21, later the same day:** the booth row,
+  fast edit's auto/on/off lock, and the fix for uploaded photographs hanging
+  upside down. All three are the four bullets immediately below.
+- **Uploaded photographs are the right way up again.** Decoding an original
+  through `createImageBitmap` — which is what made a booth full of uploads
+  affordable — hung every one of them upside down, because WebGL does not
+  apply `texture.flipY` to an ImageBitmap the way it does to an `<img>` or a
+  canvas. The decoder is asked for the flip instead:
+  `decodeAt(..., { upload: true })` passes `imageOrientation: "flipY"` and
+  records the result in a WeakSet, and `isPreflipped(src)` is what tells
+  `scene.texture()` to leave `flipY` off so it is not flipped twice. An
+  **edited** image is decoded the ordinary way up and flipped by the texture
+  as before: rotating a pre-flipped image turns the wrong way, and the edits
+  are applied on a canvas. `tests/image-source.test.js` and
+  `tests/image-regression.test.js` pin both halves.
+- **Fast edit has a lock, and otherwise follows the gesture.** Auto — the
+  default — arms fast edit when a work's handles are armed and drops it again
+  the moment you click away from that work, which is the behaviour that was
+  asked for: it lasts exactly as long as the arranging. The button beside
+  Fast edit in the toolbar cycles **Auto → On → Off**; On and Off hold it
+  there and no gesture moves it. `scene.setDraftPolicy`, `armDraft`,
+  `releaseDraft` and `letGoOfArt` in `src/scene.js` are the whole mechanism;
+  the policy is remembered in `localStorage` per browser, because it is a
+  judgement about a machine rather than about a booth. It is also a dropdown
+  in Layout → Drawing speed. Still a view setting: not in the backup, not in
+  the undo history, not in schema 1.
+- **A booth is one of a row now.** Layout → **Booth row**: `+1 booth` either
+  side, a typed number and `Add typed number` for ten at once, `+ space` for a
+  gap in the aisle with its own width, a gap setting between slots, and a
+  list of the slots with what is hung in each. **Pick a booth under “Hang new
+  artwork in” and the next original goes into that booth** — or drag one
+  straight onto its wall, which says which booth as well as which wall.
+  Selecting a work that hangs in another booth moves the picker to it, and
+  Artwork → Placement → Booth moves a work between booths.
+  - `src/row.js` is the model: a row is a list of slots, each a booth or a
+    space, exactly one of them home, and `rowLayout()` is the one place that
+    answers where each one stands — in inches along X from the centre of the
+    home booth, which is the origin the scene already draws around.
+  - **Every booth in a row is this booth's size**, deliberately. The walls,
+    their heights and the panel module are one set of measurements in this
+    project, so a work hung in a row booth is measured against the same
+    `booth.walls` as one hung at home and needs no new arithmetic and no new
+    validation. A row of differently-sized booths would need a booth to be a
+    document of its own, and that is a different feature.
+  - `booth.row` and `art.booth` are both optional, so every older backup
+    loads as the single booth it described. Removing a booth removes the
+    artwork hung in it — the alternative is works on walls nobody draws.
+  - The decorative booths either side (Surroundings → Surround with other
+    booths) are left out while a row is drawn, so the aisle is only the one
+    that was laid out. The one *behind* stays: a row says nothing about what
+    backs onto it.
+  - The hanging guide is this booth's build sheet and excludes the rest of
+    the row, which is why `hangingGuide` filters on `!a.booth`.
 - **On the branch `claude/nice-hawking-dynrum`, not yet merged:** uploading
   files an original instead of hanging it, fixture brightness as a percentage,
   fast edit arming itself on a double-tap, and the four things that made a
@@ -388,7 +447,29 @@ Extend it; do not rebuild it.
    edit. Below that: a click still rebuilds the library and the inspector as
    HTML strings, which is now cheap but not free, and `Export → Preview
    quality → Efficient` is worth trying on a 2014 machine.
-10. **Figures are stylised mannequins.** No faces, no clothing, mid-grey. If
+10. **Nobody has looked at a booth row, at the fast edit lock, or at an
+   uploaded photograph the right way up.** All three are on `main`. Judgements
+   waiting on a live site:
+   - Whether a row of booths reads as an aisle at the default 24″ gap, and
+     whether `+1 booth` / a typed ten / `+ space` is the right set of three
+     controls or one too many.
+   - Whether picking the booth under “Hang new artwork in” is obvious enough,
+     given the artwork lands somewhere the camera may not be pointing. The
+     toast names the booth; the camera does not move to it, deliberately —
+     but moving it there is the obvious next refinement if it reads as
+     nothing having happened.
+   - Whether auto fast edit is welcome. It now goes off as well as on, so the
+     shadows come back the moment you click away from a work — a visible
+     change nobody asked for in that moment, which is exactly what the lock
+     is for.
+   - **Whether uploaded photographs are the right way up.** The fix is pinned
+     by tests at both ends, but the bug itself was invisible to every test in
+     this repository until it was reported, and only a real browser sampling
+     a real JPEG can say it is gone. This is the first thing to check.
+   - A row booth is drawn plain: three walls, this booth's colour, no light
+     bar, no seam posts, no fabric weave. Whether that reads as a neighbour
+     or as an unfinished version of your own booth is a judgement.
+11. **Figures are stylised mannequins.** No faces, no clothing, mid-grey. If
    they need to read as a crowd rather than as scale references, that is a
    different asset and a different phase.
 
@@ -476,9 +557,9 @@ the picker became one list.
 
 ```sh
 npm ci
-npm test                 # 224 Node tests
+npm test                 # 235 Node tests
 npm run build
-npm run test:view        # camera, city, env presets, HDRI, ground, ground library, tent, walls, video, timeline, people, panels, responsiveness, art show
+npm run test:view        # camera, city, env presets, HDRI, ground, ground library, tent, walls, video, timeline, people, panels, responsiveness, art show, booth row
 npm run test:browser     # 25 end-to-end checks
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
 ```

@@ -22,13 +22,15 @@ test("unedited image texture loads with the default null adjustment argument", a
   // The asset's own recorded size is what decides the decode size, so the
   // stub is handed the same three arguments the real decoder is.
   const asked = [];
-  const decodeAt = async (data, width, height, maxEdge) => {
-    asked.push({ data, width, height, maxEdge });
+  const decodeAt = async (data, width, height, maxEdge, options) => {
+    asked.push({ data, width, height, maxEdge, options });
     return { data, width, height };
   };
-  const make = new Function("decodeAt", "T", "hasImageEdits", "ART_TEXTURE_MAX",
+  // The unedited path decodes for upload, so the source comes back already
+  // flipped and the texture must not flip it a second time.
+  const make = new Function("decodeAt", "isPreflipped", "T", "hasImageEdits", "ART_TEXTURE_MAX",
     "return {" + method + "};");
-  const scene = make(decodeAt, { Texture: TextureStub, SRGBColorSpace: "srgb" }, hasImageEdits, 2048);
+  const scene = make(decodeAt, () => true, { Texture: TextureStub, SRGBColorSpace: "srgb" }, hasImageEdits, 2048);
   scene.textureCache = new TextureCache();
   scene.p = { assets: { original: { data: "data:image/png;base64,test", width: 4000, height: 3000 } } };
   scene.renderer = { capabilities: { getMaxAnisotropy: () => 8 } };
@@ -37,7 +39,10 @@ test("unedited image texture loads with the default null adjustment argument", a
   assert.equal(texture.needsUpdate, true);
   // Decoded at the wall's size rather than the original's: an unpacked 12
   // megapixel bitmap is the cost this was written to stop paying.
-  assert.deepEqual(asked, [{ data: "data:image/png;base64,test", width: 4000, height: 3000, maxEdge: 2048 }]);
+  assert.deepEqual(asked, [{ data: "data:image/png;base64,test", width: 4000, height: 3000, maxEdge: 2048, options: { upload: true } }]);
+  // Upside-down uploads: WebGL does not apply flipY to an ImageBitmap, so a
+  // source the decoder already flipped is uploaded with the flag off.
+  assert.equal(texture.flipY, false);
   // A cache hit decodes nothing at all.
   assert.equal(await scene.texture("original"), texture);
   assert.equal(asked.length, 1);

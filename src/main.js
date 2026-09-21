@@ -9,6 +9,11 @@ import { SIZES, DEFAULT_SIZE, FPS, DEFAULT_FPS, videoSupported, pickCodec } from
 import { applyImageEdits, DEFAULT_IMAGE_EDITS, normalizeImageEdits } from "./image-edit.js";
 import { PEOPLE, MAX_PEOPLE, MIN_HEIGHT, MAX_HEIGHT, newPerson, personHeight } from "./people.js";
 import { FLARE_SOURCES, DEFAULT_FLARE_SOURCE, OVERHEAD } from "./flare.js";
+import {
+  DEFAULT_SPACE, MAX_GAP, MAX_SLOTS, MIN_SPACE, MAX_SPACE,
+  addBooths, addSpace, boothSlots, hasRow, normalizeRow, removeSlot, rowLayout,
+  setSpaceWidth, slotLabel,
+} from "./row.js";
 import "@fontsource/dm-sans/400.css";
 import "@fontsource/dm-sans/500.css";
 import "@fontsource/dm-sans/600.css";
@@ -59,6 +64,9 @@ import {
   Columns2,
   Ruler,
   Zap,
+  Lock,
+  ArrowLeftToLine,
+  ArrowRightToLine,
 } from "lucide";
 import {
   demoProject,
@@ -152,12 +160,23 @@ async function boot() {
     Columns2,
     Ruler,
     Zap,
+    Lock,
+    ArrowLeftToLine,
+    ArrowRightToLine,
   };
   const icon = (n) => `<i data-lucide="${n}"></i>`;
   const btn = (action, label, ic, cls = "") =>
     `<button data-action="${action}" class="${cls}" title="${e(label)}" aria-label="${e(label)}">${ic ? icon(ic) : ""}<span>${label}</span></button>`;
   let p,
     selected = null,
+    // Which booth of the row new artwork is hung in, by its slot id; null is
+    // this booth. A view setting: it says where the next tap puts a work, not
+    // anything about the booth itself.
+    activeBooth = null,
+    // Whether fast edit follows the gesture ("auto"), or is held on or off.
+    // Remembered per browser rather than per project, because it is a
+    // judgement about this machine.
+    draftPolicy = "auto",
     // The free-standing wall the mouse and the position sliders are about to
     // move, by its "panel:<id>" key. Independent of `selected`: a panel is not
     // artwork, and its inspector is Layout rather than Artwork.
@@ -236,7 +255,7 @@ async function boot() {
   selected = p.art[0]?.id;
   document.querySelector("#app").innerHTML =
     `<header><a class="brand" href="#" aria-label="Booth Studio">${icon("box")}<span>Artist OS</span></a><span class="app-badge">Booth Studio</span><div class="project"><input id="project-name" aria-label="Project name" maxlength="120" value="${e(p.name)}"/>${icon("chevron-down")}</div><div class="save-status" id="save-status" role="status">Opening…</div>${btn("help", "Help", "help-circle", "icon-only")}<div class="avatar">IA</div></header>
-<div class="workspace"><aside class="library" id="library"></aside><main class="editor"><div class="toolbar"><div class="toolgroup">${btn("select", "Select", "mouse-pointer-2", "active")}${btn("move", "Move", "move")}${btn("snap", "Snap 1″", "grid-2x2", "active")}${btn("draft", "Fast edit", "zap")}</div><div class="toolgroup">${btn("undo", "Undo", "undo-2", "icon-only")}${btn("redo", "Redo", "redo-2", "icon-only")}</div><div class="mode-switch"><button data-action="mode-3d">3D booth</button><button data-action="mode-photo">Photo</button></div>${btn("export-tab", "Export", "download", "export-top")}</div><div class="viewport"><div id="scene"></div><div id="photo" hidden></div><div class="scene-label"><span class="eyebrow" id="mode-label">MEASURED WORKSPACE</span><strong id="scene-title"></strong><span id="scene-subtitle"></span></div><div id="photo-empty" hidden><div>${icon("image-plus")}<h2>Start with your booth shot</h2><p>Add artwork and adjust its four corners to match the wall perspective.</p>${btn("upload-photo", "Upload booth photo", "plus", "primary")}</div></div><div class="viewport-bottom"><div class="view-switch" id="view-switch"><button data-view="perspective" class="active">Perspective</button><button data-view="back">Back</button><button data-view="left">Left</button><button data-view="right">Right</button><button data-view="plan">Plan</button></div><div class="zoom-controls"><span class="zoom-label">Zoom</span>${btn("zoom-out", "Zoom out", "minus", "icon-only")}${btn("zoom-in", "Zoom in", "plus", "icon-only")}${btn("reset-view", "Reset view", "rotate-ccw", "icon-only")}</div></div></div><div class="statusbar"><span id="gesture-hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</span><span id="selection-status"></span></div></main><aside class="inspector"><div class="inspector-tabs">${["art", "layout", "show", "walls", "lighting", "video", "export"].map((t, i) => `<button data-tab="${t}">${icon(["image", "layout-panel-left", "building-2", "columns-2", "lightbulb", "video", "download"][i])}<span>${["Artwork", "Layout", "Art show", "Walls", "Lighting", "Video", "Export"][i]}</span></button>`).join("")}</div><div id="inspector-content"></div></aside></div><footer><span class="footer-brand">${icon("box")} BOOTH STUDIO <small>Prototype 01</small><small id="build-stamp" title="Version ${BUILD.version} · built ${BUILD.time} · commit ${BUILD.commit}">v${BUILD.version} · ${BUILD.short} UTC · ${BUILD.commit}</small></span><span>Your images. Your space. Your arrangement.</span><span id="network">Local workspace</span></footer><input type="file" id="art-input" accept="image/jpeg,image/png" multiple hidden/><input type="file" id="replace-input" accept="image/jpeg,image/png" hidden/><input type="file" id="photo-input" accept="image/jpeg,image/png" hidden/><input type="file" id="surround-input" accept="image/jpeg,image/png" hidden/><input type="file" id="ground-input" accept="image/jpeg,image/png" hidden/><input type="file" id="backup-input" accept=".json,.booth" hidden/><div id="toast" role="status"></div><dialog id="dialog"><div id="dialog-content"></div></dialog><dialog id="image-editor"><div id="image-editor-content"></div></dialog><dialog id="timeline-dialog" class="timeline-dialog"><div id="timeline-content"></div></dialog>`;
+<div class="workspace"><aside class="library" id="library"></aside><main class="editor"><div class="toolbar"><div class="toolgroup">${btn("select", "Select", "mouse-pointer-2", "active")}${btn("move", "Move", "move")}${btn("snap", "Snap 1″", "grid-2x2", "active")}${btn("draft", "Fast edit", "zap")}${btn("draft-lock", "Fast edit: follows the gesture", "lock", "draft-lock")}</div><div class="toolgroup">${btn("undo", "Undo", "undo-2", "icon-only")}${btn("redo", "Redo", "redo-2", "icon-only")}</div><div class="mode-switch"><button data-action="mode-3d">3D booth</button><button data-action="mode-photo">Photo</button></div>${btn("export-tab", "Export", "download", "export-top")}</div><div class="viewport"><div id="scene"></div><div id="photo" hidden></div><div class="scene-label"><span class="eyebrow" id="mode-label">MEASURED WORKSPACE</span><strong id="scene-title"></strong><span id="scene-subtitle"></span></div><div id="photo-empty" hidden><div>${icon("image-plus")}<h2>Start with your booth shot</h2><p>Add artwork and adjust its four corners to match the wall perspective.</p>${btn("upload-photo", "Upload booth photo", "plus", "primary")}</div></div><div class="viewport-bottom"><div class="view-switch" id="view-switch"><button data-view="perspective" class="active">Perspective</button><button data-view="back">Back</button><button data-view="left">Left</button><button data-view="right">Right</button><button data-view="plan">Plan</button></div><div class="zoom-controls"><span class="zoom-label">Zoom</span>${btn("zoom-out", "Zoom out", "minus", "icon-only")}${btn("zoom-in", "Zoom in", "plus", "icon-only")}${btn("reset-view", "Reset view", "rotate-ccw", "icon-only")}</div></div></div><div class="statusbar"><span id="gesture-hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</span><span id="selection-status"></span></div></main><aside class="inspector"><div class="inspector-tabs">${["art", "layout", "show", "walls", "lighting", "video", "export"].map((t, i) => `<button data-tab="${t}">${icon(["image", "layout-panel-left", "building-2", "columns-2", "lightbulb", "video", "download"][i])}<span>${["Artwork", "Layout", "Art show", "Walls", "Lighting", "Video", "Export"][i]}</span></button>`).join("")}</div><div id="inspector-content"></div></aside></div><footer><span class="footer-brand">${icon("box")} BOOTH STUDIO <small>Prototype 01</small><small id="build-stamp" title="Version ${BUILD.version} · built ${BUILD.time} · commit ${BUILD.commit}">v${BUILD.version} · ${BUILD.short} UTC · ${BUILD.commit}</small></span><span>Your images. Your space. Your arrangement.</span><span id="network">Local workspace</span></footer><input type="file" id="art-input" accept="image/jpeg,image/png" multiple hidden/><input type="file" id="replace-input" accept="image/jpeg,image/png" hidden/><input type="file" id="photo-input" accept="image/jpeg,image/png" hidden/><input type="file" id="surround-input" accept="image/jpeg,image/png" hidden/><input type="file" id="ground-input" accept="image/jpeg,image/png" hidden/><input type="file" id="backup-input" accept=".json,.booth" hidden/><div id="toast" role="status"></div><dialog id="dialog"><div id="dialog-content"></div></dialog><dialog id="image-editor"><div id="image-editor-content"></div></dialog><dialog id="timeline-dialog" class="timeline-dialog"><div id="timeline-content"></div></dialog>`;
   let scene;
   try {
     scene = new BoothScene(
@@ -247,6 +266,10 @@ async function boot() {
         // arrow-free controls between them; holding both at once would leave
         // the sliders pointing at a wall nobody is looking at.
         if (id) { selectedPanel = null; selectedPedestal = null; }
+        // Selecting a work in another booth of the row points the row picker
+        // at that booth, so the next original lands beside the one just
+        // clicked rather than back at home.
+        if (id) activeBooth = p.art.find((x) => x.id === id)?.booth || null;
         tab = "art";
         renderSelection();
       },
@@ -305,6 +328,12 @@ async function boot() {
     document.querySelector("#scene").innerHTML =
       '<div class="webgl-error"><h2>3D is unavailable on this browser</h2><p>Enable hardware acceleration or try another browser. Photo editing, project backups, and hanging guides remain available.</p></div>';
     console.error(err);
+  }
+  try {
+    const saved = localStorage.getItem("booth.draftPolicy");
+    if (saved) draftPolicy = scene ? scene.setDraftPolicy(saved) : saved;
+  } catch {
+    // No storage, no remembered lock: auto is the default and is correct.
   }
   const photo = new PhotoEditor(
     document.querySelector("#photo"),
@@ -433,6 +462,46 @@ async function boot() {
     for (const el of document.querySelectorAll('[data-action="draft"]'))
       el.classList.toggle("active", draft);
     for (const el of document.querySelectorAll("[data-draft]")) el.checked = draft;
+    const lockLabels = {
+      auto: ["Auto", "Fast edit follows the gesture: on while you arrange a work, off when you let go."],
+      on: ["On", "Fast edit is held on. Shadows and supersampling stay off until you unlock it."],
+      off: ["Off", "Fast edit is held off. Arranging a work will not drop the quality."],
+    };
+    const [text, title] = lockLabels[draftPolicy] || lockLabels.auto;
+    for (const el of document.querySelectorAll('[data-action="draft-lock"]')) {
+      el.classList.toggle("active", draftPolicy !== "auto");
+      el.classList.toggle("locked-off", draftPolicy === "off");
+      el.title = title;
+      el.setAttribute("aria-label", "Fast edit lock: " + text);
+      const span = el.querySelector("span");
+      if (span) span.textContent = text;
+    }
+    for (const el of document.querySelectorAll("[data-draft-policy]"))
+      el.value = draftPolicy;
+  }
+  /**
+   * The lock beside the Fast edit button, cycling auto → on → off. Auto is the
+   * default and is the gesture deciding for itself; the two locks are for
+   * someone who has judged it on their own machine and does not want it
+   * changed back under them.
+   */
+  function setDraftPolicy(policy, announce = true) {
+    draftPolicy = scene ? scene.setDraftPolicy(policy) : policy;
+    try {
+      localStorage.setItem("booth.draftPolicy", draftPolicy);
+    } catch {
+      // A browser with storage switched off still gets the setting for this
+      // session; remembering it is the only thing that is lost.
+    }
+    syncTools();
+    if (announce)
+      toast(
+        {
+          auto: "Fast edit follows the gesture again: on while you arrange a work, off when you let go.",
+          on: "Fast edit locked on. Exports are unaffected.",
+          off: "Fast edit locked off. Arranging will not drop the quality.",
+        }[draftPolicy],
+      );
   }
   /**
    * Fast edit is the draft renderer: shadows off, supersampling off. It is a
@@ -713,7 +782,13 @@ async function boot() {
     return libraryItems().find((item) => item.sourceKey === sourceKey);
   }
   function placementFromTemplate(template, keepEdits = false) {
-    const current = p.art.find((item) => item.id === selected);
+    // Which booth of the row this is going into, and therefore which works
+    // count as "already there": a work in another booth is not something to
+    // start beside, and openSpot ignores it too.
+    const booth = activeSlot();
+    const current = p.art.find(
+      (item) => item.id === selected && (item.booth || null) === booth,
+    );
     const wall = current?.wall || template.wall || "back";
     const face = current?.face || template.face || "inside";
     // `openSpot` is what keeps a second tap on the same original from landing
@@ -726,6 +801,7 @@ async function boot() {
         id: uid(),
         sourceKey: undefined,
         sourceId: template.asset ? undefined : template.sourceId || template.id,
+        booth: booth || undefined,
         wall,
         face,
         x: current ? current.x + PLACEMENT_GAP : template.x ?? 12,
@@ -752,8 +828,11 @@ async function boot() {
       selected = placed.id;
       tab = "art";
     });
+    const inBooth = placed.booth
+      ? " of " + slotLabel(boothSlots(p.booth).find((b) => b.id === placed.booth) || {})
+      : "";
     toast(
-      `Hung on the ${wallLabel(p, placed.wall)} · ${placed.face === "outside" ? "outside" : "inside"}. Double-tap it on the wall to move or scale it.`,
+      `Hung on the ${wallLabel(p, placed.wall)}${inBooth} · ${placed.face === "outside" ? "outside" : "inside"}. Double-tap it on the wall to move or scale it.`,
     );
   }
   function libraryHTML(mobile = false) {
@@ -795,6 +874,99 @@ async function boot() {
       ${upload ? `${field("Ground tile size","groundTile",p.booth.groundTile||48,12,240,1,"in","booth")}${btn("remove-ground-upload","Delete this ground photograph",null,"wide")}` : ""}
       ${btn("upload-ground","Add ground photograph","image-plus","wide")}
       <p class="muted">Presets are the shipped surfaces; your own photographs join the list beneath them. A ground photograph should be top-down and ideally seamless. It stays on this device and enters backups. Deleting one returns the floor to the last preset.</p>`;
+  }
+  /**
+   * The booth of the row that new artwork goes into, as a slot id, or null for
+   * this booth. Validated on the way out: a booth that has been removed
+   * cannot stay selected, and the answer then is home.
+   */
+  function activeSlot() {
+    if (!activeBooth) return null;
+    const row = normalizeRow(p.booth);
+    const slot = row.slots.find((x) => x.id === activeBooth && x.kind === "booth");
+    if (!slot || slot.id === row.home) {
+      activeBooth = null;
+      return null;
+    }
+    return activeBooth;
+  }
+  /** The row, edited and written back. One undo step, like every other edit. */
+  function editRow(fn) {
+    mutate(() => {
+      p.booth.row = fn(p.booth);
+      // A booth that has just gone takes its artwork with it: leaving the
+      // works behind would leave them hanging on walls that are not drawn,
+      // which is the one state this row must never produce.
+      const ids = new Set(
+        normalizeRow(p.booth).slots.filter((x) => x.kind === "booth").map((x) => x.id),
+      );
+      p.art = p.art.filter((a) => !a.booth || ids.has(a.booth));
+      activeSlot();
+    });
+  }
+  function addRowBooths(side, count) {
+    const before = normalizeRow(p.booth).slots.length;
+    editRow((booth) => addBooths(booth, side, count));
+    const added = normalizeRow(p.booth).slots.length - before;
+    if (!added) {
+      toast(`A row holds ${MAX_SLOTS} slots. Remove one to add another.`, true);
+      return;
+    }
+    toast(
+      `${added} booth${added === 1 ? "" : "s"} added to the ${side}. Pick one under “Hang new artwork in”, then tap an original.`,
+    );
+  }
+  function addRowSpace(side) {
+    const before = normalizeRow(p.booth).slots.length;
+    editRow((booth) => addSpace(booth, side, DEFAULT_SPACE));
+    if (normalizeRow(p.booth).slots.length === before) {
+      toast(`A row holds ${MAX_SLOTS} slots. Remove one to add another.`, true);
+      return;
+    }
+    toast(`A ${DEFAULT_SPACE}″ space added to the ${side}. Type its width to change it.`);
+  }
+  function removeRowSlot(id) {
+    const hung = p.art.filter((a) => a.booth === id).length;
+    editRow((booth) => removeSlot(booth, id));
+    toast(hung ? `Booth removed, with the ${hung} work${hung === 1 ? "" : "s"} hung in it.` : "Removed from the row.");
+  }
+  const rowCount = () =>
+    Math.max(1, Math.min(MAX_SLOTS, Math.round(+document.querySelector("#row-count")?.value || 1)));
+  /**
+   * Layout → Booth row. The aisle, built by hand: booths either side of this
+   * one, gaps where the show has them, and one of them picked out as the booth
+   * the next original is hung in.
+   *
+   * Every booth in the row is this booth's size — see src/row.js for why —
+   * and hangs artwork against the same walls, so there is nothing new to
+   * measure and nothing new to validate about a piece of art but which booth
+   * it is in.
+   */
+  function rowSection() {
+    const row = normalizeRow(p.booth);
+    const slots = rowLayout(p.booth);
+    const booths = boothSlots(p.booth);
+    const active = activeSlot() || row.home;
+    const full = row.slots.length >= MAX_SLOTS;
+    const side = (label, where) =>
+      `<div class="row-side"><h4>${label}</h4><div class="button-row">${btn("row-booth-" + where, "+1 booth", where === "left" ? "arrow-left-to-line" : "arrow-right-to-line")}${btn("row-count-" + where, "Add typed number", "plus")}${btn("row-space-" + where, "+ space", "columns-2")}</div></div>`;
+    return `<section><h3>Booth row</h3><p class="muted">The aisle around this booth, drawn as booths rather than scenery. Each one is this booth's size and takes artwork of its own: pick it below, then tap an original — or drag one straight onto its wall.</p>
+      <label class="setting-label">How many to add<input type="number" id="row-count" min="1" max="${MAX_SLOTS}" step="1" value="1" aria-label="How many booths or spaces to add"/></label>
+      ${side("To the left", "left")}${side("To the right", "right")}
+      ${field("Gap between booths", "gap", row.gap, 0, MAX_GAP, 1, "in", "row")}
+      <label class="setting-label">Hang new artwork in<select aria-label="Hang new artwork in" data-row-active>${booths.map((b) => `<option value="${e(b.id)}" ${b.id === active ? "selected" : ""}>${e(slotLabel(b))}</option>`).join("")}</select></label>
+      ${activeSlot() ? `<p class="muted">New originals are hung in ${e(slotLabel(booths.find((b) => b.id === activeSlot()) || {}))}. Selecting a work that hangs in another booth moves this picker to it.</p>` : ""}
+      <div class="row-slots">${slots.map((slot, i) => {
+        const label = slot.kind === "booth"
+          ? slotLabel({ ...slot, number: booths.findIndex((b) => b.id === slot.id) + 1 })
+          : slotLabel(slot);
+        const works = slot.kind === "booth"
+          ? p.art.filter((a) => (a.booth || row.home) === slot.id).length
+          : 0;
+        return `<div class="row-slot ${slot.home ? "home" : ""}"><span>${i + 1}. ${e(label)}${slot.kind === "booth" ? ` <small>${works} hung</small>` : ""}</span>${slot.kind === "space" ? field("Width", "width", slot.width, MIN_SPACE, MAX_SPACE, 1, "in", "space-" + slot.id) : ""}${slot.home ? '<small class="muted">yours</small>' : btn("row-remove-" + slot.id, "Remove", "trash-2", "icon-only")}</div>`;
+      }).join("")}</div>
+      ${full ? `<p class="muted">A row holds ${MAX_SLOTS} slots. Remove one to add another.</p>` : ""}
+      ${hasRow(p.booth) ? '<p class="muted">Removing a booth removes the artwork hung in it. The booths either side of yours in Surroundings are left out while a row is drawn, so the aisle is only the one you laid out.</p>' : ""}</section>`;
   }
   function surroundingsFields() {
     const b=p.booth;
@@ -867,7 +1039,7 @@ async function boot() {
    * fast this machine draws is not part of the booth.
    */
   function draftSection() {
-    return `<section><h3>Drawing speed</h3><label class="check-field"><input type="checkbox" data-draft ${scene?.draft ? "checked" : ""}/>Fast edit</label><p class="muted">Drops the shadow passes and the supersampling while you arrange, and comes on by itself when you double-tap artwork. Exports are never affected: full quality goes back before a PNG or a video draws a single frame.</p></section>`;
+    return `<section><h3>Drawing speed</h3><label class="check-field"><input type="checkbox" data-draft ${scene?.draft ? "checked" : ""}/>Fast edit</label><label class="setting-label">Fast edit lock<select aria-label="Fast edit lock" data-draft-policy><option value="auto">Auto · follows the gesture</option><option value="on">Always on</option><option value="off">Always off</option></select></label><p class="muted">Auto turns fast edit on when you arm a work and off again when you click away from it. The lock beside the toolbar button is the same three settings, and holds it wherever you put it.</p><p class="muted">Drops the shadow passes and the supersampling while you arrange, and comes on by itself when you double-tap artwork. Exports are never affected: full quality goes back before a PNG or a video draws a single frame.</p></section>`;
   }
   function peopleSection() {
     const people = p.booth.people || [];
@@ -1096,10 +1268,10 @@ async function boot() {
     if (tab === "art" && p.mode === "photo") {
       html = `<div class="panel-heading"><h2>Photo artwork</h2>${btn("upload-art", "Upload artwork", "plus", "icon-only")}</div><p class="muted">Select a library work to add it to this photo. Drag its corners to match the wall. Placement is visual, not measured.</p><div class="mobile-library">${libraryHTML(true)}</div>${l ? `<section><h3>${e(l.title)}</h3>${range("Cast-shadow overlay", "shadow", l.shadow, 0, 60, 1, "photoLayer")}<p class="muted">Drag inside to move. Blue corner handles control perspective.</p>${l.corners.map((c, i) => `<h4>${["Top left", "Top right", "Bottom right", "Bottom left"][i]}</h4><div class="field-pair">${field("X %", i + "-0", c[0] * 100, 0, 100, 0.1, "%", "corner")}${field("Y %", i + "-1", c[1] * 100, 0, 100, 0.1, "%", "corner")}</div>`).join("")}<div class="button-row">${btn("photo-front", "Bring to front", "layers")}${btn("photo-delete", "Remove", "trash-2")}</div></section>` : '<div class="empty-inspector"><p>Choose an uploaded work from your library, or upload a new one.</p></div>'}<section><h3>Photo layers</h3>${p.photo.layers.map((x) => `<button class="wide layer-row ${x.id === photoSelected ? "active" : ""}" data-layer="${x.id}">${e(x.title)}</button>`).join("")}</section>`;
     } else if (tab === "art") {
-      html = `<div class="mobile-library">${libraryHTML(true)}</div>${a ? `<div class="panel-heading"><h2>Artwork properties</h2><span class="badge">${a.kind === "sign" ? "Sign" : a.kind === "label" ? "Label" : a.asset ? "Original" : "Sample"}</span></div><div class="selected-art"><div class="thumb">${artThumb(a)}</div><div><input class="title-input" data-field="title" data-scope="art" aria-label="Artwork title" maxlength="120" value="${e(a.title)}"/><span>${a.kind === "sign" || a.kind === "label" ? "Editable wall asset" : a.asset ? "Original image preserved" : "Measured placeholder panel"}</span>${a.kind === "sign" || a.kind === "label" ? "" : btn("replace-art", a.asset ? "Replace image" : "Add original image", "image-plus", "text-button")}</div></div>${signFields(a)}${a.asset ? `<section><h3>Image adjustments</h3><p class="muted">Edits affect this placement only. The uploaded original stays unchanged.</p>${btn("edit-image", "Edit image", "image", "primary wide")}<div class="button-row">${btn("copy-edits", "Copy edits", "copy")}${btn("paste-edits", "Paste edits", "layers", p.editClipboard ? "" : "disabled")}</div></section>` : ""}<section><h3>Dimensions <span>inches</span></h3><p class="muted">Double-tap artwork to adjust. Corners scale proportionally; middle edge handles stretch width or height.</p>${scaleControl(a)}<label class="setting-label"><input type="checkbox" data-field="stretch" data-scope="art" ${a.stretch ? "checked" : ""}/> Stretch image to panel dimensions</label>${field("Width", "w", a.w, 1, 360)}${field("Height", "h", a.h, 1, 360)}${!a.stretch && mismatch(p, a) ? `<div class="warning">Image proportions differ from the panel. The full image is fitted inside without stretching.${btn("match-ratio", "Match height to image", null, "wide")}</div>` : ""}${field("Thickness", "thickness", a.thickness, 0.1, 12, 0.1)}<label class="setting-label">Edge material<select data-field="edgeTexture" data-scope="art" aria-label="Edge material">${["plain","concrete","wood","metal"].map(k=>`<option value="${k}" ${(a.edgeTexture || "plain") === k ? "selected" : ""}>${k === "wood" ? "Wood grain" : k[0].toUpperCase()+k.slice(1)}</option>`).join("")}</select></label><label class="setting-label">Edge color<input type="color" data-field="edgeColor" data-scope="art" aria-label="Edge color" value="${a.edgeColor || "#b7a68b"}"/></label>${field("Wall gap", "offset", a.offset, 0, 12, 0.1)}</section><section><h3>Placement</h3><div class="exterior-callout"><strong>Interior and exterior walls</strong><span>Artwork can hang on either face of the three booth walls and of any free-standing wall.</span></div><label class="select-field">Wall location<select data-field="location" data-scope="art" aria-label="Wall location">${locationOptions(a)}</select></label><div class="button-row">${btn("face-view", "View wall face", "camera")}</div>${field("Left edge", "x", a.x, -360, 360)}${artSlider(a, "x", "Slide left / right")}${field("Bottom edge", "y", a.y, -360, 360)}${artSlider(a, "y", "Slide up / down")}<p class="muted">From the bottom-left corner, facing the ${a.face === "outside" ? "outside" : "inside"} of this wall.</p>${boundWarning(p, a) ? `<div class="warning">${boundWarning(p, a)}</div>` : ""}<div class="button-row">${btn("center", "Center", "align-center")}${btn("eye-level", "Center at 60″", "arrow-up-to-line")}</div></section><section><h3>Actions</h3><div class="button-row">${btn("duplicate-art", "Duplicate", "copy")}${btn("delete-art", "Remove", "trash-2", "danger")}</div></section>` : `<div class="empty-inspector"><h2>Make room for your work.</h2><p>Uploading files an original in your library without hanging it. Tap one there to put it on a wall, then set its real dimensions here.</p>${btn("upload-art", "Upload artwork", "image-plus", "primary")}</div>`}`;
+      html = `<div class="mobile-library">${libraryHTML(true)}</div>${a ? `<div class="panel-heading"><h2>Artwork properties</h2><span class="badge">${a.kind === "sign" ? "Sign" : a.kind === "label" ? "Label" : a.asset ? "Original" : "Sample"}</span></div><div class="selected-art"><div class="thumb">${artThumb(a)}</div><div><input class="title-input" data-field="title" data-scope="art" aria-label="Artwork title" maxlength="120" value="${e(a.title)}"/><span>${a.kind === "sign" || a.kind === "label" ? "Editable wall asset" : a.asset ? "Original image preserved" : "Measured placeholder panel"}</span>${a.kind === "sign" || a.kind === "label" ? "" : btn("replace-art", a.asset ? "Replace image" : "Add original image", "image-plus", "text-button")}</div></div>${signFields(a)}${a.asset ? `<section><h3>Image adjustments</h3><p class="muted">Edits affect this placement only. The uploaded original stays unchanged.</p>${btn("edit-image", "Edit image", "image", "primary wide")}<div class="button-row">${btn("copy-edits", "Copy edits", "copy")}${btn("paste-edits", "Paste edits", "layers", p.editClipboard ? "" : "disabled")}</div></section>` : ""}<section><h3>Dimensions <span>inches</span></h3><p class="muted">Double-tap artwork to adjust. Corners scale proportionally; middle edge handles stretch width or height.</p>${scaleControl(a)}<label class="setting-label"><input type="checkbox" data-field="stretch" data-scope="art" ${a.stretch ? "checked" : ""}/> Stretch image to panel dimensions</label>${field("Width", "w", a.w, 1, 360)}${field("Height", "h", a.h, 1, 360)}${!a.stretch && mismatch(p, a) ? `<div class="warning">Image proportions differ from the panel. The full image is fitted inside without stretching.${btn("match-ratio", "Match height to image", null, "wide")}</div>` : ""}${field("Thickness", "thickness", a.thickness, 0.1, 12, 0.1)}<label class="setting-label">Edge material<select data-field="edgeTexture" data-scope="art" aria-label="Edge material">${["plain","concrete","wood","metal"].map(k=>`<option value="${k}" ${(a.edgeTexture || "plain") === k ? "selected" : ""}>${k === "wood" ? "Wood grain" : k[0].toUpperCase()+k.slice(1)}</option>`).join("")}</select></label><label class="setting-label">Edge color<input type="color" data-field="edgeColor" data-scope="art" aria-label="Edge color" value="${a.edgeColor || "#b7a68b"}"/></label>${field("Wall gap", "offset", a.offset, 0, 12, 0.1)}</section><section><h3>Placement</h3><div class="exterior-callout"><strong>Interior and exterior walls</strong><span>Artwork can hang on either face of the three booth walls and of any free-standing wall.</span></div>${hasRow(p.booth) ? `<label class="select-field">Booth<select data-field="inBooth" data-scope="art" aria-label="Which booth this hangs in">${boothSlots(p.booth).map((b) => `<option value="${e(b.id)}" ${(a.booth || normalizeRow(p.booth).home) === b.id ? "selected" : ""}>${e(slotLabel(b))}</option>`).join("")}</select></label>` : ""}<label class="select-field">Wall location<select data-field="location" data-scope="art" aria-label="Wall location">${locationOptions(a)}</select></label><div class="button-row">${btn("face-view", "View wall face", "camera")}</div>${field("Left edge", "x", a.x, -360, 360)}${artSlider(a, "x", "Slide left / right")}${field("Bottom edge", "y", a.y, -360, 360)}${artSlider(a, "y", "Slide up / down")}<p class="muted">From the bottom-left corner, facing the ${a.face === "outside" ? "outside" : "inside"} of this wall.</p>${boundWarning(p, a) ? `<div class="warning">${boundWarning(p, a)}</div>` : ""}<div class="button-row">${btn("center", "Center", "align-center")}${btn("eye-level", "Center at 60″", "arrow-up-to-line")}</div></section><section><h3>Actions</h3><div class="button-row">${btn("duplicate-art", "Duplicate", "copy")}${btn("delete-art", "Remove", "trash-2", "danger")}</div></section>` : `<div class="empty-inspector"><h2>Make room for your work.</h2><p>Uploading files an original in your library without hanging it. Tap one there to put it on a wall, then set its real dimensions here.</p>${btn("upload-art", "Upload artwork", "image-plus", "primary")}</div>`}`;
     }
     if (tab === "layout") {
-      html = `<div class="panel-heading"><h2>${p.mode === "photo" ? "Booth photograph" : "Booth layout"}</h2>${icon("layout-panel-left")}</div>${p.mode === "photo" ? `<p class="muted">The original photo stays intact. Added art and light overlays are saved separately. Existing objects in the photograph cannot be moved or erased in this prototype.</p>${btn("upload-photo", p.photo.asset ? "Replace booth photo" : "Upload booth photo", "image-plus", "wide")}${range("Photo exposure", "exposure", p.photo.exposure, -1, 1, 0.05, "photo")}` : `<section><h3>Footprint</h3><select data-field="preset" aria-label="Booth preset"><option value="120" ${p.booth.width === 120 ? "selected" : ""}>10 × 10 ft · Standard</option><option value="240" ${p.booth.width === 240 ? "selected" : ""}>10 × 20 ft · Double</option></select><p class="muted">Nominal footprint. Panels and 1.4″ canopy legs reduce usable space near edges.</p>${isArtShow(p) ? `<div class="warning">This is an art-show booth. Its footprint, walls and light bar are in the <strong>Art show</strong> tool, and a preset or a canopy here would put it back to an outdoor pop-up.</div>` : ""}${field("Wall height", "height", p.booth.height, 48, 144, 1, "in", "booth")}<label class="check-field"><input type="checkbox" data-field="tent" data-scope="booth" ${p.booth.tent ? "checked" : ""}/>White canopy & frame</label><label class="setting-label">Tent style<select aria-label="Tent style" data-field="tentStyle" data-scope="booth">${Object.entries(TENTS).map(([k,v])=>`<option value="${k}" ${(p.booth.tentStyle||'classic')===k?'selected':''}>${v}</option>`).join('')}</select></label><p class="muted">12″ fabric valance, rounded hems, roof ribs and folding frame. Inspired shapes; not manufacturer-certified models.</p></section><section><h3>Surroundings</h3><label class="setting-label">Environment<select aria-label="Environment" data-field="envPreset" data-scope="booth">${Object.entries(ENV_PRESETS).map(([k,v])=>`<option value="${k}" ${(p.booth.envPreset||DEFAULT_PRESET)===k?'selected':''}>${v.label}</option>`).join('')}</select></label><p class="muted">Presets light the booth from a photographed environment. Without its image files a preset keeps the procedural surroundings below.</p>${isArtShow(p) ? `<label class="check-field"><input type="checkbox" data-field="on" data-scope="hall" ${hallSpec(p.booth).on ? "checked" : ""}/>Stand this booth in a white exhibition hall</label><p class="muted">${hallSpec(p.booth).on ? "The hall's own walls stand around the booth. In a photographed environment they cut across it as a white band, so choosing one of those presets switches the hall off." : "Off: the booth stands in the environment above, with nothing of its own around it. The walls, the light bar and the panel module are unchanged — this is only the room."}</p>` : ""}<label class="setting-label">Artwork colour<select aria-label="Artwork colour" data-field="artFidelity" data-scope="booth">${Object.entries(ART_FIDELITY).map(([k,v])=>`<option value="${k}" ${(p.booth.artFidelity||DEFAULT_FIDELITY)===k?'selected':''}>${v}</option>`).join('')}</select></label>${groundFields()}<label class="setting-label">Horizon<select aria-label="Horizon" data-field="horizon" data-scope="booth">${Object.entries({studio:'Neutral studio',open:'Open sky',park:'Park · trees',urban:'Urban plaza'}).map(([k,v])=>`<option value="${k}" ${(p.booth.horizon||'studio')===k?'selected':''}>${v}</option>`).join('')}</select></label><label class="check-field"><input type="checkbox" data-field="neighbors" data-scope="booth" ${p.booth.neighbors?'checked':''}/>Surround with other booths</label>${surroundingsFields()}</section>${peopleSection()}<section><h3>Display walls</h3><label class="color-field">Fabric finish<input type="color" data-field="color" data-scope="booth" value="${p.booth.color}"/></label><label class="setting-label">Panel surface<select aria-label="Panel surface" data-field="wallFinish" data-scope="booth">${Object.entries({smooth:"Smooth print",fabric:"Fabric pro-panel"}).map(([k,v])=>`<option value="${k}" ${(p.booth.wallFinish||"smooth")===k?"selected":""}>${v}</option>`).join("")}</select></label>${(p.booth.wallFinish||"smooth")==="fabric"?`${range("Weave depth","wallTexture",p.booth.wallTexture??60,0,100,1,"booth","%")}<p class="muted">The weave only. Panels keep the colour above, so artwork is still judged against the finish you chose. Without the carpet texture files the panels stay smooth.</p>`:""}<div class="swatches">${["#45474a", "#25282b", "#b1aea4", "#d8d4ca"].map((c) => `<button data-color="${c}" style="background:${c}" aria-label="Wall finish ${c}"></button>`).join("")}</div>${["back", "left", "right"].map((w) => `<div class="wall-setting"><label class="check-field"><input type="checkbox" data-field="enabled" data-scope="wall-${w}" ${p.booth.walls[w].enabled ? "checked" : ""}/>${w[0].toUpperCase() + w.slice(1)} wall</label>${field("Width", "width", p.booth.walls[w].width, 12, w === "back" ? p.booth.width : p.booth.depth, 1, "in", "wall-" + w)}${field("Height", "height", p.booth.walls[w].height, 24, 144, 1, "in", "wall-" + w)}</div>`).join("")}</section><section><h3>Free-standing walls and pedestals</h3><p class="muted">Interior panels and pedestals live in the Walls tool, so this list stays the booth itself.</p>${btn("open-walls", "Open the Walls tool", "columns-2", "wide")}</section>${draftSection()}`}<section><h3>Project</h3>${btn("copy-project", "Duplicate as alternative", "copy", "wide")}${btn("new-project", "New empty booth", "plus", "wide")}${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Backups include all original images. Download before switching projects.</p></section>`;
+      html = `<div class="panel-heading"><h2>${p.mode === "photo" ? "Booth photograph" : "Booth layout"}</h2>${icon("layout-panel-left")}</div>${p.mode === "photo" ? `<p class="muted">The original photo stays intact. Added art and light overlays are saved separately. Existing objects in the photograph cannot be moved or erased in this prototype.</p>${btn("upload-photo", p.photo.asset ? "Replace booth photo" : "Upload booth photo", "image-plus", "wide")}${range("Photo exposure", "exposure", p.photo.exposure, -1, 1, 0.05, "photo")}` : `<section><h3>Footprint</h3><select data-field="preset" aria-label="Booth preset"><option value="120" ${p.booth.width === 120 ? "selected" : ""}>10 × 10 ft · Standard</option><option value="240" ${p.booth.width === 240 ? "selected" : ""}>10 × 20 ft · Double</option></select><p class="muted">Nominal footprint. Panels and 1.4″ canopy legs reduce usable space near edges.</p>${isArtShow(p) ? `<div class="warning">This is an art-show booth. Its footprint, walls and light bar are in the <strong>Art show</strong> tool, and a preset or a canopy here would put it back to an outdoor pop-up.</div>` : ""}${field("Wall height", "height", p.booth.height, 48, 144, 1, "in", "booth")}<label class="check-field"><input type="checkbox" data-field="tent" data-scope="booth" ${p.booth.tent ? "checked" : ""}/>White canopy & frame</label><label class="setting-label">Tent style<select aria-label="Tent style" data-field="tentStyle" data-scope="booth">${Object.entries(TENTS).map(([k,v])=>`<option value="${k}" ${(p.booth.tentStyle||'classic')===k?'selected':''}>${v}</option>`).join('')}</select></label><p class="muted">12″ fabric valance, rounded hems, roof ribs and folding frame. Inspired shapes; not manufacturer-certified models.</p></section><section><h3>Surroundings</h3><label class="setting-label">Environment<select aria-label="Environment" data-field="envPreset" data-scope="booth">${Object.entries(ENV_PRESETS).map(([k,v])=>`<option value="${k}" ${(p.booth.envPreset||DEFAULT_PRESET)===k?'selected':''}>${v.label}</option>`).join('')}</select></label><p class="muted">Presets light the booth from a photographed environment. Without its image files a preset keeps the procedural surroundings below.</p>${isArtShow(p) ? `<label class="check-field"><input type="checkbox" data-field="on" data-scope="hall" ${hallSpec(p.booth).on ? "checked" : ""}/>Stand this booth in a white exhibition hall</label><p class="muted">${hallSpec(p.booth).on ? "The hall's own walls stand around the booth. In a photographed environment they cut across it as a white band, so choosing one of those presets switches the hall off." : "Off: the booth stands in the environment above, with nothing of its own around it. The walls, the light bar and the panel module are unchanged — this is only the room."}</p>` : ""}<label class="setting-label">Artwork colour<select aria-label="Artwork colour" data-field="artFidelity" data-scope="booth">${Object.entries(ART_FIDELITY).map(([k,v])=>`<option value="${k}" ${(p.booth.artFidelity||DEFAULT_FIDELITY)===k?'selected':''}>${v}</option>`).join('')}</select></label>${groundFields()}<label class="setting-label">Horizon<select aria-label="Horizon" data-field="horizon" data-scope="booth">${Object.entries({studio:'Neutral studio',open:'Open sky',park:'Park · trees',urban:'Urban plaza'}).map(([k,v])=>`<option value="${k}" ${(p.booth.horizon||'studio')===k?'selected':''}>${v}</option>`).join('')}</select></label><label class="check-field"><input type="checkbox" data-field="neighbors" data-scope="booth" ${p.booth.neighbors?'checked':''}/>Surround with other booths</label>${surroundingsFields()}</section>${peopleSection()}<section><h3>Display walls</h3><label class="color-field">Fabric finish<input type="color" data-field="color" data-scope="booth" value="${p.booth.color}"/></label><label class="setting-label">Panel surface<select aria-label="Panel surface" data-field="wallFinish" data-scope="booth">${Object.entries({smooth:"Smooth print",fabric:"Fabric pro-panel"}).map(([k,v])=>`<option value="${k}" ${(p.booth.wallFinish||"smooth")===k?"selected":""}>${v}</option>`).join("")}</select></label>${(p.booth.wallFinish||"smooth")==="fabric"?`${range("Weave depth","wallTexture",p.booth.wallTexture??60,0,100,1,"booth","%")}<p class="muted">The weave only. Panels keep the colour above, so artwork is still judged against the finish you chose. Without the carpet texture files the panels stay smooth.</p>`:""}<div class="swatches">${["#45474a", "#25282b", "#b1aea4", "#d8d4ca"].map((c) => `<button data-color="${c}" style="background:${c}" aria-label="Wall finish ${c}"></button>`).join("")}</div>${["back", "left", "right"].map((w) => `<div class="wall-setting"><label class="check-field"><input type="checkbox" data-field="enabled" data-scope="wall-${w}" ${p.booth.walls[w].enabled ? "checked" : ""}/>${w[0].toUpperCase() + w.slice(1)} wall</label>${field("Width", "width", p.booth.walls[w].width, 12, w === "back" ? p.booth.width : p.booth.depth, 1, "in", "wall-" + w)}${field("Height", "height", p.booth.walls[w].height, 24, 144, 1, "in", "wall-" + w)}</div>`).join("")}</section><section><h3>Free-standing walls and pedestals</h3><p class="muted">Interior panels and pedestals live in the Walls tool, so this list stays the booth itself.</p>${btn("open-walls", "Open the Walls tool", "columns-2", "wide")}</section>${rowSection()}${draftSection()}`}<section><h3>Project</h3>${btn("copy-project", "Duplicate as alternative", "copy", "wide")}${btn("new-project", "New empty booth", "plus", "wide")}${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Backups include all original images. Download before switching projects.</p></section>`;
     }
     if (tab === "show") {
       html = p.mode === "photo"
@@ -1466,6 +1638,14 @@ async function boot() {
       render();
     },
     draft: () => setDraft(!scene?.draft),
+    "row-booth-left": () => addRowBooths("left", 1),
+    "row-booth-right": () => addRowBooths("right", 1),
+    "row-count-left": () => addRowBooths("left", rowCount()),
+    "row-count-right": () => addRowBooths("right", rowCount()),
+    "row-space-left": () => addRowSpace("left"),
+    "row-space-right": () => addRowSpace("right"),
+    "draft-lock": () =>
+      setDraftPolicy({ auto: "on", on: "off", off: "auto" }[draftPolicy] || "auto"),
     undo: () => {
       if (!history.length) return;
       future.push(snapshot());
@@ -1879,7 +2059,8 @@ async function boot() {
     if (b.dataset.action) {
       try {
         const action = b.dataset.action;
-        if (action.startsWith("delete-panel-")) deletePanel(action.slice(13));
+        if (action.startsWith("row-remove-")) removeRowSlot(action.slice(11));
+        else if (action.startsWith("delete-panel-")) deletePanel(action.slice(13));
         else if (action.startsWith("delete-pedestal-")) deletePedestal(action.slice(16));
         else actions[action]?.(b);
       } catch (err) {
@@ -2106,6 +2287,19 @@ async function boot() {
       setDraft(el.checked);
       return;
     }
+    if (el.dataset.draftPolicy !== undefined) {
+      setDraftPolicy(el.value);
+      return;
+    }
+    // Which booth of the row the next original is hung in. A view setting too:
+    // it is where the next tap lands, not anything about the booth.
+    if (el.dataset.rowActive !== undefined) {
+      const row = normalizeRow(p.booth);
+      activeBooth = el.value === row.home ? null : el.value;
+      renderInspector();
+      renderStatus();
+      return;
+    }
     if (!el.dataset.field) return;
     const key = el.dataset.field,
       scope = el.dataset.scope;
@@ -2130,6 +2324,17 @@ async function boot() {
       // Switching venue rewrites the footprint, the walls and the finish
       // together: half an art-show booth — 12ft walls under a canopy — is not
       // a booth anyone is planning.
+      // The row: the gap between slots, and a space's own width. Both rewrite
+      // the whole row record, because a row is one value and normalizing it
+      // is what guarantees a home booth is still in it.
+      if (scope === "row" && key === "gap") {
+        p.booth.row = { ...normalizeRow(p.booth), gap: Math.max(0, Math.min(MAX_GAP, Number(value))) };
+        return;
+      }
+      if (String(scope).startsWith("space-") && key === "width") {
+        p.booth.row = setSpaceWidth(p.booth, String(scope).slice(6), Number(value));
+        return;
+      }
       if (scope === "booth" && key === "venue") {
         applyVenue(p, String(value));
         selectedPanel = null;
@@ -2165,6 +2370,15 @@ async function boot() {
         return;
       }
       const a = p.art.find((a) => a.id === selected);
+      // Moving a work from one booth of the row to another. The walls are the
+      // same measurements in every booth, so it keeps its wall, its face and
+      // its position on that wall — only which booth is drawing it changes.
+      if (scope === "art" && key === "inBooth" && a) {
+        const home = normalizeRow(p.booth).home;
+        a.booth = String(value) === home ? undefined : String(value);
+        activeBooth = a.booth || null;
+        return;
+      }
       if (scope === "art" && key === "location" && a) {
         const raw = String(value),
           cut = raw.lastIndexOf("-"),

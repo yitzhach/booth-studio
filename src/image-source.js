@@ -16,6 +16,21 @@
  * the old canvas path is still here and still correct.
  */
 
+/**
+ * The sources that came back already upside down, because they are on their
+ * way to a texture. WebGL's own vertical flip (`UNPACK_FLIP_Y_WEBGL`, which is
+ * what three's `texture.flipY` sets) is not applied to an ImageBitmap the way
+ * it is to an `<img>` or a canvas, which is why decoding an original through
+ * `createImageBitmap` hung every uploaded photograph upside down. Asking the
+ * decoder itself for the flip is the fix, and a member of this set is the
+ * signal to leave `texture.flipY` off so it is not flipped twice.
+ *
+ * A WeakSet, so a bitmap that has been closed and dropped is not kept alive by
+ * the bookkeeping that describes it.
+ */
+const PREFLIPPED = new WeakSet();
+/** True if `decodeAt` handed this source back already flipped for upload. */
+export const isPreflipped = (source) => !!source && PREFLIPPED.has(source);
 /** The size a source is decoded to: the largest that fits, never an upscale. */
 export function fitWithin(width, height, maxEdge) {
   const longest = Math.max(width, height);
@@ -72,21 +87,30 @@ function decodeWithImage(dataUrl, size) {
  * The decoded original, no larger than `maxEdge` on its longest side. The
  * result is an ImageBitmap, an `<img>` or a canvas — all three are drawable
  * and all three carry `width` and `height`, which is everything the callers
- * here need. Orientation is the browser's own: no `imageOrientation` is asked
- * for, so a texture built from this is the way up an `<img>` would have been.
+ * here need.
+ *
+ * `options.upload` says the source is going straight onto the GPU rather than
+ * onto a canvas or into an `<img>`. That path asks the decoder for the
+ * vertical flip a texture upload needs, because WebGL will not do it for an
+ * ImageBitmap; `isPreflipped` is how the caller knows to leave `flipY` off.
+ * Without it the orientation is the browser's own, which is what anything
+ * being drawn or measured wants.
  *
  * `width` and `height` are the original's, which every asset already records,
  * so the target size is known before anything is decoded.
  */
-export async function decodeAt(dataUrl, width, height, maxEdge) {
+export async function decodeAt(dataUrl, width, height, maxEdge, options = {}) {
   const size = fitWithin(width, height, maxEdge);
   if (typeof createImageBitmap === "function") {
     try {
-      return await createImageBitmap(await asBlob(dataUrl), {
+      const bitmap = await createImageBitmap(await asBlob(dataUrl), {
         resizeWidth: size.width,
         resizeHeight: size.height,
         resizeQuality: "medium",
+        ...(options.upload ? { imageOrientation: "flipY" } : {}),
       });
+      if (options.upload) PREFLIPPED.add(bitmap);
+      return bitmap;
     } catch {
       // Older Chromium ignores or rejects the resize options rather than
       // resizing badly, and a machine without ImageBitmap at all lands here
