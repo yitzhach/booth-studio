@@ -338,7 +338,22 @@ Extend it; do not rebuild it.
      because a true-depth weave on a white roof washes out.
 6. **A `home` HDRI** is still missing — an interior with windows on one side.
    That preset falls back procedurally until someone downloads one.
-7. **Nobody has looked at the new ground picker or the artwork sliders.**
+7. **Nobody has looked at anything on `claude/nice-hawking-dynrum`.** Four
+   things, all of them answers to reports from a real browser, none of them
+   seen there yet:
+   - Whether uploading and then tapping reads as obviously as it should. The
+     upload toast says the files went to the library and the card says "Tap to
+     hang it", but the gesture is new and the old one hung things for you.
+   - Whether 50 is right for fixture brightness now that the slider means
+     something different, and whether the `Set brightness to 50` note under an
+     old booth's stretched slider reads as an offer rather than a warning.
+   - Whether fast edit arming itself on a double-tap is welcome or startling.
+     It is the start of a drag, so it should be invisible — but the shadows go
+     as it comes on, and that is a visible change nobody asked for in that
+     moment.
+   - **Whether any of the speed work is enough on the 2014 iMac.** Everything
+     measured is in the tests; what is not known is how it feels. See item 8.
+8. **Nobody has looked at the ground picker or the artwork sliders.**
    Both are on `main` and live. Whether two labelled groups in one dropdown
    read as obviously as intended; whether "Delete this ground photograph"
    sounds like a delete rather than a deselect; and whether the placement
@@ -351,8 +366,9 @@ Extend it; do not rebuild it.
    four feet past the booth on purpose so a visitor can stand in the aisle;
    whether a row of same-size neighbours reads better than the old fixed
    10 x 10 ones; and whether the fast edit toggle is worth its place in the
-   toolbar or wants to be automatic.
-8. **Is it actually faster now?** Reported still slow on a 2014 iMac in
+   toolbar. That last one is half answered: it is now automatic on a
+   double-tap and also a switch in Layout, and the toolbar button stays.
+9. **Is it actually faster now?** Reported still slow on a 2014 iMac in
    Chrome — and, tellingly, **fast with the sample panels and slow with
    uploaded photographs**. That last part was the diagnosis: four separate
    places treated a 25 MB base64 original as free. The undo history and every
@@ -372,7 +388,7 @@ Extend it; do not rebuild it.
    edit. Below that: a click still rebuilds the library and the inspector as
    HTML strings, which is now cheap but not free, and `Export → Preview
    quality → Efficient` is worth trying on a 2014 machine.
-9. **Figures are stylised mannequins.** No faces, no clothing, mid-grey. If
+10. **Figures are stylised mannequins.** No faces, no clothing, mid-grey. If
    they need to read as a crowd rather than as scale references, that is a
    different asset and a different phase.
 
@@ -460,10 +476,10 @@ the picker became one list.
 
 ```sh
 npm ci
-npm test                 # 218 Node tests
+npm test                 # 224 Node tests
 npm run build
 npm run test:view        # camera, city, env presets, HDRI, ground, ground library, tent, walls, video, timeline, people, panels, responsiveness, art show
-npm run test:browser     # 19 end-to-end checks
+npm run test:browser     # 25 end-to-end checks
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
 ```
 
