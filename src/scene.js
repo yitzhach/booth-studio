@@ -2127,11 +2127,12 @@ export class BoothScene {
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
       }
-      // Twice, for the same reason a recorded frame is drawn twice: the
-      // backdrop's second pass and any texture that has just arrived land on
-      // the first draw at the new size, and a still is one frame with no
-      // second chance.
-      this.renderFrame();
+      // Once, unlike a recorded frame. `toBlob` reads the canvas back, and a
+      // readback flushes everything the GPU still owed — so a still cannot
+      // catch a half-finished frame the way a captured video frame can. A
+      // second draw at 4096 px costs as much again as the first and buys
+      // nothing; it also took the export past the browser suite's timeout,
+      // which is how this was found.
       this.renderFrame();
       return await new Promise((res, rej) =>
         canvas.toBlob(
