@@ -114,6 +114,17 @@ export function makePerson(kind = DEFAULT_PERSON, inches = 0) {
   return group;
 }
 
+/**
+ * Where a figure stands, in one function, because a slider and a typed number
+ * must land in the same place. `BoothScene.update` calls it when the scene is
+ * built and `movePerson` calls it on every pixel of a drag.
+ */
+export function placePerson(group, person) {
+  group.position.set((person.x || 0) * IN, 0, (person.z || 0) * IN);
+  group.rotation.y = ((person.rotation || 0) * Math.PI) / 180;
+  return group;
+}
+
 /** A new figure for the project, placed a little in front of the back wall. */
 export const newPerson = (kind = DEFAULT_PERSON, id = "") => ({
   id,

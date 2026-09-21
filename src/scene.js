@@ -9,7 +9,7 @@ import { GROUND_CONSUMER, TENT_CONSUMER, TENT_WEAVE, WALL_CONSUMER, WALL_SET, UV
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
 import { IN, PEDESTAL, boothPedestals, constrain, groundKind, groundUpload, constrainPanel, constrainPedestal, findPanel, findPedestal, isArtShow, lightBarSpec, isPanelKey, scalePanel, wallKeys, wallSpec } from "./model.js";
 import { lightBarBounce, lightBarFixtures, lightBarOptics, lightBarRail } from "./lightbar.js";
-import { makePerson } from "./people.js";
+import { makePerson, placePerson } from "./people.js";
 import { frameTimes, resolveMove, samplePath } from "./camera-path.js";
 import { fadeAt, isTimeline, timelineSeconds } from "./timeline.js";
 import { flareGhosts, flareOrigin } from "./flare.js";
@@ -224,6 +224,7 @@ export class BoothScene {
     this.selectedPedestal = null;
     this.pedestalObjects = [];
     this.pedestalFrames = {};
+    this.personFrames = {};
     this.view = "perspective";
     this.move = false;
     // On by default, matching the toolbar button's own initial state: this is a
@@ -668,6 +669,7 @@ export class BoothScene {
     this.wallObjects = [];
     this.pedestalObjects = [];
     this.pedestalFrames = {};
+    this.personFrames = {};
     this.resizeHandles = [];
     // The old outlines went with the group that was just disposed.
     this.selectionObjects = [];
@@ -951,11 +953,17 @@ export class BoothScene {
     this.buildPedestals(p);
     // Figures for scale. They are part of the picture, not of the booth: the
     // hanging guide ignores them and nothing can be hung on one.
-    for (const person of p.booth.people || []) {
+    //
+    // Hidden rather than deleted when the switch is off: a figure is placed to
+    // sit beside a particular wall, and making someone rebuild that placement
+    // to take one clean shot without a person in it is the reason the switch
+    // exists. The list is kept, so switching back restores where they stood.
+    for (const person of (p.booth.showPeople === false ? [] : p.booth.people || [])) {
       const figure = makePerson(person.kind, person.height);
-      figure.position.set((person.x || 0) * IN, 0, (person.z || 0) * IN);
-      figure.rotation.y = ((person.rotation || 0) * Math.PI) / 180;
+      figure.name = "person:" + person.id;
+      placePerson(figure, person);
       this.group.add(figure);
+      this.personFrames[person.id] = figure;
     }
     if (p.booth.tent) this.group.add(makeTent(W,D,H,p.booth.tentStyle || "classic"));
     // Photographed canvas on every fabric panel in the scene, when its files
@@ -1185,6 +1193,45 @@ export class BoothScene {
    * Restand one pedestal without a rebuild — the drag counterpart of
    * `movePanel`, and the reason a pedestal is a group of its own.
    */
+  /**
+   * Restand one figure without the scene rebuild `update()` performs, so a
+   * placement slider tracks the cursor instead of disposing every wall and
+   * texture in the booth per pixel.
+   *
+   * Unlike a pedestal this may rebuild the figure itself, because a person's
+   * height is in the geometry: a 5'6" figure is not a 6'0" one scaled down —
+   * the head stays an eighth of the height and the hip stays at the halfway
+   * mark, which is what keeps a shorter figure reading as shorter rather than
+   * as further away. Rebuilding one figure is a handful of primitives, and
+   * still nothing beside a whole-scene rebuild. Position and facing skip even
+   * that.
+   *
+   * Same rule as `movePanel`: this is the one path a drag and a typed number
+   * both take, so a dragged figure lands where a typed one would.
+   */
+  movePerson(person) {
+    const list = this.p.booth.people || [];
+    const index = list.findIndex((x) => x.id === person.id);
+    if (index < 0) return;
+    const before = list[index];
+    list[index] = person;
+    let figure = this.personFrames[person.id];
+    if (!figure) return;
+    if (before.height !== person.height || before.kind !== person.kind) {
+      figure.traverse((o) => {
+        o.geometry?.dispose();
+        // The material is shared across one figure's meshes and owned by it.
+        if (o.material) o.material.dispose();
+      });
+      this.group.remove(figure);
+      figure = makePerson(person.kind, person.height);
+      figure.name = "person:" + person.id;
+      this.group.add(figure);
+      this.personFrames[person.id] = figure;
+    }
+    placePerson(figure, person);
+    this.touchShadows();
+  }
   movePedestal(ped) {
     const list = this.p.booth.pedestals || [];
     const index = list.findIndex((x) => x.id === ped.id);

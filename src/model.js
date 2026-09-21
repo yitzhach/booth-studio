@@ -607,6 +607,9 @@ export function validateProject(p) {
   if (p.booth.backdropTilt !== undefined && !finite(p.booth.backdropTilt, -45, 45)) fail();
   if (p.booth.backdropLock !== undefined && typeof p.booth.backdropLock !== "boolean") fail();
   if (p.booth.fixtures !== undefined && !["auto", "always", "never"].includes(p.booth.fixtures)) fail();
+  // Whether the figures are drawn. Optional and absent from every backup
+  // written before it, so undefined means "shown", which is what they all say.
+  if (p.booth.showPeople !== undefined && typeof p.booth.showPeople !== "boolean") fail();
   if (p.booth.people !== undefined) {
     if (!Array.isArray(p.booth.people) || p.booth.people.length > 6) fail();
     for (const person of p.booth.people) {
@@ -769,16 +772,31 @@ export function convex(q) {
   });
 }
 
-/** Neighbors use nominal footprint-edge gaps in inches, not center spacing. */
+/**
+ * Neighbors use nominal footprint-edge gaps in inches, not center spacing.
+ *
+ * Each neighbour is the same size as this booth. A hall sells a row of equal
+ * pitches, so a 10 x 20 stand beside two hardcoded 10 x 10 ones was drawing a
+ * row that no hall lays out — and, because the gap was measured to a 120-inch
+ * neighbour's centre, a booth that was not 120 inches deep also put its
+ * neighbours at the wrong distance. Both numbers come from `b` now.
+ *
+ * Each placement also carries which way its booth faces. The one behind is
+ * turned around: it opens onto the next aisle, so what this booth sees over
+ * its back wall is the back of another booth, not the inside of one. Left and
+ * right share this booth's aisle and so share its facing.
+ */
 export function neighborPlacements(b) {
   if (!b.neighbors) return [];
   const layout = b.neighborLayout || "inline", gap = b.neighborGap ?? 24;
-  const result = [], size = 120;
+  const result = [], width = b.width, depth = b.depth;
+  const at = (side, x, z, rotation) => ({ side, x, z, rotation, width, depth });
   if (layout !== "island") {
-    if (layout !== "corner-left") result.push({side:"left", x:-(b.width/2 + gap + size/2), z:0});
-    if (layout !== "corner-right") result.push({side:"right", x:b.width/2 + gap + size/2, z:0});
+    if (layout !== "corner-left") result.push(at("left", -(b.width/2 + gap + width/2), 0, 0));
+    if (layout !== "corner-right") result.push(at("right", b.width/2 + gap + width/2, 0, 0));
   }
-  if (b.neighborRear && layout !== "island") result.push({side:"rear", x:0, z:-(b.depth/2 + (b.rearGap ?? gap) + size/2)});
+  if (b.neighborRear && layout !== "island")
+    result.push(at("rear", 0, -(b.depth/2 + (b.rearGap ?? gap) + depth/2), 180));
   return result;
 }
 /** Uniform size adjustment preserves image proportions and the panel's center. */

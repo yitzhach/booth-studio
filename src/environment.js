@@ -194,7 +194,11 @@ export function makeHall(g, b) {
 function neighborArtBooth(g, n, b) {
  const booth = new T.Group(); booth.name = 'neighbor-' + n.side; g.add(booth);
  booth.position.set(n.x * IN, 0, n.z * IN);
- const W = 120 * IN, D = 120 * IN, H = (b.walls?.back?.height || 144) * IN;
+ // Turned to face its own aisle. Without this the booth behind opened towards
+ // this one, so the view over the back wall was into a stranger's stand.
+ booth.rotation.y = ((n.rotation || 0) * Math.PI) / 180;
+ // The neighbour is this booth's size: a hall sells a row of equal pitches.
+ const W = n.width * IN, D = n.depth * IN, H = (b.walls?.back?.height || 144) * IN;
  const skin = material('#f1efea');
  const wall = (w, x, z, ry) => { const m = mesh(booth, new T.BoxGeometry(w, H, .055), skin); m.position.set(x, H / 2, z); m.rotation.y = ry; };
  wall(W, 0, -D / 2, 0);
@@ -216,8 +220,8 @@ export function environment(scene,g,b){const kind=b.ground||'studio',setting=b.h
  if(hall){scene.background=new T.Color('#e4e2dd');scene.fog=null;makeHall(g,b);}
  for(const n of neighborPlacements(b)){
  if(hall){neighborArtBooth(g,n,b);continue;}
- const t=makeTent(120*IN,120*IN,96*IN,'classic');t.name='neighbor-'+n.side;
- t.position.set(n.x*IN,0,n.z*IN);g.add(t);
+ const t=makeTent(n.width*IN,n.depth*IN,96*IN,'classic');t.name='neighbor-'+n.side;
+ t.position.set(n.x*IN,0,n.z*IN);t.rotation.y=((n.rotation||0)*Math.PI)/180;g.add(t);
  const wall=mesh(t,new T.BoxGeometry(3,2.2,.04),material('#d6d1c5'));wall.position.set(0,1.1,-1.5);
  }
 }

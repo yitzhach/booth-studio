@@ -187,6 +187,9 @@ async function boot() {
     // for rather than whatever the panel says when Export all is pressed.
     videoBatch = [],
     videoBatchAt = -1,
+    // True for the length of one drag of a figure's slider, so the gesture is
+    // one entry in the undo history rather than one per pixel.
+    personGesture = false,
     videoSeconds = MOVES[DEFAULT_MOVE].seconds,
     videoFps = DEFAULT_FPS,
     videoSize = DEFAULT_SIZE,
@@ -727,15 +730,37 @@ async function boot() {
   // beside a 5'6" visitor is not. They are a drawing aid, so they live in the
   // Layout panel beside the surroundings rather than in the artwork list, and
   // they are excluded from the hanging guide.
+  // A figure's slider, beside the typed number it edits. The travel is the
+  // booth's own footprint, so the whole length of it is somewhere a person can
+  // usefully stand — and a figure already outside it, typed or out of an older
+  // backup, widens its own slider rather than being walked back inside the
+  // moment these controls are drawn. Same rule as `panelSlider`.
+  function personSlider(person, key, label, unit = "in") {
+    // The booth, plus four feet of aisle at each edge. A visitor standing just
+    // outside the booth looking in is half of what these figures are for, so
+    // travel that stopped at the footprint would stop short of the useful
+    // placement — which is the difference from `panelSlider`, where a wall
+    // outside the booth is a mistake rather than a photograph.
+    const reach = key === "height"
+      ? null
+      : Math.max(panelRange(p)[key] + 48, Math.abs(person[key] || 0));
+    const min = key === "height" ? MIN_HEIGHT : -Math.ceil(reach);
+    const max = key === "height" ? Math.max(MAX_HEIGHT, Math.ceil(person[key])) : Math.ceil(reach);
+    const value = person[key] ?? 0;
+    return `<label class="range"><span>${label}<output>${Number(value.toFixed(2))}${unit}</output></span><input type="range" data-field="${key}" data-scope="person-${e(person.id)}" aria-label="${e(label)} slider" min="${min}" max="${max}" step="1" value="${value}"/></label>`;
+  }
   function peopleSection() {
     const people = p.booth.people || [];
+    // Absent means shown: that is what every backup written before the switch
+    // existed says, and it is what they all meant.
+    const shown = p.booth.showPeople !== false;
     const rows = people
       .map((person, i) => {
         const label = person.kind === "man" ? "Man" : "Woman";
-        return `<div class="person-row" data-person="${person.id}"><div class="key-head"><strong>${label} ${i + 1}</strong><span class="muted">${Math.floor(person.height / 12)}′${Math.round(person.height % 12)}″</span></div>${field("Height", "height", person.height, MIN_HEIGHT, MAX_HEIGHT, 1, "in", "person-" + person.id)}<div class="field-pair">${field("Left / right", "x", person.x, -600, 600, 1, "in", "person-" + person.id)}${field("Front / back", "z", person.z, -600, 600, 1, "in", "person-" + person.id)}</div>${field("Facing", "rotation", person.rotation ?? 0, -180, 180, 5, "°", "person-" + person.id)}<div class="button-row">${btn("delete-person", "Remove", "trash-2")}</div></div>`;
+        return `<div class="person-row" data-person="${person.id}"><div class="key-head"><strong>${label} ${i + 1}</strong><span class="muted">${Math.floor(person.height / 12)}′${Math.round(person.height % 12)}″</span></div>${field("Height", "height", person.height, MIN_HEIGHT, MAX_HEIGHT, 1, "in", "person-" + person.id)}${personSlider(person, "height", "Height")}<div class="field-pair">${field("Left / right", "x", person.x, -600, 600, 1, "in", "person-" + person.id)}${field("Front / back", "z", person.z, -600, 600, 1, "in", "person-" + person.id)}</div>${personSlider(person, "x", "Left / right")}${personSlider(person, "z", "Front / back")}${field("Facing", "rotation", person.rotation ?? 0, -180, 180, 5, "°", "person-" + person.id)}<div class="button-row">${btn("delete-person", "Remove", "trash-2")}</div></div>`;
       })
       .join("");
-    return `<section><h3>People for scale <span>${people.length} / ${MAX_PEOPLE}</span></h3><p class="muted">Stand-ins so the booth reads at human size. ${Object.values(PEOPLE).map((v) => e(v.label)).join(" · ")} by default, and every figure's height is editable. They are excluded from the hanging guide.</p>${people.length < MAX_PEOPLE ? `<div class="button-row">${btn("add-woman", "Add woman", "user-round")}${btn("add-man", "Add man", "user-round")}</div>` : `<p class="muted">${MAX_PEOPLE} figures is the limit.</p>`}${rows}</section>`;
+    return `<section><h3>People for scale <span>${people.length} / ${MAX_PEOPLE}</span></h3><p class="muted">Stand-ins so the booth reads at human size. ${Object.values(PEOPLE).map((v) => e(v.label)).join(" · ")} by default, and every figure's height is editable. They are excluded from the hanging guide.</p>${people.length ? `<label class="check-field"><input type="checkbox" data-field="showPeople" data-scope="booth" ${shown ? "checked" : ""}/>Show the figures</label><p class="muted">${shown ? "Off takes every figure out of the picture and out of an export, and keeps where each one stands." : `Hidden. ${people.length} figure${people.length === 1 ? " is" : "s are"} still placed below and come back when this is switched on.`}</p>` : ""}${people.length < MAX_PEOPLE ? `<div class="button-row">${btn("add-woman", "Add woman", "user-round")}${btn("add-man", "Add man", "user-round")}</div>` : `<p class="muted">${MAX_PEOPLE} figures is the limit.</p>`}${rows}</section>`;
   }
 
   // Video export. Offered only where it can actually be delivered: the encoder
@@ -1879,6 +1904,14 @@ async function boot() {
       scheduleSave();
       return;
     }
+    // A figure's sliders, the same way: the scene is already up to date, so
+    // this only ends the gesture and redraws the panel's own readouts.
+    if (el.type === "range" && el.dataset.scope?.startsWith("person-")) {
+      personGesture = false;
+      renderInspector();
+      scheduleSave();
+      return;
+    }
     if (el.id === "project-name") {
       mutate(() => (p.name = el.value.trim() || "Untitled booth"));
       return;
@@ -2125,6 +2158,29 @@ async function boot() {
         .closest("label")
         ?.querySelector("output")
         ?.replaceChildren(Number(a[ev.target.dataset.field].toFixed(2)) + "in");
+      return;
+    }
+    // A figure's placement and height sliders. Same deal as the artwork's:
+    // one checkpoint for the whole gesture, and `movePerson` restands the
+    // figure rather than disposing and rebuilding the booth per pixel.
+    if (ev.target.type === "range" && ev.target.dataset.scope?.startsWith("person-")) {
+      const id = ev.target.dataset.scope.slice(7);
+      const person = (p.booth.people || []).find((x) => x.id === id);
+      if (!person) return;
+      if (!personGesture) { checkpoint(); personGesture = true; }
+      const key = ev.target.dataset.field;
+      scene?.movePerson({ ...person, [key]: Number(ev.target.value) });
+      // The typed field beside the slider, and the slider's own readout.
+      // `.value`, not setAttribute: the attribute is the initial value and an
+      // input the user has already touched ignores it.
+      const typed = document.querySelector(
+        `input[type="number"][data-field="${key}"][data-scope="person-${CSS.escape(id)}"]`,
+      );
+      if (typed) typed.value = String(Number(ev.target.value));
+      ev.target
+        .closest("label")
+        ?.querySelector("output")
+        ?.replaceChildren(Number(ev.target.value) + "in");
       return;
     }
     // A position slider for a free-standing wall. Handled live, and entirely
