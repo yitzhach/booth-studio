@@ -88,11 +88,12 @@ Extend it; do not rebuild it.
     backs onto it.
   - The hanging guide is this booth's build sheet and excludes the rest of
     the row, which is why `hangingGuide` filters on `!a.booth`.
-- **On the branch `claude/nice-hawking-dynrum`, not yet merged:** uploading
-  files an original instead of hanging it, fixture brightness as a percentage,
-  fast edit arming itself on a double-tap, and the four things that made a
-  booth full of uploaded photographs slow. All four came from a 2014 iMac in
-  Chrome and from a phone. The four bullets below are that branch.
+- **Merged and deployed 2026-09-21, earlier the same day:** uploading files an
+  original instead of hanging it, fixture brightness as a percentage, fast
+  edit arming itself on a double-tap, and the four things that made a booth
+  full of uploaded photographs slow. All four came from a 2014 iMac in Chrome
+  and from a phone; the four bullets below are that work. **Nothing is sitting
+  unmerged on a branch.**
 - **Uploading files an original; tapping one hangs it.** Choosing several
   images at once used to hang every one of them on the back wall at the same
   x and y. Coplanar artwork has no depth order, so the wall flashed through
@@ -397,9 +398,9 @@ Extend it; do not rebuild it.
      because a true-depth weave on a white roof washes out.
 6. **A `home` HDRI** is still missing — an interior with windows on one side.
    That preset falls back procedurally until someone downloads one.
-7. **Nobody has looked at anything on `claude/nice-hawking-dynrum`.** Four
-   things, all of them answers to reports from a real browser, none of them
-   seen there yet:
+7. **Nobody has looked at the four things in the earlier 2026-09-21 merge.**
+   All of them are answers to reports from a real browser; none has been seen
+   there since:
    - Whether uploading and then tapping reads as obviously as it should. The
      upload toast says the files went to the library and the card says "Tap to
      hang it", but the gesture is new and the old one hung things for you.
