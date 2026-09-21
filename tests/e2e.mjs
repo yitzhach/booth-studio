@@ -157,6 +157,104 @@ try {
     6,
   );
   pass("Tapping each library original hangs it on a spot of its own");
+
+  // ---- What an uploaded original costs -----------------------------------
+  // The fixture is four coloured quadrants on purpose: red top left, blue top
+  // right, pale yellow bottom left, dark green bottom right. Decoding it at
+  // the wall's size rather than unpacking it whole is the change; landing it
+  // the same way up is the thing that change could quietly get wrong.
+  const decoded = await page.evaluate(async () => {
+    const project = window.__booth.project;
+    const id = project.art.find((a) => a.asset).asset;
+    const image = (await window.__booth.scene.texture(id)).image;
+    const canvas = document.createElement("canvas");
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(image, 0, 0);
+    const at = (fx, fy) => [
+      ...ctx.getImageData(Math.round(canvas.width * fx), Math.round(canvas.height * fy), 1, 1).data,
+    ].slice(0, 3);
+    return {
+      size: [image.width, image.height],
+      source: [project.assets[id].width, project.assets[id].height],
+      topLeft: at(0.25, 0.15),
+      topRight: at(0.75, 0.15),
+      bottomLeft: at(0.25, 0.85),
+      bottomRight: at(0.75, 0.85),
+    };
+  });
+  const reddest = (c) => c[0] > c[1] && c[0] > c[2];
+  const bluest = (c) => c[2] > c[0] && c[2] > c[1];
+  const greenest = (c) => c[1] > c[0] && c[1] > c[2];
+  assert.ok(reddest(decoded.topLeft), `top left stays red, got ${decoded.topLeft}`);
+  assert.ok(bluest(decoded.topRight), `top right stays blue, got ${decoded.topRight}`);
+  assert.ok(reddest(decoded.bottomLeft), `bottom left stays pale yellow, got ${decoded.bottomLeft}`);
+  assert.ok(greenest(decoded.bottomRight), `bottom right stays green, got ${decoded.bottomRight}`);
+  assert.deepEqual(decoded.size, decoded.source, "a small original is decoded whole, never upscaled");
+  pass("An uploaded original decodes the way up it was uploaded");
+
+  // Thumbnails: the library and the inspector show these, not the originals,
+  // and both are rebuilt on every click.
+  const thumbs = await page.evaluate(() => {
+    const assets = Object.values(window.__booth.project.assets);
+    return {
+      total: assets.length,
+      withThumb: assets.filter((a) => a.thumb).length,
+      smaller: assets.every((a) => a.thumb && a.thumb.length < a.data.length),
+      inDom: [...document.querySelectorAll(".library .art-card img")].every((img) =>
+        assets.some((a) => a.thumb === img.getAttribute("src")),
+      ),
+    };
+  });
+  assert.equal(thumbs.withThumb, thumbs.total, "every uploaded original carries a thumbnail");
+  assert.equal(thumbs.smaller, true, "and it is smaller than the original it stands in for");
+  assert.equal(thumbs.inDom, true, "and it is what the library cards point at");
+  pass("Library cards show thumbnails, not the originals");
+
+  // The undo history holds the layout, not the pictures. This was the single
+  // most expensive thing the app did: every edit stringified every original,
+  // and thirty-five of those are kept.
+  await page.locator('[data-tab="art"]').click();
+  await page.getByLabel("Left edge", { exact: true }).fill("20");
+  await page.getByLabel("Left edge", { exact: true }).press("Tab");
+  const historyCost = await page.evaluate(() => {
+    const data = Object.values(window.__booth.project.assets)[0].data;
+    return { entries: window.__booth.history.length, carriesImages: window.__booth.history.some((h) => h.structure.includes(data.slice(64, 256))) };
+  });
+  assert.ok(historyCost.entries > 0, "an edit is undoable");
+  assert.equal(historyCost.carriesImages, false, "and its snapshot does not carry the images");
+  await page.locator('[data-action="undo"]').click();
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => Object.keys(window.__booth.project.assets).length), 6,
+    "and undoing gives the images back with the layout");
+  await page.locator('[data-action="redo"]').click();
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => window.__booth.project.art.at(-1).x), 20);
+  pass("Undo carries the layout and shares the images");
+
+  // And a save writes the layout record without them, with each original a
+  // row of its own that is written once rather than after every edit.
+  await page.evaluate(() => window.__booth.save());
+  const stored = await page.evaluate(
+    () =>
+      new Promise((resolve, reject) => {
+        const open = indexedDB.open("artist-os-booth-studio");
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const tx = db.transaction(["projects", "assets"]);
+          const record = tx.objectStore("projects").get("current");
+          const ids = tx.objectStore("assets").getAllKeys();
+          tx.oncomplete = () =>
+            resolve({ inRecord: Object.keys(record.result.assets || {}).length, rows: ids.result.length });
+          tx.onerror = () => reject(tx.error);
+        };
+      }),
+  );
+  assert.equal(stored.inRecord, 0, "the saved layout record carries no images");
+  assert.equal(stored.rows, 6, "each original is a row of its own");
+  pass("Saving writes the layout, not fifty megabytes of base64");
   await page.locator('[data-tab="art"]').click();
   await page.getByLabel("Wall location").selectOption("left-inside");
   await page.getByLabel("Left edge", { exact: true }).fill("18");

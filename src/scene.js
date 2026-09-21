@@ -7,9 +7,17 @@ import { TextureCache } from "./texture-cache.js";
 import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY, showFixtures } from "./lighting.js";
 import { GROUND_CONSUMER, TENT_CONSUMER, TENT_WEAVE, WALL_CONSUMER, WALL_SET, UV_METRE, SurfaceTextures } from "./surfaces.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
+import { decodeAt } from "./image-source.js";
 import { IN, PEDESTAL, boothPedestals, constrain, groundKind, groundUpload, constrainPanel, constrainPedestal, findPanel, findPedestal, isArtShow, lightBarSpec, isPanelKey, scalePanel, wallKeys, wallSpec } from "./model.js";
 import { lightBarBounce, lightBarFixtures, lightBarOptics, lightBarRail } from "./lightbar.js";
 import { makePerson, placePerson } from "./people.js";
+/**
+ * The longest edge a preview texture is decoded to. An original stays whole
+ * in the project and in a backup; this is what the wall is shown at, and it
+ * is already more than a 2048-wide export can use on a panel that fills a
+ * third of the frame.
+ */
+export const ART_TEXTURE_MAX = 2048;
 import { frameTimes, resolveMove, samplePath } from "./camera-path.js";
 import { fadeAt, isTimeline, timelineSeconds } from "./timeline.js";
 import { flareGhosts, flareOrigin } from "./flare.js";
@@ -621,33 +629,28 @@ export class BoothScene {
   async texture(id, edits = null) {
     const edited = hasImageEdits(edits);
     const asset = this.p.assets[id];
-    return this.textureCache.get(id, edits, asset.data, () => new Promise((resolve, reject) => {
-      const im = new Image();
-      im.onload = () => {
-        try {
-        let src = im;
-        if (Math.max(im.width, im.height) > 2048) {
-          const canvas = document.createElement("canvas"),
-            scale = 2048 / Math.max(im.width, im.height);
-          canvas.width = Math.round(im.width * scale);
-          canvas.height = Math.round(im.height * scale);
-          canvas.getContext("2d").drawImage(im, 0, 0, canvas.width, canvas.height);
-          src = canvas;
-        }
-        if (edited) src = applyImageEdits(src, edits);
-        const texture = new T.Texture(src);
-        texture.colorSpace = T.SRGBColorSpace;
-        texture.anisotropy = Math.min(
-          8,
-          this.renderer.capabilities.getMaxAnisotropy(),
-        );
-        texture.needsUpdate = true;
-        resolve(texture);
-        } catch (error) { reject(error); }
-      };
-      im.onerror = reject;
-      im.src = asset.data;
-    }));
+    return this.textureCache.get(id, edits, asset.data, async () => {
+      // Decoded straight to the size the wall wants. This used to unpack the
+      // whole original — up to 100 megapixels of it — and then shrink it on a
+      // 2D canvas, which is most of what made a booth full of uploads heavy
+      // on an older machine. No `imageOrientation` is asked for, so this is
+      // the way up an `<img>` gave, and `flipY` stays at three's default.
+      let src = await decodeAt(asset.data, asset.width, asset.height, ART_TEXTURE_MAX);
+      if (edited) src = applyImageEdits(src, edits);
+      const texture = new T.Texture(src);
+      texture.colorSpace = T.SRGBColorSpace;
+      texture.anisotropy = Math.min(
+        8,
+        this.renderer.capabilities.getMaxAnisotropy(),
+      );
+      texture.needsUpdate = true;
+      // An ImageBitmap holds its pixels outside the JavaScript heap, so the
+      // garbage collector cannot see what it costs. The cache disposes a
+      // texture it is done with; this hands the pixels back at the same
+      // moment. A canvas or an `<img>` has no `close` and needs none.
+      texture.addEventListener("dispose", () => texture.image?.close?.());
+      return texture;
+    });
   }
   update(p, selected, selectedPanel = null, selectedPedestal = null) {
     this.renderer.shadowMap.needsUpdate = true;

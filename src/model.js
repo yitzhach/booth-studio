@@ -728,7 +728,15 @@ export function validateProject(p) {
       (asset.role !== undefined && !["artwork", "photo", "surround", "ground"].includes(asset.role)) ||
       typeof asset.data !== "string" ||
       !/^data:image\/(png|jpeg);base64,/.test(asset.data) ||
-      asset.data.length > 40000000
+      asset.data.length > 40000000 ||
+      // Optional, and derived from `data` rather than standing in for it: a
+      // small JPEG the library and the inspector show instead of asking the
+      // browser for the original again on every re-render. A backup written
+      // before it existed simply has none, and one is made on the way in.
+      (asset.thumb !== undefined &&
+        (typeof asset.thumb !== "string" ||
+          !/^data:image\/(png|jpeg);base64,/.test(asset.thumb) ||
+          asset.thumb.length > 400000))
     )
       fail();
   }

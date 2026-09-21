@@ -26,9 +26,77 @@ Extend it; do not rebuild it.
   widened ranges, trade show as a white hall with the warehouse split out as
   its own preset, a hide switch and placement/scale sliders for the figures,
   and neighbouring booths that match this booth's size and face the right way.
-  All five came from looking at the live site. Nothing is sitting unmerged on
-  a branch. Every suite was green before the merge: 218 Node tests, all eleven
-  view suites, the browser suite and `wall-assets`.
+  All five came from looking at the live site. Every suite was green before
+  the merge: 218 Node tests, all eleven view suites, the browser suite and
+  `wall-assets`.
+- **On the branch `claude/nice-hawking-dynrum`, not yet merged:** uploading
+  files an original instead of hanging it, fixture brightness as a percentage,
+  fast edit arming itself on a double-tap, and the four things that made a
+  booth full of uploaded photographs slow. All four came from a 2014 iMac in
+  Chrome and from a phone. The four bullets below are that branch.
+- **Uploading files an original; tapping one hangs it.** Choosing several
+  images at once used to hang every one of them on the back wall at the same
+  x and y. Coplanar artwork has no depth order, so the wall flashed through
+  all of them — and nothing had been asked for. `upload()` now adds assets and
+  no placements; the library already listed an original with no placement, so
+  this was a deletion rather than a mode. Tapping a library card hangs it
+  (`addCatalogPlacement`, which was already wired), dragging one onto a wall
+  still drops it where you point, and `openSpot()` in `src/model.js` keeps a
+  new placement off one that is already there: right along the row, then down
+  a row, then up, and an honest overlap rather than a refusal if the wall is
+  genuinely full.
+- **Fixture brightness is a percentage, 0..100, default 50.** The stored unit
+  is still the light's own power and the schema still accepts 0..300 — the
+  slider carries a scale instead. `LIGHT_BAR_POWER_STEP` (0.16) is how many
+  stored units one slider point is worth, `range()` takes it as its ninth
+  argument and writes `data-scale`, and the change handler multiplies by it in
+  the one place a control's value becomes a number. 50 is 8 stored units,
+  which is where the bar was judged to read right; the old default of 60 was
+  called much too hot. A booth carrying 60 reads 375 here and widens its own
+  slider to reach it, and offers `Set brightness to 50` rather than having its
+  stored value rewritten behind its owner's back.
+- **Fast edit arms itself, and costs nothing to reach.** Double-tapping
+  artwork arms its move-and-scale handles, and handles are the start of a
+  drag, so that gesture now turns fast edit on (`activateTransform` in
+  `src/scene.js`). It is also a switch in Layout → Drawing speed, where
+  someone arranging a booth is already looking. Toggling it no longer calls
+  `render()`: that rebuilt every wall, texture and light and redrew the
+  library and the whole inspector, so the control whose job is to make the app
+  faster cost a pause of its own on the way in. `setDraft()` and `syncTools()`
+  in `src/main.js`; `tests/view-responsive.mjs` pins that a toggle leaves
+  `scene.revision` alone.
+- **An uploaded original costs what it should now.** Four separate things, all
+  of them the same mistake — treating a 25 MB base64 string as though it were
+  free:
+  - **The undo history and every save stringified them.** `checkpoint()` ran
+    `JSON.stringify(p)` on each edit, and thirty-five of those are kept. A
+    booth with a dozen 20-megapixel photographs carries fifty-odd megabytes of
+    base64, so each nudge of a slider built a fifty-megabyte string. `snapshot()`
+    / `fromSnapshot()` in `src/main.js` stringify the layout and carry the
+    assets by reference — a shallow copy of the map, which is a few string
+    references whatever the strings weigh. An original is never edited, which
+    is what makes sharing them safe.
+  - **Every re-render pointed a dozen `<img>` tags at the originals.** A click
+    redraws the library and the inspector. Each asset now carries an optional
+    `thumb`, a ~15 KB JPEG made at import (`thumbnailOf` in `src/storage.js`),
+    and `artThumb()` shows that. Assets from before it existed are backfilled
+    one at a time after the first frame — derived data, so no checkpoint and
+    nothing in the undo history.
+  - **Textures decoded the whole original and then shrank it on a canvas.**
+    `decodeAt()` in the new `src/image-source.js` hands `createImageBitmap`
+    the target size, so the browser's own decoder does it off the main thread;
+    the old path is still there for anything that will not. The image editor's
+    720 px preview goes through it too. No `imageOrientation` is asked for, so
+    the result is the way up an `<img>` gave and `flipY` stays at three's
+    default — `tests/e2e.mjs` samples the four quadrants of the fixture to
+    hold that.
+  - **IndexedDB was handed the whole project 350 ms after every edit.**
+    `src/storage.js` now keeps the layout and the images in two object stores:
+    the layout is one small record, each original is a row written when it
+    arrives and not again. A stamp of role, thumbnail length and data length
+    is what decides "changed" without comparing megabytes. Backups are
+    untouched — a `.booth.json` is still one document with its images inside,
+    which is what makes it portable and what schema 1 promises.
 - The photoreal phase (`PBR_PHASE.md`) is done through Phase 4: HDRI lighting,
   PBR ground surfaces, the tent canvas and a fabric wall finish. Assets are
   committed and live. `public/assets` is 28 MB of a ~50 MB budget.
@@ -178,11 +246,14 @@ Extend it; do not rebuild it.
      original hard lighting exactly, so the slider is safe to explore. If 3 is
      still not enough, the next lever is the bounce cap in `lightBarBounce`,
      not more cone.
-   - **Fixture brightness** is the next judgement call. 70 was reported as
-     "beyond bright", so the slider is now 0..70 in steps of 2 rather than
-     0..300 in steps of 5 — the schema still accepts 0..300 and always will,
-     and a booth saved brighter widens its own slider. The default is still
-     60. **3500K** is the other one.
+   - **Fixture brightness** is the next judgement call, and it has been
+     recalibrated twice. 70 was reported as "beyond bright" and 60 — the old
+     default — was then reported as much too hot, so the slider is now a
+     percentage: 0..100 in steps of 1, where 50 is the default and is 8 stored
+     units, and 100 is twice that. The schema still accepts 0..300 and always
+     will. A booth composed before this reads 375 and widens its own slider;
+     `Set brightness to 50` under the slider is the one drag back. **3500K**
+     is the other judgement call.
    - Whether nine shadow-casting spots are affordable on your machine. If not,
      the honest fix is dropping `castShadow` on the washers, not cutting their
      number — with diffusion up, their shadows are mostly fill anyway.
@@ -281,21 +352,26 @@ Extend it; do not rebuild it.
    whether a row of same-size neighbours reads better than the old fixed
    10 x 10 ones; and whether the fast edit toggle is worth its place in the
    toolbar or wants to be automatic.
-8. **Is it actually faster now?** It was reported as still stuttering, and
-   **Fast edit** is the answer: a toolbar toggle that drops the shadow passes
-   and the supersampling together for the length of an edit, with full quality
-   restored for every export and every recording. A fresh session still opens
-   at full quality, so nothing changes for anyone who never presses it.
-   `tests/view-responsive.mjs` pins that the shadows and the pixel ratio both
-   go, that the materials are rebuilt so they come back, and that an export
-   from inside fast edit still renders its shadows.
+8. **Is it actually faster now?** Reported still slow on a 2014 iMac in
+   Chrome — and, tellingly, **fast with the sample panels and slow with
+   uploaded photographs**. That last part was the diagnosis: four separate
+   places treated a 25 MB base64 original as free. The undo history and every
+   save stringified all of them on every edit, every re-render of the library
+   and the inspector pointed `<img>` tags at them, textures decoded them whole
+   before shrinking them, and IndexedDB was handed the lot 350 ms after each
+   edit. All four are fixed on the branch — see Now — and **Fast edit** is
+   still there on top of that, now arming itself on a double-tap and no longer
+   costing a full re-render to switch on.
 
-   What is **not** yet known is whether that is enough on a real machine. If a
-   drag still stutters with fast edit on, the remaining candidates, in order:
-   the backdrop's second pass (deliberately left alone, because skipping it
-   reframes the hall mid-gesture and a picture that moves under your hand is
-   worse than a slow one), then the figures, then dropping `castShadow` on the
-   light-bar washers permanently rather than only in fast edit.
+   What is **not** yet known is whether it is enough on that iMac, or on a
+   phone. If a drag still stutters with fast edit on, the remaining candidates,
+   in order: the backdrop's second pass (deliberately left alone, because
+   skipping it reframes the hall mid-gesture and a picture that moves under
+   your hand is worse than a slow one), then the figures, then dropping
+   `castShadow` on the light-bar washers permanently rather than only in fast
+   edit. Below that: a click still rebuilds the library and the inspector as
+   HTML strings, which is now cheap but not free, and `Export → Preview
+   quality → Efficient` is worth trying on a 2014 machine.
 9. **Figures are stylised mannequins.** No faces, no clothing, mid-grey. If
    they need to read as a crowd rather than as scale references, that is a
    different asset and a different phase.
@@ -443,6 +519,17 @@ regression — it is the editor and the test sharing one server.
   frame and restore it in a `finally`. A PNG with the shadows missing because
   of how someone's laptop felt that afternoon is not a booth drawing.
 - **Never alter stored original image data.** Edits belong to placements.
+  `asset.thumb` is the one derived thing an asset carries, and it is optional,
+  regenerable and never read in place of `asset.data` by an export, a backup
+  or the hanging guide. It is also what makes sharing assets by reference
+  between undo snapshots safe: if an original could be edited in place, a
+  snapshot naming it would not describe the project it came from.
+- **Keep the images out of anything that runs per edit.** The undo history,
+  the debounced save and the IndexedDB write all used to copy every uploaded
+  original. `snapshot()` / `fromSnapshot()` in `src/main.js` and the two
+  object stores in `src/storage.js` are how each of them stopped. A new
+  per-edit copy of `p` should go through `snapshot()` rather than
+  `JSON.stringify` or `structuredClone`.
 - The city skyline must stay **seeded**, never `Math.random`: it rebuilds on
   every `update()` and would reshuffle on each edit. `tests/view-city.mjs`
   guards this.
@@ -605,6 +692,39 @@ regression — it is the editor and the test sharing one server.
   was wrong by 0.02 radians, which the test caught on its first run — which is
   the point: checking a curve against itself would have passed whatever the
   curve became.
+- **A 25 MB string is not free, and `JSON.stringify` will not say so.** The
+  undo history stringified the whole project on every edit, `p.assets` holds
+  every uploaded original as base64, and thirty-five entries are kept. Nothing
+  about that is visible in the line that does it — `history.push(JSON.stringify(p))`
+  reads like bookkeeping. It was the most expensive thing the app did, it cost
+  exactly what someone's own artwork weighed, and it is why a booth of sample
+  panels always felt quick while a booth of photographs did not. When a
+  structure holds both a layout and its payload, say which one you are
+  copying.
+- **Decode to the size you are about to draw.** An `<img>` handed a data URL
+  unpacks the whole thing — 100 megapixels, if that is what was uploaded —
+  and shrinking it afterwards on a 2D canvas has already paid for the bitmap
+  you threw away. `createImageBitmap(blob, { resizeWidth, resizeHeight })`
+  does it inside the decoder and off the main thread. The catch is
+  orientation: ask for `imageOrientation` and you must also set
+  `texture.flipY`, and getting that pair wrong turns every artwork upside
+  down. Ask for neither and it matches what an `<img>` gave.
+- **An asset store is not a schema change; an asset *order* is.** Splitting
+  IndexedDB into a layout record and one row per image made a reload
+  reassemble `p.assets` in the store's key order rather than the order they
+  were added — and the ground picker lists uploaded floors in exactly that
+  order. The test that caught it compares `JSON.stringify(project)` across a
+  reload, which is worth keeping for that reason alone: it fails on things
+  nobody thought were observable. The order is stored beside the layout and
+  spent on the way in, so the project itself never carries a key schema 1 has
+  not heard of.
+- **A slider does not have to be the number underneath it.** Fixture
+  brightness is a percentage where 50 is a bar that reads right; the stored
+  unit is a light's power and the schema still accepts 0..300. `data-scale`
+  on the input is the whole mechanism, converted where a control's value
+  becomes a number — one place, so nothing downstream ever sees a slider
+  point. The temptation is to rescale the stored values instead, which would
+  be a changed meaning and would relight every booth already saved.
 - **The tent weave is exaggerated 3x** over its literal depth. A true-depth
   weave on a white, brightly lit, tone-mapped roof is invisible. That is a
   rendering choice, not a measurement, and it is commented as one.

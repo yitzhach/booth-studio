@@ -110,7 +110,8 @@ import {
   relinkArtShowWalls,
 } from "./model.js";
 import { fixtureShare, lightBarFixtures } from "./lightbar.js";
-import { load, save, download, readImage } from "./storage.js";
+import { load, save, download, readImage, thumbnailOf, THUMB_MAX } from "./storage.js";
+import { decodeAt } from "./image-source.js";
 import { BoothScene, BACKDROP_FRAMING } from "./scene.js";
 import { PhotoEditor } from "./photo.js";
 import { hangingGuide } from "./guide.js";
@@ -319,8 +320,43 @@ async function boot() {
     },
     checkpoint,
   );
+  /**
+   * A copy of the project for the undo history, a save or an export, made
+   * without copying the images.
+   *
+   * Every edit used to run `JSON.stringify(p)`, and `p.assets` holds every
+   * uploaded original as base64. A booth with a dozen 20-megapixel
+   * photographs carries fifty-odd megabytes of string, so each nudge of a
+   * slider built a fifty-megabyte string — and the history keeps thirty-five
+   * of them. That is the single most expensive thing this app did, it cost
+   * exactly what someone's own artwork was worth, and it explains why the
+   * sample panels always felt quick.
+   *
+   * An original is never edited — `image-edit.js` edits belong to the
+   * placement, and the rule is written down in HANDOFF.md — so the assets can
+   * be shared by reference. A shallow copy of the map is one object with a
+   * few string references in it, whatever the strings weigh, and it still
+   * records exactly which assets existed at this point: deleting one later
+   * cannot reach back into a snapshot that named it, and undoing to a
+   * snapshot puts the entry back.
+   */
+  function snapshot() {
+    const assets = p.assets;
+    p.assets = {};
+    // JSON.stringify, not structuredClone: the history has always held
+    // strings, and an edit is judged equal by its text in a couple of places.
+    const structure = JSON.stringify(p);
+    p.assets = assets;
+    return { structure, assets: { ...assets } };
+  }
+  /** The project a snapshot describes, whole again. */
+  function fromSnapshot(snap) {
+    const restored = JSON.parse(snap.structure);
+    restored.assets = { ...snap.assets };
+    return restored;
+  }
   function checkpoint() {
-    history.push(JSON.stringify(p));
+    history.push(snapshot());
     if (history.length > 35) history.shift();
     future = [];
     document.querySelector('[data-action="undo"]').disabled = false;
@@ -338,7 +374,7 @@ async function boot() {
     document.querySelector("#save-status").textContent = "Saving…";
     saveTimer = setTimeout(async () => {
       try {
-        await save(structuredClone(p));
+        await save(fromSnapshot(snapshot()));
         if (v === saveVersion)
           document.querySelector("#save-status").textContent =
             "✓ Saved on this device";
@@ -632,8 +668,13 @@ async function boot() {
     if (a.kind === "sign" || a.kind === "label")
       return `<div class="sign-thumb"><strong>${e(a.kind === "sign" ? a.artistName || "Artist name" : a.title)}</strong><span>${e(a.kind === "sign" ? a.city || "City, State" : a.medium || "")}</span></div>`;
     const asset = p.assets[a.asset];
+    // The thumbnail, not the original. This markup is rebuilt on every click
+    // — a selection redraws the library and the inspector — and pointing a
+    // dozen of these at a dozen 20-megapixel originals is what made a booth
+    // full of uploads feel heavy. An asset saved before thumbnails existed
+    // still shows its original until the backfill reaches it.
     return asset
-      ? `<img src="${asset.data}" alt="${e(a.title)}"/>`
+      ? `<img src="${asset.thumb || asset.data}" alt="${e(a.title)}" loading="lazy" decoding="async"/>`
       : `<div class="sample-thumb sample-${p.art.indexOf(a) % 6}"><span>${a.w} × ${a.h}</span></div>`;
   }
   function libraryItems() {
@@ -1260,20 +1301,18 @@ async function boot() {
     };
     const cached = editPreviewSources.get(asset);
     if (cached) { paint(cached); return; }
-    const image = new Image();
-    image.onerror = () => {
-      if (revision === editPreviewRevision) toast("Could not load the editor preview. Your original is still saved.", true);
-    };
-    image.onload = () => {
-      const scale = Math.min(1, 720 / Math.max(image.width, image.height));
-      const source = document.createElement("canvas");
-      source.width = Math.max(1, Math.round(image.width * scale));
-      source.height = Math.max(1, Math.round(image.height * scale));
-      source.getContext("2d").drawImage(image, 0, 0, source.width, source.height);
-      editPreviewSources.set(asset, source);
-      paint(source);
-    };
-    image.src = asset.data;
+    // 720 px is what this dialog shows; decoding the original at that size is
+    // the browser's job, not a full unpack followed by a canvas shrink.
+    decodeAt(asset.data, asset.width, asset.height, 720).then(
+      (source) => {
+        editPreviewSources.set(asset, source);
+        paint(source);
+      },
+      () => {
+        if (revision === editPreviewRevision)
+          toast("Could not load the editor preview. Your original is still saved.", true);
+      },
+    );
   }
   function editRange(label, key, value, min, max, step, unit = "") {
     return `<label class="range"><span>${label}<output>${Number(value.toFixed(2))}${unit}</output></span><input type="range" data-edit="${key}" aria-label="${label}" min="${min}" max="${max}" step="${step}" value="${value}"/></label>`;
@@ -1324,7 +1363,7 @@ async function boot() {
     "edit-image": () => {
       const a = currentArtwork();
       if (!a?.asset) return;
-      editingStart = JSON.stringify(p);
+      editingStart = snapshot();
       a.edits = normalizeImageEdits(a.edits);
       renderImageEditor();
       document.querySelector("#image-editor").showModal();
@@ -1343,7 +1382,7 @@ async function boot() {
     },
     "editor-cancel": () => {
       if (!editingStart) return;
-      p = JSON.parse(editingStart);
+      p = fromSnapshot(editingStart);
       editingStart = null;
       clearTimeout(scheduleEditedPreview.timer);
       document.querySelector("#image-editor").close();
@@ -1429,15 +1468,15 @@ async function boot() {
     draft: () => setDraft(!scene?.draft),
     undo: () => {
       if (!history.length) return;
-      future.push(JSON.stringify(p));
-      p = JSON.parse(history.pop());
+      future.push(snapshot());
+      p = fromSnapshot(history.pop());
       render();
       scheduleSave();
     },
     redo: () => {
       if (!future.length) return;
-      history.push(JSON.stringify(p));
-      p = JSON.parse(future.pop());
+      history.push(snapshot());
+      p = fromSnapshot(future.pop());
       render();
       scheduleSave();
     },
@@ -2430,6 +2469,8 @@ async function boot() {
             photoLightIndex = 0;
           });
           scene?.setView("perspective");
+          // A backup written before thumbnails existed brings none with it.
+          backfillThumbnails();
           toast("Project restored with its original images.");
         },
       );
@@ -2474,10 +2515,38 @@ async function boot() {
     }
   });
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) save(editingStart ? JSON.parse(editingStart) : structuredClone(p)).catch(() => {});
+    if (document.hidden) save(fromSnapshot(editingStart || snapshot())).catch(() => {});
   });
   render();
   scheduleSave();
+  /**
+   * Thumbnails for originals that arrived before there were any — the booths
+   * already on people's machines, and every backup written until now.
+   *
+   * One at a time, after the first frame, so a project that opens with twelve
+   * photographs in it does not spend its first seconds decoding them. It is
+   * derived data rather than an edit: no checkpoint, nothing in the undo
+   * history, and the library is redrawn once at the end rather than twelve
+   * times. An original that will not produce one keeps showing itself, which
+   * is what the app did before thumbnails existed.
+   */
+  async function backfillThumbnails() {
+    const missing = Object.values(p.assets).filter((asset) => !asset.thumb);
+    if (!missing.length) return;
+    for (const asset of missing) {
+      try {
+        const source = await decodeAt(asset.data, asset.width, asset.height, THUMB_MAX);
+        asset.thumb = thumbnailOf(source, source.width, source.height);
+        source.close?.();
+      } catch {
+        // Leave it without one and move on; it is a picture of a picture.
+      }
+    }
+    renderLibrary();
+    renderInspector();
+    scheduleSave();
+  }
+  backfillThumbnails();
   // Development-only inspection hook for integration tests; absent from production.
   if (import.meta.env.DEV)
     window.__booth = {
@@ -2486,6 +2555,12 @@ async function boot() {
       },
       get scene() {
         return scene;
+      },
+      // The undo history, so a test can check what a snapshot costs as well
+      // as what it restores. An entry is {structure, assets}: the layout as
+      // text, and the images by reference.
+      get history() {
+        return history;
       },
       get selectedPanel() {
         return selectedPanel;
@@ -2506,7 +2581,7 @@ async function boot() {
       // tests/view-timeline.mjs reads it to check that Add really captured the
       // view the viewport was showing.
       timeline,
-      save: () => save(structuredClone(p)),
+      save: () => save(fromSnapshot(snapshot())),
     };
 }
 boot().catch((err) => {

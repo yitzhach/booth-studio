@@ -14,21 +14,40 @@ test("null and omitted edits preserve unedited images", () => {
 test("unedited image texture loads with the default null adjustment argument", async () => {
   const source = readFileSync(new URL("../src/scene.js", import.meta.url), "utf8");
   const method = source.slice(source.indexOf("  async texture("), source.indexOf("  update(p,"));
-  class ImageStub {
-    width = 32; height = 32;
-    set src(value) { this.data = value; queueMicrotask(() => this.onload()); }
+  class TextureStub {
+    listeners = [];
+    constructor(image) { this.image = image; }
+    addEventListener(name, fn) { this.listeners.push([name, fn]); }
   }
-  class TextureStub { constructor(image) { this.image = image; } }
-  const make = new Function("Image", "T", "hasImageEdits",
-    "return {" + method.replace("async texture", "async texture") + "};");
-  const scene = make(ImageStub, { Texture: TextureStub, SRGBColorSpace: "srgb" }, hasImageEdits);
+  // The asset's own recorded size is what decides the decode size, so the
+  // stub is handed the same three arguments the real decoder is.
+  const asked = [];
+  const decodeAt = async (data, width, height, maxEdge) => {
+    asked.push({ data, width, height, maxEdge });
+    return { data, width, height };
+  };
+  const make = new Function("decodeAt", "T", "hasImageEdits", "ART_TEXTURE_MAX",
+    "return {" + method + "};");
+  const scene = make(decodeAt, { Texture: TextureStub, SRGBColorSpace: "srgb" }, hasImageEdits, 2048);
   scene.textureCache = new TextureCache();
-  scene.p = { assets: { original: { data: "data:image/png;base64,test" } } };
+  scene.p = { assets: { original: { data: "data:image/png;base64,test", width: 4000, height: 3000 } } };
   scene.renderer = { capabilities: { getMaxAnisotropy: () => 8 } };
   const texture = await scene.texture("original");
   assert.equal(texture.image.data, scene.p.assets.original.data);
   assert.equal(texture.needsUpdate, true);
+  // Decoded at the wall's size rather than the original's: an unpacked 12
+  // megapixel bitmap is the cost this was written to stop paying.
+  assert.deepEqual(asked, [{ data: "data:image/png;base64,test", width: 4000, height: 3000, maxEdge: 2048 }]);
+  // A cache hit decodes nothing at all.
   assert.equal(await scene.texture("original"), texture);
+  assert.equal(asked.length, 1);
+  // An ImageBitmap's pixels live outside the JavaScript heap, so the texture
+  // hands them back when it is disposed rather than waiting to be collected.
+  assert.deepEqual(texture.listeners.map(([name]) => name), ["dispose"]);
+  let closed = false;
+  texture.image.close = () => (closed = true);
+  texture.listeners[0][1]();
+  assert.equal(closed, true);
 });
 
 test("artwork transforms reuse scene objects without disposing textures", () => {
@@ -55,6 +74,14 @@ test("image editor uses the browser Image loader, not the imported icon", () => 
   const imports = source.slice(source.indexOf("import {"), source.indexOf('} from "lucide"'));
   assert.match(imports, /Image as ImageIcon/);
   assert.doesNotMatch(imports, /\n\s*Image,/);
+  // `new Image()` lives in image-source.js now, and that module imports no
+  // icons at all — which is the whole of what this guard was ever about.
+  const decoder = readFileSync(new URL("../src/image-source.js", import.meta.url), "utf8");
+  assert.doesNotMatch(decoder, /lucide/);
+});
+
+test("the image editor decodes at the size it shows, not the original's", async () => {
+  const source = readFileSync(new URL("../src/main.js", import.meta.url), "utf8");
   const preview = source.slice(source.indexOf("  function drawImageEditorPreview"), source.indexOf("  function editRange"));
   let draws = 0;
   const ctx = { drawImage: () => draws++, fillRect() {} };
@@ -62,13 +89,17 @@ test("image editor uses the browser Image loader, not the imported icon", () => 
     getBoundingClientRect: () => ({ width: 600, height: 400 }) };
   const document = { querySelector: s => s === "#image-editor" ? { open: true } : canvas,
     createElement: () => ({ getContext: () => ctx }) };
-  class ImageStub {
-    width = 600; height = 400;
-    set src(v) { this.onload(); }
-  }
-  const run = new Function("document", "Image", "applyImageEdits", "p", "devicePixelRatio",
+  const asked = [];
+  const decodeAt = async (data, width, height, maxEdge) => {
+    asked.push({ data, width, height, maxEdge });
+    return { width: 600, height: 400 };
+  };
+  const run = new Function("document", "decodeAt", "applyImageEdits", "p", "devicePixelRatio",
     "let editPreviewRevision=0; const editPreviewSources=new WeakMap(); const toast=()=>{};" +
     preview + "; return drawImageEditorPreview;");
-  run(document, ImageStub, s => s, { assets: { a: { data: "fixture" } } }, 1)({ asset: "a" });
-  assert.equal(draws, 2, "source and visible preview must both be drawn before saving");
+  run(document, decodeAt, s => s, { assets: { a: { data: "fixture", width: 6000, height: 4000 } } }, 1)({ asset: "a" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(asked, [{ data: "fixture", width: 6000, height: 4000, maxEdge: 720 }],
+    "a 24 megapixel original is not unpacked whole for a 600 px dialog");
+  assert.equal(draws, 1, "the edited image is drawn into the visible preview");
 });

@@ -72,6 +72,9 @@ try {
     });
     return { spots, bounce, expected: window.__booth.fixtures };
   });
+  // The brightness this booth is actually carrying, so the assertions below
+  // are about the bar rather than about whatever the default happens to be.
+  const typed = await page.evaluate(() => window.__booth.project.booth.lightBar.power);
   assert.ok(bar, 'the bar is in the scene');
   assert.equal(bar.spots.length, 9, 'nine directional fixtures');
   assert.equal(bar.expected.length, 9, 'and the booth says there should be nine');
@@ -90,14 +93,18 @@ try {
     assert.ok(spot.angle > Math.PI / 8, 'a diffused head opens wider than a bare washer');
     assert.ok(spot.penumbra > 0.8, 'and spends most of its cone fading out');
     assert.ok(spot.shadowIntensity < 0.6, 'and fills its shadow rather than cutting one');
-    assert.ok(spot.intensity < 60, 'and is trimmed back, so softer does not arrive brighter');
+    assert.ok(spot.intensity < typed, 'and is trimmed back, so softer does not arrive brighter');
   }
   assert.ok(bar.bounce > 0, 'the white hall bounces the bar back at itself');
 
-  // Turning diffusion off must put the bare source back, bounce and all.
+  // Turning diffusion off must put the bare source back, bounce and all — and
+  // hand the light exactly the brightness that was typed. 12 rather than the
+  // default, so this cannot pass by comparing the default to itself: the
+  // slider shows a percentage now, but the stored unit is still the light's
+  // own power and it reaches the renderer untouched.
   await page.evaluate(() => {
     const b = window.__booth.project.booth;
-    b.lightBar = { ...b.lightBar, diffusion: 0 };
+    b.lightBar = { ...b.lightBar, diffusion: 0, power: 12 };
     window.__booth.scene.update(window.__booth.project);
   });
   const bare = await page.evaluate(() => {
@@ -114,13 +121,15 @@ try {
   for (const [angle, , shadowIntensity, intensity] of bare.spots) {
     assert.ok(Math.abs(angle - Math.PI / 8) < 1e-6, 'diffusion 0 is the original wall washer');
     assert.equal(shadowIntensity, 1, 'and cuts a full-strength shadow again');
-    assert.ok(Math.abs(intensity - 60) < 1e-6, 'and burns the brightness the user typed');
+    assert.ok(Math.abs(intensity - 12) < 1e-6, 'and burns the brightness the user typed');
   }
-  await page.evaluate(() => {
+  // Back to a diffused bar at the brightness this booth opened with, so the
+  // hall assertions below read a booth in its default state.
+  await page.evaluate((power) => {
     const b = window.__booth.project.booth;
-    b.lightBar = { ...b.lightBar, diffusion: 0.7 };
+    b.lightBar = { ...b.lightBar, diffusion: 0.7, power };
     window.__booth.scene.update(window.__booth.project);
-  });
+  }, typed);
 
   // --- The exhibition hall.
   assert.ok(await page.evaluate(() => !!window.__booth.scene.group.getObjectByName('exhibition-hall')),
