@@ -28,7 +28,7 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
-- **Merged and deployed 2026-09-21, later the same day:** exports in a frame
+- **Merged and deployed 2026-09-22:** exports in a frame
   you choose, careful rendering for video, the drawn drop shadow that finally
   makes a wall gap visible, an eye beside every spotlight, a universal edge
   colour, a seven-colour palette with a Previous button, and the edge finish
@@ -739,6 +739,22 @@ regression — it is the editor and the test sharing one server.
 
 ## Things learned the hard way
 
+- **`tests/e2e.mjs` fails in this sandbox at the 4096 px PNG, and it fails on
+  `main` too.** It waits 30 seconds for the download; a 4096 px render under
+  swiftshader was measured at 27-31 seconds on `main` and 27-29 on the branch
+  that added the export frames, so the suite is a coin flip on this machine
+  and neither number is a regression. The other fifteen checks pass before
+  it. **Measure both sides before believing this one** — a worktree at
+  `origin/main` and the same probe is ten minutes and settles it — and raise
+  that one wait if it becomes tiresome. It is the same class of flake
+  `tests/environment.mjs` already carries, for the same reason.
+- **A readback flushes the GPU; a captured video frame does not.** A still
+  drawn twice "to be safe" cost a second 28-second render for nothing,
+  because `canvas.toBlob` reads the pixels back and a readback waits for
+  everything the GPU still owed. A video frame handed to `VideoEncoder` has
+  no such barrier, which is why careful rendering belongs to the recorder and
+  not to the PNG. Knowing which operation synchronises is the difference
+  between a fix and a doubled bill.
 - **An export that inherits the window's shape is not an export size.** Both
   the PNG and the MP4 read their aspect ratio off the canvas, and the code
   said so plainly — "height follows width, from the viewport" — which reads
