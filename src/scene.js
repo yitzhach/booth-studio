@@ -2289,7 +2289,10 @@ export class BoothScene {
         finish();
         resolve({ cancelled: true });
       };
-      this.previewFrame = requestAnimationFrame(step);
+      // The first frame now rather than on the next animation frame: with the
+      // live loop drawing on demand, an idle page may be handed its next
+      // frame late, and a preview should start the moment it is asked for.
+      step();
     });
   }
   // Records a filmic camera move to an MP4.

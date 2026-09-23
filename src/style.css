@@ -1692,3 +1692,8 @@ dialog li {
 .scene-label-note {position:absolute;left:0;top:0;padding:2px 6px;border-radius:4px;background:rgba(21,25,30,.86);color:#e9edf0;font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap;border:1px solid var(--blue);}
 .scene-label-note.tape {background:var(--blue);color:#10151b;font-weight:600;}
 #scene.measuring canvas {cursor:crosshair;}
+/* Quick start. */
+.quick-start fieldset {border:0;padding:0;margin:0;min-width:0;}
+.quick-start fieldset:disabled {opacity:.45;}
+.quick-start .qs-starters {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 12px;margin-bottom:8px;}
+@media (max-width:480px) {.quick-start .qs-starters {grid-template-columns:1fr;}}

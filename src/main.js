@@ -134,6 +134,7 @@ import { BoothScene, BACKDROP_FRAMING } from "./scene.js";
 import { AUTO_QUALITY, startScale } from "./adaptive.js";
 import { formatLength } from "./measure.js";
 import { hangAt, nudge, sameWall, spaceEvenly } from "./arrange.js";
+import { FOOTPRINTS, SHOWS, STARTERS, fromTemplate, quickStart, templateOf } from "./quickstart.js";
 import { PhotoEditor } from "./photo.js";
 import { hangingGuide } from "./guide.js";
 async function boot() {
@@ -1571,7 +1572,7 @@ async function boot() {
       html = `<div class="mobile-library">${libraryHTML(true)}</div>${a ? `<div class="panel-heading"><h2>Artwork properties</h2><span class="badge">${a.kind === "sign" ? "Sign" : a.kind === "label" ? "Label" : a.asset ? "Original" : "Sample"}</span></div><div class="selected-art"><div class="thumb">${artThumb(a)}</div><div><input class="title-input" data-field="title" data-scope="art" aria-label="Artwork title" maxlength="120" value="${e(a.title)}"/><span>${a.kind === "sign" || a.kind === "label" ? "Editable wall asset" : a.asset ? "Original image preserved" : "Measured placeholder panel"}</span>${a.kind === "sign" || a.kind === "label" ? "" : btn("replace-art", a.asset ? "Replace image" : "Add original image", "image-plus", "text-button")}</div></div>${signFields(a)}${a.asset ? `<section><h3>Image adjustments</h3><p class="muted">Edits affect this placement only. The uploaded original stays unchanged.</p>${btn("edit-image", "Edit image", "image", "primary wide")}<div class="button-row">${btn("copy-edits", "Copy edits", "copy")}${btn("paste-edits", "Paste edits", "layers", p.editClipboard ? "" : "disabled")}</div></section>` : ""}<section><h3>Dimensions <span>inches</span></h3><p class="muted">Double-tap artwork to adjust. Corners scale proportionally; middle edge handles stretch width or height.</p>${scaleControl(a)}<label class="setting-label"><input type="checkbox" data-field="stretch" data-scope="art" ${a.stretch ? "checked" : ""}/> Stretch image to panel dimensions</label>${field("Width", "w", a.w, 1, 360)}${field("Height", "h", a.h, 1, 360)}${!a.stretch && mismatch(p, a) ? `<div class="warning">Image proportions differ from the panel. The full image is fitted inside without stretching.${btn("match-ratio", "Match height to image", null, "wide")}</div>` : ""}${field("Thickness", "thickness", a.thickness, 0.1, 12, 0.1)}<label class="setting-label">Edge material<select data-field="edgeTexture" data-scope="art" aria-label="Edge material">${["plain","concrete","wood","metal"].map(k=>`<option value="${k}" ${(a.edgeTexture || "plain") === k ? "selected" : ""}>${k === "wood" ? "Wood grain" : k[0].toUpperCase()+k.slice(1)}</option>`).join("")}</select></label>${edgeColorFields(a)}${field("Wall gap", "offset", a.offset, 0, 12, 0.1)}<p class="muted">How far the work stands off the wall. ${dropShadowSpec(p.booth).on ? "Its drop shadow is sized from this, which is what makes the gap visible head-on; Lighting → Drop shadow is where that is set." : "With Lighting → Drop shadow off, a gap is only visible looking along the wall."}</p></section><section><h3>Placement</h3><div class="exterior-callout"><strong>Interior and exterior walls</strong><span>Artwork can hang on either face of the three booth walls and of any free-standing wall.</span></div>${hasRow(p.booth) ? `<label class="select-field">Booth<select data-field="inBooth" data-scope="art" aria-label="Which booth this hangs in">${boothSlots(p.booth).map((b) => `<option value="${e(b.id)}" ${(a.booth || normalizeRow(p.booth).home) === b.id ? "selected" : ""}>${e(slotLabel(b))}</option>`).join("")}</select></label>` : ""}<label class="select-field">Wall location<select data-field="location" data-scope="art" aria-label="Wall location">${locationOptions(a)}</select></label><div class="button-row">${btn("face-view", "View wall face", "camera")}</div>${field("Left edge", "x", a.x, -360, 360)}${artSlider(a, "x", "Slide left / right")}${field("Bottom edge", "y", a.y, -360, 360)}${artSlider(a, "y", "Slide up / down")}<p class="muted">From the bottom-left corner, facing the ${a.face === "outside" ? "outside" : "inside"} of this wall.</p>${boundWarning(p, a) ? `<div class="warning">${boundWarning(p, a)}</div>` : ""}<div class="button-row">${btn("center", "Center", "align-center")}${btn("eye-level", "Center at 60″", "arrow-up-to-line")}</div><div class="button-row">${btn("space-wall", "Space this wall evenly", "columns-2")}${btn("hang-wall", "Hang this wall at 60″", "ruler")}</div><p class="muted">For every work on this face of this wall: equal gaps between them and at both ends, in the order they hang; or every centre at 60″. Arrow keys nudge the selected work an inch, Shift a foot.</p></section><section><h3>Actions</h3><div class="button-row">${btn("duplicate-art", "Duplicate", "copy")}${btn("delete-art", "Remove", "trash-2", "danger")}</div></section>` : `<div class="empty-inspector"><h2>Make room for your work.</h2><p>Uploading files an original in your library without hanging it. Tap one there to put it on a wall, then set its real dimensions here.</p>${btn("upload-art", "Upload artwork", "image-plus", "primary")}</div>`}`;
     }
     if (tab === "layout") {
-      html = `<div class="panel-heading"><h2>${p.mode === "photo" ? "Booth photograph" : "Booth layout"}</h2>${icon("layout-panel-left")}</div>${p.mode === "photo" ? `<p class="muted">The original photo stays intact. Added art and light overlays are saved separately. Existing objects in the photograph cannot be moved or erased in this prototype.</p>${btn("upload-photo", p.photo.asset ? "Replace booth photo" : "Upload booth photo", "image-plus", "wide")}${range("Photo exposure", "exposure", p.photo.exposure, -1, 1, 0.05, "photo")}` : `<section><h3>Footprint</h3><select data-field="preset" aria-label="Booth preset"><option value="120" ${p.booth.width === 120 ? "selected" : ""}>10 × 10 ft · Standard</option><option value="240" ${p.booth.width === 240 ? "selected" : ""}>10 × 20 ft · Double</option></select><p class="muted">Nominal footprint. Panels and 1.4″ canopy legs reduce usable space near edges.</p>${isArtShow(p) ? `<div class="warning">This is an art-show booth. Its footprint, walls and light bar are in the <strong>Art show</strong> tool, and a preset or a canopy here would put it back to an outdoor pop-up.</div>` : ""}${field("Wall height", "height", p.booth.height, 48, 144, 1, "in", "booth")}<label class="check-field"><input type="checkbox" data-field="tent" data-scope="booth" ${p.booth.tent ? "checked" : ""}/>White canopy & frame</label><label class="setting-label">Tent style<select aria-label="Tent style" data-field="tentStyle" data-scope="booth">${Object.entries(TENTS).map(([k,v])=>`<option value="${k}" ${(p.booth.tentStyle||'classic')===k?'selected':''}>${v}</option>`).join('')}</select></label><p class="muted">12″ fabric valance, rounded hems, roof ribs and folding frame. Inspired shapes; not manufacturer-certified models.</p></section><section><h3>Surroundings</h3><label class="setting-label">Environment<select aria-label="Environment" data-field="envPreset" data-scope="booth">${Object.entries(ENV_PRESETS).map(([k,v])=>`<option value="${k}" ${(p.booth.envPreset||DEFAULT_PRESET)===k?'selected':''}>${v.label}</option>`).join('')}</select></label><p class="muted">Presets light the booth from a photographed environment. Without its image files a preset keeps the procedural surroundings below.</p>${isArtShow(p) ? `<label class="check-field"><input type="checkbox" data-field="on" data-scope="hall" ${hallSpec(p.booth).on ? "checked" : ""}/>Stand this booth in a white exhibition hall</label><p class="muted">${hallSpec(p.booth).on ? "The hall's own walls stand around the booth. In a photographed environment they cut across it as a white band, so choosing one of those presets switches the hall off." : "Off: the booth stands in the environment above, with nothing of its own around it. The walls, the light bar and the panel module are unchanged — this is only the room."}</p>` : ""}<label class="setting-label">Artwork colour<select aria-label="Artwork colour" data-field="artFidelity" data-scope="booth">${Object.entries(ART_FIDELITY).map(([k,v])=>`<option value="${k}" ${(p.booth.artFidelity||DEFAULT_FIDELITY)===k?'selected':''}>${v}</option>`).join('')}</select></label>${groundFields()}<label class="setting-label">Horizon<select aria-label="Horizon" data-field="horizon" data-scope="booth">${Object.entries({studio:'Neutral studio',open:'Open sky',park:'Park · trees',urban:'Urban plaza'}).map(([k,v])=>`<option value="${k}" ${(p.booth.horizon||'studio')===k?'selected':''}>${v}</option>`).join('')}</select></label><label class="check-field"><input type="checkbox" data-field="neighbors" data-scope="booth" ${p.booth.neighbors?'checked':''}/>Surround with other booths</label>${surroundingsFields()}</section>${peopleSection()}<section><h3>Display walls</h3>${colorField("Fabric finish", "color", "booth", p.booth.color, "Fabric finish")}<label class="setting-label">Panel surface<select aria-label="Panel surface" data-field="wallFinish" data-scope="booth">${Object.entries({smooth:"Smooth print",fabric:"Fabric pro-panel"}).map(([k,v])=>`<option value="${k}" ${(p.booth.wallFinish||"smooth")===k?"selected":""}>${v}</option>`).join("")}</select></label>${(p.booth.wallFinish||"smooth")==="fabric"?`${range("Weave depth","wallTexture",p.booth.wallTexture??60,0,100,1,"booth","%")}<p class="muted">The weave only. Panels keep the colour above, so artwork is still judged against the finish you chose. Without the carpet texture files the panels stay smooth.</p>`:""}<div class="swatches">${["#45474a", "#25282b", "#b1aea4", "#d8d4ca"].map((c) => `<button data-color="${c}" style="background:${c}" aria-label="Wall finish ${c}"></button>`).join("")}</div>${["back", "left", "right"].map((w) => `<div class="wall-setting"><label class="check-field"><input type="checkbox" data-field="enabled" data-scope="wall-${w}" ${p.booth.walls[w].enabled ? "checked" : ""}/>${w[0].toUpperCase() + w.slice(1)} wall</label>${field("Width", "width", p.booth.walls[w].width, 12, w === "back" ? p.booth.width : p.booth.depth, 1, "in", "wall-" + w)}${field("Height", "height", p.booth.walls[w].height, 24, 144, 1, "in", "wall-" + w)}</div>`).join("")}</section><section><h3>Free-standing walls and pedestals</h3><p class="muted">Interior panels and pedestals live in the Walls tool, so this list stays the booth itself.</p>${btn("open-walls", "Open the Walls tool", "columns-2", "wide")}</section>${rowSection()}${draftSection()}`}<section><h3>Project</h3>${btn("copy-project", "Duplicate as alternative", "copy", "wide")}${btn("new-project", "New empty booth", "plus", "wide")}${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Backups include all original images. Download before switching projects.</p></section>`;
+      html = `<div class="panel-heading"><h2>${p.mode === "photo" ? "Booth photograph" : "Booth layout"}</h2>${icon("layout-panel-left")}</div>${p.mode === "photo" ? `<p class="muted">The original photo stays intact. Added art and light overlays are saved separately. Existing objects in the photograph cannot be moved or erased in this prototype.</p>${btn("upload-photo", p.photo.asset ? "Replace booth photo" : "Upload booth photo", "image-plus", "wide")}${range("Photo exposure", "exposure", p.photo.exposure, -1, 1, 0.05, "photo")}` : `<section><h3>Footprint</h3><select data-field="preset" aria-label="Booth preset"><option value="120" ${p.booth.width === 120 ? "selected" : ""}>10 × 10 ft · Standard</option><option value="240" ${p.booth.width === 240 ? "selected" : ""}>10 × 20 ft · Double</option></select><p class="muted">Nominal footprint. Panels and 1.4″ canopy legs reduce usable space near edges.</p>${isArtShow(p) ? `<div class="warning">This is an art-show booth. Its footprint, walls and light bar are in the <strong>Art show</strong> tool, and a preset or a canopy here would put it back to an outdoor pop-up.</div>` : ""}${field("Wall height", "height", p.booth.height, 48, 144, 1, "in", "booth")}<label class="check-field"><input type="checkbox" data-field="tent" data-scope="booth" ${p.booth.tent ? "checked" : ""}/>White canopy & frame</label><label class="setting-label">Tent style<select aria-label="Tent style" data-field="tentStyle" data-scope="booth">${Object.entries(TENTS).map(([k,v])=>`<option value="${k}" ${(p.booth.tentStyle||'classic')===k?'selected':''}>${v}</option>`).join('')}</select></label><p class="muted">12″ fabric valance, rounded hems, roof ribs and folding frame. Inspired shapes; not manufacturer-certified models.</p></section><section><h3>Surroundings</h3><label class="setting-label">Environment<select aria-label="Environment" data-field="envPreset" data-scope="booth">${Object.entries(ENV_PRESETS).map(([k,v])=>`<option value="${k}" ${(p.booth.envPreset||DEFAULT_PRESET)===k?'selected':''}>${v.label}</option>`).join('')}</select></label><p class="muted">Presets light the booth from a photographed environment. Without its image files a preset keeps the procedural surroundings below.</p>${isArtShow(p) ? `<label class="check-field"><input type="checkbox" data-field="on" data-scope="hall" ${hallSpec(p.booth).on ? "checked" : ""}/>Stand this booth in a white exhibition hall</label><p class="muted">${hallSpec(p.booth).on ? "The hall's own walls stand around the booth. In a photographed environment they cut across it as a white band, so choosing one of those presets switches the hall off." : "Off: the booth stands in the environment above, with nothing of its own around it. The walls, the light bar and the panel module are unchanged — this is only the room."}</p>` : ""}<label class="setting-label">Artwork colour<select aria-label="Artwork colour" data-field="artFidelity" data-scope="booth">${Object.entries(ART_FIDELITY).map(([k,v])=>`<option value="${k}" ${(p.booth.artFidelity||DEFAULT_FIDELITY)===k?'selected':''}>${v}</option>`).join('')}</select></label>${groundFields()}<label class="setting-label">Horizon<select aria-label="Horizon" data-field="horizon" data-scope="booth">${Object.entries({studio:'Neutral studio',open:'Open sky',park:'Park · trees',urban:'Urban plaza'}).map(([k,v])=>`<option value="${k}" ${(p.booth.horizon||'studio')===k?'selected':''}>${v}</option>`).join('')}</select></label><label class="check-field"><input type="checkbox" data-field="neighbors" data-scope="booth" ${p.booth.neighbors?'checked':''}/>Surround with other booths</label>${surroundingsFields()}</section>${peopleSection()}<section><h3>Display walls</h3>${colorField("Fabric finish", "color", "booth", p.booth.color, "Fabric finish")}<label class="setting-label">Panel surface<select aria-label="Panel surface" data-field="wallFinish" data-scope="booth">${Object.entries({smooth:"Smooth print",fabric:"Fabric pro-panel"}).map(([k,v])=>`<option value="${k}" ${(p.booth.wallFinish||"smooth")===k?"selected":""}>${v}</option>`).join("")}</select></label>${(p.booth.wallFinish||"smooth")==="fabric"?`${range("Weave depth","wallTexture",p.booth.wallTexture??60,0,100,1,"booth","%")}<p class="muted">The weave only. Panels keep the colour above, so artwork is still judged against the finish you chose. Without the carpet texture files the panels stay smooth.</p>`:""}<div class="swatches">${["#45474a", "#25282b", "#b1aea4", "#d8d4ca"].map((c) => `<button data-color="${c}" style="background:${c}" aria-label="Wall finish ${c}"></button>`).join("")}</div>${["back", "left", "right"].map((w) => `<div class="wall-setting"><label class="check-field"><input type="checkbox" data-field="enabled" data-scope="wall-${w}" ${p.booth.walls[w].enabled ? "checked" : ""}/>${w[0].toUpperCase() + w.slice(1)} wall</label>${field("Width", "width", p.booth.walls[w].width, 12, w === "back" ? p.booth.width : p.booth.depth, 1, "in", "wall-" + w)}${field("Height", "height", p.booth.walls[w].height, 24, 144, 1, "in", "wall-" + w)}</div>`).join("")}</section><section><h3>Free-standing walls and pedestals</h3><p class="muted">Interior panels and pedestals live in the Walls tool, so this list stays the booth itself.</p>${btn("open-walls", "Open the Walls tool", "columns-2", "wide")}</section>${rowSection()}${draftSection()}`}<section><h3>Project</h3>${btn("quick-start", "Quick start a new booth", "zap", "primary wide")}${btn("save-template", "Save this booth as a template", "save", "wide")}${btn("copy-project", "Duplicate as alternative", "copy", "wide")}${btn("new-project", "New empty booth", "plus", "wide")}${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Backups include all original images. Download before switching projects.</p></section>`;
     }
     if (tab === "show") {
       html = p.mode === "photo"
@@ -1679,6 +1680,75 @@ async function boot() {
       run();
     };
     d.showModal();
+  }
+  // The user's own booth templates: the booth without its work, per browser.
+  const TEMPLATE_KEY = "booth.templates", MAX_TEMPLATES = 12;
+  function readTemplates() {
+    try {
+      const list = JSON.parse(localStorage.getItem(TEMPLATE_KEY) || "[]");
+      return Array.isArray(list) ? list.filter((t) => t && t.id && t.booth && typeof t.label === "string") : [];
+    } catch {
+      return [];
+    }
+  }
+  function writeTemplates(list) {
+    try {
+      localStorage.setItem(TEMPLATE_KEY, JSON.stringify(list.slice(0, MAX_TEMPLATES)));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  /**
+   * Quick start: show type, size, starter furniture and a name, and a booth
+   * set up from them — or one of the user's saved templates. One form rather
+   * than a sequence of steps, because four answers fit on one screen and a
+   * wizard's Next button is three clicks nobody needs.
+   */
+  function openQuickStart() {
+    const d = document.querySelector("#dialog");
+    const templates = readTemplates();
+    const starterLabel = (k) => FURNITURE[k].label;
+    document.querySelector("#dialog-content").innerHTML =
+      `<div class="panel-heading"><h2>Quick start a booth</h2>${btn("qs-cancel", "Close", "x", "icon-only")}</div><form class="quick-start" id="quick-start" onsubmit="return false"><label class="setting-label">Name<input id="qs-name" maxlength="120" placeholder="e.g. Main Street Art Fair" aria-label="Booth name"/></label>${templates.length ? `<label class="setting-label">Start from<select id="qs-template" aria-label="Start from"><option value="">A new booth, set up below</option>${templates.map((t) => `<option value="${e(t.id)}">My template · ${e(t.label)}</option>`).join("")}</select></label>` : ""}<fieldset id="qs-fresh"><label class="setting-label">What kind of show<select id="qs-show" aria-label="Show type">${Object.entries(SHOWS).map(([k, v]) => `<option value="${k}">${e(v.label)}</option>`).join("")}</select></label><label class="setting-label">Booth size<select id="qs-size" aria-label="Booth size">${Object.entries(FOOTPRINTS).map(([k, v]) => `<option value="${k}">${e(v.label)}</option>`).join("")}</select></label><p class="setting-label">Starter furniture</p><div class="qs-starters">${STARTERS.map((k) => `<label class="check-field"><input type="checkbox" data-starter="${k}" ${k === "table6" || k === "chair" ? "checked" : ""}/>${e(starterLabel(k))}</label>`).join("")}</div></fieldset><label class="check-field"><input type="checkbox" id="qs-backup" checked/>Download a backup of the current booth first</label><p class="muted">Everything here is a starting point: the size, the walls, the furniture and the lighting all stay editable. Your artwork library is not carried over.</p><div class="button-row"><button type="button" data-action="qs-cancel">Cancel</button><button type="button" class="primary" data-action="qs-go">Start this booth</button></div>${templates.length ? `<p class="muted">Remove a saved template: ${templates.map((t) => `<button type="button" class="text-button" data-action="qs-forget-${e(t.id)}">${e(t.label)} ×</button>`).join(" ")}</p>` : ""}</form>`;
+    const sync = () => {
+      const fresh = document.querySelector("#qs-fresh");
+      if (fresh) fresh.disabled = !!document.querySelector("#qs-template")?.value;
+    };
+    document.querySelector("#qs-template")?.addEventListener("change", sync);
+    refreshIcons();
+    d.showModal();
+  }
+  function runQuickStart() {
+    const d = document.querySelector("#dialog");
+    const name = document.querySelector("#qs-name")?.value || "";
+    const templateId = document.querySelector("#qs-template")?.value || "";
+    const template = templateId && readTemplates().find((t) => t.id === templateId);
+    const next = template
+      ? fromTemplate(template, name)
+      : quickStart({
+          show: document.querySelector("#qs-show").value,
+          size: document.querySelector("#qs-size").value,
+          furniture: [...document.querySelectorAll("[data-starter]")].filter((x) => x.checked).map((x) => x.dataset.starter),
+          name,
+        });
+    try {
+      validateProject(next);
+    } catch {
+      toast("That template no longer opens in this version. Start a new booth instead.", true);
+      return;
+    }
+    if (document.querySelector("#qs-backup")?.checked) backup();
+    d.close();
+    mutate(() => {
+      p = next;
+      selected = null;
+      selectedPanel = null;
+      selectedPedestal = null;
+      tab = "layout";
+    });
+    scene?.setView("perspective");
+    toast(`${p.name} is ready. Upload artwork to start hanging.`);
   }
   function backup() {
     download(
@@ -2069,6 +2139,17 @@ async function boot() {
           s = p.assets[a.asset];
         a.h = +((a.w * s.height) / s.width).toFixed(3);
       }),
+    "quick-start": () => openQuickStart(),
+    "qs-go": () => runQuickStart(),
+    "qs-cancel": () => document.querySelector("#dialog").close(),
+    "save-template": () => {
+      const list = readTemplates();
+      const t = templateOf(p, p.name);
+      const next = [t, ...list.filter((x) => x.label !== t.label)];
+      if (writeTemplates(next))
+        toast(`Saved “${t.label}” as a template${next.length > MAX_TEMPLATES ? `; the oldest of ${MAX_TEMPLATES} was dropped` : ""}. Quick start offers it next time. Artwork and images are not included.`);
+      else toast("This browser would not store the template. Download a project backup instead.", true);
+    },
     "new-project": () =>
       confirmAction(
         "Start an empty booth?",
@@ -2438,6 +2519,10 @@ async function boot() {
         if (action.startsWith("row-remove-")) removeRowSlot(action.slice(11));
         else if (action.startsWith("delete-panel-")) deletePanel(action.slice(13));
         else if (action.startsWith("delete-pedestal-")) deletePedestal(action.slice(16));
+        else if (action.startsWith("qs-forget-")) {
+          writeTemplates(readTemplates().filter((t) => t.id !== action.slice(10)));
+          openQuickStart();
+        }
         else actions[action]?.(b);
       } catch (err) {
         toast(err.message, true);
