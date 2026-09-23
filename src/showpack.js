@@ -6,7 +6,7 @@
 // Pure: it takes a project and returns strings and lists, so node tests pin
 // it. The hanging guide stays its own file; this is the one that goes in the
 // van, and it says where the hanging guide fits.
-import { FURNITURE, artShowPanel, boothPanels, boothPedestals, escapeHTML as e, furnitureKind, isArtShow, isShown, lightBarSpec, lightVisible, panelCount, wallKeys } from "./model.js";
+import { FURNITURE, artShowPanel, boothPanels, boothPedestals, escapeHTML as e, furnitureKind, isArtShow, isShown, lightBarSpec, lightVisible, panelCount, wallKeys, wallSpec } from "./model.js";
 
 // What stands in the booth. A piece someone hid is out of it: not drawn on the
 // plan, not packed, not numbered — the way a deleted one would be, except
@@ -18,10 +18,17 @@ import { formatLength, footprint } from "./measure.js";
 
 // The work in this booth, in hanging order: wall by wall, left to right.
 // Signs and wall labels are not stock, and a row's other booths are not ours.
+// Work on a switched-off perimeter wall or a hidden free-standing one is out
+// of the picture, so it is out of the inventory too: what the list counts is
+// what the booth shows.
+const onShownWall = (p, a) => {
+  const spec = wallSpec(p, a.wall);
+  return !!spec && spec.enabled !== false;
+};
 export function inventory(p) {
   const order = wallKeys(p);
   return p.art
-    .filter((a) => !a.booth && (a.kind || "art") === "art")
+    .filter((a) => !a.booth && (a.kind || "art") === "art" && onShownWall(p, a))
     .slice()
     .sort((a, b) => order.indexOf(a.wall) - order.indexOf(b.wall) || (a.face === "outside") - (b.face === "outside") || a.x - b.x);
 }

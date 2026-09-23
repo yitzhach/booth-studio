@@ -139,6 +139,7 @@ import { FOOTPRINTS, SHOWS, STARTERS, fromTemplate, quickStart, templateOf } fro
 import { PhotoEditor } from "./photo.js";
 import { hangingGuide } from "./guide.js";
 import { showPack } from "./showpack.js";
+import { dedupe, fold, rankTools } from "./toolsearch.js";
 async function boot() {
   const icons = {
     Grid2x2: Grid2X2,
@@ -317,7 +318,7 @@ async function boot() {
   tagAssetRoles(p);
   selected = p.art[0]?.id;
   document.querySelector("#app").innerHTML =
-    `<header><a class="brand" href="#" aria-label="Booth Studio">${icon("box")}<span>Artist OS</span></a><span class="app-badge">Booth Studio</span><div class="project"><input id="project-name" aria-label="Project name" maxlength="120" value="${e(p.name)}"/>${icon("chevron-down")}</div><div class="save-status" id="save-status" role="status">Opening…</div>${btn("help", "Help", "help-circle", "icon-only")}<div class="avatar">IA</div></header>
+    `<header><a class="brand" href="#" aria-label="Booth Studio">${icon("box")}<span>Artist OS</span></a><span class="app-badge">Booth Studio</span><div class="tool-search"><span aria-hidden="true">⌕</span><input id="tool-search" type="search" placeholder="Find a tool…" aria-label="Find a tool" title="Find a tool by name · press / to jump here" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-controls="tool-results" aria-expanded="false"/><ul id="tool-results" role="listbox" aria-label="Matching tools" hidden></ul></div><div class="project"><input id="project-name" aria-label="Project name" maxlength="120" value="${e(p.name)}"/>${icon("chevron-down")}</div><div class="save-status" id="save-status" role="status">Opening…</div>${btn("help", "Help", "help-circle", "icon-only")}<div class="avatar">IA</div></header>
 <div class="workspace"><aside class="library" id="library"></aside><main class="editor"><div class="toolbar"><div class="toolgroup">${btn("select", "Select", "mouse-pointer-2", "active")}${btn("move", "Move", "move")}${btn("snap", "Snap 1″", "grid-2x2", "active")}${btn("measure", "Measure", "ruler")}${btn("draft", "Fast edit", "zap")}${btn("draft-lock", "Fast edit: follows the gesture", "lock", "draft-lock")}</div><div class="toolgroup">${btn("undo", "Undo", "undo-2", "icon-only")}${btn("redo", "Redo", "redo-2", "icon-only")}</div><div class="mode-switch"><button data-action="mode-3d">3D booth</button><button data-action="mode-photo">Photo</button></div>${btn("export-tab", "Export", "download", "export-top")}</div><div class="viewport"><div id="scene"></div><div id="photo" hidden></div><div class="scene-label"><span class="eyebrow" id="mode-label">MEASURED WORKSPACE</span><strong id="scene-title"></strong><span id="scene-subtitle"></span></div><div id="photo-empty" hidden><div>${icon("image-plus")}<h2>Start with your booth shot</h2><p>Add artwork and adjust its four corners to match the wall perspective.</p>${btn("upload-photo", "Upload booth photo", "plus", "primary")}</div></div><div class="viewport-bottom"><div class="view-switch" id="view-switch"><button data-view="perspective" class="active">Perspective</button><button data-view="back">Back</button><button data-view="left">Left</button><button data-view="right">Right</button><button data-view="plan">Plan</button></div><div class="zoom-controls"><span class="zoom-label">Zoom</span>${btn("zoom-out", "Zoom out", "minus", "icon-only")}${btn("zoom-in", "Zoom in", "plus", "icon-only")}${btn("reset-view", "Reset view", "rotate-ccw", "icon-only")}</div></div></div><div class="statusbar"><span id="gesture-hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</span><label class="preview-quality" title="Preview quality: how many pixels the viewport draws for each one on screen. Exports are never affected."><span>Preview</span><select id="quality-quick" aria-label="Preview quality"></select><output id="quality-now"></output></label><span id="selection-status"></span></div></main><aside class="inspector"><div class="inspector-tabs">${["art", "layout", "show", "walls", "lighting", "video", "export"].map((t, i) => `<button data-tab="${t}">${icon(["image", "layout-panel-left", "building-2", "columns-2", "lightbulb", "video", "download"][i])}<span>${["Artwork", "Layout", "Art show", "Walls", "Lighting", "Video", "Export"][i]}</span></button>`).join("")}</div><div id="inspector-content"></div></aside></div><footer><span class="footer-brand">${icon("box")} BOOTH STUDIO <small>Prototype 01</small><small id="build-stamp" title="Version ${BUILD.version} · built ${BUILD.time} · commit ${BUILD.commit}">v${BUILD.version} · ${BUILD.short} UTC · ${BUILD.commit}</small></span><span>Your images. Your space. Your arrangement.</span><span id="network">Local workspace</span></footer><input type="file" id="art-input" accept="image/jpeg,image/png" multiple hidden/><input type="file" id="replace-input" accept="image/jpeg,image/png" hidden/><input type="file" id="photo-input" accept="image/jpeg,image/png" hidden/><input type="file" id="surround-input" accept="image/jpeg,image/png" hidden/><input type="file" id="ground-input" accept="image/jpeg,image/png" hidden/><input type="file" id="backup-input" accept=".json,.booth" hidden/><div id="toast" role="status"></div><dialog id="dialog"><div id="dialog-content"></div></dialog><dialog id="image-editor"><div id="image-editor-content"></div></dialog><dialog id="timeline-dialog" class="timeline-dialog"><div id="timeline-content"></div></dialog>`;
   let scene;
   try {
@@ -630,7 +631,18 @@ async function boot() {
     const now = document.querySelector("#quality-now");
     if (!now) return;
     const factor = scene ? Number(scene.renderer.getPixelRatio().toFixed(2)) : null;
-    now.textContent = !scene ? "" : scene.draft ? "fast edit · 1×, no shadows" : `drawing at ${factor}×`;
+    now.textContent = !scene ? "" : scene.draft ? "fast edit · softest, no shadows" : sharpness(factor);
+  }
+  /**
+   * What the drawing scale looks like, in words rather than a supersampling
+   * factor: asked for on the real machine, because "drawing at 2×" meant
+   * nothing to someone who is not a graphics programmer. The factor stays in
+   * the tooltip for whoever wants it.
+   */
+  function sharpness(factor) {
+    const word = factor >= 3 ? "sharpest" : factor >= 2 ? "sharp" : factor > 1 ? "softer" : "softest";
+    document.querySelector("#quality-now")?.setAttribute("title", `Drawing ${factor} pixels for each one on screen`);
+    return word;
   }
   function syncTools() {
     syncQuality();
@@ -1701,12 +1713,16 @@ async function boot() {
     return `<p class="muted">This browser will encode <strong>${e(videoCodec.label)}</strong> — the codec QuickTime Player, phones and upload forms expect.</p>`;
   }
   function renderInspector() {
-    const root = document.querySelector("#inspector-content"),
-      a = p.art.find((a) => a.id === selected),
-      l = p.photo.layers.find((l) => l.id === photoSelected);
     document
       .querySelectorAll("[data-tab]")
       .forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+    document.querySelector("#inspector-content").innerHTML = inspectorHTML();
+    refreshIcons();
+  }
+  /** The open tab's inspector, as markup. Tool search reads every tab's. */
+  function inspectorHTML() {
+    const a = p.art.find((a) => a.id === selected),
+      l = p.photo.layers.find((l) => l.id === photoSelected);
     let html = "";
     if (tab === "art" && p.mode === "photo") {
       html = `<div class="panel-heading"><h2>Photo artwork</h2>${btn("upload-art", "Upload artwork", "plus", "icon-only")}</div><p class="muted">Select a library work to add it to this photo. Drag its corners to match the wall. Placement is visual, not measured.</p><div class="mobile-library">${libraryHTML(true)}</div>${l ? `<section><h3>${e(l.title)}</h3>${range("Cast-shadow overlay", "shadow", l.shadow, 0, 60, 1, "photoLayer")}<p class="muted">Drag inside to move. Blue corner handles control perspective.</p>${l.corners.map((c, i) => `<h4>${["Top left", "Top right", "Bottom right", "Bottom left"][i]}</h4><div class="field-pair">${field("X %", i + "-0", c[0] * 100, 0, 100, 0.1, "%", "corner")}${field("Y %", i + "-1", c[1] * 100, 0, 100, 0.1, "%", "corner")}</div>`).join("")}<div class="button-row">${btn("photo-front", "Bring to front", "layers")}${btn("photo-delete", "Remove", "trash-2")}</div></section>` : '<div class="empty-inspector"><p>Choose an uploaded work from your library, or upload a new one.</p></div>'}<section><h3>Photo layers</h3>${p.photo.layers.map((x) => `<button class="wide layer-row ${x.id === photoSelected ? "active" : ""}" data-layer="${x.id}">${e(x.title)}</button>`).join("")}</section>`;
@@ -1741,8 +1757,7 @@ async function boot() {
     if (tab === "export") {
       html = `<div class="panel-heading"><h2>Export your booth</h2>${icon("download")}</div><p class="muted">A clean image of the current ${p.mode === "photo" ? "photo composition" : "camera view"}, without controls or selection outlines.</p><section><h3>Image size</h3>${p.mode === "photo" ? "" : frameFields("export")}<label class="setting-label">Detail<select id="export-size" aria-label="Export image size">${STILL_SIZES.map((n) => `<option value="${n}" ${exportLong === n ? "selected" : ""}>${n} px on the long side${n <= 1440 ? " · Fast" : n >= 4096 ? " · High resolution" : ""}</option>`).join("")}</select></label><p class="muted">PNG · ${p.mode === "photo" ? "The photograph's own shape. Enlarging a small source cannot restore missing detail." : e(frameNote("export")) + " Preview textures are capped at 2048 px per artwork; originals remain in the backup."}</p>${btn("export-image", "Export PNG", "download", "primary wide")}</section>${p.mode === "photo" ? "" : videoSection()}<section><h3>Show pack</h3><p class="muted">For the van: a measured floor plan with every piece numbered and its clearances, the inventory of work with sizes, media and prices, and a packing and load-in checklist worked out from this booth. Open the downloaded HTML to print or save as PDF.</p>${btn("show-pack", "Download show pack", "layers", "wide")}</section><section><h3>Installation guide</h3><p class="muted">Measured wall elevations, panel sizes, and left/bottom placement references. Open the downloaded HTML to print or save as PDF. Photo overlays are excluded.</p>${btn("guide", "Download hanging guide", "layout-panel-left", "wide")}</section><section><h3>Keep your work</h3>${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Includes original artwork and photo files, booth layout, and lighting.</p></section><section><h3>Preview quality</h3><select id="quality" aria-label="Preview quality (Export)">${qualityOptions()}</select><p class="muted">Auto starts sharp and lowers the detail while it measures this computer drawing slower than it should. The light bar's shadows are drawn live at High detail only; exports always include them. The same menu is under the viewport, beside what it is drawing at now.</p></section>`;
     }
-    root.innerHTML = html;
-    refreshIcons();
+    return html;
   }
   // The two lines under the viewport. Split out of render() because a
   // selection changes both of them and nothing else on the page.
@@ -3500,6 +3515,165 @@ async function boot() {
     dial.addEventListener("pointercancel", done);
     aim(ev);
   });
+  // Tool search, in the header. The index is read from what each tab would
+  // draw right now — the same markup the inspector renders — so a control
+  // added to a panel is findable without anyone adding it to a list, and a
+  // control the current booth does not show (the light bar on a pop-up) is
+  // not offered. It is built when the box is focused and dropped on blur.
+  const TAB_NAMES = { art: "Artwork", layout: "Layout", show: "Art show", walls: "Walls", lighting: "Lighting", video: "Video", export: "Export" };
+  const FINDABLE = "h3, h4, label, button[data-action]";
+  let toolIndex = null,
+    toolHits = [],
+    toolAt = 0;
+  /** What a heading, label or button is called, without the values beside it. */
+  function findableName(el) {
+    if (el.matches("button")) return el.getAttribute("aria-label") || el.textContent;
+    const copy = el.cloneNode(true);
+    copy.querySelectorAll("select, output, input, textarea, button, small, span.badge").forEach((x) => x.remove());
+    if (el.matches("h3")) copy.querySelectorAll("span").forEach((x) => x.remove());
+    const text = copy.textContent.replace(/\s+/g, " ").trim();
+    if (text) return text;
+    return el.querySelector("[aria-label]")?.getAttribute("aria-label") || "";
+  }
+  function buildToolIndex() {
+    const list = [];
+    for (const [t, name] of Object.entries(TAB_NAMES)) list.push({ label: name, where: "Inspector tab", tab: t });
+    const outside = [
+      [".toolbar [data-action]", "Toolbar"],
+      ["#view-switch [data-view]", "View"],
+      [".zoom-controls [data-action]", "View"],
+      ["header [data-action]", "Header"],
+    ];
+    for (const [sel, where] of outside)
+      for (const el of document.querySelectorAll(sel)) list.push({ label: findableName(el), where, el });
+    list.push({ label: "Preview quality", where: "Status bar", el: document.querySelector("#quality-quick") });
+    const keep = tab,
+      tpl = document.createElement("template");
+    try {
+      for (const [t, name] of Object.entries(TAB_NAMES)) {
+        tab = t;
+        tpl.innerHTML = inspectorHTML();
+        tpl.content.querySelectorAll(FINDABLE).forEach((el, index) => {
+          const section = el.closest("section")?.querySelector("h3");
+          const heading = section && section !== el ? findableName(section) : "";
+          list.push({ label: findableName(el), where: heading ? `${name} · ${heading}` : name, tab: t, index });
+        });
+      }
+    } finally {
+      tab = keep;
+    }
+    return dedupe(list);
+  }
+  function renderToolHits() {
+    const box = document.querySelector("#tool-search"),
+      ul = document.querySelector("#tool-results");
+    const q = box.value;
+    toolHits = q.trim() ? rankTools(toolIndex || (toolIndex = buildToolIndex()), q) : [];
+    toolAt = Math.min(toolAt, Math.max(0, toolHits.length - 1));
+    const open = document.activeElement === box && !!q.trim();
+    ul.hidden = !open;
+    box.setAttribute("aria-expanded", String(open));
+    ul.innerHTML = !open
+      ? ""
+      : toolHits.length
+        ? toolHits.map((x, i) => `<li role="option" id="tool-hit-${i}" data-hit="${i}" aria-selected="${i === toolAt}" class="${i === toolAt ? "active" : ""}"><strong>${e(x.label)}</strong><span>${e(x.where)}</span></li>`).join("")
+        : `<li class="none">Nothing called “${e(q.trim())}”</li>`;
+    if (toolHits.length) box.setAttribute("aria-activedescendant", "tool-hit-" + toolAt);
+    else box.removeAttribute("aria-activedescendant");
+    ul.querySelector("li.active")?.scrollIntoView({ block: "nearest" });
+  }
+  /** Take the user to a found tool: its tab, scrolled to, focused and flashed. */
+  function openTool(hit) {
+    const box = document.querySelector("#tool-search");
+    box.value = "";
+    box.blur();
+    let target = hit.el || null;
+    if (hit.tab) {
+      tab = hit.tab;
+      renderInspector();
+      if (hit.index !== undefined) {
+        const root = document.querySelector("#inspector-content");
+        const all = [...root.querySelectorAll(FINDABLE)];
+        target = all[hit.index];
+        // The inspector redrew; if it came out different, find it by name.
+        if (!target || fold(findableName(target)) !== fold(hit.label))
+          target = all.find((el) => fold(findableName(el)) === fold(hit.label)) || null;
+      } else target = document.querySelector(`.inspector-tabs [data-tab="${hit.tab}"]`);
+    }
+    if (!target) return;
+    // A toolbar button is a tool in itself, so finding it uses it; anything in
+    // the inspector is only shown and focused, because "Remove" found is not
+    // "Remove" meant.
+    if (!hit.tab && target.matches("button")) {
+      target.click();
+      return;
+    }
+    const control = target.matches("label") ? target.querySelector("input, select, textarea") : target.matches("button, select, input") ? target : null;
+    const shown = target.matches("h3, h4") ? target.closest("section") || target : target;
+    shown.scrollIntoView({ block: "center", behavior: "smooth" });
+    control?.focus({ preventScroll: true });
+    shown.classList.remove("found");
+    void shown.offsetWidth;
+    shown.classList.add("found");
+    setTimeout(() => shown.classList.remove("found"), 1800);
+  }
+  {
+    const box = document.querySelector("#tool-search"),
+      ul = document.querySelector("#tool-results");
+    // Its own events stop here: the page's input and change handlers read
+    // every field in the document as booth settings.
+    for (const type of ["input", "change"]) box.addEventListener(type, (ev) => ev.stopPropagation());
+    box.addEventListener("input", () => {
+      toolAt = 0;
+      renderToolHits();
+    });
+    box.addEventListener("focus", () => {
+      toolIndex = null;
+      renderToolHits();
+    });
+    box.addEventListener("blur", () => {
+      toolIndex = null;
+      ul.hidden = true;
+      box.setAttribute("aria-expanded", "false");
+    });
+    box.addEventListener("keydown", (ev) => {
+      if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+        ev.preventDefault();
+        if (!toolHits.length) return;
+        toolAt = (toolAt + (ev.key === "ArrowDown" ? 1 : -1) + toolHits.length) % toolHits.length;
+        renderToolHits();
+      } else if (ev.key === "Enter") {
+        ev.preventDefault();
+        if (toolHits[toolAt]) openTool(toolHits[toolAt]);
+      } else if (ev.key === "Escape") {
+        ev.preventDefault();
+        if (box.value) {
+          box.value = "";
+          renderToolHits();
+        } else box.blur();
+      }
+      ev.stopPropagation();
+    });
+    // mousedown, not click: a click would blur the box first and the list
+    // would be gone before it landed.
+    ul.addEventListener("mousedown", (ev) => {
+      const li = ev.target.closest("[data-hit]");
+      ev.preventDefault();
+      if (li) openTool(toolHits[Number(li.dataset.hit)]);
+    });
+    // "/" jumps to the box from anywhere that is not already typing, and so
+    // does Ctrl/⌘-K, the other place people look for it.
+    document.addEventListener("keydown", (ev) => {
+      const typing = ev.target.matches?.("input, textarea, select, [contenteditable]");
+      const k = (ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "k";
+      if ((ev.key === "/" && !typing && !ev.ctrlKey && !ev.metaKey && !ev.altKey) || k) {
+        if (document.querySelector("dialog[open]")) return;
+        ev.preventDefault();
+        box.focus();
+        box.select();
+      }
+    });
+  }
   document.addEventListener("keydown", (ev) => {
     if (document.querySelector("#image-editor").open) {
       if (ev.key === "Escape") {

@@ -1841,3 +1841,95 @@ dialog li {
   min-width: 0;
   max-width: 32%;
 }
+/* Tool search, in the header: a box and the list of what it matches. */
+.tool-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 0 1 240px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #11151a;
+  color: var(--muted);
+}
+.tool-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  padding: 0;
+}
+.tool-search input:focus {
+  outline: none;
+}
+.tool-search:focus-within {
+  border-color: #5b8fd0;
+}
+#tool-results {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 6px);
+  left: 0;
+  width: max(100%, 320px);
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #1b2128;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+#tool-results li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+#tool-results li strong {
+  font-weight: 500;
+  font-size: 13px;
+  color: #eef1f4;
+}
+#tool-results li span {
+  font-size: 11px;
+  color: var(--muted);
+}
+#tool-results li.active {
+  background: #243444;
+}
+#tool-results li.none {
+  cursor: default;
+  font-size: 12px;
+  color: var(--muted);
+}
+/* What a search found, flashed once where it now sits. */
+.found {
+  animation: found-flash 1.8s ease-out;
+}
+@keyframes found-flash {
+  0%, 40% {
+    box-shadow: 0 0 0 2px #5b8fd0;
+    background-color: rgba(91, 143, 208, 0.16);
+  }
+  100% {
+    box-shadow: 0 0 0 2px transparent;
+    background-color: transparent;
+  }
+}
+@media (max-width: 700px) {
+  .tool-search {
+    flex-basis: 130px;
+  }
+  #tool-results {
+    width: min(320px, calc(100vw - 32px));
+  }
+}

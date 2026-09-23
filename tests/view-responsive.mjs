@@ -270,11 +270,11 @@ try {
   // don't see where the level is visible." The menu under the viewport says.
   assert.match(await page.locator('#quality-quick option:checked').textContent(), /Auto · now 1\.5×/,
     'the menu under the viewport names the rung Auto settled on');
-  assert.equal(await page.locator('#quality-now').textContent(), 'drawing at 1.5×', 'and the factor it is drawing at');
+  assert.equal(await page.locator('#quality-now').textContent(), 'softer', 'and the factor it is drawing at');
   await page.selectOption('#quality-quick', '3');
   await page.waitForTimeout(200);
   assert.equal(await page.evaluate(() => window.__booth.scene.renderer.getPixelRatio()), 3, 'picking High detail there draws at 3×');
-  assert.equal(await page.locator('#quality-now').textContent(), 'drawing at 3×');
+  assert.equal(await page.locator('#quality-now').textContent(), 'sharpest');
   await page.click('[data-tab="export"]');
   await page.waitForTimeout(200);
   assert.equal(await page.inputValue('#quality'), '3', 'and the Export menu agrees');
@@ -283,7 +283,7 @@ try {
   assert.match(await page.locator('#quality-now').textContent(), /fast edit/, 'fast edit says it is fast edit');
   await page.click('[data-action="draft"]');
   await page.waitForTimeout(200);
-  assert.equal(await page.locator('#quality-now').textContent(), 'drawing at 3×', 'and stops saying so');
+  assert.equal(await page.locator('#quality-now').textContent(), 'sharpest', 'and stops saying so');
   await page.selectOption('#quality-quick', 'auto');
   await page.waitForTimeout(200);
   await page.evaluate(() => { localStorage.removeItem('booth.view'); });

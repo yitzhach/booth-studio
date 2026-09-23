@@ -557,8 +557,23 @@ export class BoothScene {
    * is at most one refresh a frame, and the light bar's heads cast only at
    * High detail. Fast edit is the answer for a machine that cannot keep up,
    * and it has no shadow maps to refresh at all.
+   *
+   * During a drag the maps refresh every other drawn frame. On the real
+   * machine a refresh on every frame read as "slight stutter, but decent";
+   * halving it keeps the shadow following the work (a frame behind at most)
+   * rather than holding it until release, which is the bug that was
+   * reported. A skipped refresh is owed: the next frame without a move pays
+   * it, and so does letting go, so a drag always ends on true shadows.
    */
   touchShadows() {
+    if (this.drag) {
+      this.dragShadowSkip = !this.dragShadowSkip;
+      if (this.dragShadowSkip) {
+        this.shadowsOwed = true;
+        return;
+      }
+    }
+    this.shadowsOwed = false;
     this.renderer.shadowMap.needsUpdate = true;
   }
   /** Apply the most recent pointer move, if one arrived since the last frame. */
@@ -657,7 +672,12 @@ export class BoothScene {
   }
   /** One turn of the live loop: draw if anything asked for it. */
   tick(now) {
+    const moved = !!this.pendingMove;
     this.flushDrag();
+    if (this.shadowsOwed && (!moved || !this.drag)) {
+      this.dragShadowSkip = true;
+      this.touchShadows();
+    }
     if (this.host.hidden) return;
     this.clampToGround();
     const moving = this.controls.update();
@@ -2167,6 +2187,7 @@ export class BoothScene {
         // quick flick finishes an inch short of where it was released.
         this.flushDrag();
         this.drag = null; this.down = null; this.controls.enabled = true;
+        if (this.shadowsOwed) this.touchShadows();
         if (c.hasPointerCapture(e.pointerId)) c.releasePointerCapture(e.pointerId);
         this.onEnd();
         return;

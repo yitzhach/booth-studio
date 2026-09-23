@@ -81,3 +81,13 @@ test("a hidden piece or wall is out of the plan and the packing list, and one sh
   assert.equal((plan.match(/<text [^>]*font-weight="600">/g) || []).length, p.booth.pedestals.length - 1, "and only shown pieces are numbered on the plan");
   assert.doesNotMatch(showPack(p), /Table 6′ with cloth<\/td>/, "or listed under it");
 });
+
+test("work on a switched-off or hidden wall is out of the inventory", () => {
+  const p = quickStart({ size: "10x10" });
+  p.booth.walls.left.enabled = false;
+  p.booth.panels = [{ id: "pz", name: "Panel", x: 0, z: 0, width: 48, height: 84, thickness: 2, rotation: 0, hidden: true }];
+  p.art = [work("a"), work("off", { wall: "left" }), work("hid", { wall: "panel:pz" }), work("gone", { wall: "panel:nope" })];
+  assert.deepEqual(inventory(p).map((a) => a.id), ["a"]);
+  p.booth.panels[0].hidden = false;
+  assert.deepEqual(inventory(p).map((a) => a.id).sort(), ["a", "hid"]);
+});

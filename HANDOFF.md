@@ -16,11 +16,12 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-23, twice.** First the ten speed-and-planning
+- **Last deploy: 2026-09-23, three times.** First the ten speed-and-planning
   improvements, then — the same day, after the owner's first look on the real
   machine — the second round: the drag shadow, the fast-edit redraw leak, the
   cheaper click, Photoshop drop shadows, hide instead of delete, and the
-  Preview menu under the viewport (both bullets below). **Nothing is sitting
+  Preview menu under the viewport (both bullets below). Then the third round:
+  the owner's answers to that round, and tool search (the bullet below). **Nothing is sitting
   unmerged.** Before that, 2026-09-19 — the art-show booth and its neutral defaults,
   the pedestals, the Walls tool, the light-bar diffusion slider, the backdrop
   pole limit, people for scale, indoor fixture hiding, the Ken Burns move, the
@@ -33,6 +34,39 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-23, third round: the owner's answers, and tool search. Pushed
+  straight to `main` at the owner's word.** The answers to Next item 1, as a
+  quick question sheet: a drag with fast edit off is a "slight stutter, but
+  decent"; the drop-shadow mapping and the second shadow's defaults are both
+  right; the angle dial feels like Photoshop's; hidden and switched-off walls'
+  art should leave the inventory; the Preview readout should say sharp /
+  softer; Auto settles sensibly; nothing waits for the mouse; the light bar's
+  shadows are not missed in the preview. What changed:
+  1. **A drag refreshes the shadow maps every other drawn frame.**
+     `touchShadows` alternates while `this.drag` is set; a skipped refresh is
+     owed (`shadowsOwed`) and paid by the next frame without a move and by
+     pointer-up, so the shadow is at most one frame behind and a drag always
+     ends on true shadows. This is the lever the previous round named, not a
+     return to holding the maps until release.
+  2. **The inventory leaves out work on a switched-off perimeter wall, a
+     hidden free-standing wall, or a panel that no longer exists**
+     (`onShownWall` in `src/showpack.js`), which is what the booth shows.
+  3. **The readout beside the Preview menu says sharpest / sharp / softer /
+     softest** instead of "drawing at 2×"; the factor moved to its tooltip.
+     The menu's own options still name their rungs ("Balanced, 2×").
+  4. **Tool search, in the header** — asked for as "a search box: you can
+     search a tool name and it opens the tool or gives a list of options".
+     Type a name; the list shows each match with the tab and section it lives
+     in; Enter or a click opens that tab, scrolls to the control, focuses it
+     and flashes it. A toolbar or view button found is pressed, because it is
+     a tool in itself; a button in the inspector is only focused, because
+     "Remove" found is not "Remove" meant. `/` or Ctrl/⌘-K jumps to the box.
+     The index is read from `inspectorHTML()` for every tab at the moment the
+     box is focused — `renderInspector()` was split so the markup can be built
+     without drawing it — so a control added to a panel is findable without
+     touching a list, and one the current booth does not show is not offered.
+     `src/toolsearch.js` is the ranking, pure; `tests/view-toolsearch.mjs`
+     drives it.
 - **2026-09-23, second round: the first report from the real machine, and
   what it asked for. Merged and deployed 2026-09-23** from
   `claude/gifted-ramanujan-jgr1cy`, at the owner's word. The report, in order:
@@ -508,8 +542,18 @@ Extend it; do not rebuild it.
 
 ## Next
 
+1. **Tool search and the third round, on the real machine.** Does the
+   search find what you type, by the name you would type? Its words come from
+   the panels' own headings, labels and buttons, so a tool called something
+   other than what people call it is a label worth renaming, or a synonym
+   worth adding in `rankTools`. Is a slight stutter still there with shadows
+   refreshed every other frame? Past this, the next lever is a smaller shadow
+   map during a drag. Three labels are shared by several controls in one
+   section (each perimeter wall's Width and Height, under Display walls): the
+   search lists one of each and opens the first.
 1. **The 2026-09-23 work on the real machine, and the round that answered
-   it.** The first report is in: **speed "much better"**, and five asks,
+   it.** *Answered 2026-09-23 — see the third-round bullet in Now; kept here
+   for its reasoning.* The first report is in: **speed "much better"**, and five asks,
    all answered and **deployed the same day** (see Now). **Check
    `window.BOOTH_BUILD` shows `main`'s tip before judging any of it** — a
    Cloudflare build takes a few minutes. Then, on the real machine:
@@ -833,7 +877,7 @@ the picker became one list.
 npm ci
 npm test                 # 297 Node tests
 npm run build
-npm run test:view        # 18 suites: city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack
+npm run test:view        # 19 suites: city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
 npm run test:browser     # 25 end-to-end checks
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
@@ -923,6 +967,14 @@ regression — it is the editor and the test sharing one server.
 - Do not modify the separate `yitzhach/commission` repo.
 
 ## Things learned the hard way
+
+- **The whole `npm run test:view` chain now runs past ten minutes in the
+  sandbox**, longer than one shell call may take, so a timeout there is a
+  timeout, not a failure. Run the chain with the longest timeout, see which
+  suite it stopped in, and run that one and the rest one by one, reading each
+  exit status. And the test Chromium is launched `--single-process`, which
+  allows one browser context: a probe that wants several viewport widths
+  resizes one page (`setViewportSize`) rather than opening a context per size.
 
 - **three leaves `shadowMap.needsUpdate` up when it does not draw a map** —
   with `shadowMap.enabled` false (fast edit), or with no light casting.
@@ -1238,6 +1290,8 @@ regression — it is the editor and the test sharing one server.
 - `src/arrange.js` — even spacing, the 60″ hang line, arrow nudges.
 - `src/quickstart.js` — Quick start and user templates.
 - `src/showpack.js` — the show pack: floor plan, inventory, checklist.
+- `src/toolsearch.js` — tool search's ranking; the index is built in main.js
+  from each tab's `inspectorHTML()`.
 - `FUTURE_BUILD.md` — requested, deliberately not started. Currently empty.
 - `docs/HDRI-ASSETS.md`, `docs/TEXTURE-ASSETS.md` — adding asset files.
 - `AI_EXPORT_PHASE.md` — only for AI-export implementation.
