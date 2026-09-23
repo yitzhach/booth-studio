@@ -513,7 +513,7 @@ header {
   gap: 12px;
   padding: 7px 15px;
 }
-.statusbar span:last-child {
+.statusbar > span:last-child {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1144,7 +1144,8 @@ dialog li {
     padding: 5px 10px;
     min-height: 23px;
   }
-  .statusbar span:last-child {
+  .statusbar > span:last-child,
+  #quality-now {
     display: none;
   }
   .inspector {
@@ -1697,3 +1698,146 @@ dialog li {
 .quick-start fieldset:disabled {opacity:.45;}
 .quick-start .qs-starters {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 12px;margin-bottom:8px;}
 @media (max-width:480px) {.quick-start .qs-starters {grid-template-columns:1fr;}}
+/* The drawn shadows, laid out like Photoshop's Drop Shadow dialog: a label,
+   a slider, the number typed beside it and its unit, one row per setting. */
+.fx-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.fx-head h3 {
+  margin: 0;
+  gap: 8px;
+  justify-content: flex-start;
+}
+/* The eye, the same control that hides a spotlight. */
+.eye {
+  width: 32px;
+  min-height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+}
+.eye.off {
+  color: #7c6a4a;
+}
+.eye svg,
+.eye i {
+  width: 16px;
+  height: 16px;
+}
+.fx-row {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) 56px 12px;
+  align-items: center;
+  gap: 6px;
+  margin: 9px 0;
+  font-size: 12px;
+}
+.fx-row input[type="range"] {
+  width: 100%;
+}
+.fx-row input[type="number"] {
+  height: 30px;
+  width: 56px;
+  padding: 5px 7px;
+  font-size: 12px;
+  text-align: right;
+}
+.fx-unit {
+  color: #8e9ca8;
+  font-size: 11px;
+}
+/* Angle's middle column is the dial rather than a slider; Use Global Light
+   goes on the line below, under it, where a 292px inspector has room. */
+.fx-angle {
+  grid-template-columns: 54px minmax(0, 1fr) 56px 12px;
+}
+.fx-dial {
+  width: 34px;
+  height: 34px;
+  display: block;
+  cursor: grab;
+  touch-action: none;
+  border-radius: 50%;
+}
+.fx-dial:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.fx-dial svg {
+  width: 34px;
+  height: 34px;
+  display: block;
+}
+.fx-dial circle {
+  fill: #151b21;
+  stroke: #8e9ca8;
+  stroke-width: 1.2;
+}
+.fx-dial line {
+  stroke: #e9edf0;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.fx-dial .hub {
+  fill: #e9edf0;
+  stroke: none;
+}
+.fx-global {
+  margin: 2px 0 10px 60px;
+}
+/* A hidden shadow keeps its controls, dimmed, so it can be set up first. */
+.fx-off .fx-row {
+  opacity: 0.55;
+}
+/* A piece's eye and its remove button, side by side in its heading. */
+.piece-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* Hidden keeps its controls, dimmed, the way a hidden shadow does. */
+.wall-setting.is-hidden > :not(.panel-heading),
+.person-row.is-hidden > :not(.key-head) {
+  opacity: 0.55;
+}
+.wall-setting.is-hidden .eye,
+.person-row.is-hidden .eye {
+  color: #7c6a4a;
+}
+/* The preview quality menu, under the viewport where the picture it governs
+   is, with what the viewport is drawing at beside it. */
+.preview-quality {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.preview-quality select {
+  font-size: 10px;
+  padding: 2px 4px;
+  height: 22px;
+  max-width: 190px;
+}
+#quality-now {
+  color: #a9cfff;
+}
+/* With the preview menu in the bar, the hint gives way first: one line,
+   cut short, rather than a bar that doubles in height. */
+#gesture-hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.statusbar > #selection-status {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 32%;
+}

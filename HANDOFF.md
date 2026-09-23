@@ -16,7 +16,12 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-23** (see the 2026-09-23 bullet below). Before that, 2026-09-19 — the art-show booth and its neutral defaults,
+- **Last deploy: 2026-09-23, twice.** First the ten speed-and-planning
+  improvements, then — the same day, after the owner's first look on the real
+  machine — the second round: the drag shadow, the fast-edit redraw leak, the
+  cheaper click, Photoshop drop shadows, hide instead of delete, and the
+  Preview menu under the viewport (both bullets below). **Nothing is sitting
+  unmerged.** Before that, 2026-09-19 — the art-show booth and its neutral defaults,
   the pedestals, the Walls tool, the light-bar diffusion slider, the backdrop
   pole limit, people for scale, indoor fixture hiding, the Ken Burns move, the
   Video tab with its batch list and the overhead lens flare are all on `main`
@@ -28,6 +33,64 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-23, second round: the first report from the real machine, and
+  what it asked for. Merged and deployed 2026-09-23** from
+  `claude/gifted-ramanujan-jgr1cy`, at the owner's word. The report, in order:
+  "Speed — much better. If there is still room to improve, keep improving";
+  "what preview quality are we looking at, and where is it visible?"; a hide
+  button for furniture and anything added; the drop shadow lingering in the
+  old place during a drag; the drop shadow to work like Photoshop's (a
+  screenshot of its dialog: Opacity 31%, Angle 125° with Use Global Light,
+  Distance 10 px, Spread 4%, Size 16 px); and a second, stronger shadow under
+  and to the side, both with an eye. One commit each:
+  1. **A dragged work's cast shadow follows it.** `touchShadows` held the
+     shadow maps still for the whole of a drag and refreshed them on release
+     — from when every pointer event re-rendered nine casting heads. With
+     fast edit off that left the work's real cast shadow on the wall where it
+     had been. A drag is applied once per drawn frame now, and the bar casts
+     only at High detail, so a drag simply refreshes the maps every frame.
+     `settleShadows` and `shadowsStale` are gone.
+  2. **Fast edit no longer draws flat out.** Found on the way: three clears
+     `shadowMap.needsUpdate` only when it actually redraws a map, so with the
+     maps off (fast edit) or no light casting, one moved piece left the flag
+     up and `tick()` read it as a frame owed on every turn — continuous
+     drawing, in the mode meant for a slow machine, until fast edit ended.
+     This was on `main`. `tick()` now drops the flag after each frame.
+  3. **A click no longer draws the booth inside its handler.**
+     `applySelection()` ended in `renderFrame()`, from before on-demand
+     drawing: three renders per click, the first blocking the inspector.
+     Frames per selection 3.3 → 2.4, per edit 3.5 → 3.1, an edit's
+     synchronous handler 78 → 10 ms (swiftshader; ratios, not milliseconds).
+  4. **Photoshop's drop shadow, twice.** Lighting → **Drop shadow · behind
+     the work** and **Second shadow · under & to the side**, each Opacity,
+     Angle (a dial you drag, the degrees typed, and **Use global light**),
+     Distance, Spread and Size, slider plus typed number, with an eye in the
+     heading. Distance and Size are **inches on the wall**; the defaults are
+     the screenshot's numbers at 20 px to the inch (31%, 125°, 0.5″, 4%,
+     0.8″). The second defaults to 55%, 1.5″, 10%, 2.5″ and is **off** until
+     its eye is on, so no existing booth changes unasked. The shape is exact
+     — a Gaussian-blurred rectangle is the product of two error functions —
+     and drawn in a MeshBasicMaterial hook (`SHADOW_GLSL`, `shadowMaterial`),
+     so there are no canvases, it is crisp at 4096 px, and every shadow
+     shares one program. Sliders move the shadows live with no rebuild and
+     one undo step per gesture (`setShadowLive`, `scene.updateShadows`).
+     **The shadow no longer scales with each work's wall gap** — Photoshop's
+     are absolute, and that is what was asked for; the Artwork panel says so.
+  5. **Hide instead of delete.** An eye beside every pedestal or piece of
+     furniture, free-standing wall and figure. `hidden: true` on the record,
+     read through `isShown()` in model.js: not built, not in exports, not
+     pickable, not on the show pack's plan or packing list or the hanging
+     guide's pedestal table. A hidden panel reads as a switched-off wall
+     (`wallSpec().enabled`), so its art goes with it.
+  6. **Preview quality is visible where the picture is.** The status bar
+     under the viewport has the same menu Export always had, Auto's option
+     names its rung ("Auto · now Balanced, 2×"), and beside it is the factor
+     actually drawn at — not always the setting: fast edit draws 1× with no
+     shadows, and on a Retina display Efficient still draws at the display's
+     own 2×. **The answer to the question as asked:** when not editing and
+     not in fast edit, the preview is whatever that menu says — Auto by
+     default, starting at Balanced (2× supersampling) and stepping down
+     3 → 2 → 1.5 → 1 only if frames are measured slow, remembered per display.
 - **Merged and deployed 2026-09-23: speed on a slow machine, then the
   planning tools.** Asked for as "top 10 improvements — it lags, especially on
   a slower PC; make it usable for trade shows, art shows and artists, with
@@ -138,7 +201,12 @@ Extend it; do not rebuild it.
   machine that keeps up. `settleFrame` in `recordMp4` is the mechanism, and a
   still is now drawn twice for the same reason — one frame with no second
   chance.
-- **Hung work throws a shadow, and a wall gap is finally visible.** The gap
+- **Hung work throws a shadow, and a wall gap is finally visible.**
+  *(Superseded by the second 2026-09-23 round above: the three sliders became
+  Photoshop's five, the canvas became a shader, and the shadow stopped
+  scaling with the gap. `booth.dropShadow` is still validated and read — at
+  its defaults it takes the new look, moved sliders carry over through
+  `fromLegacy`. What follows is the first version, kept as the record.)* The gap
   could only be seen by putting your eye along the wall and looking down it,
   because nothing in the picture said the work was floating — and the light
   that would cast that shadow is often a diffused wash with no direction left
@@ -440,36 +508,48 @@ Extend it; do not rebuild it.
 
 ## Next
 
-1. **Nobody has looked at any of the 2026-09-23 work on a real machine.**
-   All ten items are on `main`; every one is covered by a real-browser suite
-   here, but the reason for most of them is how the app *feels* on a slow
-   PC, and that needs the PC. In order:
-   - **Is it faster on the 2014 iMac?** Idle should now cost nothing (fans
-     quiet, inspector snappy); an edit should be a fraction of what it was.
-     If a drag still stutters, see "Is it actually faster now?" below for
-     what is left, then consider instancing the row's neighbour booths.
-   - **Does Auto settle somewhere sensible, and is its toast welcome?** If it
-     lands on 1 on a machine that looked fine at Balanced, raise
-     `SLOW_FRAME_MS`; if it never steps down on a machine that stutters,
-     lower it. Pick Auto again to re-measure.
-   - **Does anything fail to appear until the mouse moves?** That is a
-     change missing from `watchForChanges()`; add it there. The 1 s
-     heartbeat hides it for 15 s after the last touch, so look after a
-     pause.
-   - **Are the light bar's shadows missed in the preview?** High detail
-     brings them back; exports always have them.
-   - **The furniture shapes, sizes and default placements**, the starter
-     positions in `STARTER_PLACES`, and whether the show pack's checklist
-     is the right list — all judgement, all easy to change.
+1. **The 2026-09-23 work on the real machine, and the round that answered
+   it.** The first report is in: **speed "much better"**, and five asks,
+   all answered and **deployed the same day** (see Now). **Check
+   `window.BOOTH_BUILD` shows `main`'s tip before judging any of it** — a
+   Cloudflare build takes a few minutes. Then, on the real machine:
+   - **Is a drag with fast edit off still smooth?** It is the one cost this
+     round added: the shadow maps now refresh every drawn frame of a drag so
+     the cast shadow follows the work (1024² per spotlight and the fill, 512²
+     per bar head at High detail). If it stutters, fast edit is still the
+     answer, and the next lever is refreshing every other frame, not holding
+     them until release again — that is the bug that was reported.
+   - **The drop shadows, by eye.** Is the Photoshop mapping right — 20 px to
+     the inch, so the screenshot's 10 px / 16 px became 0.5″ / 0.8″? At
+     whole-booth zoom that shadow is subtle; up close it reads. Are the second
+     shadow's defaults (55%, 1.5″, 10%, 2.5″) "stronger" in the way that was
+     meant? Every number is a slider; `SHADOWS` in `src/dropshadow.js` is
+     where the defaults live, and a booth nobody has tuned follows them.
+   - **Does the angle dial feel like Photoshop's?** Drag round it, or focus it
+     and use the arrows (Shift for 15°). Use Global Light ties both shadows to
+     `booth.shadowAngle`; switching it off keeps the current angle as the
+     shadow's own, which is Photoshop's rule.
+   - **Hide.** A hidden free-standing wall takes its art out of the picture,
+     and the show pack's **inventory still lists that art** — the same as a
+     switched-off perimeter wall always has. If a hidden wall's work should
+     drop out of the inventory too, that is a one-line filter in
+     `inventory()`, and it should probably apply to switched-off walls as
+     well. Artwork itself has no eye yet; it was not asked for, and hiding a
+     work raises the same inventory question.
+   - **The Preview menu in the status bar**: is it where you would look, and
+     does "drawing at 2×" mean anything to someone who is not a graphics
+     programmer? It could say "sharp / softer" instead.
+   - Still open from the first round: **does Auto settle somewhere
+     sensible?** (raise `SLOW_FRAME_MS` if it lands on 1 where Balanced looked
+     fine; the menu now shows the rung, so this is readable at a glance);
+     **does anything fail to appear until the mouse moves?** (missing from
+     `watchForChanges()`; look after a 15 s pause); **are the light bar's
+     shadows missed in the preview?**; and **the furniture shapes, sizes,
+     `STARTER_PLACES` and the show pack's checklist** — all judgement.
 1. **Nobody has looked at any of the 2026-09-21 finishing work.** All of it is
    on `main`. Judgements that need a browser and a pair of eyes:
-   - **The drop shadow's three defaults** (darkness 40, distance 45, softness
-     55) were chosen against a 0.75″ wall gap in a sandbox render, which is
-     exactly the kind of judgement a render here cannot make. Set a work's
-     wall gap to 2″, look at it head-on, and drag the three sliders. If it
-     reads as a sticker rather than a hung object, softness first; if the
-     piece looks like it is hovering, distance down. 0 darkness is no shadow
-     at all, so the whole range is safe to explore.
+   - ~~The drop shadow's three defaults~~ — answered on the real machine:
+     it was asked to work like Photoshop's, and now does. See item 1.
    - **Whether a vertical or square export frames the booth usefully.** The
      camera keeps its vertical field of view and the width follows the ratio,
      so a 9:16 clip shows the walls and loses the aisle. If a vertical frame
@@ -751,7 +831,7 @@ the picker became one list.
 
 ```sh
 npm ci
-npm test                 # 291 Node tests
+npm test                 # 297 Node tests
 npm run build
 npm run test:view        # 18 suites: city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
@@ -787,6 +867,12 @@ regression — it is the editor and the test sharing one server.
 - **The live loop draws on demand.** Anything new that changes the picture
   must reach `invalidate()` — through a wrapped scene method, an input event,
   or a load `watchForChanges()` knows about. Otherwise it shows up late.
+  And do not draw synchronously to make up for it: `applySelection()` did,
+  and it was a third render per click.
+- **A piece someone adds is hidden with `hidden: true`, never a new list.**
+  Pedestals, furniture, free-standing walls and figures all carry it and are
+  read through `isShown()`. Anything new that draws, packs, measures or lists
+  them filters on it; a panel gets it for free through `wallSpec().enabled`.
 - **Do not dispose a material in the booth group before its replacement has
   drawn.** That is what `this.retired` is for; disposing early recompiles
   every shader and was most of what an edit cost.
@@ -837,6 +923,24 @@ regression — it is the editor and the test sharing one server.
 - Do not modify the separate `yitzhach/commission` repo.
 
 ## Things learned the hard way
+
+- **three leaves `shadowMap.needsUpdate` up when it does not draw a map** —
+  with `shadowMap.enabled` false (fast edit), or with no light casting.
+  Anything that reads the flag as "a frame is owed" then draws forever;
+  `tick()` did, from the day on-demand drawing landed until 2026-09-23, and
+  only in fast edit, which is why nobody saw it. It is cleared after every
+  frame now. Test for this class of bug by counting
+  `renderer.info.render.frame` over a quiet window, not by timing.
+- **The idle-frames check in view-responsive failed two runs in three on an
+  unchanged `main`.** `render()` in main.js resizes the viewport one
+  animation frame after every edit, swiftshader can take over a second to
+  hand out that frame, and its `invalidate` started the 15 s heartbeat inside
+  the measured window. The check now lets it land first. If an idle check
+  flakes, find the late invalidate (wrap `invalidate` and log a stack) before
+  touching the loop.
+- **`half` is a reserved word in GLSL ES.** A uniform or argument named
+  `half` compiles on some drivers and not others; the drop-shadow shader says
+  `extent`, and a node test refuses the word.
 
 - **Headless Chromium hands an idle page about three animation frames a
   second.** Once the loop stopped drawing continuously, a change could wait
@@ -1119,8 +1223,10 @@ regression — it is the editor and the test sharing one server.
   than a second list, and how an older backup's override is adopted.
 - `src/framing.js` — the shape of a delivered file: one pure function that
   answers for a still and a clip alike, and why the camera is told about it.
-- `src/dropshadow.js` — the drawn drop shadow, its three sliders, and why a
-  wall gap needed one.
+- `src/dropshadow.js` — the two drawn drop shadows on Photoshop's five
+  controls, the exact blurred-rectangle maths (and its GLSL twin), and how
+  the first version's `booth.dropShadow` is still read. `shadowMaterial` /
+  `placeShadow` / `updateShadows` in `src/scene.js` draw them.
 - `src/swatches.js` — the seven saved colours and the Previous button.
 - `src/adaptive.js` — Auto preview quality's rule. `startLoop` / `tick` /
   `invalidate` / `watchForChanges` in `src/scene.js` are the on-demand loop;

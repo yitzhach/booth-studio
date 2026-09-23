@@ -4,7 +4,7 @@ import {
   blankProject,
   demoProject,
   DEFAULT_EDGE_COLOR,
-  dropShadowSpec,
+  shadowSpec,
   edgeColorOf,
   lightVisible,
   validateProject,
@@ -25,6 +25,7 @@ import {
   wallKeys,
   wallLabel,
   wallSpec,
+  isShown,
 } from "../src/model.js";
 import { hangingGuide } from "../src/guide.js";
 import { DEFAULT_IMAGE_EDITS, editedAspect, hasImageEdits, normalizeImageEdits } from "../src/image-edit.js";
@@ -366,26 +367,56 @@ test("a placement the app positions never lands on one already there", () => {
 test("a backup with no drop shadow, no universal edge and no light switch still opens", () => {
   const p = blankProject();
   delete p.booth.dropShadow;
+  delete p.booth.shadowBehind;
+  delete p.booth.shadowUnder;
+  delete p.booth.shadowAngle;
   delete p.booth.edgeUniversal;
   delete p.booth.edgeColor;
   for (const l of p.lights) delete l.on;
   assert.doesNotThrow(() => validateProject(structuredClone(p)));
   // And absent means the defaults, everywhere that reads them.
-  assert.equal(dropShadowSpec(p.booth).on, true);
+  assert.equal(shadowSpec(p.booth, "behind").on, true);
+  assert.equal(shadowSpec(p.booth, "under").on, false);
   assert.equal(edgeColorOf(p.booth, {}), DEFAULT_EDGE_COLOR);
   assert.equal(lightVisible(p.lights[0]), true);
 });
 
-test("a drop shadow outside 0..100, or a light switch that is not a switch, is refused", () => {
+test("a backup from the first drop shadow, with its three sliders, still opens", () => {
+  const p = blankProject();
+  p.booth.dropShadow = { on: true, darkness: 70, distance: 20, softness: 90 };
+  assert.doesNotThrow(() => validateProject(structuredClone(p)));
+  assert.equal(shadowSpec(p.booth, "behind").opacity, Math.round(70 * 0.81));
+});
+
+test("the Photoshop shadows accept their ranges and refuse what is not one", () => {
+  const good = blankProject();
+  good.booth.shadowBehind = { on: true, opacity: 31, angle: 125, global: true, distance: 0.5, spread: 4, size: 0.8 };
+  good.booth.shadowUnder = { on: false, opacity: 100, angle: -180, global: false, distance: 12, spread: 100, size: 0 };
+  good.booth.shadowAngle = -45;
+  assert.doesNotThrow(() => validateProject(structuredClone(good)));
+  // A record with only some fields is a record at the defaults for the rest.
+  good.booth.shadowUnder = { on: true };
+  assert.doesNotThrow(() => validateProject(structuredClone(good)));
+});
+
+test("a drop shadow outside its range, or a light switch that is not a switch, is refused", () => {
   const bad = (change) => {
     const p = structuredClone(blankProject());
     change(p);
     assert.throws(() => validateProject(p));
   };
-  bad((p) => (p.booth.dropShadow.darkness = 101));
-  bad((p) => (p.booth.dropShadow.distance = -1));
-  bad((p) => (p.booth.dropShadow.on = "yes"));
+  bad((p) => (p.booth.dropShadow = { darkness: 101 }));
+  bad((p) => (p.booth.dropShadow = { distance: -1 }));
+  bad((p) => (p.booth.dropShadow = { on: "yes" }));
   bad((p) => (p.booth.dropShadow = "dark"));
+  bad((p) => (p.booth.shadowBehind = { opacity: 101 }));
+  bad((p) => (p.booth.shadowBehind = { distance: 13 }));
+  bad((p) => (p.booth.shadowUnder = { size: -1 }));
+  bad((p) => (p.booth.shadowUnder = { spread: "wide" }));
+  bad((p) => (p.booth.shadowUnder = { global: 1 }));
+  bad((p) => (p.booth.shadowBehind = { angle: 400 }));
+  bad((p) => (p.booth.shadowBehind = []));
+  bad((p) => (p.booth.shadowAngle = "up"));
   bad((p) => (p.booth.edgeColor = "black"));
   bad((p) => (p.booth.edgeUniversal = 1));
   bad((p) => (p.lights[0].on = "off"));
@@ -411,4 +442,32 @@ test("a hidden spotlight keeps everything that made it worth aiming", () => {
   assert.equal(lightVisible(light), false);
   assert.doesNotThrow(() => validateProject(structuredClone(p)));
   for (const [key, value] of Object.entries(aim)) assert.equal(light[key], value);
+});
+
+test("a hidden piece, wall or figure is kept, validated, and read as a switched-off wall", () => {
+  const p = blankProject();
+  p.booth.pedestals = [{ id: "p1", width: 12, depth: 12, height: 44, x: 0, z: 0, rotation: 0, hidden: true }];
+  p.booth.panels = [{ id: "w1", width: 48, height: 72, x: 0, z: 0, rotation: 0, hidden: true }];
+  p.booth.people = [{ kind: "woman", height: 65, x: 0, z: 30, hidden: true }];
+  assert.doesNotThrow(() => validateProject(structuredClone(p)));
+  assert.equal(isShown(p.booth.pedestals[0]), false);
+  assert.equal(isShown({}), true, "absent means shown, which is what every older backup meant");
+  assert.equal(wallSpec(p, "panel:w1").enabled, false, "a hidden wall is measured like a switched-off one");
+  assert.match(boundWarning(p, { wall: "panel:w1", x: 0, y: 0, w: 10, h: 10 }), /hidden/);
+  for (const [list, bad] of [["pedestals", 1], ["panels", "yes"], ["people", null]]) {
+    const q = structuredClone(p);
+    q.booth[list][0].hidden = bad;
+    assert.throws(() => validateProject(q), `${list}: a hidden that is not a switch is refused`);
+  }
+});
+
+test("the hanging guide leaves a hidden pedestal off the build sheet", () => {
+  const p = blankProject();
+  p.booth.pedestals = [
+    { id: "p1", name: "Plinth shown", width: 12, depth: 12, height: 44, x: 0, z: 0, rotation: 0 },
+    { id: "p2", name: "Plinth hidden", width: 12, depth: 12, height: 44, x: 20, z: 0, rotation: 0, hidden: true },
+  ];
+  const html = hangingGuide(p);
+  assert.match(html, /Plinth shown/);
+  assert.doesNotMatch(html, /Plinth hidden/);
 });

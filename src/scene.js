@@ -3,13 +3,13 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { makeTent, environment } from "./environment.js";
 import { signTexture } from "./signage.js";
 import { edgeMaterial } from "./edge-material.js";
-import { dropShadowSpec, shadowPlan, shadowKey } from "./dropshadow.js";
+import { SHADOW_GLSL, SHADOW_KINDS, shadowPlan, shadowSpec } from "./dropshadow.js";
 import { TextureCache } from "./texture-cache.js";
 import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY, showFixtures } from "./lighting.js";
 import { GROUND_CONSUMER, TENT_CONSUMER, TENT_WEAVE, WALL_CONSUMER, WALL_SET, UV_METRE, SurfaceTextures } from "./surfaces.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
 import { decodeAt, isPreflipped } from "./image-source.js";
-import { IN, PEDESTAL, FURNITURE, furnitureKind, boothPedestals, edgeColorOf, lightVisible, constrain, groundKind, groundUpload, constrainPanel, constrainPedestal, findPanel, findPedestal, isArtShow, lightBarSpec, isPanelKey, scalePanel, wallKeys, wallSpec } from "./model.js";
+import { IN, PEDESTAL, FURNITURE, furnitureKind, boothPedestals, isShown, edgeColorOf, lightVisible, constrain, groundKind, groundUpload, constrainPanel, constrainPedestal, findPanel, findPedestal, isArtShow, lightBarSpec, isPanelKey, scalePanel, wallKeys, wallSpec } from "./model.js";
 import { lightBarBounce, lightBarFixtures, lightBarOptics, lightBarRail } from "./lightbar.js";
 import { makePerson, placePerson } from "./people.js";
 import { rowLayout } from "./row.js";
@@ -225,6 +225,71 @@ function placePedestal(g, ped) {
   g.rotation.y = ((ped.rotation || 0) * Math.PI) / 180;
   return g;
 }
+/**
+ * A drawn drop shadow's material: black, with its alpha computed per
+ * fragment from the plane's own position (src/dropshadow.js, SHADOW_GLSL).
+ * MeshBasicMaterial rather than a ShaderMaterial so opacity, fog, tone
+ * mapping and the colour space all work as they do for every other
+ * material; the hook only multiplies the alpha. Each material carries its
+ * own uniforms, and the fixed cache key makes every shadow share one program,
+ * which is what lets a rebuild keep it (see `disposeGroup`).
+ */
+function shadowMaterial() {
+  const material = new T.MeshBasicMaterial({
+    color: 0x000000,
+    transparent: true,
+    // On the wall, not in it: writing depth would make the plane fight the
+    // artwork in front of it at grazing angles.
+    depthWrite: false,
+  });
+  material.userData.shadow = {
+    shadowExtent: { value: new T.Vector2() },
+    shadowPlane: { value: new T.Vector2() },
+    shadowSigma: { value: 0.01 },
+  };
+  material.onBeforeCompile = shadowShader;
+  material.customProgramCacheKey = shadowProgramKey;
+  return material;
+}
+function shadowShader(shader) {
+  Object.assign(shader.uniforms, this.userData.shadow);
+  shader.vertexShader =
+    "uniform vec2 shadowPlane;\nvarying vec2 vShadowPos;\n" +
+    shader.vertexShader.replace(
+      "#include <begin_vertex>",
+      "#include <begin_vertex>\n\tvShadowPos = position.xy * shadowPlane;",
+    );
+  shader.fragmentShader =
+    SHADOW_GLSL +
+    shader.fragmentShader.replace(
+      "#include <color_fragment>",
+      "#include <color_fragment>\n\tdiffuseColor.a *= shadowBox(vShadowPos, shadowExtent, shadowSigma);",
+    );
+}
+function shadowProgramKey() {
+  return "booth-drop-shadow-1";
+}
+/**
+ * Stand one shadow plane where its plan says, relative to the centre of the
+ * work at its wall gap: back to the wall face and a hair in front of it. The
+ * shadow under sits a hair nearer than the one behind, so the two never
+ * trade places at a grazing angle.
+ */
+function placeShadow(mesh, spec, a) {
+  const plan = shadowPlan(spec, a);
+  const u = mesh.material.userData.shadow;
+  u.shadowExtent.value.set(plan.halfW * IN, plan.halfH * IN);
+  u.shadowPlane.value.set(plan.width * IN, plan.height * IN);
+  u.shadowSigma.value = plan.sigma * IN;
+  mesh.scale.set(plan.width * IN, plan.height * IN, 1);
+  mesh.material.opacity = plan.opacity;
+  mesh.visible = plan.on;
+  mesh.position.set(
+    plan.dx * IN,
+    plan.dy * IN,
+    -((a.offset + a.thickness / 2) * IN + 0.003) + (mesh.userData.shadowKind === "under" ? 0.002 : 0.0015),
+  );
+}
 /** Release everything a retired booth group holds on the GPU. */
 function disposeTree(group) {
   group.traverse((o) => {
@@ -280,9 +345,6 @@ export class BoothScene {
     // measurement. The button turns it off for fine placement.
     this.snap = true;
     this.textureCache = new TextureCache();
-    // Drop-shadow canvases, cached by shape rather than by work. They outlive
-    // a rebuild on purpose: the shapes do not change when a wall does.
-    this.shadowTextures = new Map();
     this.scene = new T.Scene();
     this.scene.background = new T.Color("#b5b4b0");
     this.renderer = new T.WebGLRenderer({
@@ -364,23 +426,15 @@ export class BoothScene {
   // The live loop, in one place: the video recorder stops it so that nothing
   // renders between the frames it is encoding, and starts it again afterwards.
   /**
-   * Shadow maps during a drag. An art-show booth has nine shadow-casting
-   * heads over it, and re-rendering all of them for every pointer event is
-   * what makes a dragged picture stutter. Shadows are left as they are for
-   * the length of the gesture and refreshed once when it ends — the artwork
-   * itself tracks the cursor, which is what the gesture is about.
-   */
-  /**
    * Draft mode: the viewport's quality escape hatch, and the honest answer to
    * "dragging still stutters on my machine".
    *
    * Two things cost a nine-head art-show booth most of its frame, and neither
    * of them is the geometry:
    *
-   * - **Nine shadow-casting spots are nine depth passes.** `touchShadows`
-   *   already holds them still for the length of a gesture, which is what
-   *   made a drag track the cursor at all — but the first frame after the
-   *   gesture, and every frame of an orbit, still pays for all nine.
+   * - **Every shadow-casting light is a depth pass.** A drag refreshes the
+   *   shadow maps once a drawn frame (`touchShadows`), so the cast shadow
+   *   follows the work — and every one of those frames pays for them all.
    * - **Quality is a supersampling factor.** At Balanced the renderer draws
    *   four fragments for every pixel on the 1x monitor most desktops have.
    *
@@ -490,13 +544,21 @@ export class BoothScene {
     if (changed) this.renderer.shadowMap.needsUpdate = true;
     this.invalidate();
   }
+  /**
+   * Something that casts a shadow has moved: redraw the shadow maps with the
+   * next frame.
+   *
+   * This used to hold the maps still for the length of a drag and refresh
+   * them once on release, from when every pointer event re-rendered nine
+   * shadow-casting heads. With fast edit off, that left a dragged work's cast
+   * shadow on the wall where the work had been until the button came up —
+   * reported as "the shadow stays in the original space". Neither reason
+   * survives: a drag is applied once per drawn frame (`flushDrag`), so this
+   * is at most one refresh a frame, and the light bar's heads cast only at
+   * High detail. Fast edit is the answer for a machine that cannot keep up,
+   * and it has no shadow maps to refresh at all.
+   */
   touchShadows() {
-    if (this.drag) this.shadowsStale = true;
-    else this.renderer.shadowMap.needsUpdate = true;
-  }
-  settleShadows() {
-    if (!this.shadowsStale) return;
-    this.shadowsStale = false;
     this.renderer.shadowMap.needsUpdate = true;
   }
   /** Apply the most recent pointer move, if one arrived since the last frame. */
@@ -552,8 +614,8 @@ export class BoothScene {
     for (const type of ["pointerdown", "pointerup", "click", "dblclick", "input", "change", "keydown", "keyup", "wheel"])
       document.addEventListener(type, touch, { capture: true, passive: true });
     this.controls.addEventListener("change", touch);
-    for (const name of ["update", "updateArtwork", "setSelection", "applySelection", "setView", "zoom", "resize",
-      "movePerson", "movePedestal", "movePanel", "focusWall", "applyPose", "setDraft", "letGoOfArt", "touchShadows", "settleShadows"]) {
+    for (const name of ["update", "updateArtwork", "updateShadows", "setSelection", "applySelection", "setView", "zoom", "resize",
+      "movePerson", "movePedestal", "movePanel", "focusWall", "applyPose", "setDraft", "letGoOfArt", "touchShadows"]) {
       const method = this[name];
       this[name] = (...args) => {
         const result = method.apply(this, args);
@@ -610,6 +672,14 @@ export class BoothScene {
     }
     if (this.framesOwed > 0) this.framesOwed--;
     this.renderFrame();
+    // three clears this flag only when it actually redraws a shadow map. With
+    // the maps switched off (fast edit) or no light casting, it stays up, and
+    // `due` above read it as a frame owed on every tick — so one moved piece
+    // in fast edit kept the viewport drawing flat out until fast edit ended,
+    // in exactly the mode meant for a machine that cannot afford it. Nothing
+    // is lost by dropping it: leaving fast edit and a new caster (a rebuild,
+    // `setBarShadows`) each raise it again.
+    this.renderer.shadowMap.needsUpdate = false;
     this.drawnAt = now;
     // Only back-to-back frames measure the machine: the gap after an idle
     // stretch is how long nobody touched it, not how long a frame took.
@@ -842,73 +912,44 @@ export class BoothScene {
     this.camera.updateProjectionMatrix();
   }
   /**
-   * The soft card of shadow a hung work throws onto the wall behind it.
+   * The drawn shadows a hung work throws onto the wall behind it: one plane
+   * per shadow that is switched on, each a child of the work's own group, so
+   * it moves, scales and hides with the work and needs nothing per frame.
    *
-   * Drawn rather than lit, for the reason src/dropshadow.js states: the light
-   * that would cast it is often a diffused wash with no direction left in it,
-   * and a wall gap nobody can see is a measurement nobody can check. It is a
-   * child of the work's own group, so it moves, scales and hides with the
-   * work and needs nothing per frame.
-   *
-   * The canvas is cached by shape — two works of similar proportions share
-   * one — and the cache is emptied rather than grown past a couple of dozen
-   * entries, since every entry is a 256px greyscale texture.
+   * Drawn rather than lit, for the reason src/dropshadow.js states. The shape
+   * is computed in the fragment shader — a rectangle blurred by a Gaussian,
+   * exactly — so there is no texture to build, cache or size: a thin shadow
+   * stays crisp at 4096 px, and every shadow in the booth shares one program
+   * (see `shadowMaterial`). A plane is built whenever its shadow is on, even
+   * at 0% opacity, so a slider can bring it up without a rebuild.
    */
-  artShadow(p, a, parent) {
-    const plan = shadowPlan(dropShadowSpec(p.booth), a);
-    if (!plan.on || plan.opacity <= 0.002) return null;
-    const key = shadowKey(plan);
-    if (!this.shadowTextures.has(key)) {
-      if (this.shadowTextures.size > 24) {
-        for (const tex of this.shadowTextures.values()) tex.dispose();
-        this.shadowTextures.clear();
-      }
-      const size = 256,
-        canvas = document.createElement("canvas");
-      canvas.width = canvas.height = size;
-      const ctx = canvas.getContext("2d");
-      ctx.fillStyle = "#000000";
-      ctx.fillRect(0, 0, size, size);
-      // The work-sized core, drawn white on black: white is opaque shadow.
-      // The blur is what a penumbra is, and it is why the plane is padded —
-      // a blur that reaches the edge of the canvas is a shadow cut off
-      // square, which reads as a second rectangle on the wall.
-      ctx.filter = `blur(${Math.max(0.5, plan.blur * size)}px)`;
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(
-        plan.insetX * size,
-        plan.insetY * size,
-        size * (1 - plan.insetX * 2),
-        size * (1 - plan.insetY * 2),
-      );
-      ctx.filter = "none";
-      const tex = new T.CanvasTexture(canvas);
-      tex.colorSpace = T.NoColorSpace;
-      this.shadowTextures.set(key, tex);
+  artShadows(p, a, parent) {
+    for (const kind of SHADOW_KINDS) {
+      const spec = shadowSpec(p.booth, kind);
+      if (!spec.on) continue;
+      const mesh = new T.Mesh(new T.PlaneGeometry(1, 1), shadowMaterial());
+      mesh.userData.artShadow = a.id;
+      mesh.userData.shadowKind = kind;
+      mesh.renderOrder = -1;
+      placeShadow(mesh, spec, a);
+      parent.add(mesh);
     }
-    const mesh = new T.Mesh(
-      new T.PlaneGeometry(plan.width * IN, plan.height * IN),
-      new T.MeshBasicMaterial({
-        color: 0x000000,
-        alphaMap: this.shadowTextures.get(key),
-        transparent: true,
-        opacity: plan.opacity,
-        // On the wall, not in it: writing depth would make the card fight the
-        // artwork in front of it at grazing angles.
-        depthWrite: false,
-      }),
-    );
-    // Local to the work's own group, whose origin is the centre of the work
-    // at its wall gap. Back to the wall face, then a hair in front of it.
-    mesh.position.set(
-      plan.dx * IN,
-      plan.dy * IN,
-      -((a.offset + a.thickness / 2) * IN + 0.003) + 0.0015,
-    );
-    mesh.userData.artShadow = a.id;
-    mesh.renderOrder = -1;
-    parent.add(mesh);
-    return mesh;
+  }
+  /**
+   * Re-plan every shadow in place from the booth's current settings — what a
+   * shadow slider does while it is being dragged. Only numbers change, so no
+   * program, geometry or texture is touched; switching a shadow on or off is
+   * a rebuild, because that adds or removes planes.
+   */
+  updateShadows() {
+    const specs = Object.fromEntries(SHADOW_KINDS.map((kind) => [kind, shadowSpec(this.p.booth, kind)]));
+    for (const [id, entry] of this.artGroups) {
+      // The work as its group was built: a group mid-resize carries the rest
+      // as its own scale, and the shadow is its child.
+      for (const mesh of entry.group.children)
+        if (mesh.userData.artShadow === id && specs[mesh.userData.shadowKind])
+          placeShadow(mesh, specs[mesh.userData.shadowKind], entry.initial);
+    }
   }
   /**
    * Retire the booth's current group and start an empty one.
@@ -1255,7 +1296,7 @@ export class BoothScene {
       );
       box.userData.artId = a.id;
       this.artObjects.push(box);
-      this.artShadow(p, a, art);
+      this.artShadows(p, a, art);
       // applySelection() outlines this box and places the handles against the
       // size it was built at, since the group carries the live scale.
       this.artGroups.get(a.id).box = box;
@@ -1375,7 +1416,7 @@ export class BoothScene {
     // sit beside a particular wall, and making someone rebuild that placement
     // to take one clean shot without a person in it is the reason the switch
     // exists. The list is kept, so switching back restores where they stood.
-    for (const person of (p.booth.showPeople === false ? [] : p.booth.people || [])) {
+    for (const person of (p.booth.showPeople === false ? [] : (p.booth.people || []).filter(isShown))) {
       const figure = makePerson(person.kind, person.height);
       figure.name = "person:" + person.id;
       placePerson(figure, person);
@@ -1487,7 +1528,11 @@ export class BoothScene {
       edge.position.set(0, (ped.height * IN) / 2, 0);
       edge.scale.setScalar(1.02);
     }
-    this.renderFrame();
+    // No frame drawn here. This used to end in `renderFrame()`, from before
+    // the viewport drew on demand; it is wrapped in `watchForChanges`, so the
+    // loop draws the outline on its next turn — and a synchronous frame on
+    // top of that was a third full render for every click and every rebuild,
+    // inside the click handler, on the machine least able to afford it.
   }
   /**
    * The light bar and its heads. Nine directional fixtures spotting the three
@@ -1579,7 +1624,7 @@ export class BoothScene {
    * rebuild `update()` performs, exactly as a free-standing wall's frame does.
    */
   buildPedestals(p) {
-    for (const ped of boothPedestals(p)) {
+    for (const ped of boothPedestals(p).filter(isShown)) {
       const g = new T.Group();
       g.name = "pedestal:" + ped.id;
       placePedestal(g, ped);
@@ -2122,7 +2167,6 @@ export class BoothScene {
         // quick flick finishes an inch short of where it was released.
         this.flushDrag();
         this.drag = null; this.down = null; this.controls.enabled = true;
-        this.settleShadows();
         if (c.hasPointerCapture(e.pointerId)) c.releasePointerCapture(e.pointerId);
         this.onEnd();
         return;

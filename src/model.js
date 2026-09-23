@@ -1,5 +1,5 @@
 import { editedAspect, validImageEdits } from "./image-edit.js";
-import { DROP_SHADOW, dropShadowSpec } from "./dropshadow.js";
+import { SHADOW_FIELD, SHADOW_MAX, shadowSpec } from "./dropshadow.js";
 import { hasRow, normalizeRow, rowLayout, MAX_SLOTS, MIN_SPACE, MAX_SPACE, MAX_GAP } from "./row.js";
 export const IN = 0.0254;
 export const uid = () => globalThis.crypto.randomUUID();
@@ -58,13 +58,13 @@ export function blankProject() {
       // lighting is already in the picture. Optional: a backup written before
       // it existed loads with the same default.
       fixtures: "auto",
-      // The drawn shadow every hung work throws onto the wall behind it, and
-      // with it the only thing that makes a wall gap visible from anywhere
-      // but along the wall. Optional: a backup written before it existed
-      // loads with these defaults, which is the same picture it was saved as
-      // plus a shadow it would have had if this had existed. See
-      // src/dropshadow.js.
-      dropShadow: { ...DROP_SHADOW },
+      // The drawn shadows a hung work throws onto the wall behind it —
+      // `shadowBehind`, `shadowUnder` and the global light `shadowAngle` —
+      // are deliberately absent here: absent is the default everywhere that
+      // reads them (see src/dropshadow.js), so a booth nobody has tuned
+      // follows the defaults if they are retuned, and each record is written
+      // the first time one of its controls is touched. An older booth's
+      // `dropShadow` is still read, for the shadow behind.
       // A single edge colour for every work in the booth. Off by default, so
       // each placement keeps its own `edgeColor`; switched on, one colour
       // answers for all of them and the per-work swatch says where it comes
@@ -332,6 +332,16 @@ export function relinkArtShowWalls(p) {
   p.art = p.art.map((a) => constrain(p, a));
   return p;
 }
+/**
+ * Whether a piece someone added — a pedestal or piece of furniture, a
+ * free-standing wall, a figure — is in the booth. Each may carry an optional
+ * `hidden: true`, asked for as "a hide button, so you don't need to delete —
+ * you can just hide it": hidden is out of the picture, out of every export,
+ * out of the floor plan and the packing list, and one click from back, with
+ * its size and place kept. Absent means shown, which is what every older
+ * backup meant.
+ */
+export const isShown = (item) => item?.hidden !== true;
 export const PEDESTAL_PREFIX = "pedestal:";
 // Raised from 8 when furniture joined the list: a 10 × 20 with two tables,
 // chairs, a bin and a banner is a dozen things before a single pedestal.
@@ -400,8 +410,11 @@ export const wallKeys = (p) => [
 export function wallSpec(p, key) {
   if (isPanelKey(key)) {
     const panel = findPanel(p, key);
+    // A hidden panel reads exactly as a switched-off perimeter wall does, so
+    // everything that already skips one — the build, the art hung on it,
+    // picking — skips a hidden panel too.
     return panel
-      ? { enabled: true, width: panel.width, height: panel.height, panel }
+      ? { enabled: isShown(panel), width: panel.width, height: panel.height, panel }
       : null;
   }
   return p.booth.walls[key] || null;
@@ -415,7 +428,10 @@ export const wallWidth = (p, wall) => wallSpec(p, wall)?.width ?? 0;
 export function boundWarning(p, a) {
   const wall = wallSpec(p, a.wall);
   if (!wall) return "This wall no longer exists. Move the artwork in Layout.";
-  if (!wall.enabled) return "This wall is hidden. Enable it in Layout.";
+  if (!wall.enabled)
+    return wall.panel
+      ? "This free-standing wall is hidden. Its eye in the Walls tool shows it again."
+      : "This wall is hidden. Enable it in Layout.";
   if (
     a.x < 0 ||
     a.y < 0 ||
@@ -694,6 +710,7 @@ export function validateProject(p) {
       if (ped.name !== undefined && (typeof ped.name !== "string" || ped.name.length > 200)) fail();
       if (ped.color !== undefined && !/^#[0-9a-f]{6}$/i.test(ped.color)) fail();
       if (ped.kind !== undefined && !Object.hasOwn(FURNITURE, ped.kind)) fail();
+      if (ped.hidden !== undefined && typeof ped.hidden !== "boolean") fail();
       seen.add(ped.id);
     }
   }
@@ -730,6 +747,7 @@ export function validateProject(p) {
       if (!finite(person.height, 48, 84)) fail();
       if (!finite(person.x, -600, 600) || !finite(person.z, -600, 600)) fail();
       if (person.rotation !== undefined && !finite(person.rotation, -360, 360)) fail();
+      if (person.hidden !== undefined && typeof person.hidden !== "boolean") fail();
     }
   }
   // Free-standing panels. Absent in every schema-1 backup written before they
@@ -753,6 +771,7 @@ export function validateProject(p) {
       )
         fail();
       if (panel.name !== undefined && (typeof panel.name !== "string" || panel.name.length > 200)) fail();
+      if (panel.hidden !== undefined && typeof panel.hidden !== "boolean") fail();
       panelIds.add(panel.id);
     }
   }
@@ -810,8 +829,9 @@ export function validateProject(p) {
     )
       fail();
   }
-  // The drawn drop shadow. Absent is the default everywhere, so this only
-  // has to refuse a value that is present and wrong.
+  // The drawn drop shadows. Absent is the default everywhere, so this only
+  // has to refuse a value that is present and wrong. `dropShadow` is the
+  // first version's record: never written now, and still read.
   if (p.booth.dropShadow !== undefined) {
     const s = p.booth.dropShadow;
     if (!s || typeof s !== "object") fail();
@@ -819,6 +839,19 @@ export function validateProject(p) {
     for (const key of ["darkness", "distance", "softness"])
       if (s[key] !== undefined && !finite(s[key], 0, 100)) fail();
   }
+  for (const field of Object.values(SHADOW_FIELD)) {
+    const s = p.booth[field];
+    if (s === undefined) continue;
+    if (!s || typeof s !== "object" || Array.isArray(s)) fail();
+    for (const key of ["on", "global"])
+      if (s[key] !== undefined && typeof s[key] !== "boolean") fail();
+    for (const key of ["opacity", "spread"])
+      if (s[key] !== undefined && !finite(s[key], 0, 100)) fail();
+    for (const key of ["distance", "size"])
+      if (s[key] !== undefined && !finite(s[key], 0, SHADOW_MAX)) fail();
+    if (s.angle !== undefined && !finite(s.angle, -360, 360)) fail();
+  }
+  if (p.booth.shadowAngle !== undefined && !finite(p.booth.shadowAngle, -360, 360)) fail();
   if (p.booth.edgeUniversal !== undefined && typeof p.booth.edgeUniversal !== "boolean") fail();
   if (p.booth.edgeColor !== undefined && !/^#[0-9a-f]{6}$/i.test(p.booth.edgeColor)) fail();
   if (!finite(p.ambient, 0, 4)) fail();
@@ -968,4 +1001,4 @@ export const edgeColorOf = (booth, art = {}) =>
     : art.edgeColor || DEFAULT_EDGE_COLOR;
 /** Whether a spotlight is showing. Absent means yes; see validate(). */
 export const lightVisible = (light) => light?.on !== false;
-export { dropShadowSpec };
+export { shadowSpec };
