@@ -225,7 +225,6 @@ function placePedestal(g, ped) {
   g.rotation.y = ((ped.rotation || 0) * Math.PI) / 180;
   return g;
 }
-/** Release everything a retired booth group holds on the GPU. */
 /**
  * A drawn drop shadow's material: black, with its alpha computed per
  * fragment from the plane's own position (src/dropshadow.js, SHADOW_GLSL).
@@ -291,6 +290,7 @@ function placeShadow(mesh, spec, a) {
     -((a.offset + a.thickness / 2) * IN + 0.003) + (mesh.userData.shadowKind === "under" ? 0.002 : 0.0015),
   );
 }
+/** Release everything a retired booth group holds on the GPU. */
 function disposeTree(group) {
   group.traverse((o) => {
     o.geometry?.dispose();
