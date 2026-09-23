@@ -16,7 +16,12 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-23** (see the 2026-09-23 bullet below). Before that, 2026-09-19 — the art-show booth and its neutral defaults,
+- **Last deploy: 2026-09-23, twice.** First the ten speed-and-planning
+  improvements, then — the same day, after the owner's first look on the real
+  machine — the second round: the drag shadow, the fast-edit redraw leak, the
+  cheaper click, Photoshop drop shadows, hide instead of delete, and the
+  Preview menu under the viewport (both bullets below). **Nothing is sitting
+  unmerged.** Before that, 2026-09-19 — the art-show booth and its neutral defaults,
   the pedestals, the Walls tool, the light-bar diffusion slider, the backdrop
   pole limit, people for scale, indoor fixture hiding, the Ken Burns move, the
   Video tab with its batch list and the overhead lens flare are all on `main`
@@ -29,8 +34,8 @@ Extend it; do not rebuild it.
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
 - **2026-09-23, second round: the first report from the real machine, and
-  what it asked for. On `claude/gifted-ramanujan-jgr1cy`, NOT merged** —
-  merging is deploying, so that is the owner's call. The report, in order:
+  what it asked for. Merged and deployed 2026-09-23** from
+  `claude/gifted-ramanujan-jgr1cy`, at the owner's word. The report, in order:
   "Speed — much better. If there is still room to improve, keep improving";
   "what preview quality are we looking at, and where is it visible?"; a hide
   button for furniture and anything added; the drop shadow lingering in the
@@ -505,8 +510,9 @@ Extend it; do not rebuild it.
 
 1. **The 2026-09-23 work on the real machine, and the round that answered
    it.** The first report is in: **speed "much better"**, and five asks,
-   all answered on `claude/gifted-ramanujan-jgr1cy` (see Now). **First:
-   merge it or not** — merging is deploying. Then, on the real machine:
+   all answered and **deployed the same day** (see Now). **Check
+   `window.BOOTH_BUILD` shows `main`'s tip before judging any of it** — a
+   Cloudflare build takes a few minutes. Then, on the real machine:
    - **Is a drag with fast edit off still smooth?** It is the one cost this
      round added: the shadow maps now refresh every drawn frame of a drag so
      the cast shadow follows the work (1024² per spotlight and the fill, 512²
