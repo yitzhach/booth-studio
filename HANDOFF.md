@@ -16,7 +16,7 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-19** — the art-show booth and its neutral defaults,
+- **Last deploy: 2026-09-23** (see the 2026-09-23 bullet below). Before that, 2026-09-19 — the art-show booth and its neutral defaults,
   the pedestals, the Walls tool, the light-bar diffusion slider, the backdrop
   pole limit, people for scale, indoor fixture hiding, the Ken Burns move, the
   Video tab with its batch list and the overhead lens flare are all on `main`
@@ -28,6 +28,77 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **Merged and deployed 2026-09-23: speed on a slow machine, then the
+  planning tools.** Asked for as "top 10 improvements — it lags, especially on
+  a slower PC; make it usable for trade shows, art shows and artists, with
+  some SketchUp functionality but easier". Ten items, each tested before the
+  next, one commit each on `claude/magical-hopper-xmabcm`, merged together:
+  1. **The viewport draws on demand.** `startLoop` used to render every
+     animation frame forever; an idle booth kept a 2014 GPU pinned and the
+     inspector sluggish. `tick()` now draws only when `invalidate()` has been
+     called, the controls are still moving, a shadow map is stale, or — as a
+     net — once a second for 15 s after the last change. `watchForChanges()`
+     is the whole list of what invalidates: any input event on the page, the
+     scene methods that change the picture (wrapped once, by name), every
+     asynchronous load (`texture`, `surfaces.load`, `lighting.apply`) on
+     settling, and the controls' change event. **If something changes the
+     picture and does not show until you move the mouse, it is missing from
+     that list.** A 50 ms timer (`KICK_MS`) draws an asked-for frame if the
+     browser has not handed out an animation frame by then; see Things
+     learned.
+  2. **Preview quality → Auto**, the new default, remembered per browser in
+     `booth.view` (`quality`, `autoScale`). It starts at Balanced's
+     supersampling and steps down a rung (3 → 2 → 1.5 → 1) each time 30
+     back-to-back frames have a median over 28 ms, says so once in a toast,
+     and remembers the rung for that display (keyed on devicePixelRatio). It
+     never steps back up by itself; picking Auto again restarts it.
+     `src/adaptive.js` is the rule, pure. Preview quality was not remembered
+     at all before this.
+  3. **A rebuild keeps its shaders.** `disposeGroup()` used to dispose the
+     old booth before the new one drew, and three deletes a program when its
+     last material goes — so every edit recompiled every shader. Profiled:
+     385 ms → 70–85 ms per edit for the default booth, 365 ms → 9 ms for the
+     art-show booth. The old group now waits in `this.retired` until the new
+     one has drawn and every load it started has settled (`this.loading`),
+     at most three groups, at most 10 s. `tools/perf-probe.mjs` prints the
+     numbers; view-responsive pins that a rebuild compiles nothing.
+  4. **A click is cheaper.** Icons are finished SVG strings (`icon()` in
+     main.js), not lucide placeholders rebuilt after every redraw; `render()`
+     no longer forces a page layout by resizing the canvas mid-edit (it waits
+     a frame), and `resize()` skips `setSize` when nothing changed, because
+     writing a canvas size reallocates its buffer even when it is the same.
+  5. **The light bar's nine heads cast shadows live only at High detail.**
+     Exports and recordings turn them on (`setBarShadows`), the way they
+     already undo fast edit — so a delivered file is exactly what it was.
+     The fill light still grounds every pedestal in the preview.
+  6. **Measuring.** Plan view draws the booth's width and depth and, for a
+     selected pedestal or free-standing wall, its clear floor to the left,
+     right and back walls. Toolbar → **Measure** (or T) is a tape: click,
+     click, read feet-and-inches on the tape and in the status bar; Esc puts
+     it away. `src/measure.js` is the arithmetic; lines are editor-only
+     LineSegments and labels are DOM (`.scene-labels`), so neither reaches a
+     file.
+  7. **Furniture.** A pedestal may carry an optional `kind`: 6′ and 8′
+     tables in cloths, counter, chair, stool, print bin, gridwall, banner
+     stand, screen. Same list, drag, sliders and rotation as a pedestal;
+     the Walls tool adds any of them. `MAX_PEDESTALS` 8 → 24. Shapes in
+     `src/furniture.js`, stylised like the figures.
+  8. **Keyboard and whole-wall arranging.** Arrows nudge 1″ (Shift 1′) —
+     art along its wall, floor pieces across the floor; R / Shift+R turn
+     15°; Ctrl/⌘+D duplicates; V/M/T pick Select/Move/Measure. Artwork →
+     Placement gains **Space this wall evenly** and **Hang this wall at
+     60″** (every work on that face of that wall). `src/arrange.js`.
+  9. **Quick start** (Layout → Project): show type, size, starter furniture
+     and a name build a booth through `applyVenue`; **Save this booth as a
+     template** keeps booth, lights and furniture without art or images in
+     `localStorage["booth.templates"]` (12 max) and Quick start offers them.
+     `src/quickstart.js`.
+  10. **Show pack** (Export): one printable HTML with a numbered floor plan
+     and clearances, the inventory of work with size, medium and price, and
+     a packing/load-in checklist derived from the booth (a canopy brings its
+     weights, a table its cloth, each work two hooks). Artwork gains Medium
+     and Price fields for it — `price` and `medium` were already optional
+     strings in schema 1, used by wall labels. `src/showpack.js`.
 - **Merged and deployed 2026-09-22:** exports in a frame
   you choose, careful rendering for video, the drawn drop shadow that finally
   makes a wall gap visible, an eye beside every spotlight, a universal edge
@@ -369,6 +440,27 @@ Extend it; do not rebuild it.
 
 ## Next
 
+1. **Nobody has looked at any of the 2026-09-23 work on a real machine.**
+   All ten items are on `main`; every one is covered by a real-browser suite
+   here, but the reason for most of them is how the app *feels* on a slow
+   PC, and that needs the PC. In order:
+   - **Is it faster on the 2014 iMac?** Idle should now cost nothing (fans
+     quiet, inspector snappy); an edit should be a fraction of what it was.
+     If a drag still stutters, see "Is it actually faster now?" below for
+     what is left, then consider instancing the row's neighbour booths.
+   - **Does Auto settle somewhere sensible, and is its toast welcome?** If it
+     lands on 1 on a machine that looked fine at Balanced, raise
+     `SLOW_FRAME_MS`; if it never steps down on a machine that stutters,
+     lower it. Pick Auto again to re-measure.
+   - **Does anything fail to appear until the mouse moves?** That is a
+     change missing from `watchForChanges()`; add it there. The 1 s
+     heartbeat hides it for 15 s after the last touch, so look after a
+     pause.
+   - **Are the light bar's shadows missed in the preview?** High detail
+     brings them back; exports always have them.
+   - **The furniture shapes, sizes and default placements**, the starter
+     positions in `STARTER_PLACES`, and whether the show pack's checklist
+     is the right list — all judgement, all easy to change.
 1. **Nobody has looked at any of the 2026-09-21 finishing work.** All of it is
    on `main`. Judgements that need a browser and a pair of eyes:
    - **The drop shadow's three defaults** (darkness 40, distance 45, softness
@@ -659,9 +751,10 @@ the picker became one list.
 
 ```sh
 npm ci
-npm test                 # 259 Node tests
+npm test                 # 291 Node tests
 npm run build
-npm run test:view        # camera, city, env presets, HDRI, ground, ground library, tent, walls, video, timeline, people, panels, responsiveness, art show, booth row, finishing
+npm run test:view        # 18 suites: city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack
+BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
 npm run test:browser     # 25 end-to-end checks
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
 ```
@@ -691,6 +784,12 @@ regression — it is the editor and the test sharing one server.
 
 ## Rules that are easy to break
 
+- **The live loop draws on demand.** Anything new that changes the picture
+  must reach `invalidate()` — through a wrapped scene method, an input event,
+  or a load `watchForChanges()` knows about. Otherwise it shows up late.
+- **Do not dispose a material in the booth group before its replacement has
+  drawn.** That is what `this.retired` is for; disposing early recompiles
+  every shader and was most of what an edit cost.
 - Preserve schema-1 backup compatibility. Optional fields and widened enums are
   fine; changed meaning is not. `booth.panels` and the widened `a.wall` are the
   worked example; `WALLS_PHASE.md` explains how it was kept. The art-show
@@ -738,6 +837,20 @@ regression — it is the editor and the test sharing one server.
 - Do not modify the separate `yitzhach/commission` repo.
 
 ## Things learned the hard way
+
+- **Headless Chromium hands an idle page about three animation frames a
+  second.** Once the loop stopped drawing continuously, a change could wait
+  ~400 ms for its frame here, and a camera preview's first frame could miss
+  a one-second move entirely. Real browsers fire rAF at the display rate, but
+  the loop now has a 50 ms timer behind every asked-for frame and a preview
+  draws its first frame immediately. A test that reads a label or a pixel
+  straight after a change still wants a short wait.
+- **`this.frames` in scene.js is the map of wall frames** (`frameKey`), not a
+  counter. The on-demand loop's counter is `framesOwed`; naming it `frames`
+  broke every drag and was only caught by the e2e suite.
+- **`tests/image-regression.test.js` slices scene.js from `updateArtwork(` to
+  `setView(`** and evaluates the text. A method added between those two
+  breaks it with a SyntaxError; put new methods elsewhere.
 
 - **`tests/e2e.mjs` fails in this sandbox at the 4096 px PNG, and it fails on
   `main` too.** It waits 30 seconds for the download; a 4096 px render under
@@ -1009,6 +1122,16 @@ regression — it is the editor and the test sharing one server.
 - `src/dropshadow.js` — the drawn drop shadow, its three sliders, and why a
   wall gap needed one.
 - `src/swatches.js` — the seven saved colours and the Previous button.
+- `src/adaptive.js` — Auto preview quality's rule. `startLoop` / `tick` /
+  `invalidate` / `watchForChanges` in `src/scene.js` are the on-demand loop;
+  `disposeGroup` / `releaseRetired` keep shaders across a rebuild.
+- `src/measure.js` — tape and plan-dimension arithmetic; `refreshGuides` and
+  `placeAnnotations` in `src/scene.js` draw them.
+- `src/furniture.js` — the furniture shapes; `FURNITURE` in `src/model.js`
+  is the list and its default sizes.
+- `src/arrange.js` — even spacing, the 60″ hang line, arrow nudges.
+- `src/quickstart.js` — Quick start and user templates.
+- `src/showpack.js` — the show pack: floor plan, inventory, checklist.
 - `FUTURE_BUILD.md` — requested, deliberately not started. Currently empty.
 - `docs/HDRI-ASSETS.md`, `docs/TEXTURE-ASSETS.md` — adding asset files.
 - `AI_EXPORT_PHASE.md` — only for AI-export implementation.
