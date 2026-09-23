@@ -4,7 +4,7 @@ import {
   blankProject,
   demoProject,
   DEFAULT_EDGE_COLOR,
-  dropShadowSpec,
+  shadowSpec,
   edgeColorOf,
   lightVisible,
   validateProject,
@@ -366,26 +366,56 @@ test("a placement the app positions never lands on one already there", () => {
 test("a backup with no drop shadow, no universal edge and no light switch still opens", () => {
   const p = blankProject();
   delete p.booth.dropShadow;
+  delete p.booth.shadowBehind;
+  delete p.booth.shadowUnder;
+  delete p.booth.shadowAngle;
   delete p.booth.edgeUniversal;
   delete p.booth.edgeColor;
   for (const l of p.lights) delete l.on;
   assert.doesNotThrow(() => validateProject(structuredClone(p)));
   // And absent means the defaults, everywhere that reads them.
-  assert.equal(dropShadowSpec(p.booth).on, true);
+  assert.equal(shadowSpec(p.booth, "behind").on, true);
+  assert.equal(shadowSpec(p.booth, "under").on, false);
   assert.equal(edgeColorOf(p.booth, {}), DEFAULT_EDGE_COLOR);
   assert.equal(lightVisible(p.lights[0]), true);
 });
 
-test("a drop shadow outside 0..100, or a light switch that is not a switch, is refused", () => {
+test("a backup from the first drop shadow, with its three sliders, still opens", () => {
+  const p = blankProject();
+  p.booth.dropShadow = { on: true, darkness: 70, distance: 20, softness: 90 };
+  assert.doesNotThrow(() => validateProject(structuredClone(p)));
+  assert.equal(shadowSpec(p.booth, "behind").opacity, Math.round(70 * 0.81));
+});
+
+test("the Photoshop shadows accept their ranges and refuse what is not one", () => {
+  const good = blankProject();
+  good.booth.shadowBehind = { on: true, opacity: 31, angle: 125, global: true, distance: 0.5, spread: 4, size: 0.8 };
+  good.booth.shadowUnder = { on: false, opacity: 100, angle: -180, global: false, distance: 12, spread: 100, size: 0 };
+  good.booth.shadowAngle = -45;
+  assert.doesNotThrow(() => validateProject(structuredClone(good)));
+  // A record with only some fields is a record at the defaults for the rest.
+  good.booth.shadowUnder = { on: true };
+  assert.doesNotThrow(() => validateProject(structuredClone(good)));
+});
+
+test("a drop shadow outside its range, or a light switch that is not a switch, is refused", () => {
   const bad = (change) => {
     const p = structuredClone(blankProject());
     change(p);
     assert.throws(() => validateProject(p));
   };
-  bad((p) => (p.booth.dropShadow.darkness = 101));
-  bad((p) => (p.booth.dropShadow.distance = -1));
-  bad((p) => (p.booth.dropShadow.on = "yes"));
+  bad((p) => (p.booth.dropShadow = { darkness: 101 }));
+  bad((p) => (p.booth.dropShadow = { distance: -1 }));
+  bad((p) => (p.booth.dropShadow = { on: "yes" }));
   bad((p) => (p.booth.dropShadow = "dark"));
+  bad((p) => (p.booth.shadowBehind = { opacity: 101 }));
+  bad((p) => (p.booth.shadowBehind = { distance: 13 }));
+  bad((p) => (p.booth.shadowUnder = { size: -1 }));
+  bad((p) => (p.booth.shadowUnder = { spread: "wide" }));
+  bad((p) => (p.booth.shadowUnder = { global: 1 }));
+  bad((p) => (p.booth.shadowBehind = { angle: 400 }));
+  bad((p) => (p.booth.shadowBehind = []));
+  bad((p) => (p.booth.shadowAngle = "up"));
   bad((p) => (p.booth.edgeColor = "black"));
   bad((p) => (p.booth.edgeUniversal = 1));
   bad((p) => (p.lights[0].on = "off"));

@@ -63,8 +63,8 @@ test("artwork transforms reuse scene objects without disposing textures", () => 
   const group = { position: { set: (...v) => position = v }, scale: { set: (...v) => scale = v } };
   scene.artGroups = new Map([["art", { group, initial: { w: 20, h: 30, thickness: 1 } }]]);
   scene.renderer = { shadowMap: {} };
-  // Shadows are refreshed through touchShadows, which defers them to the end
-  // of a drag; this method is extracted on its own, so it is stubbed.
+  // Shadows are refreshed through touchShadows, once a drawn frame; this
+  // method is extracted on its own, so it is stubbed.
   let shadowTouches = 0;
   scene.touchShadows = () => shadowTouches++;
   scene.updateArtwork({ id: "art", x: 10, y: 20, w: 40, h: 60, thickness: 1, offset: 1 });

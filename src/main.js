@@ -7,7 +7,7 @@ import {
 } from "./timeline.js";
 import { SIZES, DEFAULT_SIZE, FPS, DEFAULT_FPS, videoSupported, pickCodec } from "./video.js";
 import { FRAMES, DEFAULT_FRAME, CUSTOM_FRAME, FRAME_MIN, FRAME_MAX, STILL_SIZES, frameSize } from "./framing.js";
-import { DROP_SHADOW, dropShadowSpec } from "./dropshadow.js";
+import { SHADOW_FIELD, SHADOW_KINDS, SHADOW_MAX, globalAngle, normalAngle, shadowSpec } from "./dropshadow.js";
 import { MAX_SWATCHES, isColor, readPalette, savePalette, removeSwatch, rememberColor, previousColor } from "./swatches.js";
 import { applyImageEdits, DEFAULT_IMAGE_EDITS, normalizeImageEdits } from "./image-edit.js";
 import { PEOPLE, MAX_PEOPLE, MIN_HEIGHT, MAX_HEIGHT, newPerson, personHeight } from "./people.js";
@@ -928,13 +928,6 @@ async function boot() {
     }</div></div>`;
   }
   /**
-   * The drawn drop shadow, and with it the only control over how visible a
-   * wall gap is. Three sliders, in the words they were asked for: darker or
-   * lighter, further or closer, softer or harder. It lives in Lighting
-   * because it is light, even though it is drawn rather than cast — see
-   * src/dropshadow.js for why it is drawn.
-   */
-  /**
    * The edge colour, and the switch that makes one colour answer for every
    * work in the booth.
    *
@@ -988,14 +981,108 @@ async function boot() {
     const chosen = which === "video" ? videoFrameShape : exportFrame;
     return `${shape.width} × ${shape.height} px${chosen === "view" ? ", the shape of this window" : ""}. A frame that is not the window's shape shows more or less at the sides than the viewport does, because the camera keeps its height and the width follows the ratio.`;
   }
-  function dropShadowSection() {
-    const s = dropShadowSpec(p.booth);
-    const gaps = p.art.filter((a) => (a.offset || 0) > 0.01).length;
-    return `<section><h3>Drop shadow</h3><label class="check-field"><input type="checkbox" data-field="on" data-scope="dropShadow" ${s.on ? "checked" : ""}/>Shadow behind hung work</label>${
-      s.on
-        ? `${range("Darker / lighter", "darkness", s.darkness, 0, 100, 1, "dropShadow", "%")}${range("Further / closer", "distance", s.distance, 0, 100, 1, "dropShadow", "%")}${range("Softer / harder", "softness", s.softness, 0, 100, 1, "dropShadow", "%")}<p class="muted">Each work's shadow is sized from its own wall gap, so a piece stood further off the wall throws a deeper one. Darker is how much of it there is; further throws it down and across, as a lower light would; softer widens the penumbra. ${gaps ? `${gaps} work${gaps === 1 ? " has" : "s have"} a wall gap.` : "No work has a wall gap yet — Artwork → Wall gap is where that is set."}</p><p class="muted">Drawn, not cast: a diffused light bar leaves nothing directional to cast one, and a gap you can only see by putting your eye along the wall is a measurement nobody can check. It is in every export, like the booth itself.</p>`
-        : `<p class="muted">Off. A work stood off the wall on a batten then reads as flush unless you look along the wall.</p>`
-    }</section>`;
+  /**
+   * The two drawn shadows, laid out the way Photoshop's Drop Shadow dialog is
+   * — asked for with a screenshot of it: Opacity, Angle with its dial and
+   * Use Global Light, Distance, Spread and Size, each a slider with the
+   * number typed beside it. The eye in each heading shows or hides that
+   * shadow without losing its settings. They live in Lighting because they
+   * are light, even though they are drawn rather than cast; see
+   * src/dropshadow.js for why.
+   *
+   * The sliders, the typed numbers and the dial move the shadows live
+   * (`shadowGesture`, below) and take one undo step per gesture. The eye and
+   * Use Global Light are ordinary edits.
+   */
+  function shadowSection(kind) {
+    const s = shadowSpec(p.booth, kind),
+      scope = SHADOW_FIELD[kind],
+      name = kind === "behind" ? "Drop shadow" : "Under shadow";
+    const heading =
+      kind === "behind"
+        ? `Drop shadow <span>behind the work</span>`
+        : `Second shadow <span>under &amp; to the side</span>`;
+    const eye = `<button data-shadow-eye="${kind}" class="eye${s.on ? "" : " off"}" title="${s.on ? "Hide" : "Show"} this shadow" aria-label="${s.on ? "Hide" : "Show"} ${e(name.toLowerCase())}" aria-pressed="${s.on}">${icon(s.on ? "eye" : "eye-off")}</button>`;
+    const note =
+      kind === "behind"
+        ? `Photoshop's drop shadow, on the wall behind every hung work. Angle is where the light comes from; Distance and Size are inches on the wall, so a shadow reads the same at every export size. ${s.on ? "" : "Hidden: its settings are kept, and the eye brings it back."}`
+        : `A stronger shadow thrown down and to the side, for weight on the wall. It draws over the one above, so the two read as a tight contact shadow and a soft cast one. ${s.on ? "" : "Hidden until the eye is switched on; set it up first if you like."}`;
+    return `<section class="fx${s.on ? "" : " fx-off"}" data-fx="${kind}"><div class="fx-head"><h3>${heading}</h3>${eye}</div>${fxRow(name, "Opacity", "opacity", s.opacity, 0, 100, 1, scope, "%")}${angleRow(name, s, scope)}${fxRow(name, "Distance", "distance", s.distance, 0, SHADOW_MAX, 0.05, scope, "in", 6)}${fxRow(name, "Spread", "spread", s.spread, 0, 100, 1, scope, "%")}${fxRow(name, "Size", "size", s.size, 0, SHADOW_MAX, 0.05, scope, "in", 6)}<p class="muted">${note}</p></section>`;
+  }
+  /**
+   * One Photoshop-style row: the label, a slider, the number and its unit.
+   * Both inputs are the same field, so either can be used and the other
+   * follows. A slider's travel stops at `reach` where the typed number may
+   * go further — fine control over the first few inches matters more than
+   * dragging to a foot — unless the value is already past it.
+   */
+  function fxRow(name, label, key, value, min, max, step, scope, unit, reach = max) {
+    const top = Math.max(reach, value);
+    const shown = Number(value.toFixed(2));
+    return `<div class="fx-row"><span class="fx-label">${label}</span><input type="range" data-field="${key}" data-scope="${scope}" data-fx-live aria-label="${e(name + " " + label.toLowerCase())}" min="${min}" max="${top}" step="${step}" value="${shown}"/><input type="number" data-field="${key}" data-scope="${scope}" data-fx-live aria-label="${e(name + " " + label.toLowerCase() + " value")}" min="${min}" max="${max}" step="${step}" value="${shown}"/><span class="fx-unit">${unit === "in" ? "″" : unit}</span></div>`;
+  }
+  /** Photoshop's angle row: a dial to drag, the degrees, and Use Global Light. */
+  function angleRow(name, s, scope) {
+    return `<div class="fx-row fx-angle"><span class="fx-label">Angle</span><span class="fx-dial" data-dial="${scope}" role="slider" tabindex="0" aria-label="${e(name)} angle dial" aria-valuemin="-180" aria-valuemax="180" aria-valuenow="${s.angle}">${dialSVG(s.angle)}</span><input type="number" data-field="angle" data-scope="${scope}" data-fx-live aria-label="${e(name)} angle value" min="-180" max="180" step="1" value="${Math.round(s.angle)}"/><span class="fx-unit">°</span></div><label class="check-field fx-global"><input type="checkbox" data-field="global" data-scope="${scope}" ${s.global ? "checked" : ""}/>Use global light</label>`;
+  }
+  /** The dial's face: a line from the centre toward the light. */
+  function dialSVG(angle) {
+    const r = (angle * Math.PI) / 180,
+      x = 12 + 8.5 * Math.cos(r),
+      y = 12 - 8.5 * Math.sin(r);
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10.5"/><line x1="12" y1="12" x2="${x.toFixed(2)}" y2="${y.toFixed(2)}"/><circle class="hub" cx="12" cy="12" r="1.5"/></svg>`;
+  }
+  /**
+   * Every shadow control on the page, set from the booth — after a live
+   * change, so the typed number follows its slider, and the other shadow's
+   * angle follows a global light that just moved. The control being used is
+   * left alone: rewriting an input under the cursor fights the person typing.
+   */
+  function syncShadowInputs(except = null) {
+    for (const kind of SHADOW_KINDS) {
+      const s = shadowSpec(p.booth, kind),
+        scope = SHADOW_FIELD[kind];
+      for (const input of document.querySelectorAll(`[data-fx-live][data-scope="${scope}"]`)) {
+        if (input === except) continue;
+        const v = s[input.dataset.field];
+        if (typeof v === "number") input.value = input.dataset.field === "angle" ? Math.round(v) : Number(v.toFixed(2));
+      }
+      const dial = document.querySelector(`[data-dial="${scope}"]`);
+      if (dial) {
+        dial.innerHTML = dialSVG(s.angle);
+        dial.setAttribute("aria-valuenow", String(Math.round(s.angle)));
+      }
+    }
+  }
+  /**
+   * One live change to a shadow, from a slider, a typed number or the dial.
+   * The record is written back whole the first time — which is what upgrades
+   * an older booth's `dropShadow` — and an angle under the global light moves
+   * the global light, so every shadow using it turns together.
+   */
+  function setShadowLive(scope, key, raw, source = null) {
+    const kind = SHADOW_KINDS.find((k) => SHADOW_FIELD[k] === scope);
+    if (!kind) return;
+    const limits = { opacity: [0, 100], spread: [0, 100], distance: [0, SHADOW_MAX], size: [0, SHADOW_MAX], angle: [-180, 180] }[key];
+    const value = Number(raw);
+    if (!limits || raw === "" || !Number.isFinite(value)) return;
+    const v = key === "angle" ? normalAngle(Math.round(value)) : Math.max(limits[0], Math.min(limits[1], value));
+    if (shadowSpec(p.booth, kind)[key] === v) return;
+    if (!shadowGesture) {
+      checkpoint();
+      shadowGesture = true;
+    }
+    const record = (p.booth[scope] = shadowSpec(p.booth, kind));
+    record[key] = v;
+    if (key === "angle" && record.global) p.booth.shadowAngle = v;
+    scene?.updateShadows();
+    syncShadowInputs(source);
+  }
+  /** The end of a live shadow gesture: saved, and one undo step behind it. */
+  function endShadowGesture() {
+    if (!shadowGesture) return;
+    shadowGesture = false;
+    scheduleSave();
   }
   function range(
     label,
@@ -1572,7 +1659,7 @@ async function boot() {
     if (tab === "art" && p.mode === "photo") {
       html = `<div class="panel-heading"><h2>Photo artwork</h2>${btn("upload-art", "Upload artwork", "plus", "icon-only")}</div><p class="muted">Select a library work to add it to this photo. Drag its corners to match the wall. Placement is visual, not measured.</p><div class="mobile-library">${libraryHTML(true)}</div>${l ? `<section><h3>${e(l.title)}</h3>${range("Cast-shadow overlay", "shadow", l.shadow, 0, 60, 1, "photoLayer")}<p class="muted">Drag inside to move. Blue corner handles control perspective.</p>${l.corners.map((c, i) => `<h4>${["Top left", "Top right", "Bottom right", "Bottom left"][i]}</h4><div class="field-pair">${field("X %", i + "-0", c[0] * 100, 0, 100, 0.1, "%", "corner")}${field("Y %", i + "-1", c[1] * 100, 0, 100, 0.1, "%", "corner")}</div>`).join("")}<div class="button-row">${btn("photo-front", "Bring to front", "layers")}${btn("photo-delete", "Remove", "trash-2")}</div></section>` : '<div class="empty-inspector"><p>Choose an uploaded work from your library, or upload a new one.</p></div>'}<section><h3>Photo layers</h3>${p.photo.layers.map((x) => `<button class="wide layer-row ${x.id === photoSelected ? "active" : ""}" data-layer="${x.id}">${e(x.title)}</button>`).join("")}</section>`;
     } else if (tab === "art") {
-      html = `<div class="mobile-library">${libraryHTML(true)}</div>${a ? `<div class="panel-heading"><h2>Artwork properties</h2><span class="badge">${a.kind === "sign" ? "Sign" : a.kind === "label" ? "Label" : a.asset ? "Original" : "Sample"}</span></div><div class="selected-art"><div class="thumb">${artThumb(a)}</div><div><input class="title-input" data-field="title" data-scope="art" aria-label="Artwork title" maxlength="120" value="${e(a.title)}"/><span>${a.kind === "sign" || a.kind === "label" ? "Editable wall asset" : a.asset ? "Original image preserved" : "Measured placeholder panel"}</span>${a.kind === "sign" || a.kind === "label" ? "" : btn("replace-art", a.asset ? "Replace image" : "Add original image", "image-plus", "text-button")}</div></div>${signFields(a)}${a.asset ? `<section><h3>Image adjustments</h3><p class="muted">Edits affect this placement only. The uploaded original stays unchanged.</p>${btn("edit-image", "Edit image", "image", "primary wide")}<div class="button-row">${btn("copy-edits", "Copy edits", "copy")}${btn("paste-edits", "Paste edits", "layers", p.editClipboard ? "" : "disabled")}</div></section>` : ""}<section><h3>Dimensions <span>inches</span></h3><p class="muted">Double-tap artwork to adjust. Corners scale proportionally; middle edge handles stretch width or height.</p>${scaleControl(a)}<label class="setting-label"><input type="checkbox" data-field="stretch" data-scope="art" ${a.stretch ? "checked" : ""}/> Stretch image to panel dimensions</label>${field("Width", "w", a.w, 1, 360)}${field("Height", "h", a.h, 1, 360)}${!a.stretch && mismatch(p, a) ? `<div class="warning">Image proportions differ from the panel. The full image is fitted inside without stretching.${btn("match-ratio", "Match height to image", null, "wide")}</div>` : ""}${field("Thickness", "thickness", a.thickness, 0.1, 12, 0.1)}<label class="setting-label">Edge material<select data-field="edgeTexture" data-scope="art" aria-label="Edge material">${["plain","concrete","wood","metal"].map(k=>`<option value="${k}" ${(a.edgeTexture || "plain") === k ? "selected" : ""}>${k === "wood" ? "Wood grain" : k[0].toUpperCase()+k.slice(1)}</option>`).join("")}</select></label>${edgeColorFields(a)}${field("Wall gap", "offset", a.offset, 0, 12, 0.1)}<p class="muted">How far the work stands off the wall. ${dropShadowSpec(p.booth).on ? "Its drop shadow is sized from this, which is what makes the gap visible head-on; Lighting → Drop shadow is where that is set." : "With Lighting → Drop shadow off, a gap is only visible looking along the wall."}</p></section><section><h3>Placement</h3><div class="exterior-callout"><strong>Interior and exterior walls</strong><span>Artwork can hang on either face of the three booth walls and of any free-standing wall.</span></div>${hasRow(p.booth) ? `<label class="select-field">Booth<select data-field="inBooth" data-scope="art" aria-label="Which booth this hangs in">${boothSlots(p.booth).map((b) => `<option value="${e(b.id)}" ${(a.booth || normalizeRow(p.booth).home) === b.id ? "selected" : ""}>${e(slotLabel(b))}</option>`).join("")}</select></label>` : ""}<label class="select-field">Wall location<select data-field="location" data-scope="art" aria-label="Wall location">${locationOptions(a)}</select></label><div class="button-row">${btn("face-view", "View wall face", "camera")}</div>${field("Left edge", "x", a.x, -360, 360)}${artSlider(a, "x", "Slide left / right")}${field("Bottom edge", "y", a.y, -360, 360)}${artSlider(a, "y", "Slide up / down")}<p class="muted">From the bottom-left corner, facing the ${a.face === "outside" ? "outside" : "inside"} of this wall.</p>${boundWarning(p, a) ? `<div class="warning">${boundWarning(p, a)}</div>` : ""}<div class="button-row">${btn("center", "Center", "align-center")}${btn("eye-level", "Center at 60″", "arrow-up-to-line")}</div><div class="button-row">${btn("space-wall", "Space this wall evenly", "columns-2")}${btn("hang-wall", "Hang this wall at 60″", "ruler")}</div><p class="muted">For every work on this face of this wall: equal gaps between them and at both ends, in the order they hang; or every centre at 60″. Arrow keys nudge the selected work an inch, Shift a foot.</p></section><section><h3>Actions</h3><div class="button-row">${btn("duplicate-art", "Duplicate", "copy")}${btn("delete-art", "Remove", "trash-2", "danger")}</div></section>` : `<div class="empty-inspector"><h2>Make room for your work.</h2><p>Uploading files an original in your library without hanging it. Tap one there to put it on a wall, then set its real dimensions here.</p>${btn("upload-art", "Upload artwork", "image-plus", "primary")}</div>`}`;
+      html = `<div class="mobile-library">${libraryHTML(true)}</div>${a ? `<div class="panel-heading"><h2>Artwork properties</h2><span class="badge">${a.kind === "sign" ? "Sign" : a.kind === "label" ? "Label" : a.asset ? "Original" : "Sample"}</span></div><div class="selected-art"><div class="thumb">${artThumb(a)}</div><div><input class="title-input" data-field="title" data-scope="art" aria-label="Artwork title" maxlength="120" value="${e(a.title)}"/><span>${a.kind === "sign" || a.kind === "label" ? "Editable wall asset" : a.asset ? "Original image preserved" : "Measured placeholder panel"}</span>${a.kind === "sign" || a.kind === "label" ? "" : btn("replace-art", a.asset ? "Replace image" : "Add original image", "image-plus", "text-button")}</div></div>${signFields(a)}${a.asset ? `<section><h3>Image adjustments</h3><p class="muted">Edits affect this placement only. The uploaded original stays unchanged.</p>${btn("edit-image", "Edit image", "image", "primary wide")}<div class="button-row">${btn("copy-edits", "Copy edits", "copy")}${btn("paste-edits", "Paste edits", "layers", p.editClipboard ? "" : "disabled")}</div></section>` : ""}<section><h3>Dimensions <span>inches</span></h3><p class="muted">Double-tap artwork to adjust. Corners scale proportionally; middle edge handles stretch width or height.</p>${scaleControl(a)}<label class="setting-label"><input type="checkbox" data-field="stretch" data-scope="art" ${a.stretch ? "checked" : ""}/> Stretch image to panel dimensions</label>${field("Width", "w", a.w, 1, 360)}${field("Height", "h", a.h, 1, 360)}${!a.stretch && mismatch(p, a) ? `<div class="warning">Image proportions differ from the panel. The full image is fitted inside without stretching.${btn("match-ratio", "Match height to image", null, "wide")}</div>` : ""}${field("Thickness", "thickness", a.thickness, 0.1, 12, 0.1)}<label class="setting-label">Edge material<select data-field="edgeTexture" data-scope="art" aria-label="Edge material">${["plain","concrete","wood","metal"].map(k=>`<option value="${k}" ${(a.edgeTexture || "plain") === k ? "selected" : ""}>${k === "wood" ? "Wood grain" : k[0].toUpperCase()+k.slice(1)}</option>`).join("")}</select></label>${edgeColorFields(a)}${field("Wall gap", "offset", a.offset, 0, 12, 0.1)}<p class="muted">How far the work stands off the wall. ${shadowSpec(p.booth, "behind").on || shadowSpec(p.booth, "under").on ? "Head-on, the drawn drop shadow is what makes a gap read; its distance and size are set in Lighting → Drop shadow." : "With both drawn shadows hidden (Lighting → Drop shadow), a gap is only visible looking along the wall."}</p></section><section><h3>Placement</h3><div class="exterior-callout"><strong>Interior and exterior walls</strong><span>Artwork can hang on either face of the three booth walls and of any free-standing wall.</span></div>${hasRow(p.booth) ? `<label class="select-field">Booth<select data-field="inBooth" data-scope="art" aria-label="Which booth this hangs in">${boothSlots(p.booth).map((b) => `<option value="${e(b.id)}" ${(a.booth || normalizeRow(p.booth).home) === b.id ? "selected" : ""}>${e(slotLabel(b))}</option>`).join("")}</select></label>` : ""}<label class="select-field">Wall location<select data-field="location" data-scope="art" aria-label="Wall location">${locationOptions(a)}</select></label><div class="button-row">${btn("face-view", "View wall face", "camera")}</div>${field("Left edge", "x", a.x, -360, 360)}${artSlider(a, "x", "Slide left / right")}${field("Bottom edge", "y", a.y, -360, 360)}${artSlider(a, "y", "Slide up / down")}<p class="muted">From the bottom-left corner, facing the ${a.face === "outside" ? "outside" : "inside"} of this wall.</p>${boundWarning(p, a) ? `<div class="warning">${boundWarning(p, a)}</div>` : ""}<div class="button-row">${btn("center", "Center", "align-center")}${btn("eye-level", "Center at 60″", "arrow-up-to-line")}</div><div class="button-row">${btn("space-wall", "Space this wall evenly", "columns-2")}${btn("hang-wall", "Hang this wall at 60″", "ruler")}</div><p class="muted">For every work on this face of this wall: equal gaps between them and at both ends, in the order they hang; or every centre at 60″. Arrow keys nudge the selected work an inch, Shift a foot.</p></section><section><h3>Actions</h3><div class="button-row">${btn("duplicate-art", "Duplicate", "copy")}${btn("delete-art", "Remove", "trash-2", "danger")}</div></section>` : `<div class="empty-inspector"><h2>Make room for your work.</h2><p>Uploading files an original in your library without hanging it. Tap one there to put it on a wall, then set its real dimensions here.</p>${btn("upload-art", "Upload artwork", "image-plus", "primary")}</div>`}`;
     }
     if (tab === "layout") {
       html = `<div class="panel-heading"><h2>${p.mode === "photo" ? "Booth photograph" : "Booth layout"}</h2>${icon("layout-panel-left")}</div>${p.mode === "photo" ? `<p class="muted">The original photo stays intact. Added art and light overlays are saved separately. Existing objects in the photograph cannot be moved or erased in this prototype.</p>${btn("upload-photo", p.photo.asset ? "Replace booth photo" : "Upload booth photo", "image-plus", "wide")}${range("Photo exposure", "exposure", p.photo.exposure, -1, 1, 0.05, "photo")}` : `<section><h3>Footprint</h3><select data-field="preset" aria-label="Booth preset"><option value="120" ${p.booth.width === 120 ? "selected" : ""}>10 × 10 ft · Standard</option><option value="240" ${p.booth.width === 240 ? "selected" : ""}>10 × 20 ft · Double</option></select><p class="muted">Nominal footprint. Panels and 1.4″ canopy legs reduce usable space near edges.</p>${isArtShow(p) ? `<div class="warning">This is an art-show booth. Its footprint, walls and light bar are in the <strong>Art show</strong> tool, and a preset or a canopy here would put it back to an outdoor pop-up.</div>` : ""}${field("Wall height", "height", p.booth.height, 48, 144, 1, "in", "booth")}<label class="check-field"><input type="checkbox" data-field="tent" data-scope="booth" ${p.booth.tent ? "checked" : ""}/>White canopy & frame</label><label class="setting-label">Tent style<select aria-label="Tent style" data-field="tentStyle" data-scope="booth">${Object.entries(TENTS).map(([k,v])=>`<option value="${k}" ${(p.booth.tentStyle||'classic')===k?'selected':''}>${v}</option>`).join('')}</select></label><p class="muted">12″ fabric valance, rounded hems, roof ribs and folding frame. Inspired shapes; not manufacturer-certified models.</p></section><section><h3>Surroundings</h3><label class="setting-label">Environment<select aria-label="Environment" data-field="envPreset" data-scope="booth">${Object.entries(ENV_PRESETS).map(([k,v])=>`<option value="${k}" ${(p.booth.envPreset||DEFAULT_PRESET)===k?'selected':''}>${v.label}</option>`).join('')}</select></label><p class="muted">Presets light the booth from a photographed environment. Without its image files a preset keeps the procedural surroundings below.</p>${isArtShow(p) ? `<label class="check-field"><input type="checkbox" data-field="on" data-scope="hall" ${hallSpec(p.booth).on ? "checked" : ""}/>Stand this booth in a white exhibition hall</label><p class="muted">${hallSpec(p.booth).on ? "The hall's own walls stand around the booth. In a photographed environment they cut across it as a white band, so choosing one of those presets switches the hall off." : "Off: the booth stands in the environment above, with nothing of its own around it. The walls, the light bar and the panel module are unchanged — this is only the room."}</p>` : ""}<label class="setting-label">Artwork colour<select aria-label="Artwork colour" data-field="artFidelity" data-scope="booth">${Object.entries(ART_FIDELITY).map(([k,v])=>`<option value="${k}" ${(p.booth.artFidelity||DEFAULT_FIDELITY)===k?'selected':''}>${v}</option>`).join('')}</select></label>${groundFields()}<label class="setting-label">Horizon<select aria-label="Horizon" data-field="horizon" data-scope="booth">${Object.entries({studio:'Neutral studio',open:'Open sky',park:'Park · trees',urban:'Urban plaza'}).map(([k,v])=>`<option value="${k}" ${(p.booth.horizon||'studio')===k?'selected':''}>${v}</option>`).join('')}</select></label><label class="check-field"><input type="checkbox" data-field="neighbors" data-scope="booth" ${p.booth.neighbors?'checked':''}/>Surround with other booths</label>${surroundingsFields()}</section>${peopleSection()}<section><h3>Display walls</h3>${colorField("Fabric finish", "color", "booth", p.booth.color, "Fabric finish")}<label class="setting-label">Panel surface<select aria-label="Panel surface" data-field="wallFinish" data-scope="booth">${Object.entries({smooth:"Smooth print",fabric:"Fabric pro-panel"}).map(([k,v])=>`<option value="${k}" ${(p.booth.wallFinish||"smooth")===k?"selected":""}>${v}</option>`).join("")}</select></label>${(p.booth.wallFinish||"smooth")==="fabric"?`${range("Weave depth","wallTexture",p.booth.wallTexture??60,0,100,1,"booth","%")}<p class="muted">The weave only. Panels keep the colour above, so artwork is still judged against the finish you chose. Without the carpet texture files the panels stay smooth.</p>`:""}<div class="swatches">${["#45474a", "#25282b", "#b1aea4", "#d8d4ca"].map((c) => `<button data-color="${c}" style="background:${c}" aria-label="Wall finish ${c}"></button>`).join("")}</div>${["back", "left", "right"].map((w) => `<div class="wall-setting"><label class="check-field"><input type="checkbox" data-field="enabled" data-scope="wall-${w}" ${p.booth.walls[w].enabled ? "checked" : ""}/>${w[0].toUpperCase() + w.slice(1)} wall</label>${field("Width", "width", p.booth.walls[w].width, 12, w === "back" ? p.booth.width : p.booth.depth, 1, "in", "wall-" + w)}${field("Height", "height", p.booth.walls[w].height, 24, 144, 1, "in", "wall-" + w)}</div>`).join("")}</section><section><h3>Free-standing walls and pedestals</h3><p class="muted">Interior panels and pedestals live in the Walls tool, so this list stays the booth itself.</p>${btn("open-walls", "Open the Walls tool", "columns-2", "wide")}</section>${rowSection()}${draftSection()}`}<section><h3>Project</h3>${btn("quick-start", "Quick start a new booth", "zap", "primary wide")}${btn("save-template", "Save this booth as a template", "save", "wide")}${btn("copy-project", "Duplicate as alternative", "copy", "wide")}${btn("new-project", "New empty booth", "plus", "wide")}${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Backups include all original images. Download before switching projects.</p></section>`;
@@ -1592,7 +1679,7 @@ async function boot() {
         lights = photoMode ? p.photo.lights : p.lights,
         index = photoMode ? photoLightIndex : lightIndex,
         light = lights[index];
-      html = `<div class="panel-heading"><h2>${photoMode ? "Photo lighting" : "Lighting studio"}</h2>${icon("lightbulb")}</div><p class="muted">${photoMode ? "Reversible light overlays. A single photo cannot recover geometry or physically relight the booth." : "Light your real geometry. Wall gaps and panel thickness shape the cast shadows."}</p><div class="button-row">${btn("daylight", "Daylight", "sun")}${btn("warm", "Warm", "lightbulb")}</div>${!photoMode ? `<section>${range("Ambient illumination", "ambient", p.ambient, 0, 4, 0.05)}<label class="setting-label">Spotlight fixtures<select aria-label="Spotlight fixtures" data-field="fixtures" data-scope="booth">${Object.entries(FIXTURE_MODES).map(([k, v]) => `<option value="${k}" ${(p.booth.fixtures || DEFAULT_FIXTURES) === k ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label><p class="muted">${showFixtures(p.booth.fixtures, p.booth.envPreset, p.booth.venue) ? "The housings are drawn where each spotlight sits." : `Housings are hidden${isIndoor(p.booth.envPreset, p.booth.venue) ? (p.booth.venue === "artshow" ? " because an art-show booth has its own light bar overhead" : " because this is an indoor environment, where the hall's own track lighting is already in the picture") : ""}. The rail above the booth stays, and the light itself is unchanged.`}</p></section>${isArtShow(p) ? `<section><h3>Light bar</h3><label class="check-field"><input type="checkbox" data-field="on" data-scope="lightBar" ${lightBarSpec(p.booth).on ? "checked" : ""}/>Light bar across the booth</label>${lightBarSpec(p.booth).on ? `${lightBarLevels(lightBarSpec(p.booth))}<p class="muted">The nine heads over an art-show booth. Brightness and diffusion are the two to judge by eye. Brightness is a percentage of a bar judged to read right: 50 is the default, 100 is twice that and already more than anyone wanted. Diffusion opens the beams until they overlap into a wash and fills their shadows, 0 is a bare source, and past 1 the hall's own bounce takes over. The rest of the bar — how many heads, how high — is in the Art show tool.</p>` : `<p class="muted">No bar. The spotlights below still light this booth.</p>`}</section>` : ""}` : ""}${!photoMode ? dropShadowSection() : ""}<section><h3>${photoMode ? "Light overlays" : "Spotlights"} <span>${lights.length} / ${photoMode ? 8 : 4}</span></h3><div class="light-picker">${lights.map((l, i) => `<span class="light-chip"><button data-light="${i}" class="${index === i ? "active" : ""}">${i + 1}</button><button data-light-eye="${i}" class="eye${lightVisible(l) ? "" : " off"}" title="${lightVisible(l) ? "Hide" : "Show"} ${photoMode ? "overlay" : "spotlight"} ${i + 1}" aria-label="${lightVisible(l) ? "Hide" : "Show"} light ${i + 1}">${icon(lightVisible(l) ? "eye" : "eye-off")}</button></span>`).join("")}${lights.length < (photoMode ? 8 : 4) ? btn("add-light", "Add", "plus", "icon-only") : ""}</div>${light ? `${range("Brightness", "power", light.power, 0, photoMode ? 1 : 300, photoMode ? 0.05 : 5, photoMode ? "photoLight" : "light")}${range("Temperature", "kelvin", light.kelvin, 2700, 6500, 100, photoMode ? "photoLight" : "light", " K")}${photoMode ? `${range("Horizontal", "x", light.x, 0, 1, 0.01, "photoLight")}${range("Vertical", "y", light.y, 0, 1, 0.01, "photoLight")}${range("Radius", "radius", light.radius, 0.02, 0.8, 0.01, "photoLight")}` : `<h4>Light position · inches</h4>${field("Left / right", "x", light.x, -360, 360, 1, "in", "light")}${field("Height", "y", light.y, 0, 160, 1, "in", "light")}${field("Front / back", "z", light.z, -360, 360, 1, "in", "light")}<h4>Aim at · inches</h4>${field("Target X", "tx", light.tx, -360, 360, 1, "in", "light")}${field("Target height", "ty", light.ty, 0, 160, 1, "in", "light")}${field("Target Z", "tz", light.tz, -360, 360, 1, "in", "light")}<p class="muted">Origin: center of floor. +X right, +Z toward the entrance. Height starts at the floor.</p>`}${btn("delete-light", "Remove light", "trash-2", "wide")}` : ""}</section>`;
+      html = `<div class="panel-heading"><h2>${photoMode ? "Photo lighting" : "Lighting studio"}</h2>${icon("lightbulb")}</div><p class="muted">${photoMode ? "Reversible light overlays. A single photo cannot recover geometry or physically relight the booth." : "Light your real geometry. Wall gaps and panel thickness shape the cast shadows."}</p><div class="button-row">${btn("daylight", "Daylight", "sun")}${btn("warm", "Warm", "lightbulb")}</div>${!photoMode ? `<section>${range("Ambient illumination", "ambient", p.ambient, 0, 4, 0.05)}<label class="setting-label">Spotlight fixtures<select aria-label="Spotlight fixtures" data-field="fixtures" data-scope="booth">${Object.entries(FIXTURE_MODES).map(([k, v]) => `<option value="${k}" ${(p.booth.fixtures || DEFAULT_FIXTURES) === k ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label><p class="muted">${showFixtures(p.booth.fixtures, p.booth.envPreset, p.booth.venue) ? "The housings are drawn where each spotlight sits." : `Housings are hidden${isIndoor(p.booth.envPreset, p.booth.venue) ? (p.booth.venue === "artshow" ? " because an art-show booth has its own light bar overhead" : " because this is an indoor environment, where the hall's own track lighting is already in the picture") : ""}. The rail above the booth stays, and the light itself is unchanged.`}</p></section>${isArtShow(p) ? `<section><h3>Light bar</h3><label class="check-field"><input type="checkbox" data-field="on" data-scope="lightBar" ${lightBarSpec(p.booth).on ? "checked" : ""}/>Light bar across the booth</label>${lightBarSpec(p.booth).on ? `${lightBarLevels(lightBarSpec(p.booth))}<p class="muted">The nine heads over an art-show booth. Brightness and diffusion are the two to judge by eye. Brightness is a percentage of a bar judged to read right: 50 is the default, 100 is twice that and already more than anyone wanted. Diffusion opens the beams until they overlap into a wash and fills their shadows, 0 is a bare source, and past 1 the hall's own bounce takes over. The rest of the bar — how many heads, how high — is in the Art show tool.</p>` : `<p class="muted">No bar. The spotlights below still light this booth.</p>`}</section>` : ""}` : ""}${!photoMode ? shadowSection("behind") + shadowSection("under") : ""}<section><h3>${photoMode ? "Light overlays" : "Spotlights"} <span>${lights.length} / ${photoMode ? 8 : 4}</span></h3><div class="light-picker">${lights.map((l, i) => `<span class="light-chip"><button data-light="${i}" class="${index === i ? "active" : ""}">${i + 1}</button><button data-light-eye="${i}" class="eye${lightVisible(l) ? "" : " off"}" title="${lightVisible(l) ? "Hide" : "Show"} ${photoMode ? "overlay" : "spotlight"} ${i + 1}" aria-label="${lightVisible(l) ? "Hide" : "Show"} light ${i + 1}">${icon(lightVisible(l) ? "eye" : "eye-off")}</button></span>`).join("")}${lights.length < (photoMode ? 8 : 4) ? btn("add-light", "Add", "plus", "icon-only") : ""}</div>${light ? `${range("Brightness", "power", light.power, 0, photoMode ? 1 : 300, photoMode ? 0.05 : 5, photoMode ? "photoLight" : "light")}${range("Temperature", "kelvin", light.kelvin, 2700, 6500, 100, photoMode ? "photoLight" : "light", " K")}${photoMode ? `${range("Horizontal", "x", light.x, 0, 1, 0.01, "photoLight")}${range("Vertical", "y", light.y, 0, 1, 0.01, "photoLight")}${range("Radius", "radius", light.radius, 0.02, 0.8, 0.01, "photoLight")}` : `<h4>Light position · inches</h4>${field("Left / right", "x", light.x, -360, 360, 1, "in", "light")}${field("Height", "y", light.y, 0, 160, 1, "in", "light")}${field("Front / back", "z", light.z, -360, 360, 1, "in", "light")}<h4>Aim at · inches</h4>${field("Target X", "tx", light.tx, -360, 360, 1, "in", "light")}${field("Target height", "ty", light.ty, 0, 160, 1, "in", "light")}${field("Target Z", "tz", light.tz, -360, 360, 1, "in", "light")}<p class="muted">Origin: center of floor. +X right, +Z toward the entrance. Height starts at the floor.</p>`}${btn("delete-light", "Remove light", "trash-2", "wide")}` : ""}</section>`;
     }
     if (tab === "video") {
       html = p.mode === "photo"
@@ -1819,6 +1906,7 @@ async function boot() {
   let panelGesture = false;
   let pedestalGesture = false;
   let artGesture = false;
+  let shadowGesture = false;
   function scaleControl(a) {
     scaleBase = { ...a };
     scaleGesture = false;
@@ -2578,6 +2666,19 @@ async function boot() {
       }
       return;
     }
+    // The eye in a drawn shadow's heading. Hidden keeps every setting, so
+    // the second shadow can be set up before it is shown.
+    if (b.dataset.shadowEye) {
+      const kind = b.dataset.shadowEye;
+      if (!SHADOW_KINDS.includes(kind)) return;
+      mutate(() => {
+        const record = (p.booth[SHADOW_FIELD[kind]] = shadowSpec(p.booth, kind));
+        record.on = !record.on;
+      });
+      const on = shadowSpec(p.booth, kind).on;
+      toast(`${kind === "behind" ? "Drop shadow" : "Second shadow"} ${on ? "showing" : "hidden. Its settings are kept"}.`);
+      return;
+    }
     if (b.dataset.light !== undefined) {
       if (p.mode === "photo") photoLightIndex = +b.dataset.light;
       else lightIndex = +b.dataset.light;
@@ -2683,8 +2784,8 @@ async function boot() {
               ? (p.booth.lightBar = lightBarSpec(p.booth))
             : scope === "hall"
               ? (p.booth.hall = hallSpec(p.booth))
-            : scope === "dropShadow"
-              ? (p.booth.dropShadow = dropShadowSpec(p.booth))
+            : SHADOW_KINDS.some((kind) => SHADOW_FIELD[kind] === scope)
+              ? (p.booth[scope] = shadowSpec(p.booth, SHADOW_KINDS.find((kind) => SHADOW_FIELD[kind] === scope)))
               : scope === "light"
                 ? p.lights[lightIndex]
                 : scope === "photoLight"
@@ -2760,6 +2861,14 @@ async function boot() {
     if (el.id === "art-scale") {
       scaleGesture = false;
       scheduleSave();
+      return;
+    }
+    // A drawn shadow's slider or typed number: the input handler already
+    // made the change live and took its checkpoint.
+    if (el.dataset.fxLive !== undefined) {
+      setShadowLive(el.dataset.scope, el.dataset.field, el.value, el);
+      endShadowGesture();
+      syncShadowInputs();
       return;
     }
     // The work's own position sliders: the move already happened live, so
@@ -3038,6 +3147,11 @@ async function boot() {
           toast("Exhibition hall switched off: this booth now stands in the photographed environment. Art show → Exhibition hall brings it back.");
         }
       }
+      // Use Global Light: switched on, the shadow takes the shared angle;
+      // switched off, it keeps that angle as its own — Photoshop's rule. The
+      // record was written back resolved, so both already hold.
+      if (SHADOW_KINDS.some((kind) => SHADOW_FIELD[kind] === scope) && key === "global" && value)
+        target.angle = globalAngle(p.booth);
       if (scope === "booth" && key === "tentStyle") p.booth.tent = true;
       if (scope === "booth" && key === "height")
         Object.values(p.booth.walls).forEach((w) => (w.height = value));
@@ -3060,6 +3174,10 @@ async function boot() {
     });
   });
   document.addEventListener("input", (ev) => {
+    if (ev.target.dataset?.fxLive !== undefined) {
+      setShadowLive(ev.target.dataset.scope, ev.target.dataset.field, ev.target.value, ev.target);
+      return;
+    }
     if (ev.target.id === "art-scale") {
       const a = currentArtwork();
       if (!a || scaleBase?.id !== a.id) return;
@@ -3284,6 +3402,31 @@ async function boot() {
       toast(err.message, true);
     }
   };
+  // Photoshop's angle dial: press anywhere on it and drag round. The angle
+  // is where the light comes from, so the line points at the pointer.
+  document.addEventListener("pointerdown", (ev) => {
+    const dial = ev.target.closest?.("[data-dial]");
+    if (!dial || ev.button !== 0) return;
+    ev.preventDefault();
+    dial.focus();
+    const scope = dial.dataset.dial;
+    const aim = (e2) => {
+      const r = dial.getBoundingClientRect();
+      const deg = Math.atan2(r.top + r.height / 2 - e2.clientY, e2.clientX - (r.left + r.width / 2)) * (180 / Math.PI);
+      setShadowLive(scope, "angle", Math.round(deg));
+    };
+    const done = () => {
+      dial.removeEventListener("pointermove", aim);
+      dial.removeEventListener("pointerup", done);
+      dial.removeEventListener("pointercancel", done);
+      endShadowGesture();
+    };
+    dial.setPointerCapture?.(ev.pointerId);
+    dial.addEventListener("pointermove", aim);
+    dial.addEventListener("pointerup", done);
+    dial.addEventListener("pointercancel", done);
+    aim(ev);
+  });
   document.addEventListener("keydown", (ev) => {
     if (document.querySelector("#image-editor").open) {
       if (ev.key === "Escape") {
@@ -3297,6 +3440,18 @@ async function boot() {
       document.querySelector("#dialog").open
     )
       return;
+    // The shadow angle dial, focused: arrows turn it a degree, Shift fifteen,
+    // counterclockwise for Up and Right the way the angle is measured.
+    if (ev.target.dataset?.dial) {
+      const turn = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[ev.key];
+      if (!turn) return;
+      ev.preventDefault();
+      const kind = SHADOW_KINDS.find((k) => SHADOW_FIELD[k] === ev.target.dataset.dial);
+      if (!kind) return;
+      setShadowLive(ev.target.dataset.dial, "angle", shadowSpec(p.booth, kind).angle + turn * (ev.shiftKey ? 15 : 1));
+      endShadowGesture();
+      return;
+    }
     if (ev.key === "Escape" && scene?.measure.on) {
       ev.preventDefault();
       setMeasuring(false);

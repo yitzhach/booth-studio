@@ -1,5 +1,5 @@
 import { editedAspect, validImageEdits } from "./image-edit.js";
-import { DROP_SHADOW, dropShadowSpec } from "./dropshadow.js";
+import { SHADOW_FIELD, SHADOW_MAX, shadowSpec } from "./dropshadow.js";
 import { hasRow, normalizeRow, rowLayout, MAX_SLOTS, MIN_SPACE, MAX_SPACE, MAX_GAP } from "./row.js";
 export const IN = 0.0254;
 export const uid = () => globalThis.crypto.randomUUID();
@@ -58,13 +58,13 @@ export function blankProject() {
       // lighting is already in the picture. Optional: a backup written before
       // it existed loads with the same default.
       fixtures: "auto",
-      // The drawn shadow every hung work throws onto the wall behind it, and
-      // with it the only thing that makes a wall gap visible from anywhere
-      // but along the wall. Optional: a backup written before it existed
-      // loads with these defaults, which is the same picture it was saved as
-      // plus a shadow it would have had if this had existed. See
-      // src/dropshadow.js.
-      dropShadow: { ...DROP_SHADOW },
+      // The drawn shadows a hung work throws onto the wall behind it —
+      // `shadowBehind`, `shadowUnder` and the global light `shadowAngle` —
+      // are deliberately absent here: absent is the default everywhere that
+      // reads them (see src/dropshadow.js), so a booth nobody has tuned
+      // follows the defaults if they are retuned, and each record is written
+      // the first time one of its controls is touched. An older booth's
+      // `dropShadow` is still read, for the shadow behind.
       // A single edge colour for every work in the booth. Off by default, so
       // each placement keeps its own `edgeColor`; switched on, one colour
       // answers for all of them and the per-work swatch says where it comes
@@ -810,8 +810,9 @@ export function validateProject(p) {
     )
       fail();
   }
-  // The drawn drop shadow. Absent is the default everywhere, so this only
-  // has to refuse a value that is present and wrong.
+  // The drawn drop shadows. Absent is the default everywhere, so this only
+  // has to refuse a value that is present and wrong. `dropShadow` is the
+  // first version's record: never written now, and still read.
   if (p.booth.dropShadow !== undefined) {
     const s = p.booth.dropShadow;
     if (!s || typeof s !== "object") fail();
@@ -819,6 +820,19 @@ export function validateProject(p) {
     for (const key of ["darkness", "distance", "softness"])
       if (s[key] !== undefined && !finite(s[key], 0, 100)) fail();
   }
+  for (const field of Object.values(SHADOW_FIELD)) {
+    const s = p.booth[field];
+    if (s === undefined) continue;
+    if (!s || typeof s !== "object" || Array.isArray(s)) fail();
+    for (const key of ["on", "global"])
+      if (s[key] !== undefined && typeof s[key] !== "boolean") fail();
+    for (const key of ["opacity", "spread"])
+      if (s[key] !== undefined && !finite(s[key], 0, 100)) fail();
+    for (const key of ["distance", "size"])
+      if (s[key] !== undefined && !finite(s[key], 0, SHADOW_MAX)) fail();
+    if (s.angle !== undefined && !finite(s.angle, -360, 360)) fail();
+  }
+  if (p.booth.shadowAngle !== undefined && !finite(p.booth.shadowAngle, -360, 360)) fail();
   if (p.booth.edgeUniversal !== undefined && typeof p.booth.edgeUniversal !== "boolean") fail();
   if (p.booth.edgeColor !== undefined && !/^#[0-9a-f]{6}$/i.test(p.booth.edgeColor)) fail();
   if (!finite(p.ambient, 0, 4)) fail();
@@ -968,4 +982,4 @@ export const edgeColorOf = (booth, art = {}) =>
     : art.edgeColor || DEFAULT_EDGE_COLOR;
 /** Whether a spotlight is showing. Absent means yes; see validate(). */
 export const lightVisible = (light) => light?.on !== false;
-export { dropShadowSpec };
+export { shadowSpec };
