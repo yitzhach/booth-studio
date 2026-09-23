@@ -237,6 +237,15 @@ try {
   assert.equal(programs.after, programs.before, 'a rebuild compiles no new shaders and deletes none');
   assert.equal(programs.retired.length, 0, 'and the old booth is released once the new one has drawn');
 
+  // Icons are written as finished SVG, not placeholders converted after
+  // every redraw.
+  const iconState = await page.evaluate(() => ({
+    svgs: document.querySelectorAll('svg.lucide path, svg.lucide circle, svg.lucide rect, svg.lucide line').length,
+    placeholders: document.querySelectorAll('i[data-lucide]').length,
+  }));
+  assert.ok(iconState.svgs > 20, 'the icons are drawn');
+  assert.equal(iconState.placeholders, 0, 'and none is left as a placeholder');
+
   assert.equal(await page.evaluate(() => window.__booth.scene.quality), 'auto', 'preview quality defaults to Auto');
   const adapted = await page.evaluate(() => {
     const view = window.__booth.scene;

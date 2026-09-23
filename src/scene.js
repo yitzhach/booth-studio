@@ -772,7 +772,16 @@ export class BoothScene {
     const w = this.host.clientWidth,
       h = this.host.clientHeight;
     if (!w || !h) return;
-    this.renderer.setSize(w, h);
+    // setSize writes the canvas's width and height, and a browser reallocates
+    // the drawing buffer on that write even when the numbers have not
+    // changed. main.js calls this after every edit, so an unchanged size is
+    // left alone; an export, which sizes the canvas behind the renderer's
+    // back, still reads as a change.
+    const canvas = this.renderer.domElement,
+      ratio = this.renderer.getPixelRatio(),
+      size = this.renderer.getSize(new T.Vector2());
+    if (size.x !== w || size.y !== h || canvas.width !== Math.floor(w * ratio) || canvas.height !== Math.floor(h * ratio))
+      this.renderer.setSize(w, h);
     if (this.camera.isPerspectiveCamera) {
       const factor = Math.max(1, h / w);
       if (this.fitAspectFactor)

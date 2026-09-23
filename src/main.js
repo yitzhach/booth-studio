@@ -175,7 +175,24 @@ async function boot() {
     ArrowLeftToLine,
     ArrowRightToLine,
   };
-  const icon = (n) => `<i data-lucide="${n}"></i>`;
+  // An icon is written into the HTML as its finished SVG. lucide's
+  // createIcons scans the whole document for placeholders and builds each
+  // one as DOM nodes, and every inspector redraw paid for that again — a
+  // visible share of what a click cost on a slow machine. The markup is built
+  // once per icon name and reused as a string.
+  const iconMarkup = new Map();
+  const icon = (n) => {
+    let svg = iconMarkup.get(n);
+    if (svg === undefined) {
+      const node = icons[n.replace(/(^|-)(\w)/g, (_, __, c) => c.toUpperCase())];
+      const attrs = (o) => Object.entries(o).map(([k, v]) => ` ${k}="${v}"`).join("");
+      svg = node
+        ? `<svg${attrs({ xmlns: "http://www.w3.org/2000/svg", width: 24, height: 24, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": 1.6, "stroke-linecap": "round", "stroke-linejoin": "round", class: `lucide lucide-${n}`, "aria-hidden": "true" })}>${node[2].map(([tag, a]) => `<${tag}${attrs(a)}/>`).join("")}</svg>`
+        : "";
+      iconMarkup.set(n, svg);
+    }
+    return svg;
+  };
   const btn = (action, label, ic, cls = "") =>
     `<button data-action="${action}" class="${cls}" title="${e(label)}" aria-label="${e(label)}">${ic ? icon(ic) : ""}<span>${label}</span></button>`;
   let p,
@@ -476,8 +493,10 @@ async function boot() {
     clearTimeout(toast.timer);
     toast.timer = setTimeout(() => (t.className = ""), 6000);
   }
+  // Icons arrive as SVG already (see `icon`). This only converts a stray
+  // lucide placeholder, should any markup still write one.
   function refreshIcons() {
-    createIcons({ icons, attrs: { "stroke-width": 1.6 } });
+    if (document.querySelector("i[data-lucide]")) createIcons({ icons, attrs: { "stroke-width": 1.6 } });
   }
   function refreshScene() {
     if (selectedPanel && !findPanel(p, selectedPanel)) selectedPanel = null;
@@ -1572,7 +1591,18 @@ async function boot() {
     renderInspector();
     refreshScene();
     syncTools();
-    scene?.resize();
+    // On the next frame rather than now: reading the viewport's size straight
+    // after the panels were rewritten forced the browser to lay the whole page
+    // out in the middle of the edit, which was the largest single cost of a
+    // click after the rebuild itself. A size that really changed is also
+    // caught by the scene's ResizeObserver.
+    if (scene && !render.resizing) {
+      render.resizing = true;
+      requestAnimationFrame(() => {
+        render.resizing = false;
+        scene.resize();
+      });
+    }
   }
   function confirmAction(title, text, run) {
     const d = document.querySelector("#dialog");
