@@ -130,6 +130,7 @@ import { load, save, download, readImage, thumbnailOf, THUMB_MAX } from "./stora
 import { decodeAt } from "./image-source.js";
 import { BoothScene, BACKDROP_FRAMING } from "./scene.js";
 import { AUTO_QUALITY, startScale } from "./adaptive.js";
+import { formatLength } from "./measure.js";
 import { PhotoEditor } from "./photo.js";
 import { hangingGuide } from "./guide.js";
 async function boot() {
@@ -309,7 +310,7 @@ async function boot() {
   selected = p.art[0]?.id;
   document.querySelector("#app").innerHTML =
     `<header><a class="brand" href="#" aria-label="Booth Studio">${icon("box")}<span>Artist OS</span></a><span class="app-badge">Booth Studio</span><div class="project"><input id="project-name" aria-label="Project name" maxlength="120" value="${e(p.name)}"/>${icon("chevron-down")}</div><div class="save-status" id="save-status" role="status">Opening…</div>${btn("help", "Help", "help-circle", "icon-only")}<div class="avatar">IA</div></header>
-<div class="workspace"><aside class="library" id="library"></aside><main class="editor"><div class="toolbar"><div class="toolgroup">${btn("select", "Select", "mouse-pointer-2", "active")}${btn("move", "Move", "move")}${btn("snap", "Snap 1″", "grid-2x2", "active")}${btn("draft", "Fast edit", "zap")}${btn("draft-lock", "Fast edit: follows the gesture", "lock", "draft-lock")}</div><div class="toolgroup">${btn("undo", "Undo", "undo-2", "icon-only")}${btn("redo", "Redo", "redo-2", "icon-only")}</div><div class="mode-switch"><button data-action="mode-3d">3D booth</button><button data-action="mode-photo">Photo</button></div>${btn("export-tab", "Export", "download", "export-top")}</div><div class="viewport"><div id="scene"></div><div id="photo" hidden></div><div class="scene-label"><span class="eyebrow" id="mode-label">MEASURED WORKSPACE</span><strong id="scene-title"></strong><span id="scene-subtitle"></span></div><div id="photo-empty" hidden><div>${icon("image-plus")}<h2>Start with your booth shot</h2><p>Add artwork and adjust its four corners to match the wall perspective.</p>${btn("upload-photo", "Upload booth photo", "plus", "primary")}</div></div><div class="viewport-bottom"><div class="view-switch" id="view-switch"><button data-view="perspective" class="active">Perspective</button><button data-view="back">Back</button><button data-view="left">Left</button><button data-view="right">Right</button><button data-view="plan">Plan</button></div><div class="zoom-controls"><span class="zoom-label">Zoom</span>${btn("zoom-out", "Zoom out", "minus", "icon-only")}${btn("zoom-in", "Zoom in", "plus", "icon-only")}${btn("reset-view", "Reset view", "rotate-ccw", "icon-only")}</div></div></div><div class="statusbar"><span id="gesture-hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</span><span id="selection-status"></span></div></main><aside class="inspector"><div class="inspector-tabs">${["art", "layout", "show", "walls", "lighting", "video", "export"].map((t, i) => `<button data-tab="${t}">${icon(["image", "layout-panel-left", "building-2", "columns-2", "lightbulb", "video", "download"][i])}<span>${["Artwork", "Layout", "Art show", "Walls", "Lighting", "Video", "Export"][i]}</span></button>`).join("")}</div><div id="inspector-content"></div></aside></div><footer><span class="footer-brand">${icon("box")} BOOTH STUDIO <small>Prototype 01</small><small id="build-stamp" title="Version ${BUILD.version} · built ${BUILD.time} · commit ${BUILD.commit}">v${BUILD.version} · ${BUILD.short} UTC · ${BUILD.commit}</small></span><span>Your images. Your space. Your arrangement.</span><span id="network">Local workspace</span></footer><input type="file" id="art-input" accept="image/jpeg,image/png" multiple hidden/><input type="file" id="replace-input" accept="image/jpeg,image/png" hidden/><input type="file" id="photo-input" accept="image/jpeg,image/png" hidden/><input type="file" id="surround-input" accept="image/jpeg,image/png" hidden/><input type="file" id="ground-input" accept="image/jpeg,image/png" hidden/><input type="file" id="backup-input" accept=".json,.booth" hidden/><div id="toast" role="status"></div><dialog id="dialog"><div id="dialog-content"></div></dialog><dialog id="image-editor"><div id="image-editor-content"></div></dialog><dialog id="timeline-dialog" class="timeline-dialog"><div id="timeline-content"></div></dialog>`;
+<div class="workspace"><aside class="library" id="library"></aside><main class="editor"><div class="toolbar"><div class="toolgroup">${btn("select", "Select", "mouse-pointer-2", "active")}${btn("move", "Move", "move")}${btn("snap", "Snap 1″", "grid-2x2", "active")}${btn("measure", "Measure", "ruler")}${btn("draft", "Fast edit", "zap")}${btn("draft-lock", "Fast edit: follows the gesture", "lock", "draft-lock")}</div><div class="toolgroup">${btn("undo", "Undo", "undo-2", "icon-only")}${btn("redo", "Redo", "redo-2", "icon-only")}</div><div class="mode-switch"><button data-action="mode-3d">3D booth</button><button data-action="mode-photo">Photo</button></div>${btn("export-tab", "Export", "download", "export-top")}</div><div class="viewport"><div id="scene"></div><div id="photo" hidden></div><div class="scene-label"><span class="eyebrow" id="mode-label">MEASURED WORKSPACE</span><strong id="scene-title"></strong><span id="scene-subtitle"></span></div><div id="photo-empty" hidden><div>${icon("image-plus")}<h2>Start with your booth shot</h2><p>Add artwork and adjust its four corners to match the wall perspective.</p>${btn("upload-photo", "Upload booth photo", "plus", "primary")}</div></div><div class="viewport-bottom"><div class="view-switch" id="view-switch"><button data-view="perspective" class="active">Perspective</button><button data-view="back">Back</button><button data-view="left">Left</button><button data-view="right">Right</button><button data-view="plan">Plan</button></div><div class="zoom-controls"><span class="zoom-label">Zoom</span>${btn("zoom-out", "Zoom out", "minus", "icon-only")}${btn("zoom-in", "Zoom in", "plus", "icon-only")}${btn("reset-view", "Reset view", "rotate-ccw", "icon-only")}</div></div></div><div class="statusbar"><span id="gesture-hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</span><span id="selection-status"></span></div></main><aside class="inspector"><div class="inspector-tabs">${["art", "layout", "show", "walls", "lighting", "video", "export"].map((t, i) => `<button data-tab="${t}">${icon(["image", "layout-panel-left", "building-2", "columns-2", "lightbulb", "video", "download"][i])}<span>${["Artwork", "Layout", "Art show", "Walls", "Lighting", "Video", "Export"][i]}</span></button>`).join("")}</div><div id="inspector-content"></div></aside></div><footer><span class="footer-brand">${icon("box")} BOOTH STUDIO <small>Prototype 01</small><small id="build-stamp" title="Version ${BUILD.version} · built ${BUILD.time} · commit ${BUILD.commit}">v${BUILD.version} · ${BUILD.short} UTC · ${BUILD.commit}</small></span><span>Your images. Your space. Your arrangement.</span><span id="network">Local workspace</span></footer><input type="file" id="art-input" accept="image/jpeg,image/png" multiple hidden/><input type="file" id="replace-input" accept="image/jpeg,image/png" hidden/><input type="file" id="photo-input" accept="image/jpeg,image/png" hidden/><input type="file" id="surround-input" accept="image/jpeg,image/png" hidden/><input type="file" id="ground-input" accept="image/jpeg,image/png" hidden/><input type="file" id="backup-input" accept=".json,.booth" hidden/><div id="toast" role="status"></div><dialog id="dialog"><div id="dialog-content"></div></dialog><dialog id="image-editor"><div id="image-editor-content"></div></dialog><dialog id="timeline-dialog" class="timeline-dialog"><div id="timeline-content"></div></dialog>`;
   let scene;
   try {
     scene = new BoothScene(
@@ -392,6 +393,10 @@ async function boot() {
   loadViewPrefs();
   let adaptToasted = false;
   if (scene) {
+    scene.onMeasure = (inches) => {
+      measureHint = inches == null ? MEASURE_HINT : "Measured " + formatLength(inches) + " · click to start a new tape · Esc to stop";
+      renderStatus();
+    };
     scene.setQuality(quality, quality === AUTO_QUALITY ? startScale(devicePixelRatio, autoScale) : undefined);
     // Auto stepping down is said once, so a softer picture is never a mystery,
     // and remembered for this display so the next visit starts where this one
@@ -526,8 +531,20 @@ async function boot() {
    * toolbar, so all three are brought into step here — cheaply, without
    * rebuilding a panel to show that a button is lit.
    */
+  const MEASURE_HINT = "Measure: click where the tape starts, then where it ends · Esc to stop";
+  const DEFAULT_HINT = "Drag to orbit · scroll or +/− to zoom · right-drag to pan";
+  let measureHint = MEASURE_HINT;
+  function setMeasuring(on) {
+    if (!scene) return;
+    scene.setMeasuring(on);
+    measureHint = MEASURE_HINT;
+    document.querySelector("#scene").classList.toggle("measuring", !!on);
+    renderStatus();
+    syncTools();
+  }
   function syncTools() {
     const draft = !!scene?.draft;
+    document.querySelector('[data-action="measure"]')?.classList.toggle("active", !!scene?.measure.on);
     document
       .querySelector('[data-action="snap"]')
       ?.classList.toggle("active", !!scene?.snap);
@@ -1542,13 +1559,15 @@ async function boot() {
   // selection changes both of them and nothing else on the page.
   function renderStatus() {
     document.querySelector("#gesture-hint").textContent =
-      p.mode === "photo"
+      scene?.measure.on && p.mode !== "photo"
+        ? measureHint
+        : p.mode === "photo"
         ? "Drag artwork to move · drag corners for perspective"
         : scene?.move
           ? scene.snap
             ? "Drag artwork along its wall · snap in 1-inch increments"
             : "Drag artwork along its wall · snapping off"
-          : "Drag to orbit · scroll or +/− to zoom · right-drag to pan";
+          : DEFAULT_HINT;
     const selectedArt = p.art.find((a) => a.id === selected);
     document.querySelector("#selection-status").textContent =
       p.mode === "3d"
@@ -1916,6 +1935,9 @@ async function boot() {
         .classList.toggle("active", scene.snap);
       render();
     },
+    // The tape measure. Its reading goes in the status bar as well as on the
+    // tape, so it can be read without hunting for the label.
+    measure: () => setMeasuring(!scene?.measure.on),
     draft: () => setDraft(!scene?.draft),
     "row-booth-left": () => addRowBooths("left", 1),
     "row-booth-right": () => addRowBooths("right", 1),
@@ -3110,6 +3132,11 @@ async function boot() {
       document.querySelector("#dialog").open
     )
       return;
+    if (ev.key === "Escape" && scene?.measure.on) {
+      ev.preventDefault();
+      setMeasuring(false);
+      return;
+    }
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "z") {
       ev.preventDefault();
       actions[ev.shiftKey ? "redo" : "undo"]();

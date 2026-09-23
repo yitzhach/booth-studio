@@ -26,6 +26,7 @@ import { flareGhosts, flareOrigin } from "./flare.js";
 import { DEFAULT_SIZE, SIZES, evenSize, recordMp4, videoSupported } from "./video.js";
 import { DEFAULT_FRAME, frameSize } from "./framing.js";
 import { AUTO_QUALITY, FrameBudget, startScale, stepDown } from "./adaptive.js";
+import { distanceInches, formatLength, planDimensions } from "./measure.js";
 // How far behind its frame plane a wall's slab sits, in metres. Half the
 // slab's thickness plus the sliver that keeps art from z-fighting the face.
 const WALL_SLAB_OFFSET = 0.031;
@@ -172,6 +173,8 @@ export const renderScale = (quality = 2) =>
 // that asked it to draw. See `startLoop`.
 const HEARTBEAT_MS = 1000;
 const HEARTBEAT_FOR_MS = 15000;
+// How long an asked-for frame may wait on the browser before a timer draws it.
+const KICK_MS = 50;
 // The longest a rebuilt booth's old group waits on a load before it is
 // released anyway. See `disposeGroup`.
 const RETIRE_MAX_MS = 10000;
@@ -346,6 +349,14 @@ export class BoothScene {
     // optional lens flare. Both belong to a clip, not to the booth, so the
     // default is "nothing at all" and every recording restores it.
     this.overlay = { fade: 1, flare: null };
+    // Dimension labels and the tape measure's reading: DOM over the canvas,
+    // so they stay crisp at any quality and never reach an exported file.
+    this.labelLayer = document.createElement("div");
+    this.labelLayer.className = "scene-labels";
+    host.append(this.labelLayer);
+    this.annotations = [];
+    this.measure = { on: false, points: [] };
+    this.onMeasure = () => {};
     this.watchForChanges();
     this.startLoop();
   }
@@ -505,6 +516,16 @@ export class BoothScene {
   invalidate(frames = 2) {
     this.framesOwed = Math.max(this.framesOwed || 0, frames);
     this.touchedAt = performance.now();
+    // A browser only promises animation frames while it has a reason to make
+    // them; with the loop idle, headless Chromium was measured handing out
+    // three a second, so a change could wait most of a second to appear. A
+    // timer draws the frame if the loop has not within KICK_MS; when frames
+    // are flowing the loop gets there first and the timer finds nothing owed.
+    if (!this.kick && this.looping)
+      this.kick = setTimeout(() => {
+        this.kick = null;
+        if (this.looping && this.framesOwed > 0) this.tick(performance.now());
+      }, KICK_MS);
   }
   /**
    * Everything that can change the picture, wired to `invalidate`. Nothing
@@ -561,30 +582,38 @@ export class BoothScene {
     settle(this.lighting, "apply");
   }
   startLoop() {
+    this.looping = true;
     this.invalidate();
-    let last = 0;
-    this.renderer.setAnimationLoop((now) => {
-      this.flushDrag();
-      if (this.host.hidden) return;
-      this.clampToGround();
-      const moving = this.controls.update();
-      const due =
-        this.framesOwed > 0 ||
-        moving ||
-        this.renderer.shadowMap.needsUpdate ||
-        (now - this.touchedAt < HEARTBEAT_FOR_MS && now - (this.drawnAt || 0) >= HEARTBEAT_MS);
-      if (!due) {
-        last = 0;
-        return;
-      }
-      if (this.framesOwed > 0) this.framesOwed--;
-      this.renderFrame();
-      this.drawnAt = now;
-      // Only back-to-back frames measure the machine: the gap after an idle
-      // stretch is how long nobody touched it, not how long a frame took.
-      if (last) this.adapt(now - last);
-      last = now;
-    });
+    this.lastTick = 0;
+    this.renderer.setAnimationLoop((now) => this.tick(now));
+  }
+  /** Stop the live loop, for a recording or a preview that draws its own frames. */
+  stopLoop() {
+    this.looping = false;
+    this.renderer.setAnimationLoop(null);
+  }
+  /** One turn of the live loop: draw if anything asked for it. */
+  tick(now) {
+    this.flushDrag();
+    if (this.host.hidden) return;
+    this.clampToGround();
+    const moving = this.controls.update();
+    const due =
+      this.framesOwed > 0 ||
+      moving ||
+      this.renderer.shadowMap.needsUpdate ||
+      (now - this.touchedAt < HEARTBEAT_FOR_MS && now - (this.drawnAt || 0) >= HEARTBEAT_MS);
+    if (!due) {
+      this.lastTick = 0;
+      return;
+    }
+    if (this.framesOwed > 0) this.framesOwed--;
+    this.renderFrame();
+    this.drawnAt = now;
+    // Only back-to-back frames measure the machine: the gap after an idle
+    // stretch is how long nobody touched it, not how long a frame took.
+    if (this.lastTick) this.adapt(now - this.lastTick);
+    this.lastTick = now;
   }
   /** One measured frame interval, for auto quality. */
   adapt(ms) {
@@ -612,6 +641,7 @@ export class BoothScene {
       this.renderOverlay();
       this.groupDrawn = true;
       this.releaseRetired(false);
+      this.placeAnnotations();
       return;
     }
     this.backdropScene.background = background;
@@ -671,6 +701,7 @@ export class BoothScene {
     this.renderOverlay();
     this.groupDrawn = true;
     this.releaseRetired(false);
+    this.placeAnnotations();
   }
 
   // The fade and the flare, drawn over a finished frame.
@@ -1376,6 +1407,7 @@ export class BoothScene {
       if (applied) this.renderer.shadowMap.needsUpdate = true;
     }).catch(() => {});
     this.applySelection();
+    this.refreshGuides();
     if (!this.initialized) {
       this.initialized = true;
       this.setView("perspective");
@@ -1396,6 +1428,7 @@ export class BoothScene {
     this.selectedPedestal = findPedestal(this.p, selectedPedestal) ? selectedPedestal : null;
     if (this.scaleId !== selected) this.scaleId = null;
     this.applySelection();
+    this.refreshGuides();
   }
   /** Redraw the outlines from the current selection. Cheap and idempotent. */
   applySelection() {
@@ -1627,6 +1660,7 @@ export class BoothScene {
     if (!g) return;
     placePedestal(g, ped);
     this.touchShadows();
+    this.refreshGuides();
   }
   /** The pedestal under the pointer, or null. Artwork and walls win the pick. */
   pickPedestal() {
@@ -1708,6 +1742,106 @@ export class BoothScene {
     }
     this.controls.update();
     this.resize();
+    this.refreshGuides();
+  }
+  /**
+   * The plan view's dimension lines and the tape measure, rebuilt from the
+   * booth and the measure's two points. Cheap — a few line segments — so it
+   * is simply redone whenever anything they depend on moves. The lines are
+   * LineSegments in the booth group, which `export()` and `recordVideo()`
+   * already hide; the labels are DOM, which neither ever sees.
+   */
+  refreshGuides() {
+    if (!this.p) return;
+    if (this.guides) {
+      this.guides.parent?.remove(this.guides);
+      this.guides.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); });
+    }
+    this.guides = new T.Group();
+    this.guides.name = "guides";
+    this.group.add(this.guides);
+    this.annotations = [];
+    const segments = [];
+    const Y = 0.006;
+    if (this.view === "plan") {
+      const ped = this.selectedPedestal && findPedestal(this.p, this.selectedPedestal);
+      const panel = this.selectedPanel && findPanel(this.p, this.selectedPanel);
+      const item = ped ? ped : panel ? { ...panel, depth: 3 } : null;
+      for (const line of planDimensions(this.p.booth, item)) {
+        const a = new T.Vector3(line.from.x * IN, Y, line.from.z * IN),
+          b = new T.Vector3(line.to.x * IN, Y, line.to.z * IN);
+        segments.push(a, b);
+        this.annotations.push({ at: a.clone().lerp(b, 0.5), text: formatLength(line.inches), kind: "dimension " + line.kind });
+      }
+    }
+    const [m0, m1] = this.measure.points;
+    if (m0) {
+      // A small cross marks where the tape starts until the second click.
+      const s = 0.03;
+      segments.push(m0.clone().add(new T.Vector3(-s, 0, 0)), m0.clone().add(new T.Vector3(s, 0, 0)),
+        m0.clone().add(new T.Vector3(0, 0, -s)), m0.clone().add(new T.Vector3(0, 0, s)));
+    }
+    if (m0 && m1) {
+      segments.push(m0, m1);
+      this.annotations.push({ at: m0.clone().lerp(m1, 0.5), text: formatLength(distanceInches(m0, m1, IN)), kind: "tape" });
+    }
+    if (segments.length) {
+      const lines = new T.LineSegments(
+        new T.BufferGeometry().setFromPoints(segments),
+        new T.LineBasicMaterial({ color: "#91beff", depthTest: false, transparent: true }),
+      );
+      lines.renderOrder = 10;
+      lines.userData.editorOnly = true;
+      this.guides.add(lines);
+    }
+    this.invalidate();
+  }
+  /** Stand each label over its point on screen. Called after every frame. */
+  placeAnnotations() {
+    const layer = this.labelLayer;
+    if (!layer) return;
+    const list = this.annotations;
+    while (layer.children.length > list.length) layer.lastChild.remove();
+    while (layer.children.length < list.length) layer.append(document.createElement("span"));
+    if (!list.length) return;
+    const w = this.host.clientWidth, h = this.host.clientHeight, v = new T.Vector3();
+    list.forEach((note, i) => {
+      const el = layer.children[i];
+      v.copy(note.at).project(this.camera);
+      el.className = "scene-label-note " + note.kind;
+      if (el.textContent !== note.text) el.textContent = note.text;
+      el.hidden = v.z > 1;
+      el.style.transform = `translate(${((v.x + 1) / 2) * w}px, ${((1 - v.y) / 2) * h}px) translate(-50%, -50%)`;
+    });
+  }
+  /**
+   * The tape measure. While it is on, a click on the booth sets a point
+   * instead of selecting: the first click is where the tape starts, the
+   * second where it ends and shows the distance, and a third starts over.
+   * Points land on whatever surface is under the pointer — a wall, a
+   * pedestal top, a work — or the floor, so a diagonal across the booth and
+   * the height of a work off the floor are both one gesture.
+   */
+  setMeasuring(on) {
+    this.measure.on = !!on;
+    if (!on) this.measure.points = [];
+    this.refreshGuides();
+  }
+  measurePoint(e) {
+    this.point(e);
+    this.group.updateMatrixWorld(true);
+    const targets = [];
+    this.group.traverse((o) => { if (o.isMesh && o.visible && !o.userData.editorOnly) targets.push(o); });
+    const hit = this.ray.intersectObjects(targets, false)[0];
+    let at = hit?.point || this.ray.ray.intersectPlane(FLOOR, new T.Vector3());
+    if (!at) return;
+    // Snap is a measurement tool's friend: 1″ on, left raw when snap is off.
+    if (this.snap) at = new T.Vector3(...at.toArray().map((m) => Math.round(m / IN) * IN));
+    const pts = this.measure.points;
+    this.measure.points = pts.length === 1 ? [pts[0], at] : [at];
+    this.refreshGuides();
+    const [a, b] = this.measure.points;
+    this.onMeasure(b ? distanceInches(a, b, IN) : null);
   }
   zoom(factor) {
     if (this.camera.isPerspectiveCamera) {
@@ -1777,6 +1911,7 @@ export class BoothScene {
     if (!frame) return;
     placePanelFrame(frame, panel);
     this.touchShadows();
+    this.refreshGuides();
   }
   wallDrop(e, a) {
     this.point(e); this.group.updateMatrixWorld(true);
@@ -1846,6 +1981,10 @@ export class BoothScene {
     });
     c.addEventListener("pointerdown", e => {
       if (e.button !== 0 || this.drag) return;
+      if (this.measure.on) {
+        this.measurePoint(e);
+        return;
+      }
       this.point(e); this.group.updateMatrixWorld(true);
       this.down = [e.clientX, e.clientY];
       const nearest = this.ray.intersectObjects([...this.resizeHandles, ...this.wallObjects, ...this.artObjects, ...this.pedestalObjects], false)[0];
@@ -2086,7 +2225,7 @@ export class BoothScene {
     // move — a push-in that starts at 1.75x the orbit radius can exceed
     // maxDistance — and a preview that is clamped where the recording is not
     // is a preview of the wrong clip.
-    this.renderer.setAnimationLoop(null);
+    this.stopLoop();
     // A drag mid-preview would still reach the controls and fight the path.
     this.controls.enabled = false;
     let done = false;
@@ -2211,7 +2350,7 @@ export class BoothScene {
     });
     // The live loop must not render between frames: it would fight this method
     // for the camera and for the framebuffer the encoder is about to read.
-    this.renderer.setAnimationLoop(null);
+    this.stopLoop();
     this.controls.enabled = false;
     // Damping interpolates towards a target over wall-clock time. On a path
     // driven frame by frame it would smear every frame towards the last one.
