@@ -513,7 +513,7 @@ header {
   gap: 12px;
   padding: 7px 15px;
 }
-.statusbar span:last-child {
+.statusbar > span:last-child {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1144,7 +1144,8 @@ dialog li {
     padding: 5px 10px;
     min-height: 23px;
   }
-  .statusbar span:last-child {
+  .statusbar > span:last-child,
+  #quality-now {
     display: none;
   }
   .inspector {
@@ -1806,4 +1807,37 @@ dialog li {
 .wall-setting.is-hidden .eye,
 .person-row.is-hidden .eye {
   color: #7c6a4a;
+}
+/* The preview quality menu, under the viewport where the picture it governs
+   is, with what the viewport is drawing at beside it. */
+.preview-quality {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.preview-quality select {
+  font-size: 10px;
+  padding: 2px 4px;
+  height: 22px;
+  max-width: 190px;
+}
+#quality-now {
+  color: #a9cfff;
+}
+/* With the preview menu in the bar, the hint gives way first: one line,
+   cut short, rather than a bar that doubles in height. */
+#gesture-hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.statusbar > #selection-status {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 32%;
 }
