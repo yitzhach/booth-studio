@@ -364,23 +364,15 @@ export class BoothScene {
   // The live loop, in one place: the video recorder stops it so that nothing
   // renders between the frames it is encoding, and starts it again afterwards.
   /**
-   * Shadow maps during a drag. An art-show booth has nine shadow-casting
-   * heads over it, and re-rendering all of them for every pointer event is
-   * what makes a dragged picture stutter. Shadows are left as they are for
-   * the length of the gesture and refreshed once when it ends — the artwork
-   * itself tracks the cursor, which is what the gesture is about.
-   */
-  /**
    * Draft mode: the viewport's quality escape hatch, and the honest answer to
    * "dragging still stutters on my machine".
    *
    * Two things cost a nine-head art-show booth most of its frame, and neither
    * of them is the geometry:
    *
-   * - **Nine shadow-casting spots are nine depth passes.** `touchShadows`
-   *   already holds them still for the length of a gesture, which is what
-   *   made a drag track the cursor at all — but the first frame after the
-   *   gesture, and every frame of an orbit, still pays for all nine.
+   * - **Every shadow-casting light is a depth pass.** A drag refreshes the
+   *   shadow maps once a drawn frame (`touchShadows`), so the cast shadow
+   *   follows the work — and every one of those frames pays for them all.
    * - **Quality is a supersampling factor.** At Balanced the renderer draws
    *   four fragments for every pixel on the 1x monitor most desktops have.
    *
@@ -490,13 +482,21 @@ export class BoothScene {
     if (changed) this.renderer.shadowMap.needsUpdate = true;
     this.invalidate();
   }
+  /**
+   * Something that casts a shadow has moved: redraw the shadow maps with the
+   * next frame.
+   *
+   * This used to hold the maps still for the length of a drag and refresh
+   * them once on release, from when every pointer event re-rendered nine
+   * shadow-casting heads. With fast edit off, that left a dragged work's cast
+   * shadow on the wall where the work had been until the button came up —
+   * reported as "the shadow stays in the original space". Neither reason
+   * survives: a drag is applied once per drawn frame (`flushDrag`), so this
+   * is at most one refresh a frame, and the light bar's heads cast only at
+   * High detail. Fast edit is the answer for a machine that cannot keep up,
+   * and it has no shadow maps to refresh at all.
+   */
   touchShadows() {
-    if (this.drag) this.shadowsStale = true;
-    else this.renderer.shadowMap.needsUpdate = true;
-  }
-  settleShadows() {
-    if (!this.shadowsStale) return;
-    this.shadowsStale = false;
     this.renderer.shadowMap.needsUpdate = true;
   }
   /** Apply the most recent pointer move, if one arrived since the last frame. */
@@ -553,7 +553,7 @@ export class BoothScene {
       document.addEventListener(type, touch, { capture: true, passive: true });
     this.controls.addEventListener("change", touch);
     for (const name of ["update", "updateArtwork", "setSelection", "applySelection", "setView", "zoom", "resize",
-      "movePerson", "movePedestal", "movePanel", "focusWall", "applyPose", "setDraft", "letGoOfArt", "touchShadows", "settleShadows"]) {
+      "movePerson", "movePedestal", "movePanel", "focusWall", "applyPose", "setDraft", "letGoOfArt", "touchShadows"]) {
       const method = this[name];
       this[name] = (...args) => {
         const result = method.apply(this, args);
@@ -610,6 +610,14 @@ export class BoothScene {
     }
     if (this.framesOwed > 0) this.framesOwed--;
     this.renderFrame();
+    // three clears this flag only when it actually redraws a shadow map. With
+    // the maps switched off (fast edit) or no light casting, it stays up, and
+    // `due` above read it as a frame owed on every tick — so one moved piece
+    // in fast edit kept the viewport drawing flat out until fast edit ended,
+    // in exactly the mode meant for a machine that cannot afford it. Nothing
+    // is lost by dropping it: leaving fast edit and a new caster (a rebuild,
+    // `setBarShadows`) each raise it again.
+    this.renderer.shadowMap.needsUpdate = false;
     this.drawnAt = now;
     // Only back-to-back frames measure the machine: the gap after an idle
     // stretch is how long nobody touched it, not how long a frame took.
@@ -2122,7 +2130,6 @@ export class BoothScene {
         // quick flick finishes an inch short of where it was released.
         this.flushDrag();
         this.drag = null; this.down = null; this.controls.enabled = true;
-        this.settleShadows();
         if (c.hasPointerCapture(e.pointerId)) c.releasePointerCapture(e.pointerId);
         this.onEnd();
         return;

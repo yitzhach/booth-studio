@@ -203,9 +203,15 @@ try {
   // is what kept a slow machine's GPU pinned while nobody was using it.
   const idle = await page.evaluate(async () => {
     const view = window.__booth.scene;
+    const frames = () => new Promise((r) => { let n = 10; const tick = () => (--n ? requestAnimationFrame(tick) : r()); requestAnimationFrame(tick); });
+    // Whatever the last click scheduled lands first. main.js resizes the
+    // viewport a frame after every render(), and swiftshader can take over a
+    // second to hand out that frame — so resetting the clock before it had
+    // landed let its invalidate start the heartbeat inside the window being
+    // measured, and this failed two runs in three on an unchanged main.
+    await frames();
     view.framesOwed = 0;
     view.touchedAt = -Infinity;
-    const frames = () => new Promise((r) => { let n = 10; const tick = () => (--n ? requestAnimationFrame(tick) : r()); requestAnimationFrame(tick); });
     await frames();
     const first = view.renderer.info.render.frame;
     await frames();
@@ -385,6 +391,67 @@ try {
   // Whether a material samples a shadow map is compiled into its program. Miss
   // this and the shadows never come back, however the renderer is configured.
   assert.equal(leaving.recompiled, true, 'and the materials are rebuilt to sample them again');
+
+  // ---- With fast edit off, a dragged work's cast shadow goes with it ------
+  // Reported: "the shadow behind an image stays in the original space until
+  // you release it". The shadow maps were held still for the whole gesture.
+  // They are refreshed on every drawn frame of a drag now, so the count of
+  // real shadow passes has to climb while the button is still down.
+  await page.evaluate(() => window.__booth.scene.setDraftPolicy('off'));
+  const [bx, by] = await artPoint(first);
+  await page.mouse.dblclick(bx, by);
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => window.__booth.scene.draft), false,
+    'locked off, arming a work keeps full quality');
+  await page.evaluate(() => {
+    const map = window.__booth.scene.renderer.shadowMap;
+    const real = map.render.bind(map);
+    window.__shadowPasses = 0;
+    map.render = (...args) => {
+      if (map.enabled && (map.autoUpdate || map.needsUpdate)) window.__shadowPasses++;
+      return real(...args);
+    };
+    window.__restoreShadowMap = () => { map.render = real; };
+  });
+  const dragFromX = await page.evaluate((id) => window.__booth.project.art.find((a) => a.id === id).x, first);
+  await page.mouse.move(bx, by);
+  await page.mouse.down();
+  await page.waitForTimeout(100);
+  await page.evaluate(() => { window.__shadowPasses = 0; });
+  for (let i = 1; i <= 5; i++) {
+    await page.mouse.move(bx + i * 8, by);
+    await page.waitForTimeout(80);
+  }
+  const midDrag = await page.evaluate((id) => ({
+    passes: window.__shadowPasses,
+    x: window.__booth.project.art.find((a) => a.id === id).x,
+  }), first);
+  await page.mouse.up();
+  await page.evaluate(() => window.__restoreShadowMap());
+  assert.ok(midDrag.x !== dragFromX, 'the work moved while the button was down');
+  assert.ok(midDrag.passes >= 3,
+    `the shadow maps were redrawn during the drag, not only on release (${midDrag.passes} passes)`);
+  await page.evaluate(() => window.__booth.scene.setDraftPolicy('auto'));
+
+  // In fast edit the shadow maps are switched off, and three only clears a
+  // requested refresh when it draws one. The loop read that stuck flag as a
+  // frame owed on every tick, so one moved piece in fast edit kept the
+  // viewport drawing flat out until fast edit ended.
+  const draftIdle = await page.evaluate(async () => {
+    const view = window.__booth.scene;
+    const frames = () => new Promise((r) => { let n = 10; const tick = () => (--n ? requestAnimationFrame(tick) : r()); requestAnimationFrame(tick); });
+    view.setDraft(true);
+    view.touchShadows();
+    await frames();
+    view.framesOwed = 0;
+    view.touchedAt = -Infinity;
+    const first = view.renderer.info.render.frame;
+    await frames();
+    const drawn = view.renderer.info.render.frame - first;
+    view.setDraft(false);
+    return drawn;
+  });
+  assert.equal(draftIdle, 0, 'a moved piece in fast edit does not keep the viewport drawing');
 
   assert.deepEqual(errors, [], 'no page errors');
   console.log('PASS selecting rebuilds nothing, artwork sliders, hall off in a photographed environment, light bar ranges, fast edit.');
