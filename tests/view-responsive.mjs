@@ -198,6 +198,43 @@ try {
   assert.equal(await page.locator('input[data-scope="lightBar"][data-field="power"]').getAttribute('max'), '100',
     'and the slider goes back to the scale it belongs on');
 
+  // ---- Drawing on demand, and auto preview quality ----------------------
+  // An untouched booth draws nothing: the same picture sixty times a second
+  // is what kept a slow machine's GPU pinned while nobody was using it.
+  const idle = await page.evaluate(async () => {
+    const view = window.__booth.scene;
+    view.framesOwed = 0;
+    view.touchedAt = -Infinity;
+    const frames = () => new Promise((r) => { let n = 10; const tick = () => (--n ? requestAnimationFrame(tick) : r()); requestAnimationFrame(tick); });
+    await frames();
+    const first = view.renderer.info.render.frame;
+    await frames();
+    const still = view.renderer.info.render.frame;
+    document.querySelector('#inspector-content').dispatchEvent(new Event('input', { bubbles: true }));
+    await frames();
+    return { idle: still - first, touched: view.renderer.info.render.frame - still };
+  });
+  assert.equal(idle.idle, 0, 'an idle booth draws no frames');
+  assert.ok(idle.touched > 0, 'and any input on the page draws one');
+
+  assert.equal(await page.evaluate(() => window.__booth.scene.quality), 'auto', 'preview quality defaults to Auto');
+  const adapted = await page.evaluate(() => {
+    const view = window.__booth.scene;
+    const before = view.renderer.getPixelRatio();
+    for (let i = 0; i < 30; i++) view.adapt(60);
+    return { before, after: view.renderer.getPixelRatio(), saved: JSON.parse(localStorage.getItem('booth.view')).autoScale };
+  });
+  assert.equal(adapted.before, 2, 'Auto starts at Balanced');
+  assert.equal(adapted.after, 1.5, 'and one slow window is one rung down');
+  assert.deepEqual(adapted.saved, { dpr: 1, scale: 1.5 }, 'remembered for this display');
+  assert.match(await page.locator('#toast').textContent(), /Preview detail lowered/, 'and said once');
+  await page.reload();
+  await page.waitForFunction(() => window.__booth?.scene);
+  assert.equal(await page.evaluate(() => window.__booth.scene.renderer.getPixelRatio()), 1.5, 'the next visit starts where this one settled');
+  await page.evaluate(() => { localStorage.removeItem('booth.view'); });
+  await page.reload();
+  await page.waitForFunction(() => window.__booth?.scene);
+
   // ---- Fast edit: the quality escape hatch ------------------------------
   // The honest answer to "a drag still stutters": nine shadow-casting heads
   // and a supersampled buffer, both dropped for the length of an edit.

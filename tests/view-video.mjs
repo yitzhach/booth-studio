@@ -306,10 +306,13 @@ try {
   assert.equal(after.fov, before.fov, 'the field of view is restored');
   assert.equal(after.pixelRatio, before.pixelRatio, 'the preview pixel ratio is restored');
 
-  // And the canvas must be back at viewport size, still animating.
+  // And the canvas must be back at viewport size, with the live loop answering
+  // again. The loop draws on demand, so the test asks for a frame the way any
+  // change does; a loop left stopped would ignore the request.
   const live = await page.evaluate(async () => {
     const view = window.__booth.scene;
     const first = view.renderer.info.render.frame;
+    view.invalidate();
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     return { advanced: view.renderer.info.render.frame > first, width: view.renderer.domElement.clientWidth };
   });

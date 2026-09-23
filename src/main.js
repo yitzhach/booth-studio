@@ -129,6 +129,7 @@ import { fixtureShare, lightBarFixtures } from "./lightbar.js";
 import { load, save, download, readImage, thumbnailOf, THUMB_MAX } from "./storage.js";
 import { decodeAt } from "./image-source.js";
 import { BoothScene, BACKDROP_FRAMING } from "./scene.js";
+import { AUTO_QUALITY, startScale } from "./adaptive.js";
 import { PhotoEditor } from "./photo.js";
 import { hangingGuide } from "./guide.js";
 async function boot() {
@@ -205,7 +206,11 @@ async function boot() {
     lightIndex = 0,
     photoLightIndex = 0,
     busy = false,
-    quality = 2,
+    // Preview quality: "auto" (the default — see src/adaptive.js) or a fixed
+    // supersampling factor. A view setting, remembered per browser in
+    // booth.view with the rung auto last settled on for this display.
+    quality = AUTO_QUALITY,
+    autoScale = null,
     editingStart = null,
     // Video export state. It lives here rather than in the DOM because a
     // recording survives re-renders of the inspector and has to be cancellable
@@ -368,6 +373,21 @@ async function boot() {
     // No storage, no remembered lock: auto is the default and is correct.
   }
   loadViewPrefs();
+  let adaptToasted = false;
+  if (scene) {
+    scene.setQuality(quality, quality === AUTO_QUALITY ? startScale(devicePixelRatio, autoScale) : undefined);
+    // Auto stepping down is said once, so a softer picture is never a mystery,
+    // and remembered for this display so the next visit starts where this one
+    // settled rather than measuring its way down again.
+    scene.onAdapt = (scale) => {
+      autoScale = { dpr: devicePixelRatio || 1, scale };
+      saveViewPrefs();
+      if (!adaptToasted) {
+        adaptToasted = true;
+        toast("Preview detail lowered to keep up with this computer. Exports are unaffected; Export → Preview quality sets it by hand.");
+      }
+    };
+  }
   const photo = new PhotoEditor(
     document.querySelector("#photo"),
     (id) => {
@@ -549,12 +569,14 @@ async function boot() {
     palette = readPalette(saved.palette);
     if (saved.colorHistory && typeof saved.colorHistory === "object") colorHistory = saved.colorHistory;
     if (saved.lastEdge && typeof saved.lastEdge === "object") lastEdge = saved.lastEdge;
+    if (saved.quality === AUTO_QUALITY || [1, 2, 3].includes(saved.quality)) quality = saved.quality;
+    if (saved.autoScale && typeof saved.autoScale === "object") autoScale = saved.autoScale;
   }
   function saveViewPrefs() {
     try {
       localStorage.setItem(
         "booth.view",
-        JSON.stringify({ exportFrame, exportLong, customFrame, videoFrameShape, videoSettle, palette, colorHistory, lastEdge }),
+        JSON.stringify({ exportFrame, exportLong, customFrame, videoFrameShape, videoSettle, palette, colorHistory, lastEdge, quality, autoScale }),
       );
     } catch {
       // A browser with storage switched off keeps all of this for the
@@ -1492,7 +1514,7 @@ async function boot() {
         : `<div class="panel-heading"><h2>Video</h2>${icon("video")}</div><p class="muted">Everything about moving pictures in one place: the move, the clip, the timeline and a batch list. The Export tab keeps the same controls beside the PNG and the guide, and they are the same settings — this is not a second set.</p>${videoSection()}${batchSection()}<section><h3>Stills</h3><p class="muted">The frame you are looking at, as a PNG, without controls or outlines. The full image options are in Export.</p>${btn("export-image", "Export PNG · 4096 px", "download", "wide")}</section>`;
     }
     if (tab === "export") {
-      html = `<div class="panel-heading"><h2>Export your booth</h2>${icon("download")}</div><p class="muted">A clean image of the current ${p.mode === "photo" ? "photo composition" : "camera view"}, without controls or selection outlines.</p><section><h3>Image size</h3>${p.mode === "photo" ? "" : frameFields("export")}<label class="setting-label">Detail<select id="export-size" aria-label="Export image size">${STILL_SIZES.map((n) => `<option value="${n}" ${exportLong === n ? "selected" : ""}>${n} px on the long side${n <= 1440 ? " · Fast" : n >= 4096 ? " · High resolution" : ""}</option>`).join("")}</select></label><p class="muted">PNG · ${p.mode === "photo" ? "The photograph's own shape. Enlarging a small source cannot restore missing detail." : e(frameNote("export")) + " Preview textures are capped at 2048 px per artwork; originals remain in the backup."}</p>${btn("export-image", "Export PNG", "download", "primary wide")}</section>${p.mode === "photo" ? "" : videoSection()}<section><h3>Installation guide</h3><p class="muted">Measured wall elevations, panel sizes, and left/bottom placement references. Open the downloaded HTML to print or save as PDF. Photo overlays are excluded.</p>${btn("guide", "Download hanging guide", "layout-panel-left", "wide")}</section><section><h3>Keep your work</h3>${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Includes original artwork and photo files, booth layout, and lighting.</p></section><section><h3>Preview quality</h3><select id="quality" aria-label="Preview quality"><option value="1" ${quality === 1 ? "selected" : ""}>Efficient · Older devices</option><option value="2" ${quality === 2 ? "selected" : ""}>Balanced</option><option value="3" ${quality === 3 ? "selected" : ""}>High detail</option></select></section>`;
+      html = `<div class="panel-heading"><h2>Export your booth</h2>${icon("download")}</div><p class="muted">A clean image of the current ${p.mode === "photo" ? "photo composition" : "camera view"}, without controls or selection outlines.</p><section><h3>Image size</h3>${p.mode === "photo" ? "" : frameFields("export")}<label class="setting-label">Detail<select id="export-size" aria-label="Export image size">${STILL_SIZES.map((n) => `<option value="${n}" ${exportLong === n ? "selected" : ""}>${n} px on the long side${n <= 1440 ? " · Fast" : n >= 4096 ? " · High resolution" : ""}</option>`).join("")}</select></label><p class="muted">PNG · ${p.mode === "photo" ? "The photograph's own shape. Enlarging a small source cannot restore missing detail." : e(frameNote("export")) + " Preview textures are capped at 2048 px per artwork; originals remain in the backup."}</p>${btn("export-image", "Export PNG", "download", "primary wide")}</section>${p.mode === "photo" ? "" : videoSection()}<section><h3>Installation guide</h3><p class="muted">Measured wall elevations, panel sizes, and left/bottom placement references. Open the downloaded HTML to print or save as PDF. Photo overlays are excluded.</p>${btn("guide", "Download hanging guide", "layout-panel-left", "wide")}</section><section><h3>Keep your work</h3>${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Includes original artwork and photo files, booth layout, and lighting.</p></section><section><h3>Preview quality</h3><select id="quality" aria-label="Preview quality"><option value="auto" ${quality === AUTO_QUALITY ? "selected" : ""}>Auto · adapts to this computer</option><option value="1" ${quality === 1 ? "selected" : ""}>Efficient · Older devices</option><option value="2" ${quality === 2 ? "selected" : ""}>Balanced</option><option value="3" ${quality === 3 ? "selected" : ""}>High detail</option></select><p class="muted">Auto starts sharp and lowers the detail while it measures this computer drawing slower than it should. The light bar's shadows are drawn live at High detail only; exports always include them.</p></section>`;
     }
     root.innerHTML = html;
     refreshIcons();
@@ -2548,9 +2570,13 @@ async function boot() {
       return;
     }
     if (el.id === "quality") {
-      quality = +el.value;
-      scene?.setQuality(+el.value);
+      quality = el.value === AUTO_QUALITY ? AUTO_QUALITY : +el.value;
+      // Choosing Auto again starts it over from the top, so a machine that
+      // has since been freed up gets to measure its way back to sharp.
+      if (quality === AUTO_QUALITY) autoScale = null;
+      scene?.setQuality(quality, quality === AUTO_QUALITY ? startScale(devicePixelRatio) : undefined);
       scene?.resize();
+      saveViewPrefs();
       return;
     }
     // Video settings are view state, not project state: they are not saved

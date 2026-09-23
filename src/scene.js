@@ -25,6 +25,7 @@ import { fadeAt, isTimeline, timelineSeconds } from "./timeline.js";
 import { flareGhosts, flareOrigin } from "./flare.js";
 import { DEFAULT_SIZE, SIZES, evenSize, recordMp4, videoSupported } from "./video.js";
 import { DEFAULT_FRAME, frameSize } from "./framing.js";
+import { AUTO_QUALITY, FrameBudget, startScale, stepDown } from "./adaptive.js";
 // How far behind its frame plane a wall's slab sits, in metres. Half the
 // slab's thickness plus the sliver that keeps art from z-fighting the face.
 const WALL_SLAB_OFFSET = 0.031;
@@ -163,8 +164,14 @@ export const isPanorama = (background) =>
 // Quality is a supersampling factor, not a ceiling: on a 1x monitor asking for
 // min(devicePixelRatio, 2) renders at 1 and aliases. Capped at 3 because the
 // cost is per pixel and a phone does not need 9x the fragments.
+// "auto" asks for the same factor Balanced does; the scene then measures its
+// way down from there (see src/adaptive.js).
 export const renderScale = (quality = 2) =>
-  Math.min(Math.max(devicePixelRatio || 1, quality), 3);
+  Math.min(Math.max(devicePixelRatio || 1, quality === AUTO_QUALITY ? 2 : quality), 3);
+// How long the viewport keeps a once-a-second heartbeat after the last thing
+// that asked it to draw. See `startLoop`.
+const HEARTBEAT_MS = 1000;
+const HEARTBEAT_FOR_MS = 15000;
 export function temperature(k) {
   const t = (k - 2700) / 3800;
   return new T.Color().setRGB(
@@ -269,13 +276,21 @@ export class BoothScene {
     // The Export panel's Preview quality, kept here rather than only in the
     // inspector because draft mode has to be able to put it back.
     this.quality = 2;
+    // Auto quality's current rung and the frame budget that moves it. Set by
+    // `setQuality(AUTO_QUALITY)`; unused at a fixed quality.
+    this.autoScale = startScale(devicePixelRatio);
+    this.budget = new FrameBudget();
+    this.onAdapt = () => {};
+    // Light-bar heads draw their shadows in exports always, and in the live
+    // viewport only at High detail. See `setBarShadows`.
+    this.barShadows = false;
     // Fast edit follows the gesture unless someone has locked it; see
     // setDraftPolicy.
     this.draftPolicy = "auto";
     // Draft mode is off on load: the booth should look like itself the first
     // time it is seen, and someone who never drags anything never needs this.
     this.draft = false;
-    this.renderer.setPixelRatio(renderScale(this.quality));
+    this.renderer.setPixelRatio(this.previewScale());
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.autoUpdate = false;
     this.renderer.shadowMap.type = T.PCFSoftShadowMap;
@@ -314,6 +329,7 @@ export class BoothScene {
     // optional lens flare. Both belong to a clip, not to the booth, so the
     // default is "nothing at all" and every recording restores it.
     this.overlay = { fade: 1, flare: null };
+    this.watchForChanges();
     this.startLoop();
   }
   // The live loop, in one place: the video recorder stops it so that nothing
@@ -354,7 +370,7 @@ export class BoothScene {
     if (draft === this.draft) return;
     this.draft = draft;
     this.renderer.shadowMap.enabled = !draft;
-    this.renderer.setPixelRatio(draft ? 1 : renderScale(this.quality));
+    this.renderer.setPixelRatio(draft ? 1 : this.previewScale());
     // Whether a material samples a shadow map is compiled into its program,
     // so flipping `shadowMap.enabled` under a built scene is not enough on its
     // own: without this the booth keeps drawing the shadows it was compiled
@@ -402,10 +418,48 @@ export class BoothScene {
   releaseDraft() {
     if ((this.draftPolicy || "auto") === "auto") this.setDraft(false);
   }
-  /** Preview quality, remembered so draft mode can restore the right one. */
-  setQuality(quality) {
+  /**
+   * Preview quality, remembered so draft mode can restore the right one.
+   * `AUTO_QUALITY` hands the factor to the frame budget, starting from
+   * `autoScale` — which the caller may seed from what an earlier session on
+   * this display measured. High detail is also the one setting that draws the
+   * light bar's shadows live; see `setBarShadows`.
+   */
+  setQuality(quality, autoScale) {
     this.quality = quality;
-    if (!this.draft) this.renderer.setPixelRatio(renderScale(quality));
+    if (autoScale) this.autoScale = autoScale;
+    this.budget.reset();
+    if (!this.draft) this.renderer.setPixelRatio(this.previewScale());
+    this.setBarShadows(quality === 3);
+    this.invalidate();
+  }
+  /** The supersampling factor the live viewport draws at, outside fast edit. */
+  previewScale() {
+    return this.quality === AUTO_QUALITY ? this.autoScale : renderScale(this.quality);
+  }
+  /**
+   * Whether the light bar's heads cast shadows. Nine shadow-casting spots are
+   * nine shadow maps sampled by every lit fragment of every frame — with the
+   * supersampling, the largest single cost of an art-show booth. At the
+   * default diffusion each of those shadows is drawn at about a quarter
+   * strength, filling in rather than cutting, and the fill light still grounds
+   * every pedestal. So the live viewport leaves them off below High detail,
+   * and `export()` and `recordVideo()` turn them on for the delivered file,
+   * the way they already put fast edit's shadows back. three recompiles the
+   * materials by itself: the number of shadowed spots is part of its lights
+   * state.
+   */
+  setBarShadows(on) {
+    this.barShadows = !!on;
+    let changed = false;
+    this.group.getObjectByName("light-bar")?.traverse((o) => {
+      if (o.isSpotLight && o.castShadow !== this.barShadows) {
+        o.castShadow = this.barShadows;
+        changed = true;
+      }
+    });
+    if (changed) this.renderer.shadowMap.needsUpdate = true;
+    this.invalidate();
   }
   touchShadows() {
     if (this.drag) this.shadowsStale = true;
@@ -423,15 +477,99 @@ export class BoothScene {
     this.pendingMove = null;
     this.applyDrag?.(e);
   }
+  /**
+   * Ask for the viewport to be drawn. The live loop draws on demand: a booth
+   * nobody is touching is the same picture sixty times a second, and drawing
+   * it anyway kept a slow machine's GPU pinned — and its inspector sluggish —
+   * while nothing moved. `frames` is how many consecutive frames to draw; two
+   * covers a change whose effect lands one frame late (a shadow map, a
+   * texture upload).
+   */
+  invalidate(frames = 2) {
+    this.framesOwed = Math.max(this.framesOwed || 0, frames);
+    this.touchedAt = performance.now();
+  }
+  /**
+   * Everything that can change the picture, wired to `invalidate`. Nothing
+   * about how the booth is built had to change for on-demand drawing; what
+   * has to be right is this list, so it is deliberately broad:
+   *
+   * - Any input anywhere on the page. Every inspector control, toolbar
+   *   button, key and gesture ends in a scene call synchronously from its
+   *   event, so a document-level listener catches all of them, including the
+   *   ones main.js makes by assigning to a field.
+   * - Every public method that changes what is drawn, wrapped once here
+   *   rather than remembered in each of them.
+   * - Every asynchronous load that lands in the scene: artwork textures,
+   *   surface sets and the lighting preset, on settling either way.
+   * - The camera controls' own change event, and a shadow map flagged stale.
+   *
+   * And a safety net: for fifteen seconds after the last of those, the
+   * viewport still draws once a second, so a change nothing above announced
+   * shows up late rather than never. After that an idle booth costs nothing.
+   */
+  watchForChanges() {
+    const touch = () => this.invalidate();
+    for (const type of ["pointerdown", "pointerup", "click", "dblclick", "input", "change", "keydown", "keyup", "wheel"])
+      document.addEventListener(type, touch, { capture: true, passive: true });
+    this.controls.addEventListener("change", touch);
+    for (const name of ["update", "updateArtwork", "setSelection", "applySelection", "setView", "zoom", "resize",
+      "movePerson", "movePedestal", "movePanel", "focusWall", "applyPose", "setDraft", "letGoOfArt", "touchShadows", "settleShadows"]) {
+      const method = this[name];
+      this[name] = (...args) => {
+        const result = method.apply(this, args);
+        this.invalidate();
+        return result;
+      };
+    }
+    const settle = (owner, name) => {
+      const load = owner[name];
+      owner[name] = (...args) => {
+        const result = load.apply(owner, args);
+        Promise.resolve(result).then(touch, touch);
+        return result;
+      };
+    };
+    settle(this, "texture");
+    settle(this.surfaces, "load");
+    settle(this.lighting, "apply");
+  }
   startLoop() {
-    this.renderer.setAnimationLoop(() => {
+    this.invalidate();
+    let last = 0;
+    this.renderer.setAnimationLoop((now) => {
       this.flushDrag();
-      if (!this.host.hidden) {
-        this.clampToGround();
-        this.controls.update();
-        this.renderFrame();
+      if (this.host.hidden) return;
+      this.clampToGround();
+      const moving = this.controls.update();
+      const due =
+        this.framesOwed > 0 ||
+        moving ||
+        this.renderer.shadowMap.needsUpdate ||
+        (now - this.touchedAt < HEARTBEAT_FOR_MS && now - (this.drawnAt || 0) >= HEARTBEAT_MS);
+      if (!due) {
+        last = 0;
+        return;
       }
+      if (this.framesOwed > 0) this.framesOwed--;
+      this.renderFrame();
+      this.drawnAt = now;
+      // Only back-to-back frames measure the machine: the gap after an idle
+      // stretch is how long nobody touched it, not how long a frame took.
+      if (last) this.adapt(now - last);
+      last = now;
     });
+  }
+  /** One measured frame interval, for auto quality. */
+  adapt(ms) {
+    if (this.quality !== AUTO_QUALITY || this.draft) return;
+    if (!this.budget.sample(ms)) return;
+    const next = stepDown(this.autoScale);
+    if (next === this.autoScale) return;
+    this.autoScale = next;
+    this.renderer.setPixelRatio(next);
+    this.resize();
+    this.onAdapt(next);
   }
   // One frame. A spherical backdrop is drawn first, through a wider lens of its
   // own, then the booth over the top of it; see BACKDROP_FRAMING. Anything else
@@ -1301,7 +1439,8 @@ export class BoothScene {
       );
       light.position.copy(from);
       light.target.position.copy(to);
-      light.castShadow = true;
+      // Off in the live viewport below High detail; see setBarShadows.
+      light.castShadow = this.barShadows;
       // Nine shadow-casting spots is nine shadow passes. Half the map size of
       // a hand-placed spotlight keeps that affordable; a wall wash is a soft
       // edge anyway, so there is nothing in it to see.
@@ -2015,6 +2154,8 @@ export class BoothScene {
     // leaving the shadows off and a whole clip to lose.
     const wasDraft = this.draft;
     this.setDraft(false);
+    const wasBarShadows = this.barShadows;
+    this.setBarShadows(true);
     try {
       this.renderer.setPixelRatio(1);
       this.renderer.setSize(width, height, false);
@@ -2077,6 +2218,7 @@ export class BoothScene {
       this.resize();
       this.controls.update();
       this.renderer.shadowMap.needsUpdate = true;
+      this.setBarShadows(wasBarShadows);
       this.setDraft(wasDraft);
       this.startLoop();
     }
@@ -2111,6 +2253,8 @@ export class BoothScene {
     // Below the size check, so a refused export leaves the mode as it found it.
     const wasDraft = this.draft;
     this.setDraft(false);
+    const wasBarShadows = this.barShadows;
+    this.setBarShadows(true);
     const pixel = this.renderer.getPixelRatio();
     const wasAspect = this.camera.aspect;
     const hidden = [];
@@ -2145,6 +2289,7 @@ export class BoothScene {
       this.renderer.setPixelRatio(pixel);
       if (this.camera.isPerspectiveCamera) this.camera.aspect = wasAspect;
       this.resize();
+      this.setBarShadows(wasBarShadows);
       this.setDraft(wasDraft);
     }
   }

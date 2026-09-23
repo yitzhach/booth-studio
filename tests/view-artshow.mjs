@@ -97,6 +97,35 @@ try {
   }
   assert.ok(bar.bounce > 0, 'the white hall bounces the bar back at itself');
 
+  // --- Bar shadows: the live viewport's biggest per-pixel cost, left off below
+  // High detail and put back for every delivered file.
+  const barShadows = () => page.evaluate(() => {
+    const out = [];
+    window.__booth.scene.group.getObjectByName('light-bar').traverse((o) => { if (o.isSpotLight) out.push(o.castShadow); });
+    return out;
+  });
+  assert.ok((await barShadows()).every((on) => !on), 'the live viewport does not draw nine bar shadows by default');
+  const exported = await page.evaluate(async () => {
+    const scene = window.__booth.scene;
+    let seen = null;
+    const real = scene.renderFrame.bind(scene);
+    scene.renderFrame = () => {
+      if (seen === null) { seen = []; scene.group.getObjectByName('light-bar').traverse((o) => { if (o.isSpotLight) seen.push(o.castShadow); }); }
+      return real();
+    };
+    try { await scene.export(1024); } finally { scene.renderFrame = real; }
+    return seen;
+  });
+  assert.equal(exported.length, 9);
+  assert.ok(exported.every(Boolean), 'an export draws every bar shadow');
+  assert.ok((await barShadows()).every((on) => !on), 'and the viewport goes back to going without');
+  await page.evaluate(() => window.__booth.scene.setQuality(3));
+  assert.ok((await barShadows()).every(Boolean), 'High detail draws them live');
+  await page.evaluate(() => window.__booth.scene.update(window.__booth.project, null));
+  assert.ok((await barShadows()).every(Boolean), 'and a rebuilt bar keeps them');
+  await page.evaluate(() => window.__booth.scene.setQuality('auto'));
+  assert.ok((await barShadows()).every((on) => !on));
+
   // Turning diffusion off must put the bare source back, bounce and all — and
   // hand the light exactly the brightness that was typed. 12 rather than the
   // default, so this cannot pass by comparing the default to itself: the
