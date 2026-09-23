@@ -114,6 +114,8 @@ import {
   LIGHT_BAR_POWER_STEP,
   MAX_PEDESTALS,
   PEDESTAL,
+  FURNITURE,
+  furnitureKind,
   VENUES,
   applyVenue,
   artShowPanel,
@@ -228,6 +230,8 @@ async function boot() {
     // supersampling factor. A view setting, remembered per browser in
     // booth.view with the rung auto last settled on for this display.
     quality = AUTO_QUALITY,
+    // Which piece the Walls tool's Add button hangs next: view state.
+    furnitureChoice = "pedestal",
     autoScale = null,
     editingStart = null,
     // Video export state. It lives here rather than in the DOM because a
@@ -798,14 +802,14 @@ async function boot() {
   }
   function pedestalFields() {
     const list = boothPedestals(p);
-    return `<section><h3>Pedestals</h3><p class="muted">A plinth with a solid top for business cards, a tablet or a guest book. Double-click one in the booth to pick it up, then drag it across the floor or use the sliders. Position is inches from the centre of the floor: X is right, Z is toward the entrance.</p>${list.map((ped, i) => {
+    return `<section><h3>Pedestals and furniture</h3><p class="muted">Pedestals, tables in their cloths, a counter, seating, a print bin, gridwall, a banner stand and a screen. Double-click one in the booth to pick it up, then drag it across the floor or use the sliders. Position is inches from the centre of the floor: X is right, Z is toward the entrance. Plan view shows the clear floor around the one selected.</p>${list.map((ped, i) => {
       const name = ped.name || "Pedestal " + (i + 1),
         scope = "pedestal-" + ped.id,
         chosen = selectedPedestal === ped.id,
         f = (label, key, value, min, max, step, unit) =>
           field(label, key, value, min, max, step, unit, scope, name + " " + label);
       return `<div class="wall-setting${chosen ? " selected" : ""}" data-pedestal="${e(ped.id)}"><div class="panel-heading"><h4>${e(name)}${chosen ? ' <span class="badge">Selected</span>' : ""}</h4>${btn("delete-pedestal-" + ped.id, "Remove " + name, "trash-2", "icon-only")}</div>${f("Height", "height", ped.height, 6, 96, 1, "in")}${f("Width", "width", ped.width, 4, 96, 1, "in")}${f("Depth", "depth", ped.depth, 4, 96, 1, "in")}${colorField("Finish", "color", scope, ped.color || PEDESTAL.color, name + " finish")}${f("Position X", "x", ped.x, -360, 360, 1, "in")}${pedestalSlider(ped, name, "x", "Slide left / right")}${f("Position Z", "z", ped.z, -360, 360, 1, "in")}${pedestalSlider(ped, name, "z", "Slide front / back")}${f("Rotation", "rotation", ped.rotation, -180, 180, 5, "°")}</div>`;
-    }).join("")}${list.length < MAX_PEDESTALS ? btn("add-pedestal", "Add pedestal", "plus", "wide") : `<p class="muted">${MAX_PEDESTALS} pedestals is the limit.</p>`}</section>`;
+    }).join("")}${list.length < MAX_PEDESTALS ? `<label class="setting-label">Add to the floor<select id="furniture-kind" aria-label="Furniture to add">${Object.entries(FURNITURE).map(([k, f]) => `<option value="${k}" ${k === furnitureChoice ? "selected" : ""}>${e(f.label)} · ${f.width}×${f.depth}″</option>`).join("")}</select></label>${btn("add-pedestal", "Add " + FURNITURE[furnitureChoice].label.toLowerCase(), "plus", "wide")}` : `<p class="muted">${MAX_PEDESTALS} pieces is the limit.</p>`}</section>`;
   }
   /**
    * The art-show tool. Everything an indoor convention booth is measured by,
@@ -2303,23 +2307,30 @@ async function boot() {
       mutate(() => {
         const list = (p.booth.pedestals ||= []);
         if (list.length >= MAX_PEDESTALS) {
-          toast(`This prototype supports up to ${MAX_PEDESTALS} pedestals.`, true);
+          toast(`This prototype supports up to ${MAX_PEDESTALS} pieces of furniture.`, true);
           return;
         }
+        const kind = furnitureChoice,
+          { label, ...size } = FURNITURE[kind],
+          same = list.filter((x) => furnitureKind(x) === kind).length;
         // Near the entrance on the right, where a card table usually stands,
         // rather than in the middle of the floor where it would be in the way
-        // of the first thing anyone looks at.
+        // of the first thing anyone looks at. Measured from the piece's own
+        // size, so an 8′ table lands inside the booth and a pedestal lands
+        // exactly where it always did.
         list.push({
           id: uid(),
-          name: "Pedestal " + (list.length + 1),
-          ...PEDESTAL,
-          x: Math.round(p.booth.width / 2 - PEDESTAL.width),
-          z: Math.round(p.booth.depth / 2 - PEDESTAL.depth * 2),
+          name: (kind === "pedestal" ? "Pedestal" : label) + " " + (same + 1),
+          ...size,
+          ...(kind === "pedestal" ? {} : { kind }),
+          x: Math.round(p.booth.width / 2 - size.width / 2 - 6),
+          z: Math.round(p.booth.depth / 2 - size.depth / 2 - 18),
           rotation: 0,
         });
+        list[list.length - 1] = constrainPedestal(p, list[list.length - 1]);
         selectedPedestal = list[list.length - 1].id;
         selectedPanel = null;
-        toast("Pedestal added near the entrance. Double-click it in the booth to pick it up, or use the sliders.");
+        toast(`${label} added near the entrance. Double-click it in the booth to pick it up, or use the sliders.`);
       }),
     // The one drag back for a booth carrying the brightness default from
     // before the slider was a percentage. It writes the stored unit, not the
@@ -2619,6 +2630,11 @@ async function boot() {
     }
     if (el.id === "project-name") {
       mutate(() => (p.name = el.value.trim() || "Untitled booth"));
+      return;
+    }
+    if (el.id === "furniture-kind") {
+      if (FURNITURE[el.value]) furnitureChoice = el.value;
+      renderInspector();
       return;
     }
     if (el.id === "quality") {

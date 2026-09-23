@@ -333,9 +333,36 @@ export function relinkArtShowWalls(p) {
   return p;
 }
 export const PEDESTAL_PREFIX = "pedestal:";
-export const MAX_PEDESTALS = 8;
+// Raised from 8 when furniture joined the list: a 10 × 20 with two tables,
+// chairs, a bin and a banner is a dozen things before a single pedestal.
+export const MAX_PEDESTALS = 24;
 /** The pedestal asked for: 44″ tall, 12 × 12, with a solid top. */
 export const PEDESTAL = { width: 12, depth: 12, height: 44, color: "#f4f3f0" };
+/**
+ * Free-standing furniture. Each is a pedestal with a `kind`: the same list,
+ * the same drag, sliders, rotation and limit, and a different shape when the
+ * scene draws it. A pedestal saved before this has no kind and is still a
+ * pedestal, which is what keeps schema 1 true.
+ *
+ * Sizes are the ones a show supplies or a booth buys: a folding table is 6′
+ * or 8′ by 30″ at 30″ high, a retractable banner is about 33″ by 80″, a
+ * gridwall panel is 2′ wide. Each is a starting point, typed over like any
+ * pedestal's.
+ */
+export const FURNITURE = {
+  pedestal: { label: "Pedestal", ...PEDESTAL },
+  table6: { label: "Table 6′ with cloth", width: 72, depth: 30, height: 30, color: "#23262b" },
+  table8: { label: "Table 8′ with cloth", width: 96, depth: 30, height: 30, color: "#23262b" },
+  counter: { label: "Counter", width: 40, depth: 20, height: 40, color: "#f4f3f0" },
+  chair: { label: "Chair", width: 18, depth: 18, height: 33, color: "#2e3034" },
+  stool: { label: "Stool", width: 16, depth: 16, height: 30, color: "#2e3034" },
+  bin: { label: "Print bin", width: 30, depth: 20, height: 32, color: "#8a6a4a" },
+  // A gridwall panel is a sheet of wire; its depth is the footprint of its feet.
+  gridwall: { label: "Gridwall panel", width: 24, depth: 12, height: 72, color: "#1e1f22" },
+  banner: { label: "Banner stand", width: 33, depth: 12, height: 80, color: "#91beff" },
+  tv: { label: "Screen on a stand", width: 44, depth: 20, height: 72, color: "#15171a" },
+};
+export const furnitureKind = (ped) => (ped?.kind && FURNITURE[ped.kind] ? ped.kind : "pedestal");
 export const boothPedestals = (p) => p.booth.pedestals || [];
 export const findPedestal = (p, id) =>
   boothPedestals(p).find((ped) => ped.id === id) || null;
@@ -666,6 +693,7 @@ export function validateProject(p) {
         fail();
       if (ped.name !== undefined && (typeof ped.name !== "string" || ped.name.length > 200)) fail();
       if (ped.color !== undefined && !/^#[0-9a-f]{6}$/i.test(ped.color)) fail();
+      if (ped.kind !== undefined && !Object.hasOwn(FURNITURE, ped.kind)) fail();
       seen.add(ped.id);
     }
   }

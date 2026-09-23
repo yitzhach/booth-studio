@@ -9,7 +9,7 @@ import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY, showFixtures } 
 import { GROUND_CONSUMER, TENT_CONSUMER, TENT_WEAVE, WALL_CONSUMER, WALL_SET, UV_METRE, SurfaceTextures } from "./surfaces.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
 import { decodeAt, isPreflipped } from "./image-source.js";
-import { IN, PEDESTAL, boothPedestals, edgeColorOf, lightVisible, constrain, groundKind, groundUpload, constrainPanel, constrainPedestal, findPanel, findPedestal, isArtShow, lightBarSpec, isPanelKey, scalePanel, wallKeys, wallSpec } from "./model.js";
+import { IN, PEDESTAL, FURNITURE, furnitureKind, boothPedestals, edgeColorOf, lightVisible, constrain, groundKind, groundUpload, constrainPanel, constrainPedestal, findPanel, findPedestal, isArtShow, lightBarSpec, isPanelKey, scalePanel, wallKeys, wallSpec } from "./model.js";
 import { lightBarBounce, lightBarFixtures, lightBarOptics, lightBarRail } from "./lightbar.js";
 import { makePerson, placePerson } from "./people.js";
 import { rowLayout } from "./row.js";
@@ -27,6 +27,7 @@ import { DEFAULT_SIZE, SIZES, evenSize, recordMp4, videoSupported } from "./vide
 import { DEFAULT_FRAME, frameSize } from "./framing.js";
 import { AUTO_QUALITY, FrameBudget, startScale, stepDown } from "./adaptive.js";
 import { distanceInches, formatLength, planDimensions } from "./measure.js";
+import { buildFurniture } from "./furniture.js";
 // How far behind its frame plane a wall's slab sits, in metres. Half the
 // slab's thickness plus the sliver that keeps art from z-fighting the face.
 const WALL_SLAB_OFFSET = 0.031;
@@ -1584,6 +1585,15 @@ export class BoothScene {
       placePedestal(g, ped);
       this.group.add(g);
       this.pedestalFrames[ped.id] = g;
+      const kind = furnitureKind(ped);
+      if (kind !== "pedestal") {
+        // Furniture: the same group, placement and drag, another shape.
+        for (const part of buildFurniture(kind, { ...ped, color: ped.color || FURNITURE[kind].color }, g, this.box.bind(this))) {
+          part.userData.pedestal = ped.id;
+          this.pedestalObjects.push(part);
+        }
+        continue;
+      }
       const color = ped.color || PEDESTAL.color;
       const body = new T.MeshStandardMaterial({ color, roughness: 0.78 });
       const w = ped.width * IN, d = ped.depth * IN, h = ped.height * IN;
