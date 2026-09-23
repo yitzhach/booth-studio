@@ -217,6 +217,26 @@ try {
   assert.equal(idle.idle, 0, 'an idle booth draws no frames');
   assert.ok(idle.touched > 0, 'and any input on the page draws one');
 
+  // A rebuild reuses the booth's shader programs. Disposing the old materials
+  // before the new ones drew threw them all away and recompiled every one on
+  // the next frame: most of what an edit cost.
+  const programs = await page.evaluate(async () => {
+    const b = window.__booth, view = b.scene;
+    const settle = async () => { await new Promise((r) => setTimeout(r, 1300)); view.renderFrame(); };
+    await settle();
+    const ids = () => view.renderer.info.programs.map((p) => p.id + ':' + p.name).sort().join();
+    const before = ids();
+    view.update(b.project, view.selected, view.selectedPanel, view.selectedPedestal);
+    view.renderFrame();
+    view.update(b.project, view.selected, view.selectedPanel, view.selectedPedestal);
+    view.update(b.project, view.selected, view.selectedPanel, view.selectedPedestal);
+    await settle();
+    return { before, after: ids(), retired: view.retired };
+  });
+  assert.ok(programs.before.length > 0);
+  assert.equal(programs.after, programs.before, 'a rebuild compiles no new shaders and deletes none');
+  assert.equal(programs.retired.length, 0, 'and the old booth is released once the new one has drawn');
+
   assert.equal(await page.evaluate(() => window.__booth.scene.quality), 'auto', 'preview quality defaults to Auto');
   const adapted = await page.evaluate(() => {
     const view = window.__booth.scene;

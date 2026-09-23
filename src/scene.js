@@ -172,6 +172,11 @@ export const renderScale = (quality = 2) =>
 // that asked it to draw. See `startLoop`.
 const HEARTBEAT_MS = 1000;
 const HEARTBEAT_FOR_MS = 15000;
+// The longest a rebuilt booth's old group waits on a load before it is
+// released anyway. See `disposeGroup`.
+const RETIRE_MAX_MS = 10000;
+// And the most retired groups held at once.
+const RETIRE_KEEP = 3;
 export function temperature(k) {
   const t = (k - 2700) / 3800;
   return new T.Color().setRGB(
@@ -215,6 +220,18 @@ function placePedestal(g, ped) {
   g.position.set(ped.x * IN, 0, ped.z * IN);
   g.rotation.y = ((ped.rotation || 0) * Math.PI) / 180;
   return g;
+}
+/** Release everything a retired booth group holds on the GPU. */
+function disposeTree(group) {
+  group.traverse((o) => {
+    o.geometry?.dispose();
+    if (o.material) {
+      (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) =>
+        { if (m.userData.ownedMap) m.map?.dispose(); m.dispose(); },
+      );
+    }
+    if (o.isLight) o.shadow?.dispose();
+  });
 }
 export class BoothScene {
   constructor(
@@ -522,11 +539,20 @@ export class BoothScene {
         return result;
       };
     }
+    // Loads in flight, which `releaseRetired` also waits on. Settling runs
+    // before the caller's own `.then` — registered first — and both before the
+    // next frame, so the frame that sees zero already has what landed.
+    this.loading = 0;
+    const done = () => {
+      this.loading--;
+      touch();
+    };
     const settle = (owner, name) => {
       const load = owner[name];
       owner[name] = (...args) => {
         const result = load.apply(owner, args);
-        Promise.resolve(result).then(touch, touch);
+        this.loading++;
+        Promise.resolve(result).then(done, done);
         return result;
       };
     };
@@ -584,6 +610,8 @@ export class BoothScene {
     ) {
       this.renderer.render(this.scene, this.camera);
       this.renderOverlay();
+      this.groupDrawn = true;
+      this.releaseRetired(false);
       return;
     }
     this.backdropScene.background = background;
@@ -641,6 +669,8 @@ export class BoothScene {
       this.renderer.autoClear = autoClear;
     }
     this.renderOverlay();
+    this.groupDrawn = true;
+    this.releaseRetired(false);
   }
 
   // The fade and the flare, drawn over a finished frame.
@@ -839,19 +869,49 @@ export class BoothScene {
     parent.add(mesh);
     return mesh;
   }
+  /**
+   * Retire the booth's current group and start an empty one.
+   *
+   * The old group is taken out of the scene at once but its geometry and
+   * materials are released only after the new group has been drawn (see
+   * `releaseRetired`, called from `renderFrame`). The order is the whole
+   * point: three deletes a shader program as soon as the last material using
+   * it is disposed, so disposing first threw away every program the booth
+   * uses and the next frame compiled them all again — measured at about half
+   * of what an edit cost, and on an old GPU the most expensive half. Drawn
+   * first, the new materials pick up the same programs and disposing the old
+   * ones only lowers a count.
+   *
+   * Not at the first frame, though: a work's texture lands a moment after the
+   * build, and a material that gains a map needs a different program — one
+   * the old group was still holding. So the old group waits for every load
+   * the build started to settle (counted in `watchForChanges`) and goes with
+   * the first frame drawn after that, or after `RETIRE_MAX_MS` if a load
+   * never does.
+   */
   disposeGroup() {
-    this.group.traverse((o) => {
-      o.geometry?.dispose();
-      if (o.material) {
-        (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) =>
-          { if (m.userData.ownedMap) m.map?.dispose(); m.dispose(); },
-        );
-      }
-      if (o.isLight) o.shadow?.dispose();
-    });
     this.scene.remove(this.group);
+    this.retired ||= [];
+    if (this.retired.length && !this.groupDrawn) {
+      // Two builds with no frame between them (a burst of edits, a hidden
+      // viewport). The group being replaced never drew, so it holds no
+      // programs and can go at once; the ones that did draw stay.
+      disposeTree(this.group);
+    } else {
+      this.retired.push(this.group);
+      // A long burst of drawn edits while a load is pending is the one way
+      // the list could grow; past a few booths the oldest goes regardless.
+      while (this.retired.length > RETIRE_KEEP) disposeTree(this.retired.shift());
+    }
+    this.retiredAt = performance.now();
+    this.groupDrawn = false;
     this.group = new T.Group();
     this.scene.add(this.group);
+  }
+  releaseRetired(force = true) {
+    if (!this.retired?.length) return;
+    if (!force && this.loading > 0 && performance.now() - this.retiredAt < RETIRE_MAX_MS) return;
+    this.retired.splice(0).forEach(disposeTree);
   }
   box(w, h, d, x, y, z, mat, parent = this.group) {
     const o = new T.Mesh(new T.BoxGeometry(w, h, d), mat);
