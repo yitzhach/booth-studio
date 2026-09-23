@@ -87,8 +87,69 @@ try {
   const reloaded = await page.evaluate(() => window.__booth.project.booth.pedestals.map((x) => x.kind ?? 'pedestal'));
   assert.deepEqual(reloaded, kinds, 'every kind reloads as itself');
 
+  // ---- Hide rather than delete ------------------------------------------
+  // Asked for as "a hide button for the furniture, and any item that is
+  // added — a new wall, etc. — so you don't need to delete it". Hidden is out
+  // of the picture and back in one click, with its size and place kept.
+  await page.click('[data-tab="walls"]');
+  await page.waitForTimeout(200);
+  const drawnPiece = (id) => page.evaluate((key) => {
+    const s = window.__booth.scene;
+    return { group: !!s.group.getObjectByName('pedestal:' + key), picks: s.pedestalObjects.filter((o) => o.userData.pedestal === key).length };
+  }, id);
+  const hidden = list.find((x) => x.kind === 'table8');
+  const before = await page.evaluate((id) => window.__booth.project.booth.pedestals.find((x) => x.id === id), hidden.id);
+  await page.click(`[data-hide="pedestal"][data-hide-id="${hidden.id}"]`);
+  await page.waitForTimeout(400);
+  assert.deepEqual(await drawnPiece(hidden.id), { group: false, picks: 0 }, 'a hidden piece is out of the picture and cannot be picked');
+  const kept = await page.evaluate((id) => window.__booth.project.booth.pedestals.find((x) => x.id === id), hidden.id);
+  assert.equal(kept.hidden, true, 'and is kept in the booth, marked hidden');
+  assert.deepEqual({ ...kept, hidden: undefined }, { ...before, hidden: undefined }, 'with its size and place unchanged');
+  assert.equal(await page.locator(`.wall-setting.is-hidden[data-pedestal="${hidden.id}"]`).count(), 1, 'its controls say so');
+  await page.click(`[data-hide="pedestal"][data-hide-id="${hidden.id}"]`);
+  await page.waitForTimeout(400);
+  assert.equal((await drawnPiece(hidden.id)).group, true, 'the eye brings it back');
+  assert.equal(await page.evaluate((id) => 'hidden' in window.__booth.project.booth.pedestals.find((x) => x.id === id), hidden.id), false,
+    'and shown leaves no flag behind, the way every older backup reads');
+
+  // A free-standing wall: hiding it takes the art hung on it along with it.
+  await page.click('[data-action="add-panel"]');
+  await page.waitForTimeout(400);
+  const panelId = await page.evaluate(() => window.__booth.project.booth.panels[0].id);
+  const artId = await page.evaluate((id) => {
+    const b = window.__booth;
+    const a = b.project.art[0];
+    b.mutate(() => Object.assign(a, { wall: 'panel:' + id, face: 'inside', x: 2, y: 20 }));
+    return a.id;
+  }, panelId);
+  await page.waitForTimeout(400);
+  const drawnPanel = () => page.evaluate(([key, art]) => {
+    const s = window.__booth.scene;
+    return { wall: s.wallObjects.some((o) => o.userData.wall === 'panel:' + key), art: s.artObjects.some((o) => o.userData.artId === art) };
+  }, [panelId, artId]);
+  assert.deepEqual(await drawnPanel(), { wall: true, art: true });
+  await page.click(`[data-hide="panel"][data-hide-id="${panelId}"]`);
+  await page.waitForTimeout(400);
+  assert.deepEqual(await drawnPanel(), { wall: false, art: false }, 'a hidden wall takes its art out of the picture with it');
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(400);
+  assert.deepEqual(await drawnPanel(), { wall: true, art: true }, 'and undo brings both back');
+
+  // A figure, from Layout.
+  await page.click('[data-tab="layout"]');
+  await page.waitForTimeout(200);
+  await page.click('[data-action="add-woman"]');
+  await page.waitForTimeout(400);
+  const personId = await page.evaluate(() => window.__booth.project.booth.people.at(-1).id);
+  await page.click(`[data-hide="person"][data-hide-id="${personId}"]`);
+  await page.waitForTimeout(400);
+  assert.equal(await page.evaluate((id) => !!window.__booth.scene.personFrames[id], personId), false, 'a hidden figure is not drawn');
+  await page.click(`[data-hide="person"][data-hide-id="${personId}"]`);
+  await page.waitForTimeout(400);
+  assert.equal(await page.evaluate((id) => !!window.__booth.scene.personFrames[id], personId), true, 'and comes back');
+
   assert.deepEqual(errors, [], 'no page errors');
-  console.log(`PASS furniture: ${kinds.length} kinds added, drawn at their sizes, pickable, resized by typing and reloaded.`);
+  console.log(`PASS furniture: ${kinds.length} kinds added, drawn at their sizes, pickable, resized by typing, reloaded, and hidden without being deleted.`);
 } finally {
   await browser.close();
   await server.close();

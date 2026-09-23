@@ -65,3 +65,19 @@ test("the pack is one printable page that escapes what people typed", () => {
   assert.match(html, /Packing and load-in/);
   assert.match(html, /Table 6′ with cloth/);
 });
+
+test("a hidden piece or wall is out of the plan and the packing list, and one shown is in", () => {
+  const p = quickStart({ show: "artfair", size: "10x10", furniture: ["table6", "chair"] });
+  p.booth.panels = [{ id: "w1", name: "Divider", width: 48, height: 72, x: 0, z: 0, rotation: 0 }];
+  const table = p.booth.pedestals.find((x) => x.kind === "table6");
+  const packed = (q) => checklist(q).flatMap((g) => g.items.map((it) => it.text)).join("\n");
+  assert.match(packed(p), /Table 6′/);
+  assert.match(packed(p), /Divider/);
+  table.hidden = true;
+  p.booth.panels[0].hidden = true;
+  assert.doesNotMatch(packed(p), /Table 6′/, "a hidden table is not packed");
+  assert.doesNotMatch(packed(p), /Divider/, "nor a hidden wall");
+  const plan = floorPlanSVG(p);
+  assert.equal((plan.match(/<text [^>]*font-weight="600">/g) || []).length, p.booth.pedestals.length - 1, "and only shown pieces are numbered on the plan");
+  assert.doesNotMatch(showPack(p), /Table 6′ with cloth<\/td>/, "or listed under it");
+});

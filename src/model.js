@@ -332,6 +332,16 @@ export function relinkArtShowWalls(p) {
   p.art = p.art.map((a) => constrain(p, a));
   return p;
 }
+/**
+ * Whether a piece someone added — a pedestal or piece of furniture, a
+ * free-standing wall, a figure — is in the booth. Each may carry an optional
+ * `hidden: true`, asked for as "a hide button, so you don't need to delete —
+ * you can just hide it": hidden is out of the picture, out of every export,
+ * out of the floor plan and the packing list, and one click from back, with
+ * its size and place kept. Absent means shown, which is what every older
+ * backup meant.
+ */
+export const isShown = (item) => item?.hidden !== true;
 export const PEDESTAL_PREFIX = "pedestal:";
 // Raised from 8 when furniture joined the list: a 10 × 20 with two tables,
 // chairs, a bin and a banner is a dozen things before a single pedestal.
@@ -400,8 +410,11 @@ export const wallKeys = (p) => [
 export function wallSpec(p, key) {
   if (isPanelKey(key)) {
     const panel = findPanel(p, key);
+    // A hidden panel reads exactly as a switched-off perimeter wall does, so
+    // everything that already skips one — the build, the art hung on it,
+    // picking — skips a hidden panel too.
     return panel
-      ? { enabled: true, width: panel.width, height: panel.height, panel }
+      ? { enabled: isShown(panel), width: panel.width, height: panel.height, panel }
       : null;
   }
   return p.booth.walls[key] || null;
@@ -415,7 +428,10 @@ export const wallWidth = (p, wall) => wallSpec(p, wall)?.width ?? 0;
 export function boundWarning(p, a) {
   const wall = wallSpec(p, a.wall);
   if (!wall) return "This wall no longer exists. Move the artwork in Layout.";
-  if (!wall.enabled) return "This wall is hidden. Enable it in Layout.";
+  if (!wall.enabled)
+    return wall.panel
+      ? "This free-standing wall is hidden. Its eye in the Walls tool shows it again."
+      : "This wall is hidden. Enable it in Layout.";
   if (
     a.x < 0 ||
     a.y < 0 ||
@@ -694,6 +710,7 @@ export function validateProject(p) {
       if (ped.name !== undefined && (typeof ped.name !== "string" || ped.name.length > 200)) fail();
       if (ped.color !== undefined && !/^#[0-9a-f]{6}$/i.test(ped.color)) fail();
       if (ped.kind !== undefined && !Object.hasOwn(FURNITURE, ped.kind)) fail();
+      if (ped.hidden !== undefined && typeof ped.hidden !== "boolean") fail();
       seen.add(ped.id);
     }
   }
@@ -730,6 +747,7 @@ export function validateProject(p) {
       if (!finite(person.height, 48, 84)) fail();
       if (!finite(person.x, -600, 600) || !finite(person.z, -600, 600)) fail();
       if (person.rotation !== undefined && !finite(person.rotation, -360, 360)) fail();
+      if (person.hidden !== undefined && typeof person.hidden !== "boolean") fail();
     }
   }
   // Free-standing panels. Absent in every schema-1 backup written before they
@@ -753,6 +771,7 @@ export function validateProject(p) {
       )
         fail();
       if (panel.name !== undefined && (typeof panel.name !== "string" || panel.name.length > 200)) fail();
+      if (panel.hidden !== undefined && typeof panel.hidden !== "boolean") fail();
       panelIds.add(panel.id);
     }
   }

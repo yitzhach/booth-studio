@@ -6,7 +6,13 @@
 // Pure: it takes a project and returns strings and lists, so node tests pin
 // it. The hanging guide stays its own file; this is the one that goes in the
 // van, and it says where the hanging guide fits.
-import { FURNITURE, artShowPanel, boothPanels, boothPedestals, escapeHTML as e, furnitureKind, isArtShow, lightBarSpec, lightVisible, panelCount, wallKeys } from "./model.js";
+import { FURNITURE, artShowPanel, boothPanels, boothPedestals, escapeHTML as e, furnitureKind, isArtShow, isShown, lightBarSpec, lightVisible, panelCount, wallKeys } from "./model.js";
+
+// What stands in the booth. A piece someone hid is out of it: not drawn on the
+// plan, not packed, not numbered — the way a deleted one would be, except
+// that it is one click from back in the app.
+const panelsIn = (p) => boothPanels(p).filter(isShown);
+const piecesIn = (p) => boothPedestals(p).filter(isShown);
 import { lightBarFixtures } from "./lightbar.js";
 import { formatLength, footprint } from "./measure.js";
 
@@ -66,10 +72,10 @@ export function checklist(p) {
       if (spec?.enabled !== false) structure.push({ qty: null, text: `${w[0].toUpperCase() + w.slice(1)} display wall, ${spec.width}″ × ${spec.height}″` });
     }
   }
-  for (const panel of boothPanels(p)) structure.push({ qty: null, text: `Free-standing wall “${panel.name || "Wall"}”, ${panel.width}″ × ${panel.height}″` });
+  for (const panel of panelsIn(p)) structure.push({ qty: null, text: `Free-standing wall “${panel.name || "Wall"}”, ${panel.width}″ × ${panel.height}″` });
   if (structure.length) groups.push({ title: "Structure", items: structure });
 
-  const pieces = boothPedestals(p);
+  const pieces = piecesIn(p);
   if (pieces.length) {
     const counts = new Map();
     for (const ped of pieces) {
@@ -133,9 +139,9 @@ export function floorPlanSVG(p) {
   if (back?.enabled !== false) parts.push(wall(-back.width / 2, -D / 2, back.width / 2, -D / 2));
   if (left?.enabled !== false) parts.push(wall(-W / 2, -D / 2, -W / 2, -D / 2 + left.width));
   if (right?.enabled !== false) parts.push(wall(W / 2, -D / 2, W / 2, -D / 2 + right.width));
-  for (const panel of boothPanels(p))
+  for (const panel of panelsIn(p))
     parts.push(`<rect x="${X(panel.x) - (panel.width * s) / 2}" y="${Y(panel.z) - 4}" width="${panel.width * s}" height="8" fill="#202630" transform="rotate(${-panel.rotation} ${X(panel.x)} ${Y(panel.z)})"/>`);
-  boothPedestals(p).forEach((ped, i) => {
+  piecesIn(p).forEach((ped, i) => {
     const cx = X(ped.x), cy = Y(ped.z);
     parts.push(`<g transform="rotate(${-(ped.rotation || 0)} ${cx} ${cy})"><rect x="${cx - (ped.width * s) / 2}" y="${cy - (ped.depth * s) / 2}" width="${ped.width * s}" height="${ped.depth * s}" fill="#d6e5f7" stroke="#28619e"/></g><text x="${cx}" y="${cy + 5}" text-anchor="middle" font-size="14" font-weight="600">${i + 1}</text>`);
   });
@@ -147,7 +153,7 @@ export function floorPlanSVG(p) {
 
 /** The whole pack, as a printable HTML page. */
 export function showPack(p) {
-  const works = inventory(p), money = priceTotal(works), pieces = boothPedestals(p);
+  const works = inventory(p), money = priceTotal(works), pieces = piecesIn(p);
   const plan = `<section><h2>Floor plan</h2>${floorPlanSVG(p)}${pieces.length ? `<table><thead><tr><th>#</th><th>Piece</th><th>W × D × H</th><th>Clear to left / right / back wall</th><th>Turned</th></tr></thead><tbody>${pieces.map((ped, i) => {
     const { hx, hz } = footprint(ped);
     const clear = [ped.x - hx + p.booth.width / 2, p.booth.width / 2 - ped.x - hx, ped.z - hz + p.booth.depth / 2].map((n) => (n > 0 ? e(formatLength(n)) : "—"));

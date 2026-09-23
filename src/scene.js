@@ -9,7 +9,7 @@ import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY, showFixtures } 
 import { GROUND_CONSUMER, TENT_CONSUMER, TENT_WEAVE, WALL_CONSUMER, WALL_SET, UV_METRE, SurfaceTextures } from "./surfaces.js";
 import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
 import { decodeAt, isPreflipped } from "./image-source.js";
-import { IN, PEDESTAL, FURNITURE, furnitureKind, boothPedestals, edgeColorOf, lightVisible, constrain, groundKind, groundUpload, constrainPanel, constrainPedestal, findPanel, findPedestal, isArtShow, lightBarSpec, isPanelKey, scalePanel, wallKeys, wallSpec } from "./model.js";
+import { IN, PEDESTAL, FURNITURE, furnitureKind, boothPedestals, isShown, edgeColorOf, lightVisible, constrain, groundKind, groundUpload, constrainPanel, constrainPedestal, findPanel, findPedestal, isArtShow, lightBarSpec, isPanelKey, scalePanel, wallKeys, wallSpec } from "./model.js";
 import { lightBarBounce, lightBarFixtures, lightBarOptics, lightBarRail } from "./lightbar.js";
 import { makePerson, placePerson } from "./people.js";
 import { rowLayout } from "./row.js";
@@ -1416,7 +1416,7 @@ export class BoothScene {
     // sit beside a particular wall, and making someone rebuild that placement
     // to take one clean shot without a person in it is the reason the switch
     // exists. The list is kept, so switching back restores where they stood.
-    for (const person of (p.booth.showPeople === false ? [] : p.booth.people || [])) {
+    for (const person of (p.booth.showPeople === false ? [] : (p.booth.people || []).filter(isShown))) {
       const figure = makePerson(person.kind, person.height);
       figure.name = "person:" + person.id;
       placePerson(figure, person);
@@ -1620,7 +1620,7 @@ export class BoothScene {
    * rebuild `update()` performs, exactly as a free-standing wall's frame does.
    */
   buildPedestals(p) {
-    for (const ped of boothPedestals(p)) {
+    for (const ped of boothPedestals(p).filter(isShown)) {
       const g = new T.Group();
       g.name = "pedestal:" + ped.id;
       placePedestal(g, ped);

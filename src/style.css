@@ -1792,3 +1792,18 @@ dialog li {
 .fx-off .fx-row {
   opacity: 0.55;
 }
+/* A piece's eye and its remove button, side by side in its heading. */
+.piece-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* Hidden keeps its controls, dimmed, the way a hidden shadow does. */
+.wall-setting.is-hidden > :not(.panel-heading),
+.person-row.is-hidden > :not(.key-head) {
+  opacity: 0.55;
+}
+.wall-setting.is-hidden .eye,
+.person-row.is-hidden .eye {
+  color: #7c6a4a;
+}

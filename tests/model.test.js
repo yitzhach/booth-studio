@@ -25,6 +25,7 @@ import {
   wallKeys,
   wallLabel,
   wallSpec,
+  isShown,
 } from "../src/model.js";
 import { hangingGuide } from "../src/guide.js";
 import { DEFAULT_IMAGE_EDITS, editedAspect, hasImageEdits, normalizeImageEdits } from "../src/image-edit.js";
@@ -441,4 +442,32 @@ test("a hidden spotlight keeps everything that made it worth aiming", () => {
   assert.equal(lightVisible(light), false);
   assert.doesNotThrow(() => validateProject(structuredClone(p)));
   for (const [key, value] of Object.entries(aim)) assert.equal(light[key], value);
+});
+
+test("a hidden piece, wall or figure is kept, validated, and read as a switched-off wall", () => {
+  const p = blankProject();
+  p.booth.pedestals = [{ id: "p1", width: 12, depth: 12, height: 44, x: 0, z: 0, rotation: 0, hidden: true }];
+  p.booth.panels = [{ id: "w1", width: 48, height: 72, x: 0, z: 0, rotation: 0, hidden: true }];
+  p.booth.people = [{ kind: "woman", height: 65, x: 0, z: 30, hidden: true }];
+  assert.doesNotThrow(() => validateProject(structuredClone(p)));
+  assert.equal(isShown(p.booth.pedestals[0]), false);
+  assert.equal(isShown({}), true, "absent means shown, which is what every older backup meant");
+  assert.equal(wallSpec(p, "panel:w1").enabled, false, "a hidden wall is measured like a switched-off one");
+  assert.match(boundWarning(p, { wall: "panel:w1", x: 0, y: 0, w: 10, h: 10 }), /hidden/);
+  for (const [list, bad] of [["pedestals", 1], ["panels", "yes"], ["people", null]]) {
+    const q = structuredClone(p);
+    q.booth[list][0].hidden = bad;
+    assert.throws(() => validateProject(q), `${list}: a hidden that is not a switch is refused`);
+  }
+});
+
+test("the hanging guide leaves a hidden pedestal off the build sheet", () => {
+  const p = blankProject();
+  p.booth.pedestals = [
+    { id: "p1", name: "Plinth shown", width: 12, depth: 12, height: 44, x: 0, z: 0, rotation: 0 },
+    { id: "p2", name: "Plinth hidden", width: 12, depth: 12, height: 44, x: 20, z: 0, rotation: 0, hidden: true },
+  ];
+  const html = hangingGuide(p);
+  assert.match(html, /Plinth shown/);
+  assert.doesNotMatch(html, /Plinth hidden/);
 });

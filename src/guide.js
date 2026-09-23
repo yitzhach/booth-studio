@@ -1,4 +1,4 @@
-import { edgeColorOf, escapeHTML as e, boothPedestals, boundWarning, findPanel, hallSpec, isArtShow, lightBarSpec, wallKeys, wallLabel, wallSpec } from "./model.js";
+import { edgeColorOf, escapeHTML as e, boothPedestals, isShown, boundWarning, findPanel, hallSpec, isArtShow, lightBarSpec, wallKeys, wallLabel, wallSpec } from "./model.js";
 import { BAR_INSET, lightBarFixtures } from "./lightbar.js";
 export function hangingGuide(p) {
   let content = "";
@@ -26,7 +26,8 @@ export function hangingGuide(p) {
   // Everything that stands on the floor rather than hanging on a wall. A
   // builder setting a booth up needs these measurements as much as the
   // artwork's, and they are nowhere else in the guide.
-  const pedestals = boothPedestals(p);
+  // A hidden piece is not in the booth, so it is not on the build sheet.
+  const pedestals = boothPedestals(p).filter(isShown);
   const bar = lightBarSpec(p.booth), fixtures = lightBarFixtures(p);
   if (pedestals.length || (isArtShow(p) && bar.on))
     content += `<section><h2>Booth fixtures</h2>${pedestals.length ? `<h3>Pedestals</h3><table><thead><tr><th>Pedestal</th><th>H × W × D</th><th>X from centre</th><th>Z from centre</th><th>Turned</th></tr></thead><tbody>${pedestals.map((ped, i) => `<tr><td>${i + 1}. ${e(ped.name || "Pedestal " + (i + 1))}</td><td>${ped.height} × ${ped.width} × ${ped.depth}</td><td>${ped.x.toFixed(1)}″</td><td>${ped.z.toFixed(1)}″</td><td>${ped.rotation.toFixed(0)}°</td></tr>`).join("")}</tbody></table><p>X is inches right of the centre of the floor, Z is inches toward the entrance. Tops are solid.</p>` : ""}${isArtShow(p) && bar.on ? `<h3>Light bar</h3><p>${fixtures.length} fixture${fixtures.length === 1 ? "" : "s"} on a bar ${bar.height}″ above the floor, ${BAR_INSET}″ inside the front edge, at ${bar.kelvin}K.</p><table><thead><tr><th>#</th><th>Wall</th><th>X on the bar</th><th>Aimed at (X, height, Z)</th></tr></thead><tbody>${fixtures.map((f, i) => `<tr><td>${i + 1}</td><td>${f.wall}</td><td>${f.x.toFixed(1)}″</td><td>${f.tx.toFixed(1)}″, ${f.ty.toFixed(1)}″, ${f.tz.toFixed(1)}″</td></tr>`).join("")}</tbody></table>` : ""}${isArtShow(p) && hallSpec(p.booth).on ? `<p>Standing in an exhibition hall with ${(hallSpec(p.booth).ceiling / 12).toFixed(0)} ft ceilings.</p>` : ""}</section>`;
