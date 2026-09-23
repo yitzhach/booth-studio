@@ -1528,7 +1528,11 @@ export class BoothScene {
       edge.position.set(0, (ped.height * IN) / 2, 0);
       edge.scale.setScalar(1.02);
     }
-    this.renderFrame();
+    // No frame drawn here. This used to end in `renderFrame()`, from before
+    // the viewport drew on demand; it is wrapped in `watchForChanges`, so the
+    // loop draws the outline on its next turn — and a synchronous frame on
+    // top of that was a third full render for every click and every rebuild,
+    // inside the click handler, on the machine least able to afford it.
   }
   /**
    * The light bar and its heads. Nine directional fixtures spotting the three
