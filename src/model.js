@@ -720,6 +720,7 @@ export function validateProject(p) {
       if (ped.color !== undefined && !/^#[0-9a-f]{6}$/i.test(ped.color)) fail();
       if (ped.kind !== undefined && !Object.hasOwn(FURNITURE, ped.kind)) fail();
       if (ped.hidden !== undefined && typeof ped.hidden !== "boolean") fail();
+      if (ped.locked !== undefined && typeof ped.locked !== "boolean") fail();
       seen.add(ped.id);
     }
   }
@@ -805,6 +806,7 @@ export function validateProject(p) {
       if (!finite(person.x, -600, 600) || !finite(person.z, -600, 600)) fail();
       if (person.rotation !== undefined && !finite(person.rotation, -360, 360)) fail();
       if (person.hidden !== undefined && typeof person.hidden !== "boolean") fail();
+      if (person.lift !== undefined && !finite(person.lift, 0, 120)) fail();
     }
   }
   // Free-standing panels. Absent in every schema-1 backup written before they

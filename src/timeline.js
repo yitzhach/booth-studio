@@ -262,3 +262,34 @@ export function segmentSpeed(timeline, index) {
 /** Total clip length including holds — what the export panel and the frame count use. */
 export const timelineSeconds = (timeline) =>
   clamp(normalizeTimeline(timeline).seconds, MIN_SECONDS, MAX_SECONDS);
+
+/**
+ * Where each key sits in clip seconds, holds included: `arrive` is when the
+ * camera reaches the key's pose and `leave` when it sets off again, which is
+ * `arrive` plus the key's hold. The visual timeline draws from this, so a key
+ * on the track is exactly where the recorder will put it.
+ */
+export function keySchedule(timeline) {
+  const tl = normalizeTimeline(timeline);
+  const held = tl.keys.reduce((sum, k) => sum + (k.hold || 0), 0);
+  const moving = Math.max(0.001, tl.seconds - held);
+  let before = 0;
+  return tl.keys.map((k) => {
+    const arrive = k.t * moving + before;
+    before += k.hold || 0;
+    return { id: k.id, arrive, leave: arrive + (k.hold || 0) };
+  });
+}
+
+/**
+ * The inverse, for dragging a key along the track or typing its time: the `t`
+ * that makes key `index` arrive at `seconds` of clip time. The first and last
+ * keys are pinned by `normalizeTimeline` whatever this returns.
+ */
+export function keyTAt(timeline, index, seconds) {
+  const tl = normalizeTimeline(timeline);
+  const held = tl.keys.reduce((sum, k) => sum + (k.hold || 0), 0);
+  const moving = Math.max(0.001, tl.seconds - held);
+  const before = tl.keys.slice(0, Math.max(0, index)).reduce((sum, k) => sum + (k.hold || 0), 0);
+  return clamp((seconds - before) / moving, 0, 1);
+}

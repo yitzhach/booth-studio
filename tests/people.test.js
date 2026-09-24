@@ -109,3 +109,13 @@ test("child, pair and wheelchair user: their heights, names, and a backup that c
   assert.doesNotThrow(() => validateProject(p));
 });
 
+
+test("a figure can be raised off the floor, within bounds, and absent means on the floor", () => {
+  const p = blankProject();
+  p.booth.people = [{ ...newPerson("woman", "a"), lift: 30 }];
+  assert.doesNotThrow(() => validateProject(p));
+  p.booth.people[0].lift = -5;
+  assert.throws(() => validateProject(p));
+  p.booth.people[0].lift = 500;
+  assert.throws(() => validateProject(p));
+});

@@ -1738,19 +1738,23 @@ export class BoothScene {
       this.group.add(g);
       this.pedestalFrames[ped.id] = g;
       const kind = furnitureKind(ped);
+      // A locked piece is drawn but never picked: a click on it goes through
+      // to whatever is behind it, or orbits. Its controls in the Walls tool
+      // are the only way to change it until it is unlocked.
+      const pick = ped.locked ? [] : this.pedestalObjects;
       if (kind === "box") {
         // A drawn box is exactly its measurements: one block, no reveal.
         const block = this.box(ped.width * IN, ped.height * IN, ped.depth * IN, 0, (ped.height * IN) / 2, 0,
           new T.MeshStandardMaterial({ color: ped.color || FURNITURE.box.color, roughness: 0.8 }), g);
         block.userData.pedestal = ped.id;
-        this.pedestalObjects.push(block);
+        pick.push(block);
         continue;
       }
       if (kind !== "pedestal") {
         // Furniture: the same group, placement and drag, another shape.
         for (const part of buildFurniture(kind, { ...ped, color: ped.color || FURNITURE[kind].color }, g, this.box.bind(this))) {
           part.userData.pedestal = ped.id;
-          this.pedestalObjects.push(part);
+          pick.push(part);
         }
         continue;
       }
@@ -1763,7 +1767,7 @@ export class BoothScene {
       const TOP = 0.02;
       const column = this.box(w, h - TOP, d, 0, (h - TOP) / 2, 0, body, g);
       column.userData.pedestal = ped.id;
-      this.pedestalObjects.push(column);
+      pick.push(column);
       const top = this.box(
         w + 0.01,
         TOP,
@@ -1775,7 +1779,7 @@ export class BoothScene {
         g,
       );
       top.userData.pedestal = ped.id;
-      this.pedestalObjects.push(top);
+      pick.push(top);
     }
   }
   /**

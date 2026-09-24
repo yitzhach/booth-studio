@@ -251,6 +251,16 @@ try {
   [48, 70, 52].forEach((h, i) => assert.ok(Math.abs(heights[i] - h * 0.0254) < 0.005, `new kind ${i} is ${h}″ tall`));
   assert.match(await page.textContent('.person-row:last-child'), /Wheelchair user 5/, 'its row is named for its kind');
 
+  // Raise a figure off the floor — onto a stage, say — with its slider.
+  const lastId = await page.evaluate(() => window.__booth.project.booth.people.at(-1).id);
+  const lift = page.locator(`input[type="range"][data-scope="person-${lastId}"][data-field="lift"]`);
+  await lift.fill('24');
+  await lift.dispatchEvent('change');
+  await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(() => window.__booth.project.booth.people.at(-1).lift), 24, 'the lift is saved');
+  const y = await page.evaluate((id) => window.__booth.scene.personFrames[id].position.y, lastId);
+  assert.ok(Math.abs(y - 24 * 0.0254) < 1e-6, `and the figure stands 24″ up (${(y / 0.0254).toFixed(2)}″)`);
+
   // ---- Without the pictures ----------------------------------------------
   // The app must run with `public/assets` empty: a missing picture leaves the
   // mannequin, and says nothing about it.

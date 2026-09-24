@@ -177,3 +177,21 @@ test("a timeline records which light its flare comes from", () => {
   assert.equal(normalizeTimeline({ flare: { source: "nonsense" } }).flare.source, "overhead", "and falls back to the one that always exists");
   assert.equal(normalizeTimeline({}).flare.source, "overhead");
 });
+
+test("the schedule places each key in clip seconds, holds included, and keyTAt inverts it", async () => {
+  const { keySchedule, keyTAt, normalizeTimeline } = await import("../src/timeline.js");
+  const pose = { position: [3, 1.6, 4], target: [0, 1.2, 0] };
+  const tl = normalizeTimeline({
+    seconds: 12,
+    keys: [
+      { ...pose, t: 0, hold: 1 },
+      { ...pose, t: 0.5, hold: 2 },
+      { ...pose, t: 1 },
+    ],
+  });
+  const s = keySchedule(tl);
+  // 3 s held, 9 s moving: the middle key arrives at 1 + 4.5.
+  assert.deepEqual(s.map((x) => [x.arrive, x.leave]), [[0, 1], [5.5, 7.5], [12, 12]]);
+  assert.ok(Math.abs(keyTAt(tl, 1, 5.5) - 0.5) < 1e-9);
+  assert.equal(keyTAt(tl, 1, -4), 0, "clamped");
+});

@@ -62,6 +62,24 @@ try {
   }, drawn.id);
   assert.ok(Math.abs(top - 30 * 0.0254) < 0.005, `and the geometry is 30″ tall (${(top / 0.0254).toFixed(2)}″)`);
 
+  // ---- Lock it: drawn, but a click in the booth goes through it ----------
+  await page.click(`[data-lock-pedestal="${drawn.id}"]`);
+  await page.waitForTimeout(200);
+  assert.equal(await page.evaluate((id) => window.__booth.project.booth.pedestals.find((x) => x.id === id).locked, drawn.id), true, 'the lock is saved on the piece');
+  assert.equal(await page.evaluate(() => window.__booth.selectedPedestal), null, 'locking lets go of it');
+  const centre = await floorAt(-6, 2);
+  await page.mouse.click(centre.x, centre.y);
+  await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(() => window.__booth.selectedPedestal), null, 'a click on a locked box does not select it');
+  assert.equal(await page.evaluate((id) => window.__booth.scene.pedestalObjects.some((o) => o.userData.pedestal === id), drawn.id), false, 'it is not in the pick list');
+  // A click that lands on nothing may have moved the panel; back to Walls.
+  await page.click('[data-tab="walls"]');
+  await page.click(`[data-lock-pedestal="${drawn.id}"]`);
+  await page.waitForTimeout(200);
+  await page.mouse.click(centre.x, centre.y);
+  await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(() => window.__booth.selectedPedestal), drawn.id, 'unlocked, a click selects it again');
+
   // ---- Export .glb, then bring it back in as a model -----------------------
   await page.click('[data-view="perspective"]');
   await page.click('[data-tab="export"]');

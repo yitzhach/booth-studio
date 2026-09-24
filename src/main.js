@@ -4,13 +4,14 @@ import { MOVES, DEFAULT_MOVE, CUSTOM_MOVE, resolveMove, frameTimes } from "./cam
 import {
   EASES, MAX_KEYS, MIN_KEYS, MIN_SECONDS, MAX_SECONDS,
   emptyTimeline, keyFrom, normalizeTimeline, segmentSpeed, timelineSeconds,
+  keySchedule, keyTAt, sampleTimeline, easeFn,
 } from "./timeline.js";
 import { SIZES, DEFAULT_SIZE, FPS, DEFAULT_FPS, videoSupported, pickCodec } from "./video.js";
 import { FRAMES, DEFAULT_FRAME, CUSTOM_FRAME, FRAME_MIN, FRAME_MAX, STILL_SIZES, frameSize } from "./framing.js";
 import { SHADOW_FIELD, SHADOW_KINDS, SHADOW_MAX, globalAngle, normalAngle, shadowSpec } from "./dropshadow.js";
 import { MAX_SWATCHES, isColor, readPalette, savePalette, removeSwatch, rememberColor, previousColor } from "./swatches.js";
 import { applyImageEdits, DEFAULT_IMAGE_EDITS, normalizeImageEdits } from "./image-edit.js";
-import { PEOPLE, MAX_PEOPLE, MIN_HEIGHT, MAX_HEIGHT, newPerson, personHeight, personName } from "./people.js";
+import { PEOPLE, MAX_PEOPLE, MIN_HEIGHT, MAX_HEIGHT, MAX_LIFT, newPerson, personHeight, personName } from "./people.js";
 import { FLARE_SOURCES, DEFAULT_FLARE_SOURCE, OVERHEAD } from "./flare.js";
 import {
   DEFAULT_SPACE, MAX_GAP, MAX_SLOTS, MIN_SPACE, MAX_SPACE,
@@ -68,6 +69,7 @@ import {
   Ruler,
   Zap,
   Lock,
+  LockOpen,
   ArrowLeftToLine,
   ArrowRightToLine,
   Eye,
@@ -201,6 +203,7 @@ async function boot() {
     Ruler,
     Zap,
     Lock,
+    LockOpen,
     Eye,
     EyeOff,
     ArrowLeftToLine,
@@ -1081,7 +1084,7 @@ async function boot() {
         chosen = selectedPedestal === ped.id,
         f = (label, key, value, min, max, step, unit) =>
           field(label, key, value, min, max, step, unit, scope, name + " " + label);
-      return `<div class="wall-setting${chosen ? " selected" : ""}${isShown(ped) ? "" : " is-hidden"}" data-pedestal="${e(ped.id)}"><div class="panel-heading"><h4>${e(name)}${chosen ? ' <span class="badge">Selected</span>' : ""}${isShown(ped) ? "" : ' <span class="badge">Hidden</span>'}</h4><span class="piece-actions">${hideEye("pedestal", ped.id, name, isShown(ped))}${btn("delete-pedestal-" + ped.id, "Remove " + name, "trash-2", "icon-only")}</span></div>${furnitureKind(ped) === "box" ? `${f("Height", "height", ped.height, ...BOX_LIMITS.height, 1, "in")}${range("Pull up", "height", ped.height, BOX_LIMITS.height[0], Math.max(96, Math.ceil(ped.height)), 1, scope, "in")}${f("Width", "width", ped.width, ...BOX_LIMITS.width, 1, "in")}${f("Depth", "depth", ped.depth, ...BOX_LIMITS.depth, 1, "in")}` : `${f("Height", "height", ped.height, 6, 96, 1, "in")}${f("Width", "width", ped.width, 4, 96, 1, "in")}${f("Depth", "depth", ped.depth, 4, 96, 1, "in")}`}${colorField("Finish", "color", scope, ped.color || PEDESTAL.color, name + " finish")}${f("Position X", "x", ped.x, -360, 360, 1, "in")}${pedestalSlider(ped, name, "x", "Slide left / right")}${f("Position Z", "z", ped.z, -360, 360, 1, "in")}${pedestalSlider(ped, name, "z", "Slide front / back")}${f("Rotation", "rotation", ped.rotation, -180, 180, 5, "°")}</div>`;
+      return `<div class="wall-setting${chosen ? " selected" : ""}${isShown(ped) ? "" : " is-hidden"}" data-pedestal="${e(ped.id)}"><div class="panel-heading"><h4>${e(name)}${chosen ? ' <span class="badge">Selected</span>' : ""}${isShown(ped) ? "" : ' <span class="badge">Hidden</span>'}${ped.locked ? ' <span class="badge">Locked</span>' : ""}</h4><span class="piece-actions"><button data-lock-pedestal="${e(ped.id)}" class="eye" title="${ped.locked ? "Unlock" : "Lock"} ${e(name)}" aria-label="${ped.locked ? "Unlock" : "Lock"} ${e(name)}" aria-pressed="${!!ped.locked}">${icon(ped.locked ? "lock" : "lock-open")}</button>${hideEye("pedestal", ped.id, name, isShown(ped))}${btn("delete-pedestal-" + ped.id, "Remove " + name, "trash-2", "icon-only")}</span></div>${furnitureKind(ped) === "box" ? `${f("Height", "height", ped.height, ...BOX_LIMITS.height, 1, "in")}${range("Pull up", "height", ped.height, BOX_LIMITS.height[0], Math.max(96, Math.ceil(ped.height)), 1, scope, "in")}${f("Width", "width", ped.width, ...BOX_LIMITS.width, 1, "in")}${f("Depth", "depth", ped.depth, ...BOX_LIMITS.depth, 1, "in")}` : `${f("Height", "height", ped.height, 6, 96, 1, "in")}${f("Width", "width", ped.width, 4, 96, 1, "in")}${f("Depth", "depth", ped.depth, 4, 96, 1, "in")}`}${colorField("Finish", "color", scope, ped.color || PEDESTAL.color, name + " finish")}${f("Position X", "x", ped.x, -360, 360, 1, "in")}${pedestalSlider(ped, name, "x", "Slide left / right")}${f("Position Z", "z", ped.z, -360, 360, 1, "in")}${pedestalSlider(ped, name, "z", "Slide front / back")}${f("Rotation", "rotation", ped.rotation, -180, 180, 5, "°")}</div>`;
     }).join("")}${list.length < MAX_PEDESTALS ? `<label class="setting-label">Add to the floor<select id="furniture-kind" aria-label="Furniture to add">${Object.entries(FURNITURE).filter(([k]) => k !== "box" || allowed("box")).map(([k, f]) => `<option value="${k}" ${k === furnitureChoice ? "selected" : ""}>${e(f.label)} · ${f.width}×${f.depth}″</option>`).join("")}</select></label>${btn("add-pedestal", "Add " + FURNITURE[furnitureChoice].label.toLowerCase(), "plus", "wide")}` : `<p class="muted">${MAX_PEDESTALS} pieces is the limit.</p>`}</section>`;
   }
   /**
@@ -1633,11 +1636,11 @@ async function boot() {
     // travel that stopped at the footprint would stop short of the useful
     // placement — which is the difference from `panelSlider`, where a wall
     // outside the booth is a mistake rather than a photograph.
-    const reach = key === "height"
+    const reach = key === "height" || key === "lift"
       ? null
       : Math.max(panelRange(p)[key] + 48, Math.abs(person[key] || 0));
-    const min = key === "height" ? MIN_HEIGHT : -Math.ceil(reach);
-    const max = key === "height" ? Math.max(MAX_HEIGHT, Math.ceil(person[key])) : Math.ceil(reach);
+    const min = key === "height" ? MIN_HEIGHT : key === "lift" ? 0 : -Math.ceil(reach);
+    const max = key === "height" ? Math.max(MAX_HEIGHT, Math.ceil(person[key])) : key === "lift" ? MAX_LIFT : Math.ceil(reach);
     const value = person[key] ?? 0;
     return `<label class="range"><span>${label}<output>${Number(value.toFixed(2))}${unit}</output></span><input type="range" data-field="${key}" data-scope="person-${e(person.id)}" aria-label="${e(label)} slider" min="${min}" max="${max}" step="1" value="${value}"/></label>`;
   }
@@ -1815,7 +1818,7 @@ async function boot() {
     const rows = people
       .map((person, i) => {
         const label = personName(person.kind);
-        return `<div class="person-row${isShown(person) ? "" : " is-hidden"}" data-person="${person.id}"><div class="key-head"><strong>${label} ${i + 1}${isShown(person) ? "" : ' <span class="badge">Hidden</span>'}</strong><span class="piece-actions"><span class="muted">${Math.floor(person.height / 12)}′${Math.round(person.height % 12)}″</span>${hideEye("person", person.id, `${label} ${i + 1}`, isShown(person))}</span></div>${field("Height", "height", person.height, MIN_HEIGHT, MAX_HEIGHT, 1, "in", "person-" + person.id)}${personSlider(person, "height", "Height")}<div class="field-pair">${field("Left / right", "x", person.x, -600, 600, 1, "in", "person-" + person.id)}${field("Front / back", "z", person.z, -600, 600, 1, "in", "person-" + person.id)}</div>${personSlider(person, "x", "Left / right")}${personSlider(person, "z", "Front / back")}${field("Facing", "rotation", person.rotation ?? 0, -180, 180, 5, "°", "person-" + person.id)}<div class="button-row">${btn("delete-person", "Remove", "trash-2")}</div></div>`;
+        return `<div class="person-row${isShown(person) ? "" : " is-hidden"}" data-person="${person.id}"><div class="key-head"><strong>${label} ${i + 1}${isShown(person) ? "" : ' <span class="badge">Hidden</span>'}</strong><span class="piece-actions"><span class="muted">${Math.floor(person.height / 12)}′${Math.round(person.height % 12)}″</span>${hideEye("person", person.id, `${label} ${i + 1}`, isShown(person))}</span></div>${field("Height", "height", person.height, MIN_HEIGHT, MAX_HEIGHT, 1, "in", "person-" + person.id)}${personSlider(person, "height", "Height")}<div class="field-pair">${field("Left / right", "x", person.x, -600, 600, 1, "in", "person-" + person.id)}${field("Front / back", "z", person.z, -600, 600, 1, "in", "person-" + person.id)}</div>${personSlider(person, "x", "Left / right")}${personSlider(person, "z", "Front / back")}${field("Raised off the floor", "lift", person.lift ?? 0, 0, MAX_LIFT, 1, "in", "person-" + person.id)}${personSlider(person, "lift", "Raise / lower")}${field("Facing", "rotation", person.rotation ?? 0, -180, 180, 5, "°", "person-" + person.id)}<div class="button-row">${btn("delete-person", "Remove", "trash-2")}</div></div>`;
       })
       .join("");
     return `<section><h3>People for scale <span>${people.length} / ${MAX_PEOPLE}</span></h3><p class="muted">Stand-ins so the booth reads at human size. ${Object.values(PEOPLE).map((v) => e(v.label)).join(" · ")} by default, and every figure's height is editable. They are excluded from the hanging guide.</p>${people.length ? `<label class="check-field"><input type="checkbox" data-field="showPeople" data-scope="booth" ${shown ? "checked" : ""}/>Show the figures</label><p class="muted">${shown ? "Off takes every figure out of the picture and out of an export, and keeps where each one stands." : `Hidden. ${people.length} figure${people.length === 1 ? " is" : "s are"} still placed below and come back when this is switched on.`}</p>` : ""}${people.length < MAX_PEOPLE ? `<div class="button-row people-add">${btn("add-woman", "Add woman", "user-round")}${btn("add-man", "Add man", "user-round")}${btn("add-child", "Add child", "user-round")}${btn("add-pair", "Add pair", "user-round")}${btn("add-wheelchair", "Add wheelchair user", "user-round")}</div>` : `<p class="muted">${MAX_PEOPLE} figures is the limit.</p>`}${rows}</section>`;
@@ -1884,27 +1887,180 @@ async function boot() {
   // The timeline dialog. It reuses #dialog rather than owning one, because two
   // modal dialogs in one app is two sets of focus and escape-key behaviour to
   // keep in step.
+  // The timeline dialog, drawn as a timeline: a track with a ruler, each
+  // keyframe a diamond at the second the camera arrives there, holds as solid
+  // blocks, every segment carrying a drawing of its ramp, the fades as
+  // shading at the ends, and a playhead. Under the track, a strip of the
+  // keyframes' own pictures. Asked for 2026-09-24 as "more visual, so I can
+  // see the keyframes — easier to use, more intuitive". Drag a middle diamond
+  // to retime it; drag anywhere else on the track to scrub the camera
+  // through the move; click a picture to select that keyframe and see its
+  // view. The selected keyframe's settings are the one card below the strip.
+  //
+  // View state only, like the timeline itself: thumbnails are pictures of
+  // the viewport, held per key id and never saved.
+  let tlSelected = null,
+    tlPlayhead = 0;
+  const keyThumbs = new Map();
+  /** A small picture of what the viewport shows right now. */
+  function grabThumb() {
+    const src = scene?.renderer?.domElement;
+    if (!src?.width) return null;
+    const c = document.createElement("canvas");
+    c.width = 160;
+    c.height = Math.max(1, Math.round((160 * src.height) / src.width));
+    c.getContext("2d").drawImage(src, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", 0.72);
+  }
+  /**
+   * A picture for every key that has none — a timeline carried over from a
+   * batch, or one opened before any were taken. Each is the key's own view,
+   * drawn once and read back; the camera goes back where it was afterwards.
+   */
+  function fillThumbs() {
+    if (!scene || busyPreview || busyVideo) return;
+    const missing = timeline().keys.filter((k) => !keyThumbs.has(k.id));
+    if (!missing.length) return;
+    const home = scene.pose();
+    for (const k of missing) {
+      scene.applyPose(k);
+      keyThumbs.set(k.id, grabThumb());
+    }
+    scene.applyPose(home);
+  }
+  /** The track's contents, in percent of the clip: redrawn on its own while dragging. */
+  function timelineTrackHTML() {
+    const tl = timeline();
+    const S = tl.seconds;
+    const at = (sec) => `${((Math.min(S, Math.max(0, sec)) / S) * 100).toFixed(3)}%`;
+    const sched = keySchedule(tl);
+    const step = S <= 8 ? 1 : S <= 20 ? 2 : S <= 40 ? 5 : 10;
+    let ticks = "";
+    for (let t = 0; t <= S + 1e-9; t += step) ticks += `<span class="tl-tick" style="left:${at(t)}">${t}s</span>`;
+    let segs = "";
+    for (let i = 0; i < tl.keys.length - 1; i++) {
+      const from = sched[i].leave,
+        to = sched[i + 1].arrive;
+      if (to - from <= 1e-6) continue;
+      // The ramp, drawn: speed would be its slope, so an ease-in visibly
+      // starts flat and an ease-out lands flat.
+      const f = easeFn(tl.keys[i].ease);
+      const pts = Array.from({ length: 21 }, (_, n) => `${n * 5},${(30 - f(n / 20) * 26).toFixed(2)}`).join(" ");
+      segs += `<div class="tl-seg" style="left:${at(from)};width:calc(${at(to)} - ${at(from)})" title="${e(EASES[tl.keys[i].ease]?.label || "")}"><svg viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}"/></svg></div>`;
+    }
+    const holds = sched
+      .filter((x) => x.leave - x.arrive > 1e-6)
+      .map((x) => `<div class="tl-hold" style="left:${at(x.arrive)};width:calc(${at(x.leave)} - ${at(x.arrive)})" title="Hold ${(x.leave - x.arrive).toFixed(1)}s"></div>`)
+      .join("");
+    const fades =
+      (tl.fade.in > 0 ? `<div class="tl-fade in" style="left:0;width:${at(tl.fade.in)}" title="Fade in"></div>` : "") +
+      (tl.fade.out > 0 ? `<div class="tl-fade out" style="right:0;width:${at(tl.fade.out)}" title="Fade out"></div>` : "");
+    const keys = tl.keys
+      .map((k, i) => {
+        const fixed = i === 0 || i === tl.keys.length - 1;
+        return `<button class="tl-key${k.id === tlSelected ? " selected" : ""}${fixed ? " fixed" : ""}" data-tl-key="${k.id}" style="left:${at(sched[i].arrive)}" title="${e(keyName(i, tl.keys.length))} · ${sched[i].arrive.toFixed(1)}s${fixed ? "" : " · drag to retime"}" aria-label="${e(keyName(i, tl.keys.length))} at ${sched[i].arrive.toFixed(1)} seconds"><span>${i + 1}</span></button>`;
+      })
+      .join("");
+    return `<div class="tl-ruler">${ticks}</div><div class="tl-lane">${fades}${segs}${holds}${keys}</div><div class="tl-playhead" style="left:${at(tlPlayhead)}"><span>${tlPlayhead.toFixed(1)}s</span></div>`;
+  }
+  const keyName = (i, n) => (i === 0 ? "Start" : i === n - 1 ? "End" : `Keyframe ${i + 1}`);
   function renderTimelineDialog() {
     const tl = timeline();
     const seconds = tl.seconds;
     const noLights = !(p.lights || []).length;
-    const rows = tl.keys
+    const sched = keySchedule(tl);
+    if (!tl.keys.some((k) => k.id === tlSelected)) tlSelected = tl.keys[0].id;
+    tlPlayhead = Math.min(seconds, Math.max(0, tlPlayhead));
+    fillThumbs();
+    const strip = tl.keys
       .map((k, i) => {
-        const first = i === 0;
-        const last = i === tl.keys.length - 1;
-        const speed = last ? null : segmentSpeed(tl, i);
-        return `<div class="key-row" data-key="${k.id}"><div class="key-head"><strong>${first ? "Start" : last ? "End" : `Keyframe ${i + 1}`}</strong><span class="muted">${(k.t * seconds).toFixed(1)}s</span></div><div class="key-fields"><label class="setting-label">At<input type="number" data-key-field="t" data-key="${k.id}" min="0" max="${seconds}" step="0.1" value="${(k.t * seconds).toFixed(1)}" ${first || last ? "disabled" : ""} aria-label="Keyframe time in seconds"/></label><label class="setting-label">Hold<input type="number" data-key-field="hold" data-key="${k.id}" min="0" max="10" step="0.1" value="${(k.hold || 0).toFixed(1)}" aria-label="Seconds held on this pose"/></label>${
-          last
-            ? ""
-            : `<label class="setting-label">Ramp<select data-key-field="ease" data-key="${k.id}" aria-label="Segment ramp">${Object.entries(EASES)
-                .map(([id, v]) => `<option value="${id}" ${k.ease === id ? "selected" : ""}>${e(v.label)}</option>`)
-                .join("")}</select></label>`
-        }</div>${speed === null ? "" : `<p class="muted">Then travels ${speed.toFixed(2)} m/s to the next keyframe.</p>`}<div class="button-row">${btn("timeline-go", "Go to this view", "camera")}${btn("timeline-recapture", "Recapture", "rotate-ccw")}${tl.keys.length > MIN_KEYS ? btn("timeline-delete", "Delete", "trash-2") : ""}</div></div>`;
+        const thumb = keyThumbs.get(k.id);
+        return `<button class="key-card${k.id === tlSelected ? " selected" : ""}" data-action="timeline-select" data-key="${k.id}" aria-label="Select ${e(keyName(i, tl.keys.length))}" aria-pressed="${k.id === tlSelected}">${thumb ? `<img src="${thumb}" alt=""/>` : `<span class="key-thumb-none">${i + 1}</span>`}<strong>${i + 1}. ${e(keyName(i, tl.keys.length))}</strong><small>${sched[i].arrive.toFixed(1)}s${k.hold ? ` · holds ${k.hold.toFixed(1)}s` : ""}</small></button>`;
       })
       .join("");
+    const i = tl.keys.findIndex((k) => k.id === tlSelected);
+    const k = tl.keys[i];
+    const first = i === 0,
+      last = i === tl.keys.length - 1;
+    const speed = last ? null : segmentSpeed(tl, i);
+    const card = `<div class="key-row" data-key="${k.id}"><div class="key-head"><strong>${e(keyName(i, tl.keys.length))}</strong><span class="muted">arrives at ${sched[i].arrive.toFixed(1)}s</span></div><div class="key-fields"><label class="setting-label">At (s)<input type="number" data-key-field="t" data-key="${k.id}" min="0" max="${seconds}" step="0.1" value="${sched[i].arrive.toFixed(1)}" ${first || last ? "disabled" : ""} aria-label="Keyframe time in seconds"/></label><label class="setting-label">Hold (s)<input type="number" data-key-field="hold" data-key="${k.id}" min="0" max="10" step="0.1" value="${(k.hold || 0).toFixed(1)}" aria-label="Seconds held on this pose"/></label>${
+      last
+        ? ""
+        : `<label class="setting-label">Ramp to next<select data-key-field="ease" data-key="${k.id}" aria-label="Segment ramp">${Object.entries(EASES)
+            .map(([id, v]) => `<option value="${id}" ${k.ease === id ? "selected" : ""}>${e(v.label)}</option>`)
+            .join("")}</select></label>`
+    }</div>${speed === null ? "" : `<p class="muted">Then travels ${speed.toFixed(2)} m/s to the next keyframe.</p>`}<div class="button-row">${btn("timeline-go", "Show this view", "camera")}${btn("timeline-recapture", "Replace with current view", "rotate-ccw")}${tl.keys.length > MIN_KEYS ? btn("timeline-delete", "Delete", "trash-2") : ""}</div></div>`;
     document.querySelector("#timeline-content").innerHTML =
-      `<div class="panel-heading"><h2>Custom camera timeline</h2>${btn("close-timeline", "Close", "x", "icon-only")}</div><p class="muted">Compose a shot in the viewport behind this panel, then add it as a keyframe. Each keyframe is the exact view you captured. Times set the speed between them; the ramp is what makes a move read as a camera rather than a scrub.</p><label class="setting-label">Clip length<input type="number" id="timeline-seconds" min="${MIN_SECONDS}" max="${MAX_SECONDS}" step="1" value="${seconds}" aria-label="Clip length in seconds"/></label><div class="key-list">${rows}</div>${tl.keys.length < MAX_KEYS ? btn("timeline-add", "Add keyframe from this view", "plus", "primary wide") : `<p class="muted">${MAX_KEYS} keyframes is the limit. Delete one to add another.</p>`}<section><h3>Fades</h3><div class="field-pair"><label class="setting-label">Fade in<input type="number" id="timeline-fade-in" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.in.toFixed(1)}" aria-label="Fade in seconds"/></label><label class="setting-label">Fade out<input type="number" id="timeline-fade-out" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.out.toFixed(1)}" aria-label="Fade out seconds"/></label></div><p class="muted">Seconds of black at each end. Zero disables. The fade is drawn over the finished frame, so it reaches real black rather than a dark wash.</p></section><section><h3>Lens flare</h3><label class="check-field"><input type="checkbox" id="timeline-flare" ${tl.flare.on ? "checked" : ""}/>Lens flare during the move</label><label class="setting-label">Comes from<select id="timeline-flare-source" aria-label="Lens flare source">${Object.entries(FLARE_SOURCES).map(([k, v]) => `<option value="${k}" ${tl.flare.source === k ? "selected" : ""} ${k === "spot" && noLights ? "disabled" : ""}>${e(v)}</option>`).join("")}</select></label>${tl.flare.source === "spot" && noLights ? `<p class="warn-note">This booth has no spotlights, so a flare from one would never appear. Use the overhead source, or add a spotlight in Lighting.</p>` : ""}${range("Flare strength", "flare-strength", Math.round(tl.flare.strength * 100), 0, 100, 1, "timeline", "%")}<p class="muted">${tl.flare.source === "overhead" ? `An unseen light ${Math.round(OVERHEAD.y / 12)} ft over the centre of the booth, standing in for the sun or a hall's high bay. Nothing is drawn there and nothing is lit by it — only the flare says it is there.` : "The brightest spotlight in the booth."} The flare tracks the camera: its ghosts sit on the line from that light through the centre of frame, and it fades out as the light leaves the shot.</p></section><div class="button-row">${busyPreview ? btn("stop-preview", "Stop preview", "x") : btn("preview-move", "Preview", "play")}${btn("close-timeline", "Done", "check", "primary")}</div>`;
+      `<div class="panel-heading"><h2>Camera timeline</h2>${btn("close-timeline", "Close", "x", "icon-only")}</div><ol class="tl-steps"><li>Frame a shot in the booth behind this panel.</li><li>Press <strong>Add keyframe</strong>. Repeat for each shot.</li><li>Drag a diamond to change when the camera gets there; drag the track to scrub.</li></ol><div class="tl-bar">${tl.keys.length < MAX_KEYS ? btn("timeline-add", "Add keyframe", "plus", "primary") : `<span class="muted">${MAX_KEYS} keyframes max</span>`}${busyPreview ? btn("stop-preview", "Stop", "x") : btn("preview-move", "Preview", "play")}<label class="setting-label tl-length">Length (s)<input type="number" id="timeline-seconds" min="${MIN_SECONDS}" max="${MAX_SECONDS}" step="1" value="${seconds}" aria-label="Clip length in seconds"/></label></div><div class="tl-track" data-tl-track role="group" aria-label="Timeline track">${timelineTrackHTML()}</div><div class="tl-legend"><span><i class="tl-sw seg"></i>move · curve = ramp</span><span><i class="tl-sw hold"></i>hold</span><span><i class="tl-sw fade"></i>fade</span></div><div class="tl-strip">${strip}</div>${card}<section><h3>Fades</h3><div class="field-pair"><label class="setting-label">Fade in<input type="number" id="timeline-fade-in" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.in.toFixed(1)}" aria-label="Fade in seconds"/></label><label class="setting-label">Fade out<input type="number" id="timeline-fade-out" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.out.toFixed(1)}" aria-label="Fade out seconds"/></label></div><p class="muted">Seconds of black at each end. Zero disables. The fade is drawn over the finished frame, so it reaches real black rather than a dark wash.</p></section><section><h3>Lens flare</h3><label class="check-field"><input type="checkbox" id="timeline-flare" ${tl.flare.on ? "checked" : ""}/>Lens flare during the move</label><label class="setting-label">Comes from<select id="timeline-flare-source" aria-label="Lens flare source">${Object.entries(FLARE_SOURCES).map(([k, v]) => `<option value="${k}" ${tl.flare.source === k ? "selected" : ""} ${k === "spot" && noLights ? "disabled" : ""}>${e(v)}</option>`).join("")}</select></label>${tl.flare.source === "spot" && noLights ? `<p class="warn-note">This booth has no spotlights, so a flare from one would never appear. Use the overhead source, or add a spotlight in Lighting.</p>` : ""}${range("Flare strength", "flare-strength", Math.round(tl.flare.strength * 100), 0, 100, 1, "timeline", "%")}<p class="muted">${tl.flare.source === "overhead" ? `An unseen light ${Math.round(OVERHEAD.y / 12)} ft over the centre of the booth, standing in for the sun or a hall's high bay. Nothing is drawn there and nothing is lit by it — only the flare says it is there.` : "The brightest spotlight in the booth."} The flare tracks the camera: its ghosts sit on the line from that light through the centre of frame, and it fades out as the light leaves the shot.</p></section><div class="button-row">${btn("close-timeline", "Done", "check", "primary")}</div>`;
     refreshIcons();
+  }
+  /** Scrub: put the playhead at `sec` and show the camera there. */
+  function scrubTo(sec) {
+    const tl = timeline();
+    tlPlayhead = Math.min(tl.seconds, Math.max(0, sec));
+    scene?.applyPose(sampleTimeline(tl, tlPlayhead / tl.seconds));
+  }
+  // The track's pointer handling, bound once on the dialog's content (which
+  // is never replaced) and capturing on the track itself, whose children are
+  // redrawn on every move of a drag.
+  {
+    const content = document.querySelector("#timeline-content");
+    let dragging = null;
+    const secondsAt = (ev, track) => {
+      const r = track.getBoundingClientRect();
+      return (Math.min(1, Math.max(0, (ev.clientX - r.left) / Math.max(1, r.width)))) * timeline().seconds;
+    };
+    const redraw = () => {
+      const track = content.querySelector("[data-tl-track]");
+      if (track) track.innerHTML = timelineTrackHTML();
+    };
+    content.addEventListener("pointerdown", (ev) => {
+      const track = ev.target.closest?.("[data-tl-track]");
+      if (!track || ev.button !== 0) return;
+      ev.preventDefault();
+      const keyEl = ev.target.closest("[data-tl-key]");
+      const tl = timeline();
+      const index = keyEl ? tl.keys.findIndex((k) => k.id === keyEl.dataset.tlKey) : -1;
+      if (index >= 0) {
+        tlSelected = tl.keys[index].id;
+        const fixed = index === 0 || index === tl.keys.length - 1;
+        dragging = fixed ? { select: true } : { key: tl.keys[index].id, moved: false };
+        tlPlayhead = keySchedule(tl)[index].arrive;
+        scene?.applyPose(tl.keys[index]);
+      } else {
+        dragging = { scrub: true };
+        scrubTo(secondsAt(ev, track));
+      }
+      track.setPointerCapture(ev.pointerId);
+      redraw();
+    });
+    content.addEventListener("pointermove", (ev) => {
+      if (!dragging || dragging.select) return;
+      const track = content.querySelector("[data-tl-track]");
+      if (!track) return;
+      const sec = secondsAt(ev, track);
+      if (dragging.scrub) scrubTo(sec);
+      else {
+        const tl = timeline();
+        const index = tl.keys.findIndex((k) => k.id === dragging.key);
+        if (index < 0) return;
+        dragging.moved = true;
+        const keys = tl.keys.map((k, n) => (n === index ? { ...k, t: keyTAt(tl, index, sec) } : k));
+        videoTimeline = normalizeTimeline({ ...tl, keys });
+        tlPlayhead = keySchedule(videoTimeline)[index].arrive;
+      }
+      redraw();
+    });
+    const end = () => {
+      if (!dragging) return;
+      const was = dragging;
+      dragging = null;
+      // A drag ends with the whole dialog redrawn: the card's times and the
+      // strip's labels follow the key that moved.
+      if (!was.scrub) renderTimelineDialog();
+    };
+    content.addEventListener("pointerup", end);
+    content.addEventListener("pointercancel", end);
   }
   // The batch list. A clip is queued with a copy of the settings it was queued
   // with — including a snapshot of the timeline where the move is Custom —
@@ -2859,9 +3015,22 @@ async function boot() {
       // where someone building a move in order wants it — and never on top of
       // the end key, which would be a zero-length segment.
       const previous = tl.keys.at(-2).t;
-      videoTimeline = normalizeTimeline({ ...tl, keys: [...tl.keys, { ...keyFrom(position, target), t: (previous + 1) / 2 }] });
+      const added = { ...keyFrom(position, target), t: (previous + 1) / 2 };
+      videoTimeline = normalizeTimeline({ ...tl, keys: [...tl.keys, added] });
+      keyThumbs.set(added.id, grabThumb());
+      tlSelected = added.id;
+      tlPlayhead = keySchedule(videoTimeline).find((x) => x.id === added.id)?.arrive ?? tlPlayhead;
       renderTimelineDialog();
-      toast(`Keyframe ${videoTimeline.keys.length} captured from this view.`);
+      toast(`Keyframe ${videoTimeline.keys.length - 1} captured from this view.`);
+    },
+    "timeline-select": (button) => {
+      const tl = timeline();
+      const index = tl.keys.findIndex((k) => k.id === button?.closest("[data-key]")?.dataset.key);
+      if (index < 0) return;
+      tlSelected = tl.keys[index].id;
+      tlPlayhead = keySchedule(tl)[index].arrive;
+      scene?.applyPose(tl.keys[index]);
+      renderTimelineDialog();
     },
     "timeline-go": (button) => {
       const key = timeline().keys.find((k) => k.id === button?.closest("[data-key]")?.dataset.key);
@@ -2874,6 +3043,7 @@ async function boot() {
         ...timeline(),
         keys: timeline().keys.map((k) => (k.id === id ? { ...k, position, target } : k)),
       });
+      keyThumbs.set(id, grabThumb());
       renderTimelineDialog();
       toast("Keyframe replaced with this view.");
     },
@@ -2894,6 +3064,17 @@ async function boot() {
         const { cancelled } = await scene.previewMove({
           move: custom || videoMove,
           seconds: custom ? custom.seconds : videoSeconds,
+          // The timeline's playhead rides along with a custom preview.
+          onProgress: custom
+            ? (t) => {
+                tlPlayhead = t * custom.seconds;
+                const head = document.querySelector("#timeline-content .tl-playhead");
+                if (head) {
+                  head.style.left = `${(t * 100).toFixed(3)}%`;
+                  head.firstElementChild.textContent = `${tlPlayhead.toFixed(1)}s`;
+                }
+              }
+            : undefined,
         });
         if (!cancelled) toast("That is the move. Export MP4 renders it.");
       } catch (err) {
@@ -3262,6 +3443,22 @@ async function boot() {
       }
       return;
     }
+    // Lock a floor piece: still drawn, no longer picked in the viewport, so a
+    // box laid down as a stage or a floor can be clicked through. Only this
+    // button and the piece's own controls change it.
+    if (b.dataset.lockPedestal) {
+      const id = b.dataset.lockPedestal,
+        item = boothPedestals(p).find((x) => x.id === id);
+      if (!item) return;
+      const lock = !item.locked;
+      mutate(() => {
+        if (lock) item.locked = true;
+        else delete item.locked;
+        if (lock && selectedPedestal === id) selectedPedestal = null;
+      });
+      toast(lock ? "Locked. Clicks in the booth pass through it; change it here, or unlock it." : "Unlocked. Click it in the booth to select it again.");
+      return;
+    }
     // Hide a piece rather than delete it. Letting go of it too, if it was the
     // one selected: its controls stay in the list, but there is nothing left
     // in the viewport for a selection outline or a drag to point at.
@@ -3619,7 +3816,7 @@ async function boot() {
         // Times are entered in seconds — the unit on screen — and stored as a
         // fraction of the clip, so changing the clip length moves the keys with
         // it rather than stranding them past the end.
-        if (el.dataset.keyField === "t") return { ...k, t: +el.value / Math.max(0.001, tl.seconds) };
+        if (el.dataset.keyField === "t") return { ...k, t: keyTAt(tl, tl.keys.indexOf(k), +el.value) };
         if (el.dataset.keyField === "hold") return { ...k, hold: +el.value };
         return { ...k, ease: el.value };
       });

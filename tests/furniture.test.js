@@ -46,3 +46,12 @@ test("sizes are the ones a show supplies", () => {
     assert.match(f.color, /^#[0-9a-f]{6}$/i);
   }
 });
+
+test("a floor piece may be locked; the lock is optional and boolean", async () => {
+  const { blankProject, validateProject } = await import("../src/model.js");
+  const p = blankProject();
+  p.booth.pedestals = [{ id: "b1", kind: "box", x: 0, z: 0, width: 48, depth: 24, height: 12, rotation: 0, locked: true }];
+  assert.doesNotThrow(() => validateProject(p));
+  p.booth.pedestals[0].locked = "yes";
+  assert.throws(() => validateProject(p));
+});

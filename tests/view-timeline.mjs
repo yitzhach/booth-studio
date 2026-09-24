@@ -49,7 +49,7 @@ try {
 
   // It opens on two keys taken from the current view, so it is never a blank
   // slate and Preview works before anything is added.
-  const seeded = await page.locator('.key-row').count();
+  const seeded = await page.locator('.key-card').count();
   assert.equal(seeded, 2, `a new timeline seeds a start and an end, got ${seeded}`);
 
   // Add a keyframe after moving the camera: the captured pose must be the one
@@ -63,7 +63,7 @@ try {
     return view.camera.position.toArray();
   });
   await page.click('[data-action="timeline-add"]');
-  await page.waitForFunction(() => document.querySelectorAll('.key-row').length === 3);
+  await page.waitForFunction(() => document.querySelectorAll('.key-card').length === 3);
 
   const captured = await page.evaluate(() => {
     const view = window.__booth.scene;
@@ -76,6 +76,33 @@ try {
     for (let i = 0; i < 3; i++)
       assert.ok(Math.abs(key.position[i] - moved[i]) < 1e-6, `Add captured ${key.position[i]}, viewport was ${moved[i]}`);
   }
+
+  // The visual track: a diamond per key, a picture per key, the new key selected.
+  assert.equal(await page.locator('.tl-key').count(), 3, 'a diamond on the track for every keyframe');
+  assert.equal(await page.locator('.key-card img').count(), 3, 'and a picture of each keyframe in the strip');
+  assert.equal(await page.locator('.key-card.selected').count(), 1, 'the new keyframe is selected');
+
+  // Drag the middle diamond to about a quarter of the way along: its time follows.
+  const track = await page.locator('[data-tl-track]').boundingBox();
+  const mid = await page.locator('.tl-key').nth(1).boundingBox();
+  await page.mouse.move(mid.x + mid.width / 2, mid.y + mid.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(track.x + track.width * 0.25, mid.y + mid.height / 2, { steps: 5 });
+  await page.mouse.up();
+  const dragged = await page.evaluate(() => window.__booth.timeline().keys[1].t);
+  assert.ok(Math.abs(dragged - 0.25) < 0.04, `dragging the diamond retimes the keyframe, t=${dragged}`);
+
+  // Scrub: a press on the track away from a diamond moves the camera to that
+  // moment of the move.
+  const before = await page.evaluate(() => window.__booth.scene.camera.position.toArray());
+  await page.mouse.click(track.x + track.width * 0.62, track.y + track.height - 8);
+  const scrubbed = await page.evaluate(() => window.__booth.scene.camera.position.toArray());
+  assert.ok(scrubbed.some((v, i) => Math.abs(v - before[i]) > 1e-4), 'scrubbing moves the camera');
+  assert.match(await page.textContent('.tl-playhead'), /s$/, 'and the playhead shows the time');
+
+  // A picture in the strip selects its keyframe and shows its view.
+  await page.locator('.key-card').first().click();
+  assert.equal(await page.getAttribute('.key-card:first-child', 'aria-pressed'), 'true', 'the first keyframe is selected');
 
   // Times ascend and the ends are pinned, whatever is typed into the middle.
   const times = await page.evaluate(() => {

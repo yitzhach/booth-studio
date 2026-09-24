@@ -16,9 +16,10 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-24 — tool shortcuts, three more people, the
-  smaller drag shadow and Pro unlocked** (the first bullet below). Before
-  it, the same day: roadmap batch E, the last of the roadmap
+- **Last deploy: 2026-09-24 — locked floor pieces, raised figures and the
+  visual camera timeline** (the first bullet below). Before it, the same
+  day: tool shortcuts, three more people, the smaller drag shadow and Pro
+  unlocked; and before that roadmap batch E, the last of the roadmap
   (the hall planner and the power and rentals sheet — the first bullet
   below), after batches C and D, A and B, the roadmap's base and the cut-out
   people, all the same day. **The roadmap proposed on 2026-09-24 is built.**
@@ -40,6 +41,45 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-24, the owner's next three: lock a box, raise a figure, a
+  visual timeline. Merged to `main` and deployed.**
+  1. **Lock a floor piece.** Every pedestal, piece of furniture and drawn box
+     has a padlock beside its eye in Walls → Pedestals and furniture. Locked
+     (`locked: true`, optional, on the pedestal record) it is still drawn, in
+     every export too, but it is left out of `pedestalObjects`, the scene's
+     pick list — so a click on it passes through to orbit or to whatever is
+     behind it, and it cannot be selected or dragged in the viewport. Its
+     fields in the panel still work; that and the padlock are the only way to
+     change it. Asked for so a box laid down as a stage or a floor stops
+     getting picked up. Locking lets go of it if it was selected.
+  2. **Raise or lower a figure.** People for scale → each figure has
+     **Raised off the floor** (a typed number and a Raise / lower slider),
+     0–120″, stored as optional `lift` on the person. For standing someone on
+     a pedestal, a box used as a stage, or a riser. `placePerson` puts it in
+     the group's y, so the cut-out's face-the-camera turn and its shadow come
+     along without change.
+  3. **The camera timeline, drawn as a timeline.** Asked for as "more visual,
+     so I can see the keyframes — easier to use, more intuitive". The dialog
+     (Video → Custom → Edit timeline) is now, top to bottom: three numbered
+     steps; Add keyframe, Preview and Length on one bar; a **track** with a
+     seconds ruler, each keyframe a numbered diamond at the second the camera
+     arrives there, each move a blue band carrying a drawing of its ramp
+     (ease-in visibly starts flat), each hold a striped block, the fades as
+     shading at the ends, and a pink playhead; a **strip of pictures**, one
+     per keyframe, taken from the viewport when the key is added or
+     replaced (and drawn once for any key without one when the dialog opens);
+     and one card for the selected keyframe — its time, hold, ramp, Show this
+     view, Replace with current view, Delete. **Drag a middle diamond to
+     retime it; press or drag anywhere else on the track to scrub the camera
+     through the move; click a picture to select that keyframe and see its
+     view.** Preview moves the playhead as it plays. The pictures and the
+     selection are view state, never saved. `keySchedule` / `keyTAt` in
+     `src/timeline.js` convert between a key's `t` and clip seconds with
+     holds counted — the old "At" field ignored holds, so with a hold in the
+     clip it showed and set the wrong second; it now uses them too.
+  Not checked by eye on the real machine: whether the diamonds are big
+  enough to grab on a phone (28 px there, 22 on a desktop), and whether a
+  12-keyframe clip crowds the track.
 - **2026-09-24, after the roadmap: tool shortcuts, three more people, a
   smaller drag shadow, and Pro unlocked. Merged to `main` and deployed.**
   The owner's list from Next, built together while they tested the live site.
@@ -893,6 +933,10 @@ Extend it; do not rebuild it.
    (see Now); past it, fast edit is the answer. Three labels are shared by several controls in one
    section (each perimeter wall's Width and Height, under Display walls): the
    search lists one of each and opens the first.
+1. **Lock, lift and the timeline, on the real machine.** Is the padlock
+   where you would look for it? Should free-standing walls lock too (not
+   built: only floor pieces)? Does the timeline read at a glance, and are
+   the diamonds easy to grab with a thumb?
 1. **Tool shortcuts: the owner's names.** *Built 2026-09-24, see Now.* The
    sixty names in `SHORTCUTS` are a draft; the owner renames, adds or drops
    any. Voice search is undecided (see Now for why it was not built).

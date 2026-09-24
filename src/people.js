@@ -62,6 +62,10 @@ export const DEFAULT_PERSON = "woman";
 export const MAX_PEOPLE = 6;
 export const MIN_HEIGHT = 48;
 export const MAX_HEIGHT = 84;
+// How far a figure can be raised off the floor, in inches: onto a pedestal, a
+// drawn box used as a stage, or a riser. Optional on the record; absent is on
+// the floor, which is every figure saved before it existed.
+export const MAX_LIFT = 120;
 export const personHeight = (kind) => (PEOPLE[kind] || PEOPLE[DEFAULT_PERSON]).height;
 export const resolvePerson = (kind) => (PEOPLE[kind] ? kind : DEFAULT_PERSON);
 
@@ -314,7 +318,7 @@ function seated(height, skin) {
  * built and `movePerson` calls it on every pixel of a drag.
  */
 export function placePerson(group, person) {
-  group.position.set((person.x || 0) * IN, 0, (person.z || 0) * IN);
+  group.position.set((person.x || 0) * IN, (person.lift || 0) * IN, (person.z || 0) * IN);
   group.rotation.y = ((person.rotation || 0) * Math.PI) / 180;
   return group;
 }
