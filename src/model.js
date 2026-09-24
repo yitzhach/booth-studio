@@ -1,4 +1,5 @@
 import { validViews } from "./views.js";
+import { validKit } from "./batch.js";
 import { validHall } from "./hall.js";
 import { editedAspect, validImageEdits } from "./image-edit.js";
 import { SHADOW_FIELD, SHADOW_MAX, shadowSpec } from "./dropshadow.js";
@@ -775,6 +776,8 @@ export function validateProject(p) {
   }
   // Saved views: optional, so every backup written before them opens.
   if (!validViews(p.views)) fail();
+  // The export queue and timeline presets. Optional, like the views.
+  if (!validKit(p.exportKit)) fail();
   // The hall planner's plan of the whole show. Optional, like the views.
   if (!validHall(p.hall)) fail();
   // The floor plan underlay: an image of the venue's plan laid on the floor

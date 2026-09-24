@@ -4,8 +4,9 @@ import { MOVES, DEFAULT_MOVE, CUSTOM_MOVE, resolveMove, frameTimes } from "./cam
 import {
   EASES, MAX_KEYS, MIN_KEYS, MIN_SECONDS, MAX_SECONDS,
   emptyTimeline, keyFrom, normalizeTimeline, segmentSpeed, timelineSeconds,
-  keySchedule, keyTAt, sampleTimeline, easeFn, FLOWS, autoTime,
+  keySchedule, keyTAt, sampleTimeline, easeFn, FLOWS, autoTime, neighbourKey,
 } from "./timeline.js";
+import { normalKit, cleanSettings, resolveJob, overridden, tweak, applyPreset, removePreset, jobSlug, MAX_JOBS, MAX_PRESETS, CUSTOM as KIT_CUSTOM } from "./batch.js";
 import { SIZES, DEFAULT_SIZE, FPS, DEFAULT_FPS, videoSupported, pickCodec } from "./video.js";
 import { FRAMES, DEFAULT_FRAME, DEFAULT_CLIP_FRAME, CUSTOM_FRAME, FRAME_MIN, FRAME_MAX, STILL_SIZES, frameSize, guideRect, placeRect, placeFromRect, normalPlace, DEFAULT_PLACE } from "./framing.js";
 import { SHADOW_FIELD, SHADOW_KINDS, SHADOW_MAX, globalAngle, normalAngle, shadowSpec } from "./dropshadow.js";
@@ -333,11 +334,14 @@ async function boot() {
     videoTimeline = null,
     // Key times from before the last Auto timing, for its undo button.
     tlBeforeAuto = null,
-    // The batch list: clips queued with the settings they were queued with, so
-    // a list built over ten minutes of composing still renders what was asked
-    // for rather than whatever the panel says when Export all is pressed.
-    videoBatch = [],
+    // The batch queue itself lives in the project, as `p.exportKit` (see
+    // src/batch.js), so it survives a reload and travels in a backup. This is
+    // only which of its items is rendering.
     videoBatchAt = -1,
+    // Where a keyframed frame sits at the timeline's playhead: sampled while
+    // scrubbing and playing, so the guide moves with the clip. Null when the
+    // frame is not keyframed, and then the Video tab's placement is the one.
+    livePlace = null,
     // True for the length of one drag of a figure's slider, so the gesture is
     // one entry in the undo history rather than one per pixel.
     personGesture = false,
@@ -554,7 +558,7 @@ async function boot() {
         H,
         x0: ev.clientX,
         y0: ev.clientY,
-        rect: placeRect(W, H, shape.aspect, framePlace[shape.which]),
+        rect: placeRect(W, H, shape.aspect, getPlace(shape.which)),
         box: host.getBoundingClientRect(),
       };
       handle.setPointerCapture(ev.pointerId);
@@ -597,14 +601,14 @@ async function boot() {
         if (drag.which === "video") videoFrameShape = "custom";
         else exportFrame = "custom";
       }
-      framePlace[drag.which] = place;
+      setPlace(drag.which, place);
       updateFrameGuide();
     });
     const end = () => {
       if (!drag) return;
       drag = null;
       saveViewPrefs();
-      renderInspector();
+      placeSettled();
     };
     guide?.addEventListener("pointerup", end);
     guide?.addEventListener("pointercancel", end);
@@ -698,6 +702,13 @@ async function boot() {
     const restored = JSON.parse(snap.structure);
     restored.assets = { ...snap.assets };
     return restored;
+  }
+  // The export queue is saved with the project but is not the booth: an undo
+  // of a wall move must not also un-queue the clip added since.
+  function keepKit(next) {
+    if (p.exportKit) next.exportKit = p.exportKit;
+    else delete next.exportKit;
+    return next;
   }
   function checkpoint() {
     history.push(snapshot());
@@ -1341,7 +1352,8 @@ async function boot() {
       value === "custom"
         ? `<div class="field-row"><label class="field"><span>Width</span><div><input type="number" data-frame-custom="width" data-frame-which="${which}" aria-label="Custom frame width" value="${customFrame.width}" min="${FRAME_MIN}" max="${FRAME_MAX}" step="2"/><small>px</small></div></label><label class="field"><span>Height</span><div><input type="number" data-frame-custom="height" data-frame-which="${which}" aria-label="Custom frame height" value="${customFrame.height}" min="${FRAME_MIN}" max="${FRAME_MAX}" step="2"/><small>px</small></div></label></div><p class="muted">One custom size, shared by the still and the clip. Sides are rounded to even numbers, which is what an H.264 encoder requires.</p>`
         : "";
-    const place = framePlace[which];
+    const place = getPlace(which);
+    const keyed = which === "video" && frameKeyed();
     const slider = (key, label, min, v) =>
       `<label class="range"><span>${label}<output>${Math.round(v * 100)}%</output></span><input type="range" data-frame-place="${key}" data-frame-which="${which}" aria-label="${e(label)} (${which === "video" ? "video" : "still"})" min="${min}" max="100" step="1" value="${Math.round(v * 100)}"/></label>`;
     // The frame's place in the viewport: the same thing the guide's handles
@@ -1350,7 +1362,7 @@ async function boot() {
     const placing =
       value === "view"
         ? ""
-        : `${slider("scale", "Frame size", 20, place.scale)}${slider("x", "Frame left / right", -100, place.x)}${slider("y", "Frame up / down", -100, place.y)}<p class="muted">Or drag the frame in the viewport: its label moves it, a corner resizes it, an edge changes its shape (and makes it a custom size).</p>${place.scale !== 1 || place.x !== 0 || place.y !== 0 ? btn(`frame-reset-${which}`, "Reset frame to fit", "rotate-ccw", "wide") : ""}`;
+        : `${keyed ? `<p class="keyed-note">Keyframed: these set <strong>${e(selectedKeyName())}</strong>'s frame.</p>` : which === "video" && videoMove === CUSTOM_MOVE && videoTimeline?.frameKeys ? `<p class="keyed-note">This clip's frame is keyframed: each keyframe has its own, set in Edit timeline. These sliders do not move it.</p>` : ""}${slider("scale", "Frame size", 20, place.scale)}${slider("x", "Frame left / right", -100, place.x)}${slider("y", "Frame up / down", -100, place.y)}<p class="muted">Or drag the frame in the viewport: its label moves it, a corner resizes it, an edge changes its shape (and makes it a custom size).</p>${place.scale !== 1 || place.x !== 0 || place.y !== 0 ? btn(`frame-reset-${which}`, "Reset frame to fit", "rotate-ccw", "wide") : ""}`;
     return `<label class="setting-label">Frame<select data-frame="${which}" aria-label="${which === "video" ? "Video frame" : "Export frame"}">${options}</select></label>${custom}${placing}`;
   }
   /** What the chosen frame will actually produce, in pixels, said out loud. */
@@ -2014,7 +2026,7 @@ async function boot() {
       (f) => `<option value="${f}" ${videoFps === f ? "selected" : ""}>${f} fps</option>`,
     ).join("")}</select></label><label class="setting-label">Resolution<select id="video-size" aria-label="Video resolution">${Object.entries(SIZES)
       .map(([k, v]) => `<option value="${k}" ${String(videoSize) === k ? "selected" : ""}>${e(v.label)}</option>`)
-      .join("")}</select></label>${frameFields("video")}<label class="check-field"><input type="checkbox" data-video-settle ${videoSettle ? "checked" : ""}/>Careful rendering</label><p class="muted">${videoSettle ? "Each frame is drawn twice, the second time after the browser has caught up, so nothing is captured half-finished. It roughly doubles the render and it is what fixes glitches in an exported clip." : "Off: each frame is captured as soon as it is drawn. Faster, and the setting to turn back on if a clip comes out with a wall, a shadow or the backdrop from the frame before."}</p><p class="muted">MP4 · H.264 where this browser can encode it, which is what QuickTime Player and phones want. ${e(frameNote("video"))} Every frame is rendered in full before it is encoded, so the clip runs at the frame rate you chose however fast this machine is — which is why it takes longer than the clip lasts.</p>${videoCodecLine()}${busyPreview ? btn("stop-preview", "Stop preview", "x", "wide") : btn("preview-move", "Preview the move", "play", "wide")}<p class="muted">Plays the move in the viewport at its real length, without rendering anything. Judge it here first: a 14-second 1440p clip is minutes of encoding.</p>${btn("export-video", "Export MP4", "download", "primary wide")}${busyVideo ? btn("cancel-video", "Cancel", "x", "wide") : ""}<div class="video-progress" role="status" aria-live="polite">${busyVideo ? `<progress max="1" value="${videoProgress}"></progress><span>${Math.round(videoProgress * 100)}% · frame ${videoFrame} of ${videoFrames}</span>` : ""}</div></section>`;
+      .join("")}</select></label>${frameFields("video")}<label class="check-field"><input type="checkbox" data-video-settle ${videoSettle ? "checked" : ""}/>Careful rendering</label><p class="muted">${videoSettle ? "Each frame is drawn twice, the second time after the browser has caught up, so nothing is captured half-finished. It roughly doubles the render and it is what fixes glitches in an exported clip." : "Off: each frame is captured as soon as it is drawn. Faster, and the setting to turn back on if a clip comes out with a wall, a shadow or the backdrop from the frame before."}</p><p class="muted">MP4 · H.264 where this browser can encode it, which is what QuickTime Player and phones want. ${e(frameNote("video"))} Every frame is rendered in full before it is encoded, so the clip runs at the frame rate you chose however fast this machine is — which is why it takes longer than the clip lasts.</p>${videoCodecLine()}${busyPreview ? btn("stop-preview", "Stop preview", "x", "wide") : btn("preview-move", "Preview the move", "play", "wide")}<p class="muted">Plays the move in the viewport at its real length, without rendering anything. Judge it here first: a 14-second 1440p clip is minutes of encoding.</p>${btn("export-video", "Export MP4", "download", "primary wide")}${busyVideo ? btn("cancel-video", "Cancel", "x", "wide") : ""}<div class="video-progress" role="status" aria-live="polite">${busyVideo ? progressHTML() : ""}</div></section>`;
   }
   // The timeline the export will render, always normalised: the dialog edits a
   // plain object and everything else reads it through here, so no caller has to
@@ -2030,6 +2042,52 @@ async function boot() {
     const pose = scene?.pose();
     return [pose?.position || [3, 1.6, 4], pose?.target || [0, 1.2, 0]];
   };
+  // The frame's placement, routed. With the timeline open on a keyframed
+  // frame, the clip's placement is the selected keyframe's — or, while
+  // scrubbing or playing, the one sampled at the playhead — so the Video
+  // tab's sliders, the timeline's and the guide's handles all edit that key.
+  // Otherwise it is the Video tab's own, for the whole clip.
+  const timelineOpen = () => !!document.querySelector("#timeline-dialog")?.open;
+  const frameKeyed = () => videoMove === CUSTOM_MOVE && !!videoTimeline?.frameKeys && (timelineOpen() || busyPreview);
+  const selectedKey = () => videoTimeline?.keys.find((k) => k.id === tlSelected) || videoTimeline?.keys[0];
+  function selectedKeyName() {
+    const tl = timeline();
+    return keyName(Math.max(0, tl.keys.findIndex((k) => k.id === tlSelected)), tl.keys.length);
+  }
+  function getPlace(which) {
+    if (which === "video" && frameKeyed()) return livePlace || selectedKey()?.place || framePlace.video;
+    return framePlace[which];
+  }
+  function setPlace(which, place) {
+    if (!(which === "video" && frameKeyed())) {
+      framePlace[which] = place;
+      return;
+    }
+    const id = selectedKey().id;
+    videoTimeline = normalizeTimeline({ ...videoTimeline, keys: videoTimeline.keys.map((k) => (k.id === id ? { ...k, place } : k)) });
+    livePlace = place;
+    // Setting a keyframe's frame is looking at that keyframe: the camera and
+    // the playhead go to it, so the frame is judged against its own shot.
+    const i = videoTimeline.keys.findIndex((k) => k.id === id);
+    const arrive = keySchedule(videoTimeline)[i].arrive;
+    if (Math.abs(tlPlayhead - arrive) > 1e-3) {
+      tlPlayhead = arrive;
+      scene?.applyPose(videoTimeline.keys[i]);
+    }
+  }
+  /** Once a frame edit lands: the panels redrawn, and a keyframe's picture retaken. */
+  function placeSettled() {
+    if (frameKeyed()) {
+      const key = selectedKey();
+      if (key) keyThumbs.set(key.id, grabThumb(key.place));
+    }
+    refreshPanels();
+  }
+  /** The playhead's frame, for the guide, while a keyframed clip is scrubbed or played. */
+  function followPlayhead(tl, t) {
+    livePlace = tl.frameKeys ? sampleTimeline(tl, t).place || null : null;
+    if (tl.frameKeys) updateFrameGuide();
+  }
   // A one-line answer to "what will this export?", which is the question the
   // panel is actually being asked once the timeline is closed.
   function timelineSummary() {
@@ -2060,7 +2118,7 @@ async function boot() {
     tlPlayhead = 0;
   const keyThumbs = new Map();
   /** A small picture of what the viewport shows right now. */
-  function grabThumb() {
+  function grabThumb(place = getPlace("video")) {
     const src = scene?.renderer?.domElement;
     if (!src?.width) return null;
     // Cropped to the clip's frame, so a keyframe's picture is the shot the
@@ -2069,7 +2127,7 @@ async function boot() {
       videoFrameShape === "custom"
         ? customFrame.width / customFrame.height
         : FRAMES[videoFrameShape]?.aspect || src.width / src.height;
-    const r = videoFrameShape === "view" ? guideRect(src.width, src.height, aspect) : placeRect(src.width, src.height, aspect, framePlace.video);
+    const r = videoFrameShape === "view" ? guideRect(src.width, src.height, aspect) : placeRect(src.width, src.height, aspect, place);
     const c = document.createElement("canvas");
     c.width = 160;
     c.height = Math.max(1, Math.round((160 * r.height) / r.width));
@@ -2088,7 +2146,7 @@ async function boot() {
     const home = scene.pose();
     for (const k of missing) {
       scene.applyPose(k);
-      keyThumbs.set(k.id, grabThumb());
+      keyThumbs.set(k.id, grabThumb(k.place || getPlace("video")));
     }
     scene.applyPose(home);
   }
@@ -2121,13 +2179,22 @@ async function boot() {
     const fades =
       (tl.fade.in > 0 ? `<div class="tl-fade in" style="left:0;width:${at(tl.fade.in)}" title="Fade in"></div>` : "") +
       (tl.fade.out > 0 ? `<div class="tl-fade out" style="right:0;width:${at(tl.fade.out)}" title="Fade out"></div>` : "");
+    // An end key slid inward holds its shot out to the clip's edge: drawn
+    // like a hold, paler, because nothing about it is the key's own hold.
+    const first = sched[0].arrive,
+      lastLeave = sched.at(-1).leave;
+    const ends =
+      (first > 1e-6 ? `<div class="tl-hold tl-end" style="left:0;width:${at(first)}" title="Holds the first shot until ${first.toFixed(1)}s"></div>` : "") +
+      (S - lastLeave > 1e-6 ? `<div class="tl-hold tl-end" style="left:${at(lastLeave)};width:calc(100% - ${at(lastLeave)})" title="Holds the last shot from ${lastLeave.toFixed(1)}s"></div>` : "");
+    // Every diamond drags now, the two ends included: "allow sliding of end
+    // key frames".
     const keys = tl.keys
       .map((k, i) => {
-        const fixed = i === 0 || i === tl.keys.length - 1;
-        return `<button class="tl-key${k.id === tlSelected ? " selected" : ""}${fixed ? " fixed" : ""}" data-tl-key="${k.id}" style="left:${at(sched[i].arrive)}" title="${e(keyName(i, tl.keys.length))} · ${sched[i].arrive.toFixed(1)}s${fixed ? "" : " · drag to retime"}" aria-label="${e(keyName(i, tl.keys.length))} at ${sched[i].arrive.toFixed(1)} seconds"><span>${i + 1}</span></button>`;
+        const end = i === 0 || i === tl.keys.length - 1;
+        return `<button class="tl-key${k.id === tlSelected ? " selected" : ""}${end ? " end" : ""}" data-tl-key="${k.id}" style="left:${at(sched[i].arrive)}" title="${e(keyName(i, tl.keys.length))} · ${sched[i].arrive.toFixed(1)}s · drag to retime" aria-label="${e(keyName(i, tl.keys.length))} at ${sched[i].arrive.toFixed(1)} seconds"><span>${i + 1}</span></button>`;
       })
       .join("");
-    return `<div class="tl-ruler">${ticks}</div><div class="tl-lane">${fades}${segs}${holds}${keys}</div><div class="tl-playhead" style="left:${at(tlPlayhead)}"><span>${tlPlayhead.toFixed(1)}s</span></div>`;
+    return `<div class="tl-ruler">${ticks}</div><div class="tl-lane">${fades}${ends}${segs}${holds}${keys}</div><div class="tl-playhead" style="left:${at(tlPlayhead)}"><span>${tlPlayhead.toFixed(1)}s</span></div>`;
   }
   const keyName = (i, n) => (i === 0 ? "Start" : i === n - 1 ? "End" : `Keyframe ${i + 1}`);
   function renderTimelineDialog() {
@@ -2149,7 +2216,7 @@ async function boot() {
     const first = i === 0,
       last = i === tl.keys.length - 1;
     const speed = last ? null : segmentSpeed(tl, i);
-    const card = `<div class="key-row" data-key="${k.id}"><div class="key-head"><strong>${e(keyName(i, tl.keys.length))}</strong><span class="muted">arrives at ${sched[i].arrive.toFixed(1)}s</span></div><div class="key-fields"><label class="setting-label">At (s)<input type="number" data-key-field="t" data-key="${k.id}" min="0" max="${seconds}" step="0.1" value="${sched[i].arrive.toFixed(1)}" ${first || last ? "disabled" : ""} aria-label="Keyframe time in seconds"/></label><label class="setting-label">Hold (s)<input type="number" data-key-field="hold" data-key="${k.id}" min="0" max="10" step="0.1" value="${(k.hold || 0).toFixed(1)}" aria-label="Seconds held on this pose"/></label>${
+    const card = `<div class="key-row" data-key="${k.id}"><div class="key-head"><strong>${e(keyName(i, tl.keys.length))}</strong><span class="muted">arrives at ${sched[i].arrive.toFixed(1)}s</span></div><div class="key-fields"><label class="setting-label">At (s)<input type="number" data-key-field="t" data-key="${k.id}" min="0" max="${seconds}" step="0.1" value="${sched[i].arrive.toFixed(1)}" aria-label="Keyframe time in seconds"/></label><label class="setting-label">Hold (s)<input type="number" data-key-field="hold" data-key="${k.id}" min="0" max="10" step="0.1" value="${(k.hold || 0).toFixed(1)}" aria-label="Seconds held on this pose"/></label>${
       last || tl.flow === "glide"
         ? ""
         : `<label class="setting-label">Ramp to next<select data-key-field="ease" data-key="${k.id}" aria-label="Segment ramp">${Object.entries(EASES)
@@ -2157,14 +2224,45 @@ async function boot() {
             .join("")}</select></label>`
     }</div>${speed === null ? "" : `<p class="muted">Then travels ${speed.toFixed(2)} m/s to the next keyframe.</p>`}<div class="button-row">${btn("timeline-go", "Show this view", "camera")}${btn("timeline-recapture", "Replace with current view", "rotate-ccw")}${tl.keys.length > MIN_KEYS ? btn("timeline-delete", "Delete", "trash-2") : ""}</div></div>`;
     document.querySelector("#timeline-content").innerHTML =
-      `<div class="panel-heading"><h2>Camera timeline</h2>${btn("close-timeline", "Close", "x", "icon-only")}</div><ol class="tl-steps"><li>Frame a shot in the booth behind this panel.</li><li>Press <strong>Add keyframe</strong>. Repeat for each shot.</li><li>Drag a diamond to change when the camera gets there; drag the track to scrub.</li></ol><div class="tl-bar">${tl.keys.length < MAX_KEYS ? btn("timeline-add", "Add keyframe", "plus", "primary") : `<span class="muted">${MAX_KEYS} keyframes max</span>`}${busyPreview ? btn("timeline-pause", "Pause", "pause", "primary") : btn("timeline-play", tlPlayhead > 0.05 && tlPlayhead < seconds - 0.05 ? "Play from here" : "Play", "play")}<label class="setting-label tl-length">Length (s)<input type="number" id="timeline-seconds" min="${MIN_SECONDS}" max="${MAX_SECONDS}" step="1" value="${seconds}" aria-label="Clip length in seconds"/></label></div><div class="tl-track" data-tl-track role="group" aria-label="Timeline track">${timelineTrackHTML()}</div><div class="tl-legend"><span><i class="tl-sw seg"></i>move · curve = ramp</span><span><i class="tl-sw hold"></i>hold</span><span><i class="tl-sw fade"></i>fade</span></div><div class="tl-strip">${strip}</div>${card}<section><h3>Motion</h3><label class="setting-label">Camera flow<select id="timeline-flow" aria-label="Camera flow">${Object.entries(FLOWS).map(([id, v]) => `<option value="${id}" ${tl.flow === id ? "selected" : ""}>${e(v.label)}</option>`).join("")}</select></label><p class="muted">${tl.flow === "glide" ? "The camera eases in once, moves at a steady speed through every keyframe without stopping, and eases out at the end — the look of a slider or a gimbal. A hold still stops it." : "Each move has its own ramp, so the camera settles on every keyframe. Choose the glide for one unbroken move."}</p>${tl.keys.length > 2 ? btn("timeline-auto", "Auto timing · even speed", "zap", "wide") : ""}<p class="muted">${tl.keys.length > 2 ? "Respaces the middle keyframes so the camera covers the same distance every second." : "Auto timing spaces middle keyframes; add one to use it."}</p>${tlBeforeAuto ? btn("timeline-auto-undo", "Put the timing back", "undo-2", "wide") : ""}</section><section><h3>Fades</h3><div class="field-pair"><label class="setting-label">Fade in<input type="number" id="timeline-fade-in" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.in.toFixed(1)}" aria-label="Fade in seconds"/></label><label class="setting-label">Fade out<input type="number" id="timeline-fade-out" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.out.toFixed(1)}" aria-label="Fade out seconds"/></label></div><p class="muted">Seconds of black at each end. Zero disables. The fade is drawn over the finished frame, so it reaches real black rather than a dark wash.</p></section><section><h3>Lens flare</h3><label class="check-field"><input type="checkbox" id="timeline-flare" ${tl.flare.on ? "checked" : ""}/>Lens flare during the move</label><label class="setting-label">Comes from<select id="timeline-flare-source" aria-label="Lens flare source">${Object.entries(FLARE_SOURCES).map(([k, v]) => `<option value="${k}" ${tl.flare.source === k ? "selected" : ""} ${k === "spot" && noLights ? "disabled" : ""}>${e(v)}</option>`).join("")}</select></label>${tl.flare.source === "spot" && noLights ? `<p class="warn-note">This booth has no spotlights, so a flare from one would never appear. Use the overhead source, or add a spotlight in Lighting.</p>` : ""}${range("Flare strength", "flare-strength", Math.round(tl.flare.strength * 100), 0, 100, 1, "timeline", "%")}<p class="muted">${tl.flare.source === "overhead" ? `An unseen light ${Math.round(OVERHEAD.y / 12)} ft over the centre of the booth, standing in for the sun or a hall's high bay. Nothing is drawn there and nothing is lit by it — only the flare says it is there.` : "The brightest spotlight in the booth."} The flare tracks the camera: its ghosts sit on the line from that light through the centre of frame, and it fades out as the light leaves the shot.</p></section><div class="button-row">${btn("close-timeline", "Done", "check", "primary")}</div>`;
+      `<div class="panel-heading"><h2>Camera timeline</h2>${btn("close-timeline", "Close", "x", "icon-only")}</div><ol class="tl-steps"><li>Frame a shot in the booth behind this panel.</li><li>Press <strong>Add keyframe</strong>. Repeat for each shot.</li><li>Drag a diamond to change when the camera gets there; drag the track to scrub.</li></ol><div class="tl-bar">${tl.keys.length < MAX_KEYS ? btn("timeline-add", "Add keyframe", "plus", "primary") : `<span class="muted">${MAX_KEYS} keyframes max</span>`}<span class="tl-transport">${btn("timeline-prev", "Previous keyframe", "skip-back", "icon-only")}${busyPreview ? btn("timeline-pause", "Pause", "pause", "primary") : btn("timeline-play", tlPlayhead > 0.05 && tlPlayhead < seconds - 0.05 ? "Play from here" : "Play", "play")}${btn("timeline-next", "Next keyframe", "skip-forward", "icon-only")}</span><label class="setting-label tl-length">Length (s)<input type="number" id="timeline-seconds" min="${MIN_SECONDS}" max="${MAX_SECONDS}" step="1" value="${seconds}" aria-label="Clip length in seconds"/></label></div><div class="tl-track" data-tl-track role="group" aria-label="Timeline track">${timelineTrackHTML()}</div><div class="tl-legend"><span><i class="tl-sw seg"></i>move · curve = ramp</span><span><i class="tl-sw hold"></i>hold</span><span><i class="tl-sw fade"></i>fade</span></div><div class="tl-strip">${strip}</div>${card}${timelineFrameSection(tl)}<section><h3>Motion</h3><label class="setting-label">Camera flow<select id="timeline-flow" aria-label="Camera flow">${Object.entries(FLOWS).map(([id, v]) => `<option value="${id}" ${tl.flow === id ? "selected" : ""}>${e(v.label)}</option>`).join("")}</select></label><p class="muted">${tl.flow === "glide" ? "The camera eases in once, moves at a steady speed through every keyframe without stopping, and eases out at the end — the look of a slider or a gimbal. A hold still stops it." : "Each move has its own ramp, so the camera settles on every keyframe. Choose the glide for one unbroken move."}</p>${tl.keys.length > 2 ? btn("timeline-auto", "Auto timing · even speed", "zap", "wide") : ""}<p class="muted">${tl.keys.length > 2 ? "Respaces the middle keyframes so the camera covers the same distance every second." : "Auto timing spaces middle keyframes; add one to use it."}</p>${tlBeforeAuto ? btn("timeline-auto-undo", "Put the timing back", "undo-2", "wide") : ""}</section><section><h3>Fades</h3><div class="field-pair"><label class="setting-label">Fade in<input type="number" id="timeline-fade-in" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.in.toFixed(1)}" aria-label="Fade in seconds"/></label><label class="setting-label">Fade out<input type="number" id="timeline-fade-out" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.out.toFixed(1)}" aria-label="Fade out seconds"/></label></div><p class="muted">Seconds of black at each end. Zero disables. The fade is drawn over the finished frame, so it reaches real black rather than a dark wash.</p></section><section><h3>Lens flare</h3><label class="check-field"><input type="checkbox" id="timeline-flare" ${tl.flare.on ? "checked" : ""}/>Lens flare during the move</label><label class="setting-label">Comes from<select id="timeline-flare-source" aria-label="Lens flare source">${Object.entries(FLARE_SOURCES).map(([k, v]) => `<option value="${k}" ${tl.flare.source === k ? "selected" : ""} ${k === "spot" && noLights ? "disabled" : ""}>${e(v)}</option>`).join("")}</select></label>${tl.flare.source === "spot" && noLights ? `<p class="warn-note">This booth has no spotlights, so a flare from one would never appear. Use the overhead source, or add a spotlight in Lighting.</p>` : ""}${range("Flare strength", "flare-strength", Math.round(tl.flare.strength * 100), 0, 100, 1, "timeline", "%")}<p class="muted">${tl.flare.source === "overhead" ? `An unseen light ${Math.round(OVERHEAD.y / 12)} ft over the centre of the booth, standing in for the sun or a hall's high bay. Nothing is drawn there and nothing is lit by it — only the flare says it is there.` : "The brightest spotlight in the booth."} The flare tracks the camera: its ghosts sit on the line from that light through the centre of frame, and it fades out as the light leaves the shot.</p></section>${timelineExportSection()}${batchSection()}<div class="button-row">${btn("close-timeline", "Done", "check", "primary")}</div>`;
     refreshIcons();
+  }
+  /**
+   * The frame, in the timeline: the same Frame menu and size / left-right /
+   * up-down sliders as the Video tab, plus the switch that keyframes them.
+   * Asked for as "add the frame up / down slider also in the timeline, and
+   * make it keyframeable so the frame can move too".
+   */
+  function timelineFrameSection(tl) {
+    const note = tl.frameKeys
+      ? `Each keyframe keeps its own frame. The sliders and the guide's handles set the selected keyframe's; between keyframes the frame travels on the same ramp as the camera, so a frame can rise, fall, pan or zoom during the move.`
+      : `Off: the frame stays where it is for the whole clip. On, each keyframe keeps its own frame size and position, and the frame moves between them with the camera.`;
+    const toggle = `<label class="check-field"><input type="checkbox" id="timeline-frame-keys" ${tl.frameKeys ? "checked" : ""} ${videoFrameShape === "view" ? "disabled" : ""}/>Keyframe the frame</label><p class="muted">${videoFrameShape === "view" ? "“This window” is the whole viewport and has nowhere to move. Choose a frame shape to keyframe it." : note}</p>`;
+    return `<section><h3>Frame</h3>${frameFields("video")}${toggle}</section>`;
+  }
+  /** Export from the timeline itself, so the clip can go out without leaving it. */
+  function timelineExportSection() {
+    if (!videoSupported()) return "";
+    return `<section><h3>Export</h3><p class="muted">${e(frameNote("video"))} ${videoFps} fps. Frame rate and resolution are in the Video tab; the batch below can give each item its own.</p>${busyVideo ? btn("cancel-video", "Cancel", "x", "wide") : btn("export-video", "Export MP4", "download", "primary wide")}<div class="video-progress" role="status" aria-live="polite">${busyVideo ? progressHTML() : ""}</div></section>`;
+  }
+  /** Selects key `index`: the playhead, the camera and the frame all go to it. */
+  function showKey(index) {
+    const tl = timeline();
+    const key = tl.keys[index];
+    if (!key) return;
+    tlSelected = key.id;
+    tlPlayhead = keySchedule(tl)[index].arrive;
+    scene?.applyPose(key);
+    livePlace = key.place || null;
+    renderTimelineDialog();
+    renderInspector();
   }
   /** Scrub: put the playhead at `sec` and show the camera there. */
   function scrubTo(sec) {
     const tl = timeline();
     tlPlayhead = Math.min(tl.seconds, Math.max(0, sec));
     scene?.showMoment(tl, tlPlayhead / tl.seconds);
+    followPlayhead(tl, tlPlayhead / tl.seconds);
   }
   // The track's pointer handling, bound once on the dialog's content (which
   // is never replaced) and capturing on the track itself, whose children are
@@ -2189,10 +2287,11 @@ async function boot() {
       const index = keyEl ? tl.keys.findIndex((k) => k.id === keyEl.dataset.tlKey) : -1;
       if (index >= 0) {
         tlSelected = tl.keys[index].id;
-        const fixed = index === 0 || index === tl.keys.length - 1;
-        dragging = fixed ? { select: true } : { key: tl.keys[index].id, moved: false };
+        dragging = { key: tl.keys[index].id, moved: false };
         tlPlayhead = keySchedule(tl)[index].arrive;
         scene?.applyPose(tl.keys[index]);
+        livePlace = tl.keys[index].place || null;
+        if (tl.frameKeys) updateFrameGuide();
       } else {
         dragging = { scrub: true };
         scrubTo(secondsAt(ev, track));
@@ -2213,7 +2312,9 @@ async function boot() {
         dragging.moved = true;
         const keys = tl.keys.map((k, n) => (n === index ? { ...k, t: keyTAt(tl, index, sec) } : k));
         videoTimeline = normalizeTimeline({ ...tl, keys });
-        tlPlayhead = keySchedule(videoTimeline)[index].arrive;
+        // Found again by id: a key dragged past its neighbour changes place.
+        const now = videoTimeline.keys.findIndex((k) => k.id === dragging.key);
+        tlPlayhead = keySchedule(videoTimeline)[now].arrive;
       }
       redraw();
     });
@@ -2233,73 +2334,208 @@ async function boot() {
   // because the point of a batch is to compose four different shots and then
   // walk away, and settings that followed the panel would render the last one
   // four times.
-  function batchLabel(job) {
-    const move = job.move === CUSTOM_MOVE ? "Custom timeline" : resolveMove(job.move).label;
-    // The frame is named only when it is not the window's, which is the
-    // default and what every clip queued before this existed carries.
-    const frame = job.frame && job.frame !== DEFAULT_FRAME ? ` · ${FRAMES[job.frame]?.label.split(" · ")[0] || job.frame}` : "";
-    return `${move} · ${job.seconds}s · ${job.fps} fps · ${SIZES[job.size]?.label.split(" · ")[0] || job.size}${frame}`;
+  // The batch queue: clips and stills rendered in one go, each with the
+  // general export settings or its own. See src/batch.js for the model. It
+  // is saved with the project (so it survives a reload and travels in a
+  // backup) but it is not the booth, so an edit to it is saved without an
+  // undo step and an undo leaves it alone.
+  const kit = () => normalKit(p.exportKit);
+  function setKit(next) {
+    p.exportKit = { defaults: next.defaults, presets: next.presets, queue: next.queue };
+    scheduleSave();
+    refreshPanels();
+  }
+  // Which of the batch's folding sections are open. The panel is redrawn on
+  // every change, and a tweak panel that folded shut each time one of its
+  // menus was used would be unusable.
+  const openFolds = new Set();
+  const fold = (id, fallback = false) => ((openFolds.has(id) || (fallback && !openFolds.has(`-${id}`))) ? " open" : "");
+  const remember = (id, open) => {
+    openFolds.delete(open ? `-${id}` : id);
+    openFolds.add(open ? id : `-${id}`);
+  };
+  // Both: the click, because a redraw can land before the browser's queued
+  // toggle event does and the new state would be lost with the old element;
+  // the toggle, for anything that opens a section some other way.
+  document.addEventListener(
+    "click",
+    (ev) => {
+      const summary = ev.target?.closest?.("summary");
+      const details = summary?.parentElement;
+      if (details?.dataset?.fold) remember(details.dataset.fold, !details.open);
+    },
+    true,
+  );
+  document.addEventListener(
+    "toggle",
+    (ev) => {
+      if (ev.target?.dataset?.fold && ev.target.isConnected) remember(ev.target.dataset.fold, ev.target.open);
+    },
+    true,
+  );
+  function addJobs(jobs) {
+    if (!scene) return toast("3D is not available, so there is nothing to export.", true);
+    const k = kit();
+    if (k.queue.length + jobs.length > MAX_JOBS) return toast(`${MAX_JOBS} items is the limit for one batch.`, true);
+    setKit({ ...k, queue: [...k.queue, ...jobs] });
+    toast(jobs.length === 1 ? `Queued ${batchLabel(jobs[0], kit())}.` : `Queued ${jobs.length} items.`);
+  }
+  /** The Video tab and, when it is open, the timeline, which share controls. */
+  function refreshPanels() {
+    renderInspector();
+    if (timelineOpen()) renderTimelineDialog();
+  }
+  const shortFrame = (id) => FRAMES[id]?.label.split(" · ").at(-1) || id;
+  const shortSize = (size) => SIZES[size]?.label.split(" · ")[0] || size;
+  function batchLabel(job, k = kit()) {
+    const r = resolveJob(job, k);
+    const frame = r.frame && r.frame !== DEFAULT_FRAME ? ` · ${shortFrame(r.frame)}` : "";
+    if (r.kind === "still") return `${job.name ? `${job.name} · ` : ""}Still · ${r.long} px${frame}`;
+    const preset = job.preset && k.presets.find((x) => x.id === job.preset);
+    const move = preset ? `Preset “${preset.name}”` : job.move === KIT_CUSTOM ? "Custom timeline" : resolveMove(job.move).label;
+    return `${job.name ? `${job.name} · ` : ""}${move} · ${r.seconds}s · ${r.fps} fps · ${shortSize(r.size)}${frame}`;
+  }
+  /** Everything the Video tab is set to now, as batch settings. */
+  const panelSettings = () =>
+    cleanSettings({ fps: videoFps, size: videoSize, long: exportLong, frame: videoFrameShape, custom: customFrame, place: framePlace.video, settle: videoSettle });
+  /**
+   * A clip from what the panel is set to. `frozen` keeps every setting as it
+   * is now — "add each one individually" — and otherwise the clip follows
+   * the general settings until one of its own is tweaked. A Custom move
+   * carries a frozen copy of the timeline, so the next keyframe someone adds
+   * does not quietly rewrite a queued clip.
+   */
+  function clipJob(frozen) {
+    const custom = videoMove === CUSTOM_MOVE;
+    return {
+      id: uid(),
+      kind: "clip",
+      move: custom ? KIT_CUSTOM : videoMove,
+      seconds: custom ? timeline().seconds : videoSeconds,
+      ...(custom ? { timeline: structuredClone(timeline()) } : {}),
+      set: frozen ? panelSettings() : {},
+    };
+  }
+  function stillJob(frozen, pose = scene?.pose(), set) {
+    return {
+      id: uid(),
+      kind: "still",
+      pose: { position: [...pose.position], target: [...pose.target] },
+      set: set || (frozen ? cleanSettings({ long: exportLong, frame: exportFrame, custom: customFrame, place: framePlace.export }) : {}),
+    };
+  }
+  function kitSelect(key, value, options, attrs, general) {
+    const opts = [
+      general !== undefined ? `<option value="" ${value === undefined ? "selected" : ""}>General · ${e(general)}</option>` : "",
+      ...options.map(([v, label]) => `<option value="${e(String(v))}" ${value !== undefined && String(value) === String(v) ? "selected" : ""}>${e(label)}</option>`),
+    ].join("");
+    return `<select ${attrs}>${opts}</select>`;
+  }
+  const FPS_OPTIONS = FPS.map((f) => [f, `${f} fps`]);
+  const SIZE_OPTIONS = Object.keys(SIZES).map((k) => [k, shortSize(k)]);
+  const LONG_OPTIONS = STILL_SIZES.map((n) => [n, `${n} px`]);
+  const FRAME_OPTIONS = Object.keys(FRAMES).map((k) => [k, FRAMES[k].label]);
+  function generalSettingsHTML(k) {
+    const d = k.defaults;
+    const field = (label, key, options) =>
+      `<label class="setting-label">${label}${kitSelect(key, d[key], options, `data-kit-default="${key}" aria-label="General ${label.toLowerCase()}"`)}</label>`;
+    const placed = d.place.scale !== 1 || d.place.x !== 0 || d.place.y !== 0;
+    return `<details class="batch-general" data-fold="general"${fold("general")}><summary>General export settings</summary><p class="muted">What every item uses unless it has its own. Change one here and every item still on the general setting follows.</p><div class="field-pair">${field("Frame rate", "fps", FPS_OPTIONS)}${field("Clip size", "size", SIZE_OPTIONS)}</div><div class="field-pair">${field("Still size", "long", LONG_OPTIONS)}${field("Frame", "frame", FRAME_OPTIONS)}</div><p class="muted">Frame ${d.frame === "custom" ? `${d.custom.width} × ${d.custom.height}` : e(shortFrame(d.frame))}${placed ? `, placed at ${Math.round(d.place.scale * 100)}% size` : ", centred at full size"}.</p>${btn("kit-take-frame", "Use the Video tab's frame and placement", "crop", "wide")}<label class="check-field"><input type="checkbox" data-kit-default="settle" ${d.settle ? "checked" : ""}/>Careful rendering</label></details>`;
+  }
+  function presetsHTML(k) {
+    const rows = k.presets
+      .map(
+        (x) =>
+          `<div class="batch-row preset-row" data-preset="${x.id}"><div class="key-head"><strong>${e(x.name)}</strong><span class="muted">${x.timeline.keys.length} keyframes · ${x.timeline.seconds}s · ${k.queue.filter((j) => j.preset === x.id).length} using it</span></div><div class="button-row">${btn("preset-load", "Load into timeline", "folder-open")}${btn("preset-overwrite", "Save the timeline over it", "save")}${btn("preset-apply", "Use for every clip", "copy")}${btn("preset-delete", "Delete", "trash-2")}</div></div>`,
+      )
+      .join("");
+    return `<details class="batch-presets" data-fold="presets"${fold("presets", true)}><summary>Timeline presets <span>${k.presets.length}</span></summary><p class="muted">A saved timeline. Clips that use one follow it, so one move can go out as a 16:9, a 9:16 and a square — and every later change to the preset reaches all of them.</p><div class="preset-new"><input type="text" data-preset-name maxlength="120" placeholder="Preset name" aria-label="New preset name"/>${btn("preset-save", "Save timeline as preset", "save")}</div>${rows}</details>`;
+  }
+  function jobRow(job, i, k) {
+    const r = resolveJob(job, k);
+    const state = busyVideo && videoBatchAt === i ? "Rendering…" : busyVideo && videoBatchAt > i ? "Done" : "Queued";
+    const d = k.defaults;
+    const own = (key) => (overridden(job, key) ? job.set[key] : undefined);
+    const tweakSel = (key, label, options, general) =>
+      `<label class="setting-label">${label}${kitSelect(key, own(key), options, `data-job-set="${key}" aria-label="${label} for item ${i + 1}"`, general)}</label>`;
+    let what = "";
+    if (job.kind === "clip") {
+      const moves = [
+        ...Object.entries(MOVES).map(([id, v]) => [id, v.label]),
+        ...(job.timeline ? [["own", "Its own timeline"]] : []),
+        ...k.presets.map((x) => [`preset:${x.id}`, `Preset · ${x.name}`]),
+      ];
+      const value = job.preset ? `preset:${job.preset}` : job.move === KIT_CUSTOM ? "own" : job.move;
+      what = `<label class="setting-label">Move${kitSelect("move", value, moves, `data-job-move aria-label="Move for item ${i + 1}"`)}</label><div class="field-pair">${tweakSel("fps", "Frame rate", FPS_OPTIONS, `${d.fps} fps`)}${tweakSel("size", "Size", SIZE_OPTIONS, shortSize(d.size))}</div>`;
+    } else what = `<div class="field-pair">${tweakSel("long", "Size", LONG_OPTIONS, `${d.long} px`)}</div>`;
+    const framed = overridden(job, "frame") || overridden(job, "place");
+    const frame = `${tweakSel("frame", "Frame", FRAME_OPTIONS, shortFrame(d.frame))}<div class="button-row">${btn("job-take-frame", job.kind === "still" ? "Use the Export tab's frame here" : "Use the Video tab's frame here", "crop")}${framed ? btn("job-general-frame", "Frame: back to general", "rotate-ccw") : ""}</div>`;
+    const actions = `${job.kind === "clip" ? btn("batch-use", "Load these settings", "rotate-ccw") : btn("job-show", "Show this view", "camera")}${busyVideo ? "" : `${i > 0 ? btn("job-up", "Move up", "arrow-up", "icon-only") : ""}${btn("batch-remove", "Remove", "trash-2")}`}`;
+    return `<div class="batch-row" data-job="${job.id}"><div class="key-head"><strong>${i + 1}. ${e(batchLabel(job, k))}</strong><span class="muted">${state}</span></div><details class="job-tweak" data-fold="job-${job.id}"${fold(`job-${job.id}`)}><summary>Tweak${Object.keys(job.set).length ? ` · ${Object.keys(job.set).length} own` : " · general"}</summary><label class="setting-label">Name<input type="text" data-job-name maxlength="120" value="${e(job.name || "")}" placeholder="Used in the file name" aria-label="Name for item ${i + 1}"/></label>${what}${frame}${Object.keys(job.set).length ? btn("job-general", "Use the general settings for all of it", "rotate-ccw", "wide") : ""}</details><div class="button-row">${actions}</div></div>`;
   }
   function batchSection() {
     if (!videoSupported()) return "";
-    const rows = videoBatch
-      .map((job, i) => {
-        const state = busyVideo && videoBatchAt === i ? "Rendering…" : videoBatchAt > i ? "Done" : "Queued";
-        return `<div class="batch-row" data-job="${job.id}"><div class="key-head"><strong>${i + 1}. ${e(batchLabel(job))}</strong><span class="muted">${state}</span></div><div class="button-row">${btn("batch-use", "Load these settings", "rotate-ccw")}${busyVideo ? "" : btn("batch-remove", "Remove", "trash-2")}</div></div>`;
-      })
-      .join("");
-    return `<section><h3>Batch <span>${videoBatch.length} ${videoBatch.length === 1 ? "clip" : "clips"}</span></h3><p class="muted">Queue several clips and render them in one go. Each one keeps the settings it was queued with, including its own timeline, so you can compose a shot, add it, recompose and add another. They render in order and download as they finish.</p><div class="button-row">${btn("batch-add", "Add current settings", "plus")}${videoBatch.length && !busyVideo ? btn("batch-clear", "Clear list", "trash-2") : ""}</div>${rows}${videoBatch.length ? (busyVideo ? btn("cancel-video", "Cancel", "x", "wide") : btn("batch-export", `Export all ${videoBatch.length}`, "download", "primary wide")) : ""}${videoBatch.length ? `<p class="muted">A batch renders every frame of every clip, so it takes as long as the clips add up to — several minutes for four 1080p moves. The camera comes back where you left it.</p>` : ""}</section>`;
+    const k = kit();
+    const n = k.queue.length;
+    const clips = k.queue.filter((j) => j.kind === "clip").length;
+    const rows = k.queue.map((job, i) => jobRow(job, i, k)).join("");
+    const custom = videoMove === CUSTOM_MOVE;
+    return `<section class="batch"><h3>Batch export <span>${n} ${n === 1 ? "item" : "items"}</span></h3><p class="muted">Queue clips and stills and render them in one go. Add each exactly as it is set now, or add it on the general settings and tweak it in the list. They render in order and download as they finish; the list is saved with the booth.</p>${generalSettingsHTML(k)}${presetsHTML(k)}<h4>Add to the batch</h4><div class="button-row">${btn("batch-add", "Clip · as set now", "plus")}${btn("batch-add-general", "Clip · general settings", "plus")}</div><div class="button-row">${btn("batch-add-still", "Still · as set now", "image-plus")}${btn("batch-add-still-general", "Still · general settings", "image-plus")}</div>${custom ? btn("batch-add-key-stills", "A still of every keyframe", "images", "wide") : ""}${n && !busyVideo ? btn("batch-clear", "Clear list", "trash-2", "wide") : ""}${rows}${n ? (busyVideo ? btn("cancel-video", "Cancel", "x", "wide") : btn("batch-export", `Export all ${n}`, "download", "primary wide")) : ""}${n ? `<div class="video-progress" role="status" aria-live="polite">${busyVideo && videoBatchAt >= 0 ? progressHTML() : ""}</div><p class="muted">A batch renders every frame of every clip, so it takes as long as the clips add up to — several minutes for four 1080p moves. ${clips < n ? "Stills take a second or two each. " : ""}The camera comes back where you left it.</p>` : ""}</section>`;
   }
 
-  // The panel's settings as a renderable clip. A Custom move carries a frozen
-  // copy of the timeline rather than a reference to it, so a queued clip is not
-  // quietly rewritten by the next keyframe someone adds.
+  // The panel's settings as a renderable clip, resolved the way a batch item is.
   function currentClip() {
-    const custom = videoMove === CUSTOM_MOVE;
-    const tl = custom ? structuredClone(timeline()) : null;
-    return {
-      move: videoMove,
-      timeline: tl,
-      seconds: custom ? tl.seconds : videoSeconds,
-      fps: videoFps,
-      size: videoSize,
-      // A queued clip keeps the frame it was queued in, the same way it keeps
-      // its own timeline: a batch of a widescreen clip and a vertical one is
-      // exactly what the frame picker is for.
-      frame: videoFrameShape,
-      custom: { ...customFrame },
-      place: { ...framePlace.video },
-      settle: videoSettle,
-    };
+    const job = clipJob(true);
+    return { ...resolveJob(job, kit()), timeline: job.timeline || null };
   }
   // Renders one clip or a whole batch, in order, downloading each as it lands.
   // A batch is not a different code path: it is this loop with more than one
   // entry, which is what keeps a single export and a batch honest with each
   // other.
-  async function runClips(jobs) {
+  // A batch is the same loop with stills in it: a still is one frame, rendered
+  // by the PNG export from the view it was queued with.
+  async function runClips(jobs, { batch = false } = {}) {
     busy = busyVideo = true;
     videoAbort = new AbortController();
-    videoBatchAt = jobs === videoBatch ? 0 : -1;
-    renderInspector();
+    videoBatchAt = batch ? 0 : -1;
+    refreshPanels();
     // The progress element is written to directly rather than through
     // renderInspector: redrawing the whole panel a few hundred times would
-    // itself slow the render it is reporting on.
+    // itself slow the render it is reporting on. There can be one in the
+    // Video tab and one in the timeline; both are kept.
     const status = (note) => {
-      const bar = document.querySelector(".video-progress progress");
-      const label = document.querySelector(".video-progress span");
-      if (bar) bar.value = videoProgress;
-      if (label)
-        label.textContent = `${note}${Math.round(videoProgress * 100)}% · frame ${videoFrame} of ${videoFrames}`;
+      document.querySelectorAll(".video-progress").forEach((box) => {
+        if (!batch && box.closest(".batch")) return;
+        if (!box.querySelector("progress")) box.innerHTML = progressHTML();
+        box.querySelector("progress").value = videoProgress;
+        box.querySelector("span").textContent = `${note}${Math.round(videoProgress * 100)}% · frame ${videoFrame} of ${videoFrames}`;
+      });
     };
     let done = 0;
+    let stills = 0;
     let vp9 = false;
     try {
       for (const [index, job] of jobs.entries()) {
-        videoBatchAt = jobs === videoBatch ? index : -1;
+        videoBatchAt = batch ? index : -1;
+        if (batch) refreshPanels();
         videoProgress = 0;
         videoFrame = 0;
+        const note = jobs.length > 1 ? `${job.kind === "still" ? "Still" : "Clip"} ${index + 1} of ${jobs.length} · ` : "";
+        const name = batch ? `${safeName()}-${jobSlug(job, index)}` : `${safeName()}-${job.move}`;
+        if (job.kind === "still") {
+          videoFrames = 1;
+          status(note);
+          if (videoAbort.signal.aborted) throw new DOMException("Cancelled", "AbortError");
+          const blob = await scene.export(job.long, { frame: job.frame, custom: job.custom, place: job.place, pose: job.pose || undefined });
+          download(blob, `${name}.png`);
+          videoProgress = 1;
+          status(note);
+          done += 1;
+          stills += 1;
+          continue;
+        }
+        if (job.move === CUSTOM_MOVE && !job.timeline) throw new Error(`Item ${index + 1} has no timeline to render. Load a preset into it or remove it.`);
         videoFrames = frameTimes(job.seconds, job.fps).count;
-        const note = jobs.length > 1 ? `Clip ${index + 1} of ${jobs.length} · ` : "";
         status(note);
         const recorded = await scene.recordVideo({
           // A timeline where the move is Custom, one of the fixed moves
@@ -2320,8 +2556,7 @@ async function boot() {
             status(note);
           },
         });
-        const suffix = jobs.length > 1 ? `-${index + 1}` : "";
-        download(recorded.blob, `${safeName()}-${job.move}${suffix}.mp4`);
+        download(recorded.blob, `${name}.mp4`);
         vp9 = vp9 || recorded.kind === "vp09";
         done += 1;
       }
@@ -2334,22 +2569,24 @@ async function boot() {
           "Exported as VP9, because this browser cannot encode H.264. It plays in Chrome, Edge and VLC, but not in QuickTime Player — use Chrome or Safari for a QuickTime-ready file.",
           true,
         );
-      else if (done > 1) toast(`${done} clips exported.`);
+      else if (batch) toast(`${done} exported${stills ? ` · ${done - stills} ${done - stills === 1 ? "clip" : "clips"}, ${stills} ${stills === 1 ? "still" : "stills"}` : ""}.`);
       else toast(`${jobs[0].seconds}s MP4 exported · ${videoFrames} frames at ${jobs[0].fps} fps.`);
     } catch (err) {
       // A cancelled batch keeps the clips it already wrote: they are on disk
       // and saying otherwise would be a lie.
       if (err?.name === "AbortError")
-        toast(done ? `Cancelled after ${done} ${done === 1 ? "clip" : "clips"}.` : "Recording cancelled.");
+        toast(done ? `Cancelled after ${done} ${done === 1 ? "item" : "items"}.` : "Recording cancelled.");
       else toast(err.message, true);
     } finally {
       busy = busyVideo = false;
       videoAbort = null;
       videoProgress = 0;
       videoBatchAt = -1;
-      renderInspector();
+      refreshPanels();
     }
   }
+  const progressHTML = () =>
+    `<progress max="1" value="${videoProgress}"></progress><span>${Math.round(videoProgress * 100)}% · frame ${videoFrame} of ${videoFrames}</span>`;
 
   // Says what will come out, in the terms that matter: whether QuickTime
   // Player will open it. Nothing is claimed until the probe has answered.
@@ -2392,7 +2629,7 @@ async function boot() {
     guide.hidden = !shape;
     if (!shape) return;
     guide.dataset.which = shape.which;
-    const r = placeRect(host.clientWidth, host.clientHeight, shape.aspect, framePlace[shape.which]);
+    const r = placeRect(host.clientWidth, host.clientHeight, shape.aspect, getPlace(shape.which));
     Object.assign(guide.style, {
       left: `${host.offsetLeft}px`,
       top: `${host.offsetTop}px`,
@@ -2921,14 +3158,14 @@ async function boot() {
     undo: () => {
       if (!history.length) return;
       future.push(snapshot());
-      p = fromSnapshot(history.pop());
+      p = keepKit(fromSnapshot(history.pop()));
       render();
       scheduleSave();
     },
     redo: () => {
       if (!future.length) return;
       history.push(snapshot());
-      p = fromSnapshot(future.pop());
+      p = keepKit(fromSnapshot(future.pop()));
       render();
       scheduleSave();
     },
@@ -3150,48 +3387,140 @@ async function boot() {
       // work either way, so it is written once.
       await runClips([currentClip()]);
     },
-    "batch-add": () => {
-      if (!scene) return toast("3D is not available, so there is no view to record.", true);
-      videoBatch = [...videoBatch, { id: uid(), ...currentClip() }];
-      renderInspector();
-      toast(`Queued ${batchLabel(videoBatch.at(-1))}.`);
+    "batch-add": () => addJobs([clipJob(true)]),
+    "batch-add-general": () => addJobs([clipJob(false)]),
+    "batch-add-still": () => addJobs([stillJob(true)]),
+    "batch-add-still-general": () => addJobs([stillJob(false)]),
+    // One still per keyframe, each from that keyframe's own view — and its
+    // own frame, when the frame is keyframed.
+    "batch-add-key-stills": () => {
+      const tl = timeline();
+      addJobs(
+        tl.keys.map((k, i) => ({
+          ...stillJob(false, k, k.place ? cleanSettings({ frame: videoFrameShape, custom: customFrame, place: k.place }) : {}),
+          name: keyName(i, tl.keys.length),
+        })),
+      );
     },
     "batch-remove": (button) => {
       if (busyVideo) return;
       const id = button?.closest("[data-job]")?.dataset.job;
-      videoBatch = videoBatch.filter((job) => job.id !== id);
-      renderInspector();
+      const k = kit();
+      setKit({ ...k, queue: k.queue.filter((job) => job.id !== id) });
     },
     "batch-clear": () => {
       if (busyVideo) return;
-      videoBatch = [];
-      renderInspector();
+      setKit({ ...kit(), queue: [] });
+    },
+    "job-up": (button) => {
+      if (busyVideo) return;
+      const k = kit();
+      const i = k.queue.findIndex((j) => j.id === button?.closest("[data-job]")?.dataset.job);
+      if (i < 1) return;
+      const queue = [...k.queue];
+      [queue[i - 1], queue[i]] = [queue[i], queue[i - 1]];
+      setKit({ ...k, queue });
     },
     // Puts a queued clip's settings back in the panel, which is how you check
     // what you queued — and how you edit a queued timeline: load it, change it,
     // remove the old row and add it again.
     "batch-use": (button) => {
-      const job = videoBatch.find((x) => x.id === button?.closest("[data-job]")?.dataset.job);
-      if (!job) return;
-      videoMove = job.move;
-      videoSeconds = job.seconds;
-      videoFps = job.fps;
-      videoSize = job.size;
-      if (FRAMES[job.frame]) videoFrameShape = job.frame;
-      if (job.place) framePlace.video = normalPlace(job.place);
-      if (job.custom) customFrame = { ...job.custom };
-      if (typeof job.settle === "boolean") videoSettle = job.settle;
+      const k = kit();
+      const job = k.queue.find((x) => x.id === button?.closest("[data-job]")?.dataset.job);
+      if (!job || job.kind !== "clip") return;
+      const r = resolveJob(job, k);
+      videoMove = r.move;
+      videoSeconds = r.seconds;
+      videoFps = r.fps;
+      videoSize = r.size;
+      if (FRAMES[r.frame]) videoFrameShape = r.frame;
+      framePlace.video = normalPlace(r.place);
+      customFrame = { ...r.custom };
+      videoSettle = r.settle;
       saveViewPrefs();
-      if (job.timeline) videoTimeline = normalizeTimeline(job.timeline);
+      if (r.timeline) videoTimeline = normalizeTimeline(structuredClone(r.timeline));
       probeCodec();
-      renderInspector();
+      refreshPanels();
       toast("Settings loaded into the panel.");
+    },
+    "job-show": (button) => {
+      const job = kit().queue.find((x) => x.id === button?.closest("[data-job]")?.dataset.job);
+      if (job?.pose) scene?.applyPose(job.pose);
+    },
+    // The frame the panel is set to, onto one item: the Video tab's for a
+    // clip, the Export tab's for a still.
+    "job-take-frame": (button) => {
+      const k = kit();
+      const id = button?.closest("[data-job]")?.dataset.job;
+      setKit({
+        ...k,
+        queue: k.queue.map((j) => {
+          if (j.id !== id) return j;
+          const still = j.kind === "still";
+          const from = { frame: still ? exportFrame : videoFrameShape, custom: customFrame, place: still ? framePlace.export : framePlace.video };
+          return Object.entries(from).reduce((job, [key, v]) => tweak(job, key, v), j);
+        }),
+      });
+    },
+    "job-general-frame": (button) => {
+      const k = kit();
+      const id = button?.closest("[data-job]")?.dataset.job;
+      setKit({ ...k, queue: k.queue.map((j) => (j.id === id ? ["frame", "custom", "place"].reduce((job, key) => tweak(job, key, undefined), j) : j)) });
+    },
+    "job-general": (button) => {
+      const k = kit();
+      const id = button?.closest("[data-job]")?.dataset.job;
+      setKit({ ...k, queue: k.queue.map((j) => (j.id === id ? { ...j, set: {} } : j)) });
+    },
+    "kit-take-frame": () => {
+      const k = kit();
+      setKit({ ...k, defaults: { ...k.defaults, ...cleanSettings({ frame: videoFrameShape, custom: customFrame, place: framePlace.video }) } });
+      toast("The general frame is now the Video tab's.");
+    },
+    "preset-save": (button) => {
+      const k = kit();
+      if (k.presets.length >= MAX_PRESETS) return toast(`${MAX_PRESETS} presets is the limit.`, true);
+      const input = button?.closest("section, .preset-new")?.querySelector("[data-preset-name]");
+      const name = (input?.value || "").trim().slice(0, 120) || `Timeline ${k.presets.length + 1}`;
+      setKit({ ...k, presets: [...k.presets, { id: uid(), name, timeline: structuredClone(timeline()) }] });
+      toast(`Saved the timeline as “${name}”.`);
+    },
+    "preset-load": (button) => {
+      const preset = kit().presets.find((x) => x.id === button?.closest("[data-preset]")?.dataset.preset);
+      if (!preset) return;
+      videoTimeline = normalizeTimeline(structuredClone(preset.timeline));
+      videoMove = CUSTOM_MOVE;
+      tlBeforeAuto = null;
+      refreshPanels();
+      toast(`“${preset.name}” loaded into the timeline.`);
+    },
+    "preset-overwrite": (button) => {
+      const k = kit();
+      const id = button?.closest("[data-preset]")?.dataset.preset;
+      setKit({ ...k, presets: k.presets.map((x) => (x.id === id ? { ...x, timeline: structuredClone(timeline()) } : x)) });
+      toast("Preset updated. Every clip using it follows.");
+    },
+    "preset-apply": (button) => {
+      const k = kit();
+      const id = button?.closest("[data-preset]")?.dataset.preset;
+      const clips = k.queue.filter((j) => j.kind === "clip").length;
+      if (!clips) return toast("There are no clips in the batch to give it to. Add one first.", true);
+      setKit(applyPreset(k, id));
+      toast(`${clips} ${clips === 1 ? "clip uses" : "clips use"} the preset now.`);
+    },
+    "preset-delete": (button) => {
+      const k = kit();
+      setKit(removePreset(k, button?.closest("[data-preset]")?.dataset.preset));
     },
     "batch-export": async () => {
       if (busy || busyVideo) return;
       if (!scene) return toast("3D is not available, so there is no view to record.", true);
-      if (!videoBatch.length) return toast("The batch list is empty.", true);
-      await runClips(videoBatch);
+      const k = kit();
+      if (!k.queue.length) return toast("The batch list is empty.", true);
+      // A clip on a preset is named after it in its file name, unless it has
+      // a name of its own.
+      const named = (job) => job.name || (job.preset && k.presets.find((x) => x.id === job.preset)?.name) || undefined;
+      await runClips(k.queue.map((job) => ({ ...resolveJob(job, k), name: named(job) })), { batch: true });
     },
     "add-woman": () => addPerson("woman"),
     "add-man": () => addPerson("man"),
@@ -3223,6 +3552,10 @@ async function boot() {
     "close-timeline": () => {
       document.querySelector("#timeline-dialog").close();
       scene?.clearMoment();
+      livePlace = null;
+      // Emptied, so the batch and frame controls it repeats are not in the
+      // page twice while it is closed.
+      document.querySelector("#timeline-content").innerHTML = "";
       renderInspector();
     },
     "timeline-add": () => {
@@ -3233,10 +3566,14 @@ async function boot() {
       // where someone building a move in order wants it — and never on top of
       // the end key, which would be a zero-length segment.
       const previous = tl.keys.at(-2).t;
-      const added = { ...keyFrom(position, target), t: (previous + 1) / 2 };
+      // Between the last two keys, wherever the end has been slid to.
+      const added = { ...keyFrom(position, target), t: (previous + tl.keys.at(-1).t) / 2 };
+      // A keyframed frame: the new key takes the frame as it is shown now.
+      if (tl.frameKeys) added.place = { ...getPlace("video") };
       videoTimeline = normalizeTimeline({ ...tl, keys: [...tl.keys, added] });
-      keyThumbs.set(added.id, grabThumb());
+      keyThumbs.set(added.id, grabThumb(added.place || getPlace("video")));
       tlSelected = added.id;
+      livePlace = added.place || null;
       tlPlayhead = keySchedule(videoTimeline).find((x) => x.id === added.id)?.arrive ?? tlPlayhead;
       renderTimelineDialog();
       toast(`Keyframe ${videoTimeline.keys.length - 1} captured from this view.`);
@@ -3245,10 +3582,17 @@ async function boot() {
       const tl = timeline();
       const index = tl.keys.findIndex((k) => k.id === button?.closest("[data-key]")?.dataset.key);
       if (index < 0) return;
-      tlSelected = tl.keys[index].id;
-      tlPlayhead = keySchedule(tl)[index].arrive;
-      scene?.applyPose(tl.keys[index]);
-      renderTimelineDialog();
+      showKey(index);
+    },
+    // Previous / next keyframe from the playhead: "have a next or prev
+    // keyframe arrows to jump to the next keyframe".
+    "timeline-prev": () => {
+      const i = neighbourKey(timeline(), tlPlayhead, -1);
+      if (i >= 0) showKey(i);
+    },
+    "timeline-next": () => {
+      const i = neighbourKey(timeline(), tlPlayhead, 1);
+      if (i >= 0) showKey(i);
     },
     "timeline-auto": () => {
       tlBeforeAuto = timeline().keys.map((k) => ({ id: k.id, t: k.t }));
@@ -3268,8 +3612,8 @@ async function boot() {
       renderTimelineDialog();
     },
     "timeline-go": (button) => {
-      const key = timeline().keys.find((k) => k.id === button?.closest("[data-key]")?.dataset.key);
-      if (key) scene?.applyPose(key);
+      const index = timeline().keys.findIndex((k) => k.id === button?.closest("[data-key]")?.dataset.key);
+      if (index >= 0) showKey(index);
     },
     "timeline-recapture": (button) => {
       const id = button?.closest("[data-key]")?.dataset.key;
@@ -3278,7 +3622,7 @@ async function boot() {
         ...timeline(),
         keys: timeline().keys.map((k) => (k.id === id ? { ...k, position, target } : k)),
       });
-      keyThumbs.set(id, grabThumb());
+      keyThumbs.set(id, grabThumb(timeline().keys.find((k) => k.id === id)?.place || getPlace("video")));
       renderTimelineDialog();
       toast("Keyframe replaced with this view.");
     },
@@ -3303,6 +3647,7 @@ async function boot() {
           onProgress: custom
             ? (t) => {
                 tlPlayhead = t * custom.seconds;
+                followPlayhead(custom, t);
                 const head = document.querySelector("#timeline-content .tl-playhead");
                 if (head) {
                   head.style.left = `${(t * 100).toFixed(3)}%`;
@@ -3316,6 +3661,7 @@ async function boot() {
         toast(err.message, true);
       } finally {
         busyPreview = false;
+        if (!timelineOpen()) livePlace = null;
         renderInspector();
       }
     },
@@ -3339,6 +3685,7 @@ async function boot() {
           from,
           onProgress: (t) => {
             tlPlayhead = t * tl.seconds;
+            followPlayhead(tl, t);
             const head = document.querySelector("#timeline-content .tl-playhead");
             if (head) {
               head.style.left = `${(t * 100).toFixed(3)}%`;
@@ -3355,14 +3702,15 @@ async function boot() {
         if (document.querySelector("#timeline-dialog")?.open) {
           renderTimelineDialog();
           scene.showMoment(tl, tlPlayhead / tl.seconds);
+          followPlayhead(tl, tlPlayhead / tl.seconds);
         }
       }
     },
     "timeline-pause": () => scene?.stopPreview?.({ keep: true }),
     "frame-reset-video": () => {
-      framePlace.video = { ...DEFAULT_PLACE };
+      setPlace("video", { ...DEFAULT_PLACE });
       saveViewPrefs();
-      renderInspector();
+      placeSettled();
     },
     "frame-reset-export": () => {
       framePlace.export = { ...DEFAULT_PLACE };
@@ -4069,6 +4417,39 @@ async function boot() {
     }
     // Video settings are view state, not project state: they are not saved
     // with the booth and do not belong in the undo history.
+    // The batch queue's settings. Saved with the project, outside the undo
+    // history: see setKit.
+    if (el.dataset.kitDefault) {
+      const k = kit();
+      const key = el.dataset.kitDefault;
+      setKit({ ...k, defaults: { ...k.defaults, ...cleanSettings({ [key]: key === "settle" ? el.checked : el.value }) } });
+      return;
+    }
+    if (el.dataset.jobSet || el.dataset.jobMove !== undefined || el.dataset.jobName !== undefined) {
+      const k = kit();
+      const id = el.closest("[data-job]")?.dataset.job;
+      const job = k.queue.find((j) => j.id === id);
+      if (!job) return;
+      let next = job;
+      if (el.dataset.jobSet) next = tweak(job, el.dataset.jobSet, el.value === "" ? undefined : el.value);
+      else if (el.dataset.jobName !== undefined) next = { ...job, name: el.value.trim().slice(0, 120) || undefined };
+      else if (el.value.startsWith("preset:")) next = { ...job, move: KIT_CUSTOM, preset: el.value.slice(7) };
+      else if (el.value === "own") next = { ...job, move: KIT_CUSTOM, preset: undefined };
+      else if (MOVES[el.value]) next = { ...job, move: el.value, preset: undefined, seconds: job.move === el.value ? job.seconds : resolveMove(el.value).seconds };
+      setKit({ ...k, queue: k.queue.map((j) => (j.id === id ? next : j)) });
+      return;
+    }
+    if (el.id === "timeline-frame-keys") {
+      const tl = timeline();
+      // On: every keyframe starts from the frame as it is now, and is then
+      // its own. Off: the keyframes' frames are dropped and the Video tab's
+      // placement holds for the whole clip.
+      const keys = el.checked ? tl.keys.map((k) => ({ ...k, place: { ...framePlace.video } })) : tl.keys;
+      videoTimeline = normalizeTimeline({ ...tl, keys, frameKeys: el.checked });
+      livePlace = null;
+      placeSettled();
+      return;
+    }
     if (el.id === "timeline-seconds") {
       videoTimeline = normalizeTimeline({ ...timeline(), seconds: +el.value });
       renderTimelineDialog();
@@ -4110,6 +4491,12 @@ async function boot() {
         return { ...k, ease: el.value };
       });
       videoTimeline = normalizeTimeline({ ...tl, keys });
+      // The playhead goes with a retimed key, as it does when one is dragged,
+      // so the previous / next arrows count from where the key now is.
+      if (el.dataset.keyField === "t") {
+        const i = videoTimeline.keys.findIndex((k) => k.id === el.dataset.key);
+        if (i >= 0) tlPlayhead = keySchedule(videoTimeline)[i].arrive;
+      }
       renderTimelineDialog();
       return;
     }
@@ -4154,19 +4541,19 @@ async function boot() {
       if (el.dataset.frame === "video") videoFrameShape = value;
       else exportFrame = value;
       saveViewPrefs();
-      renderInspector();
+      refreshPanels();
       return;
     }
     if (el.dataset.framePlace) {
       saveViewPrefs();
-      renderInspector();
+      placeSettled();
       return;
     }
     if (el.dataset.frameCustom) {
       const side = Math.max(FRAME_MIN, Math.min(FRAME_MAX, Math.round(Number(el.value) || 0)));
       customFrame = { ...customFrame, [el.dataset.frameCustom]: side };
       saveViewPrefs();
-      renderInspector();
+      refreshPanels();
       return;
     }
     if (el.dataset.videoSettle !== undefined) {
@@ -4383,8 +4770,13 @@ async function boot() {
       const which = ev.target.dataset.frameWhich === "export" ? "export" : "video";
       const key = ev.target.dataset.framePlace;
       const v = Number(ev.target.value) / 100;
-      framePlace[which] = normalPlace({ ...framePlace[which], [key]: v });
-      ev.target.closest("label")?.querySelector("output")?.replaceChildren(`${Math.round(Number(ev.target.value))}%`);
+      setPlace(which, normalPlace({ ...getPlace(which), [key]: v }));
+      // The same slider can be in the Video tab and in the timeline at once;
+      // both follow.
+      document.querySelectorAll(`[data-frame-place="${key}"][data-frame-which="${which}"]`).forEach((input) => {
+        if (input !== ev.target) input.value = ev.target.value;
+        input.closest("label")?.querySelector("output")?.replaceChildren(`${Math.round(Number(ev.target.value))}%`);
+      });
       updateFrameGuide();
       return;
     }
@@ -4957,6 +5349,12 @@ async function boot() {
       },
       get framePlace() {
         return framePlace;
+      },
+      get videoTimeline() {
+        return videoTimeline;
+      },
+      get livePlace() {
+        return livePlace;
       },
       get frames() {
         return { video: videoFrameShape, export: exportFrame, custom: customFrame };

@@ -46,6 +46,104 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-25, third round: a keyframed frame, sliding end keys, previous /
+  next keyframe, and a batch of clips and stills. On branch
+  `claude/laughing-hopper-g3fc2i`, not yet merged — so not deployed.**
+  Asked for as "add 'frame up down' slider also in timeline … and make it a
+  keyframeable feature so the frame can move too; allow sliding of end key
+  frames — if they slide, after them the framing remains unchanged; have a
+  next or prev keyframe arrows; can we create a batch export function …".
+  The owner answered four questions first: keyframe all three placement
+  sliders, not only up / down; hold the pose past a slid end key rather than
+  trim the clip; stills join the batch, and the export and batch tools are in
+  the timeline window too; the queue and presets are kept on this browser
+  *and* in the backup.
+  1. **The frame in the timeline, keyframed.** The timeline dialog has a
+     Frame section: the same Frame menu and Frame size / left-right / up-down
+     sliders as the Video tab, and **Keyframe the frame**. Off (the default,
+     and every timeline before this), the frame holds for the whole clip as
+     it always did. On, every keyframe carries its own `place` (the same
+     scale plus −1..1 offsets as `framePlace`), starting from the frame as it
+     was; the sliders — in the dialog *and* the Video tab — and the guide's
+     handles then set the **selected** keyframe's, and move the camera and
+     playhead to it so the frame is judged against its shot. Between keys the
+     frame travels on the same ease as the camera (`poseBetween` lerps
+     `place` when both keys have one), so it arrives with the shot. Scrubbing
+     and Play move the guide with it (`livePlace`, sampled at the playhead;
+     `getPlace` / `setPlace` in main.js route every read and write). The
+     recorder sets the camera's view offset per frame from the sampled place
+     (`recordVideo`'s `drawFrame`). `frameKeys` and `place` are optional
+     fields of the timeline, which is view state and never in schema 1.
+  2. **End keys slide.** `normalizeTimeline` no longer pins the first key to
+     0 and the last to 1; it keeps them in 0..1 and in order. Before the first
+     key and after the last, the camera (and a keyframed frame) holds that
+     key's shot, and the track draws the held stretch as a paler hold
+     (`.tl-end`). Every diamond drags now, and the ends' At (s) field is
+     editable. The keys-flow sampler was rewritten to walk the same
+     arrive / leave schedule the track draws; the glide got explicit holds at
+     both ends. Auto timing spreads the middle keys between wherever the two
+     ends sit. A timeline saved before this has its ends at exactly 0 and 1,
+     so it samples as it always did (the old timeline tests all pass
+     unchanged but one, which asserted the old pinning and now asserts the
+     new rule). A retimed key takes the playhead with it.
+  3. **Previous / next keyframe** arrows either side of Play
+     (`neighbourKey` in timeline.js): the nearest key arriving strictly
+     before or after the playhead, selected, with its camera and frame.
+  4. **The batch, for clips and stills** (`src/batch.js`, pure). One queue,
+     three ways in, as asked:
+     - *Add each one individually*: **Clip · as set now** / **Still · as set
+       now** freeze every setting, which is the old batch list exactly (the
+       clip from the Video tab, the still from the Export tab's frame and
+       size, and the view it was queued from).
+     - *A general export setting, tweaked per item*: **General export
+       settings** (frame rate, clip size, still size, frame, and "Use the
+       Video tab's frame and placement", careful rendering), and
+       **Clip / Still · general settings**, which add an item that follows
+       them. Each row's **Tweak** panel overrides any one setting — a menu's
+       first option, "General · …", hands it back — and says how many it
+       owns. A job stores only its overrides in `set`; `resolveJob` merges.
+     - *A timeline preset copied across many files*: **Timeline presets** —
+       Save timeline as preset, Load into timeline, Save the timeline over
+       it, **Use for every clip**, Delete. A clip on a preset *links* to it,
+       so one move sent out as 16:9, 9:16 and square follows every later
+       edit. Deleting a preset leaves each linked clip a copy, so nothing
+       queued changes. A clip's Move menu also picks a fixed move, its own
+       timeline or any preset.
+     Also: **A still of every keyframe** (each from its key's view, and its
+     own frame when the frame is keyframed), Move up, Show this view for a
+     still. Files are numbered in queue order and named after the item's
+     name, its preset, or what it is (`Spring-booth-01-rise.mp4`,
+     `…-02-still.png`). A still renders through `scene.export` with a new
+     optional `pose`, restored in the finally.
+     **Where it lives:** the optional `p.exportKit` (`defaults`, `presets`,
+     `queue`), validated by `validKit` in `validateProject` — so it
+     autosaves with the booth (survives a reload on this browser) and
+     travels in a backup; every older backup has none and loads. It is not
+     the booth, so a change to it is saved without an undo step, and
+     undo / redo carry the current kit across (`keepKit`) rather than
+     un-queueing things.
+  5. **Export and the batch in the timeline window.** The dialog ends with
+     an Export section (Export MP4, with its progress) and the whole batch
+     section, so a clip can be built, queued and rendered without leaving
+     it. The dialog's contents are emptied on close so the shared controls
+     are never in the page twice.
+  The batch's folding sections remember whether they are open across the
+  redraw every change causes (`openFolds`; recorded on the summary's click
+  as well as on `toggle`, because a redraw can beat the queued toggle event).
+  Tests: `tests/timeline.test.js` (slid ends hold before and after, in both
+  flows; the keyframed frame sampled, dropped when off, filled and clamped;
+  previous / next; auto timing keeping slid ends), `tests/batch.test.js`
+  (general settings and tweaks, presets linked and deleted, stills, the
+  backup validator, file names), and a new browser suite
+  `tests/view-batch.mjs` — prev / next, a slid end key and its drawn hold,
+  a keyframed frame the guide follows between two keys and while scrubbed,
+  a preset used by a clip, general settings reaching an item and a tweak
+  surviving them, undo leaving the queue alone, a batch of a clip and a
+  still downloading both files, and the queue and preset surviving a
+  reload.
+  Not checked by eye: whether the moving frame reads as intended in an
+  exported clip, and whether the batch panel is too long in the timeline
+  window on a phone.
 - **2026-09-25, second round: the owner's asks after seeing the frame
   guide. Merged to `main` and deployed.**
   1. **The export frame can be moved, resized and reshaped.** Asked for as
@@ -1029,6 +1127,13 @@ Extend it; do not rebuild it.
 
 ## Next
 
+1. **The 2026-09-25 third round, on the real machine** (merge the branch
+   first). Keyframe the frame, give Start and End different frames, and
+   export: does the frame's move read as intended, and should it have its
+   own ramp rather than the camera's? Slide an end key in: is a held tail
+   the right answer, or should the clip be trimmed? Is the batch panel too
+   long inside the timeline window, especially on a phone? Is "link to the
+   preset" the right behaviour, or should Use for every clip copy it?
 1. **The cut-out people, by eye.** Do they read right in the booth — size
    against the walls, the woman's colours under the booth's light, the black
    silhouette against a dark wall? Is mirroring on facing welcome, or should

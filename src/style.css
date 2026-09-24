@@ -2049,6 +2049,17 @@ dialog li {
 .tl-steps {margin:6px 0 12px;padding-left:20px;font-size:12px;line-height:1.6;color:var(--muted);}
 .tl-bar {display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
 .tl-bar .tl-length {margin:0 0 0 auto;width:96px;}
+.tl-transport {display:inline-flex;gap:4px;align-items:center;}
+.keyed-note {font-size:12px;color:#f2c14e;margin:4px 0;}
+/* The batch queue: general settings, presets, and a tweak panel per item. */
+.batch details {border:1px solid #2c3743;border-radius:8px;padding:6px 10px;margin:8px 0;}
+.batch summary {cursor:pointer;font-weight:600;font-size:13px;}
+.batch summary span {color:var(--muted);font-weight:400;margin-left:4px;}
+.batch h4 {margin:12px 0 4px;}
+.batch .job-tweak {margin:6px 0;border-style:dashed;}
+.batch .job-tweak summary {font-weight:500;font-size:12px;color:var(--muted);}
+.preset-new {display:flex;gap:6px;align-items:center;margin:6px 0;}
+.preset-new input {flex:1;min-width:0;}
 .tl-track {position:relative;height:78px;margin:6px 10px 4px;touch-action:none;cursor:ew-resize;user-select:none;}
 .tl-ruler {position:absolute;left:0;right:0;top:0;height:18px;border-bottom:1px solid #3a4756;}
 .tl-tick {position:absolute;top:0;transform:translateX(-50%);font-size:10px;color:var(--muted);white-space:nowrap;}
@@ -2063,7 +2074,9 @@ dialog li {
 .tl-fade.out {background:linear-gradient(270deg,#000 0%,transparent 100%);}
 .tl-key {position:absolute;top:50%;width:22px;height:22px;min-height:0;padding:0;margin:0;transform:translate(-50%,-50%) rotate(45deg);border-radius:4px;border:2px solid #0e1216;background:#f2c14e;cursor:grab;z-index:2;display:flex;align-items:center;justify-content:center;}
 .tl-key span {transform:rotate(-45deg);font:700 10px/1 system-ui, sans-serif;color:#1a1408;}
-.tl-key.fixed {background:#c9ced4;cursor:pointer;}
+.tl-key.end {background:#e9d8a6;}
+/* An end key slid inward holds its shot out to the edge: a paler hold. */
+.tl-hold.tl-end {opacity:.45;}
 .tl-key.selected {box-shadow:0 0 0 3px #5b8fd0;}
 .tl-key:active {cursor:grabbing;}
 .tl-playhead {position:absolute;top:0;bottom:0;width:0;border-left:2px solid #ff5fa2;pointer-events:none;z-index:3;}

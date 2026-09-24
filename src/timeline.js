@@ -22,6 +22,7 @@
 // still evaluating — the easing table below — has to be defined here.
 import { toSpherical, fromSpherical } from "./camera-path.js";
 import { resolveFlareSource, DEFAULT_FLARE_SOURCE } from "./flare.js";
+import { normalPlace } from "./framing.js";
 
 // 6t^5 - 15t^4 + 10t^3, the same curve the fixed moves ease with: zero velocity
 // and zero acceleration at both ends, so a keyframe is a pose the camera
@@ -143,19 +144,37 @@ export function normalizeTimeline(raw, fallbackPose) {
       ease: EASES[k?.ease] ? k.ease : DEFAULT_EASE,
       position: vec3(k?.position, pose.position),
       target: vec3(k?.target, pose.target),
+      ...(k?.place && typeof k.place === "object" ? { place: normalPlace(k.place) } : {}),
     }))
     .slice(0, MAX_KEYS)
     .sort((a, b) => a.t - b.t);
   while (keys.length < MIN_KEYS)
     keys.push(keys.length ? { ...keys.at(-1), id: keyId() } : keyFrom(pose.position, pose.target));
-  keys[0].t = 0;
-  keys.at(-1).t = 1;
+  // The end keys are no longer pinned to the clip's two ends. Asked for as
+  // "allow sliding of end keyframes — if they slide, after them the framing
+  // remains unchanged": a first key at 2 s holds its shot from 0 to 2 s, and
+  // a last key at 9 s of a 12 s clip holds its shot for the last 3 s. Every
+  // timeline saved before this has them at exactly 0 and 1, so it samples
+  // the same as it always did.
+  //
   // Strictly ascending. Two keys at the same time are a zero-length segment and
   // a division by zero one frame later; nudging the later one is kinder than
   // dropping a pose someone captured on purpose.
   const epsilon = 1 / 1000;
-  for (let i = 1; i < keys.length - 1; i++) keys[i].t = Math.max(keys[i].t, keys[i - 1].t + epsilon);
-  for (let i = keys.length - 2; i > 0; i--) keys[i].t = Math.min(keys[i].t, keys[i + 1].t - epsilon);
+  const n = keys.length;
+  keys[0].t = Math.min(keys[0].t, 1 - epsilon * (n - 1));
+  for (let i = 1; i < n; i++) keys[i].t = Math.max(keys[i].t, keys[i - 1].t + epsilon);
+  keys[n - 1].t = Math.min(1, keys[n - 1].t);
+  for (let i = n - 2; i >= 0; i--) keys[i].t = Math.min(keys[i].t, keys[i + 1].t - epsilon);
+  // A keyframed frame: every key carries where the export frame sits (see
+  // `frameKeys` below). A key added before the switch was on, or one whose
+  // place was lost, takes its neighbour's, so the frame never jumps to a
+  // default nobody set.
+  const frameKeys = !!raw?.frameKeys && keys.some((k) => k.place);
+  if (frameKeys) {
+    let last = keys.find((k) => k.place).place;
+    for (const k of keys) last = k.place ? k.place : (k.place = { ...last });
+  } else keys.forEach((k) => delete k.place);
   const seconds = clamp(raw?.seconds ?? DEFAULT_SECONDS, MIN_SECONDS, MAX_SECONDS);
   // A fade cannot outlast the clip, and two fades cannot overlap: a frame that
   // is both fading in and out has no defensible brightness.
@@ -166,6 +185,11 @@ export function normalizeTimeline(raw, fallbackPose) {
     seconds,
     keys,
     flow: FLOWS[raw?.flow] ? raw.flow : DEFAULT_FLOW,
+    // Whether the export frame's size and position are keyframed along with
+    // the camera — "make it a keyframeable feature so the frame can move
+    // too". Off, the frame sits where the Video tab puts it for the whole
+    // clip, which is what every timeline before this did.
+    frameKeys,
     fade: { in: fadeIn, out: fadeOut },
     flare: {
       on: !!raw?.flare?.on,
@@ -207,30 +231,32 @@ export function sampleTimeline(timeline, t) {
   const moving = Math.max(0.001, clipSeconds - heldSeconds);
   const now = clamp(t, 0, 1) * clipSeconds;
   if (tl.flow === "glide") return sampleGlide(keys, now, moving);
-
-  let elapsed = 0;
-  let index = keys.length - 2;
-  let local = 1;
-  outer: for (let i = 0; i < keys.length; i++) {
-    const hold = keys[i].hold || 0;
-    if (hold > 0) {
-      if (now <= elapsed + hold) {
-        index = Math.min(i, keys.length - 2);
-        local = i >= keys.length - 1 ? 1 : 0;
-        break outer;
-      }
-      elapsed += hold;
+  // Walked in clip seconds against the schedule the track draws, so a key is
+  // exactly where it is shown. Before the first key and after the last the
+  // camera holds that key's shot: the ends can be slid inward.
+  const sched = schedule(keys, moving);
+  const n = keys.length;
+  if (now <= sched[0].leave) return poseBetween(keys[0], keys[1], 0);
+  for (let i = 0; i < n - 1; i++) {
+    if (now <= sched[i].leave) return poseBetween(keys[i], keys[i + 1], 0);
+    const from = sched[i].leave,
+      to = sched[i + 1].arrive;
+    if (now <= to) {
+      const span = to - from;
+      return poseBetween(keys[i], keys[i + 1], easeFn(keys[i].ease)(span > 0 ? clamp((now - from) / span, 0, 1) : 1));
     }
-    if (i >= keys.length - 1) break;
-    const span = (keys[i + 1].t - keys[i].t) * moving;
-    if (now <= elapsed + span || i === keys.length - 2) {
-      index = i;
-      local = span > 0 ? clamp((now - elapsed) / span, 0, 1) : 1;
-      break outer;
-    }
-    elapsed += span;
   }
-  return poseBetween(keys[index], keys[index + 1], easeFn(keys[index].ease)(local));
+  return poseBetween(keys[n - 2], keys[n - 1], 1);
+}
+
+/** When each key arrives and leaves, in clip seconds, holds included. */
+function schedule(keys, moving) {
+  let before = 0;
+  return keys.map((k) => {
+    const arrive = k.t * moving + before;
+    before += k.hold || 0;
+    return { arrive, leave: arrive + (k.hold || 0) };
+  });
 }
 
 /**
@@ -241,14 +267,12 @@ export function sampleTimeline(timeline, t) {
  */
 function sampleGlide(keys, now, moving) {
   const n = keys.length;
-  const arrive = [],
-    leave = [];
-  let before = 0;
-  for (const k of keys) {
-    arrive.push(k.t * moving + before);
-    before += k.hold || 0;
-    leave.push(arrive.at(-1) + (k.hold || 0));
-  }
+  const sched = schedule(keys, moving);
+  const arrive = sched.map((x) => x.arrive),
+    leave = sched.map((x) => x.leave);
+  // Held on the first shot until it is due, and on the last once it lands.
+  if (now <= arrive[0]) return poseBetween(keys[0], keys[1], 0);
+  if (now >= arrive[n - 1]) return poseBetween(keys[n - 2], keys[n - 1], 1);
   for (let i = 0; i < n; i++) if (now >= arrive[i] && now <= leave[i]) return poseBetween(keys[i], keys[Math.min(i + 1, n - 1)], 0);
   let seg = n - 2;
   for (let i = 0; i < n - 1; i++)
@@ -297,9 +321,13 @@ export function autoTime(timeline) {
   }
   const total = lengths.reduce((sum, l) => sum + l, 0);
   if (!(total > 1e-6)) return tl;
+  // Spread between wherever the two end keys sit, which is 0 and 1 unless
+  // they have been slid inward.
+  const t0 = tl.keys[0].t,
+    t1 = tl.keys.at(-1).t;
   let run = 0;
   const keys = tl.keys.map((k, i) => {
-    const t = i === 0 ? 0 : (run += lengths[i - 1]) / total;
+    const t = i === 0 ? t0 : t0 + ((run += lengths[i - 1]) / total) * (t1 - t0);
     return { ...k, t };
   });
   return normalizeTimeline({ ...tl, keys });
@@ -328,6 +356,18 @@ export function poseBetween(from, to, e) {
     position[1] += rise;
     target[1] += rise;
   }
+  // A keyframed frame moves on the same ease as the camera, so the frame and
+  // the shot inside it arrive together.
+  if (from.place && to.place)
+    return {
+      position,
+      target,
+      place: {
+        scale: lerp(from.place.scale, to.place.scale, e),
+        x: lerp(from.place.x, to.place.x, e),
+        y: lerp(from.place.y, to.place.y, e),
+      },
+    };
   return { position, target };
 }
 
@@ -387,8 +427,8 @@ export function keySchedule(timeline) {
 
 /**
  * The inverse, for dragging a key along the track or typing its time: the `t`
- * that makes key `index` arrive at `seconds` of clip time. The first and last
- * keys are pinned by `normalizeTimeline` whatever this returns.
+ * that makes key `index` arrive at `seconds` of clip time. Any key may be
+ * moved, the two ends included; `normalizeTimeline` keeps them in order.
  */
 export function keyTAt(timeline, index, seconds) {
   const tl = normalizeTimeline(timeline);
@@ -396,4 +436,19 @@ export function keyTAt(timeline, index, seconds) {
   const moving = Math.max(0.001, tl.seconds - held);
   const before = tl.keys.slice(0, Math.max(0, index)).reduce((sum, k) => sum + (k.hold || 0), 0);
   return clamp((seconds - before) / moving, 0, 1);
+}
+
+/**
+ * The keyframe before or after `seconds` of clip time, for the timeline's
+ * previous / next arrows: the index of the nearest key that arrives strictly
+ * earlier (dir -1) or later (dir 1), or -1 when there is none.
+ */
+export function neighbourKey(timeline, seconds, dir) {
+  const sched = keySchedule(timeline);
+  const eps = 1e-3;
+  if (dir < 0) {
+    for (let i = sched.length - 1; i >= 0; i--) if (sched[i].arrive < seconds - eps) return i;
+    return -1;
+  }
+  return sched.findIndex((x) => x.arrive > seconds + eps);
 }

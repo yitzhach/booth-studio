@@ -2992,7 +2992,8 @@ export class BoothScene {
       // the viewport's own projection and renders only that rectangle of it.
       const viewW = canvas.width,
         viewH = canvas.height;
-      const rect = this.frameRect(frame, viewW, viewH, width / height, place);
+      const frameId = frame;
+      const rect = this.frameRect(frameId, viewW, viewH, width / height, place);
       this.renderer.setPixelRatio(1);
       this.renderer.setSize(width, height, false);
       this.camera.aspect = viewW / viewH;
@@ -3014,6 +3015,12 @@ export class BoothScene {
           this.camera.position.set(...frame.position);
           this.controls.target.set(...frame.target);
           this.camera.lookAt(this.controls.target);
+          // A timeline with a keyframed frame moves the frame too: this
+          // frame's rectangle of the view, sampled with its pose.
+          if (frame.place) {
+            const r = this.frameRect(frameId, viewW, viewH, width / height, frame.place);
+            this.camera.setViewOffset(viewW, viewH, r.x, r.y, r.width, r.height);
+          }
           this.camera.updateProjectionMatrix();
           // Shadows are static between edits, so the map is refreshed once per
           // frame here rather than never: the lights do not move, but the
@@ -3073,7 +3080,7 @@ export class BoothScene {
    * the whole bug behind a stretched export, so it is set here and restored in
    * the finally beside everything else.
    */
-  async export(long, { frame = DEFAULT_FRAME, custom, place } = {}) {
+  async export(long, { frame = DEFAULT_FRAME, custom, place, pose } = {}) {
     await Promise.allSettled(this.textureCache.pending());
     const canvas = this.renderer.domElement,
       w = canvas.width,
@@ -3104,6 +3111,15 @@ export class BoothScene {
         o.visible = false;
       }
     });
+    // A queued still carries the view it was queued from. The camera is
+    // put there for the one render and back afterwards, in the finally.
+    const home = pose ? this.pose() : null;
+    if (pose) {
+      this.controls.target.set(...pose.target);
+      this.camera.position.set(...pose.position);
+      this.camera.lookAt(this.controls.target);
+      this.camera.updateMatrixWorld();
+    }
     try {
       this.renderer.setPixelRatio(1);
       this.renderer.setSize(width, height, false);
@@ -3128,6 +3144,12 @@ export class BoothScene {
       );
     } finally {
       hidden.forEach((o) => (o.visible = true));
+      if (home) {
+        this.controls.target.set(...home.target);
+        this.camera.position.set(...home.position);
+        this.camera.lookAt(this.controls.target);
+        this.controls.update();
+      }
       this.renderer.setPixelRatio(pixel);
       this.camera.clearViewOffset();
       if (this.camera.isPerspectiveCamera) {

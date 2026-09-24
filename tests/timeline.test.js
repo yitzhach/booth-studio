@@ -7,7 +7,8 @@ import assert from "node:assert/strict";
 import {
   EASES, MAX_KEYS, MIN_KEYS, MIN_SECONDS, MAX_SECONDS, DEFAULT_SECONDS,
   emptyTimeline, keyFrom, normalizeTimeline, sampleTimeline, fadeAt,
-  segmentSpeed, timelineSeconds, isTimeline, poseBetween,
+  segmentSpeed, timelineSeconds, isTimeline, poseBetween, keyTAt,
+  neighbourKey,
 } from "../src/timeline.js";
 import { samplePath } from "../src/camera-path.js";
 
@@ -23,14 +24,19 @@ const three = () =>
     ],
   });
 
-test("a timeline always starts at 0, ends at 1 and ascends in between", () => {
+test("a timeline's keys ascend, stay inside 0..1, and its ends may be slid inward", () => {
   const tl = normalizeTimeline({
     keys: [keyFrom(A.position, A.target, 0.9), keyFrom(B.position, B.target, 0.2), keyFrom(A.position, A.target, 0.2)],
   });
-  assert.equal(tl.keys[0].t, 0);
-  assert.equal(tl.keys.at(-1).t, 1);
+  // Sorted, so the key at 0.2 is first and keeps its time rather than being
+  // pinned to 0: the end keys slide.
+  assert.equal(tl.keys[0].t, 0.2);
+  assert.equal(tl.keys.at(-1).t, 0.9);
   for (let i = 1; i < tl.keys.length; i++)
     assert.ok(tl.keys[i].t > tl.keys[i - 1].t, `key ${i} must come after key ${i - 1}`);
+  const wild = normalizeTimeline({ keys: [keyFrom(A.position, A.target, -3), keyFrom(B.position, B.target, 7)] });
+  assert.equal(wild.keys[0].t, 0);
+  assert.equal(wild.keys[1].t, 1);
 });
 
 test("fewer than two keys is padded, more than the limit is cut", () => {
@@ -256,4 +262,70 @@ test("auto timing gives each segment time in proportion to its travel", () => {
   // Two identical poses: nothing to measure, nothing changes.
   const still = autoTime({ keys: [{ ...A, t: 0 }, { ...A, t: 0.3 }, { ...A, t: 1 }] });
   assert.ok(Math.abs(still.keys[1].t - 0.3) < 1e-9);
+});
+
+test("slid end keys hold their shot before the first and after the last", () => {
+  const tl = normalizeTimeline({
+    seconds: 10,
+    keys: [keyFrom(A.position, A.target, 0.2), keyFrom(B.position, B.target, 0.7)],
+  });
+  for (const t of [0, 0.1, 0.2]) assert.deepEqual(sampleTimeline(tl, t).position.map((v) => +v.toFixed(6)), A.position);
+  for (const t of [0.7, 0.85, 1]) {
+    const p = sampleTimeline(tl, t).position;
+    B.position.forEach((v, i) => assert.ok(Math.abs(p[i] - v) < 1e-9));
+  }
+  // In between it is moving.
+  const mid = sampleTimeline(tl, 0.45).position;
+  assert.ok(Math.hypot(mid[0] - A.position[0], mid[2] - A.position[2]) > 0.1);
+  // The glide holds the same way.
+  const glide = normalizeTimeline({ ...tl, flow: "glide" });
+  assert.deepEqual(sampleTimeline(glide, 0.05).position.map((v) => +v.toFixed(6)), A.position);
+  const end = sampleTimeline(glide, 0.95).position;
+  B.position.forEach((v, i) => assert.ok(Math.abs(end[i] - v) < 1e-9));
+  // The schedule and its inverse agree for an end key.
+  assert.ok(Math.abs(keySchedule(tl)[0].arrive - 2) < 1e-9);
+  assert.ok(Math.abs(keyTAt(tl, 1, 7) - 0.7) < 1e-9);
+});
+
+test("the frame can be keyframed: it moves with the camera, and is dropped when off", () => {
+  const keys = [
+    { ...keyFrom(A.position, A.target, 0), place: { scale: 1, x: 0, y: -1 } },
+    { ...keyFrom(B.position, B.target, 1), place: { scale: 0.5, x: 0, y: 1 } },
+  ];
+  const on = normalizeTimeline({ frameKeys: true, keys });
+  assert.equal(on.frameKeys, true);
+  assert.deepEqual(sampleTimeline(on, 0).place, { scale: 1, x: 0, y: -1 });
+  assert.deepEqual(sampleTimeline(on, 1).place, { scale: 0.5, x: 0, y: 1 });
+  const mid = sampleTimeline(on, 0.5).place;
+  assert.ok(mid.y > -1 && mid.y < 1 && mid.scale < 1 && mid.scale > 0.5);
+  const off = normalizeTimeline({ keys });
+  assert.equal(off.frameKeys, false);
+  assert.equal(sampleTimeline(off, 0.5).place, undefined);
+  assert.ok(off.keys.every((k) => !("place" in k)));
+  // A key without a place takes its neighbour's, and a wild one is clamped.
+  const gap = normalizeTimeline({
+    frameKeys: true,
+    keys: [keyFrom(A.position, A.target, 0), { ...keyFrom(B.position, B.target, 1), place: { scale: 9, x: -5, y: 0.3 } }],
+  });
+  assert.deepEqual(gap.keys[0].place, { scale: 1, x: -1, y: 0.3 });
+});
+
+test("previous and next keyframe from the playhead", () => {
+  const tl = three();
+  assert.equal(neighbourKey(tl, 0, 1), 1);
+  assert.equal(neighbourKey(tl, 6, 1), 2);
+  assert.equal(neighbourKey(tl, 6, -1), 0);
+  assert.equal(neighbourKey(tl, 12, 1), -1);
+  assert.equal(neighbourKey(tl, 0, -1), -1);
+  assert.equal(neighbourKey(tl, 7, -1), 1);
+});
+
+test("auto timing keeps slid end keys where they are", () => {
+  const tl = normalizeTimeline({
+    keys: [keyFrom(A.position, A.target, 0.1), keyFrom([0, 1.8, 5], [0, 1.3, 0], 0.2), keyFrom(B.position, B.target, 0.8)],
+  });
+  const even = autoTime(tl);
+  assert.equal(even.keys[0].t, 0.1);
+  assert.ok(Math.abs(even.keys[2].t - 0.8) < 1e-12);
+  assert.ok(even.keys[1].t > 0.1 && even.keys[1].t < 0.8);
 });
