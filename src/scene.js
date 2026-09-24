@@ -177,6 +177,11 @@ export const renderScale = (quality = 2) =>
 // that asked it to draw. See `startLoop`.
 const HEARTBEAT_MS = 1000;
 const HEARTBEAT_FOR_MS = 15000;
+// During a drag every shadow map is redrawn every other frame, and a map's
+// cost is its pixel count: a 1024 map drawn at 512 is a quarter of the work.
+// The shadow is softer while the piece moves and sharp again the moment it is
+// let go, which is when anyone judges it.
+const DRAG_SHADOW_SIZE = 512;
 // How long an asked-for frame may wait on the browser before a timer draws it.
 const KICK_MS = 50;
 // The longest a rebuilt booth's old group waits on a load before it is
@@ -598,6 +603,34 @@ export class BoothScene {
     this.shadowsOwed = false;
     this.renderer.shadowMap.needsUpdate = true;
   }
+  /**
+   * Smaller shadow maps for the length of a drag, full size after it. The
+   * loop calls this when a drag starts or ends, so no gesture handler has to
+   * remember it. A map is reallocated at its new size only when it is thrown
+   * away, hence the dispose; the full size is kept on the light so a rebuild
+   * mid-drag (which makes new lights at full size) is left alone.
+   */
+  dragShadowMaps(small) {
+    this.smallShadows = small;
+    this.scene.traverse((o) => {
+      if (!o.isLight || !o.castShadow || !o.shadow) return;
+      const size = o.shadow.mapSize;
+      if (small) {
+        if (size.x <= DRAG_SHADOW_SIZE || o.userData.fullShadow) return;
+        o.userData.fullShadow = size.x;
+        size.set(DRAG_SHADOW_SIZE, DRAG_SHADOW_SIZE);
+      } else {
+        const full = o.userData.fullShadow;
+        if (!full) return;
+        delete o.userData.fullShadow;
+        size.set(full, full);
+      }
+      o.shadow.map?.dispose();
+      o.shadow.map = null;
+    });
+    this.renderer.shadowMap.needsUpdate = true;
+    this.invalidate(2);
+  }
   /** Apply the most recent pointer move, if one arrived since the last frame. */
   flushDrag() {
     const e = this.pendingMove;
@@ -698,6 +731,7 @@ export class BoothScene {
   tick(now) {
     const moved = !!this.pendingMove;
     this.flushDrag();
+    if (!!this.drag !== !!this.smallShadows) this.dragShadowMaps(!!this.drag);
     if (this.shadowsOwed && (!moved || !this.drag)) {
       this.dragShadowSkip = true;
       this.touchShadows();

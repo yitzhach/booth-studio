@@ -2,7 +2,7 @@
 // decoration. The geometry needs a GPU; these do not.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PEOPLE, DEFAULT_PERSON, MAX_PEOPLE, MIN_HEIGHT, MAX_HEIGHT, personHeight, resolvePerson, newPerson } from "../src/people.js";
+import { PEOPLE, DEFAULT_PERSON, MAX_PEOPLE, MIN_HEIGHT, MAX_HEIGHT, personHeight, resolvePerson, newPerson, personName } from "../src/people.js";
 import { blankProject, validateProject } from "../src/model.js";
 
 test("the defaults are the ones asked for: 5'6\" and 6'0\"", () => {
@@ -35,7 +35,7 @@ test("a project carrying figures still validates, and a broken one does not", ()
   assert.doesNotThrow(() => validateProject(p));
 
   for (const broken of [
-    { ...newPerson("woman", "a"), kind: "child" },
+    { ...newPerson("woman", "a"), kind: "robot" },
     { ...newPerson("woman", "a"), height: 200 },
     { ...newPerson("woman", "a"), height: "tall" },
     { ...newPerson("woman", "a"), x: 1e6 },
@@ -88,9 +88,24 @@ test("a cut-out maps the figure's own box, not the picture's margin", async () =
     // v runs up: the soles are the low v, the top of the hair the high one.
     assert.equal(v0, 1 - (box[3] + 1) / h);
     assert.equal(v1, 1 - box[1] / h);
-    // A figure far wider than a quarter of its height would be a stretched one.
+    // A standing figure far wider than a quarter of its height would be a
+    // stretched one. The pair is two of them; the wheelchair user's chair
+    // runs front to back about as far as they sit tall.
     const aspect = cutoutAspect(kind);
-    assert.ok(aspect > 0.2 && aspect < 0.35, `${kind} is ${aspect.toFixed(3)} wide per unit of height`);
+    const [lo, hi] = { group: [0.3, 0.45], wheelchair: [0.6, 0.8] }[kind] || [0.2, 0.35];
+    assert.ok(aspect > lo && aspect < hi, `${kind} is ${aspect.toFixed(3)} wide per unit of height`);
     assert.equal(PEOPLE[kind].cutout.file, `assets/people/${kind}.png`);
   }
 });
+
+test("child, pair and wheelchair user: their heights, names, and a backup that carries them loads", () => {
+  assert.equal(personHeight("child"), 48);
+  assert.equal(personHeight("group"), 70);
+  assert.equal(personHeight("wheelchair"), 52);
+  assert.equal(personName("wheelchair"), "Wheelchair user");
+  assert.equal(personName("robot"), "Woman", "an unknown kind is named as what it draws as");
+  const p = blankProject();
+  p.booth.people = ["child", "group", "wheelchair"].map((k, i) => newPerson(k, "p" + i));
+  assert.doesNotThrow(() => validateProject(p));
+});
+

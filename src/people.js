@@ -35,7 +35,29 @@ export const PEOPLE = {
     height: 72,
     cutout: { file: "assets/people/man.png", size: [750, 1827], box: [152, 28, 586, 1764] },
   },
+  // Three more kinds, asked for 2026-09-24. Their pictures are plain black
+  // silhouettes drawn for the app (sources in `tools/people/*.svg`), in the
+  // man's style, until the owner supplies better ones. A kind's `height` is
+  // the top of its tallest head: for the pair, the taller of the two; for the
+  // wheelchair user, seated.
+  child: {
+    label: "Child · 4′0″",
+    height: 48,
+    cutout: { file: "assets/people/child.png", size: [600, 1400], box: [120, 45, 479, 1351] },
+  },
+  group: {
+    label: "Pair · 5′10″",
+    height: 70,
+    cutout: { file: "assets/people/group.png", size: [1000, 1830], box: [150, 35, 825, 1809] },
+  },
+  wheelchair: {
+    label: "Wheelchair user · 4′4″",
+    height: 52,
+    cutout: { file: "assets/people/wheelchair.png", size: [1100, 1300], box: [150, 28, 1009, 1249] },
+  },
 };
+/** What a figure is called in its row and its toast: the label's first part. */
+export const personName = (kind) => PEOPLE[resolvePerson(kind)].label.split(" · ")[0];
 export const DEFAULT_PERSON = "woman";
 export const MAX_PEOPLE = 6;
 export const MIN_HEIGHT = 48;
@@ -58,6 +80,9 @@ const HIP = 0.5;
 const PALETTE = {
   woman: "#5f636b",
   man: "#53575f",
+  child: "#62666e",
+  group: "#585c64",
+  wheelchair: "#5a5e66",
 };
 
 /**
@@ -160,6 +185,28 @@ export function makePerson(kind = DEFAULT_PERSON, inches = 0, texture = null) {
     roughness: 0.85,
     metalness: 0,
   });
+  if (id === "group") {
+    // Two figures a little apart, the second 91% of the first — the pair in
+    // the picture, as mannequins.
+    const pair = [
+      [-9 * IN, height, "man"],
+      [9 * IN, height * 0.91, "woman"],
+    ];
+    for (const [x, h, one] of pair) {
+      const figure = mannequin(one, h, skin, HEAD);
+      figure.position.x = x;
+      group.add(figure);
+    }
+  } else if (id === "wheelchair") group.add(seated(height, skin));
+  // A child's head is a bigger share of its height: about a sixth at four.
+  else group.add(...mannequin(id, height, skin, id === "child" ? 0.16 : HEAD).children);
+  group.userData.person = true;
+  return group;
+}
+
+/** One standing mannequin, feet at the origin. */
+function mannequin(id, height, skin, headShare) {
+  const group = new T.Group();
   const add = (geometry, x, y, z) => {
     const mesh = new T.Mesh(geometry, skin);
     mesh.position.set(x, y, z);
@@ -176,7 +223,7 @@ export function makePerson(kind = DEFAULT_PERSON, inches = 0, texture = null) {
   };
   const shoulders = height * (id === "man" ? 0.125 : 0.112);
   const hips = height * (id === "man" ? 0.096 : 0.105);
-  const headRadius = (height * HEAD) / 2;
+  const headRadius = (height * headShare) / 2;
 
   add(new T.SphereGeometry(headRadius, 18, 14), 0, height - headRadius, 0);
   // Neck.
@@ -216,7 +263,48 @@ export function makePerson(kind = DEFAULT_PERSON, inches = 0, texture = null) {
     arm.rotation.z = side * -0.06;
     arm.scale.z = 0.9;
   }
-  group.userData.person = true;
+  return group;
+}
+
+/**
+ * A wheelchair user, as a mannequin: seated, facing +Z with the chair's big
+ * wheels either side and its front casters under the footrest. `height` is
+ * the top of the head, seated. The chair is the usual adult one — about 25″
+ * wide, a 19″ seat, 24″ wheels — scaled with the figure so a typed height
+ * keeps the two in proportion.
+ */
+function seated(height, skin) {
+  const group = new T.Group();
+  const k = height / (52 * IN);
+  const add = (geometry, x, y, z, material = skin) => {
+    const mesh = new T.Mesh(geometry, material);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = true;
+    mesh.userData.person = true;
+    group.add(mesh);
+    return mesh;
+  };
+  const frame = new T.MeshStandardMaterial({ color: "#3b3f45", roughness: 0.5, metalness: 0.4 });
+  const i = IN;
+  // Seat and back.
+  add(new T.BoxGeometry(17 * i, 1.5 * i, 17 * i), 0, 19 * i, 0, frame);
+  add(new T.BoxGeometry(17 * i, 16 * i, 1 * i), 0, 28 * i, -8.5 * i, frame);
+  for (const side of [-1, 1]) {
+    const wheel = add(new T.TorusGeometry(11.5 * i, 0.9 * i, 8, 32), side * 11.5 * i, 12 * i, -4 * i, frame);
+    wheel.rotation.y = Math.PI / 2;
+    add(new T.CylinderGeometry(2.5 * i, 2.5 * i, 1.2 * i, 16), side * 7 * i, 2.5 * i, 12 * i, frame).rotation.z = Math.PI / 2;
+    // Thigh forward along the seat, shin down to the footrest.
+    add(new T.CylinderGeometry(2.6 * i, 2.3 * i, 16 * i, 12), side * 3.5 * i, 22 * i, 3 * i).rotation.x = Math.PI / 2;
+    add(new T.CylinderGeometry(2 * i, 1.7 * i, 17 * i, 12), side * 3.5 * i, 13 * i, 11 * i);
+    // Arms resting on the armrests.
+    add(new T.CylinderGeometry(1.5 * i, 1.3 * i, 12 * i, 10), side * 8.5 * i, 31 * i, -2 * i);
+  }
+  group.scale.setScalar(k);
+  // Torso and head, sitting upright.
+  const torso = add(new T.CylinderGeometry(6.5 * i, 6 * i, 20 * i, 18), 0, 31 * i, -3 * i);
+  torso.scale.z = 0.55;
+  add(new T.CylinderGeometry(1.8 * i, 2 * i, 3 * i, 12), 0, 42.5 * i, -3 * i);
+  add(new T.SphereGeometry(4.5 * i, 18, 14), 0, 47.5 * i, -3 * i);
   return group;
 }
 

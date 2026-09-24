@@ -22,6 +22,15 @@ export const TIERS = {
 };
 export const DEFAULT_TIER = "pro";
 export const TIER_KEY = "booth.tier";
+/**
+ * Whether a browser can stay on Lite. **Off** at the owner's word
+ * (2026-09-24: "let's unlock Pro for now, I can add a lock later"): every
+ * page load starts on Pro whatever the browser remembered, so nobody who
+ * once tried the Plan switch is stuck behind a lock. The switch still works
+ * for the rest of that visit, to see what Lite would show. Turning this on is
+ * the one line the lock needs.
+ */
+export const LOCKS_ON = false;
 
 /**
  * Every feature that is Pro, with the name the lock badge and the toast use.
@@ -97,7 +106,8 @@ export function can(tier, feature) {
 export const actionFeature = (action) => PRO_ACTIONS[action] || null;
 
 /** The tier this browser remembered, read defensively. */
-export function readTier(storage = globalThis.localStorage) {
+export function readTier(storage = globalThis.localStorage, locks = LOCKS_ON) {
+  if (!locks) return "pro";
   try {
     return resolveTier(storage?.getItem(TIER_KEY));
   } catch {

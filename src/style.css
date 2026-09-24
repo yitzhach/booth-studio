@@ -2007,3 +2007,22 @@ dialog li {
 .hall-map-wrap [data-hall-booth]:focus rect {stroke:#2f7de1;}
 .hall-totals {font-size:12px;color:var(--muted);margin:8px 0 0;}
 .hall-booth {border:1px solid #2f5f9e;border-radius:10px;padding:10px 12px;background:#17202b;}
+
+/* Tool shortcuts: the name beside a search result, and Help's table. */
+#tool-results li strong kbd, .shortcut-help kbd {display:inline-block;margin-left:8px;padding:0 6px;border:1px solid #3a4652;border-radius:4px;background:#11151a;color:#9fc3ea;font:600 11px/18px ui-monospace, SFMono-Regular, Menlo, monospace;vertical-align:1px;}
+.shortcut-help kbd {margin:0 8px 0 0;min-width:38px;text-align:center;}
+.shortcut-help {display:grid;grid-template-columns:repeat(auto-fill, minmax(210px, 1fr));gap:4px 18px;max-height:46vh;overflow-y:auto;}
+.shortcut-help h4 {margin:8px 0 4px;font-size:12px;color:var(--muted);}
+.shortcut-help ul {margin:0;padding:0;list-style:none;font-size:12px;}
+.shortcut-help li {padding:2px 0;}
+/* The phone's search button: the header box is out of a thumb's reach, so a
+   button in the viewport's lower right focuses it. Phones only. */
+.find-tool {display:none;}
+@media (max-width: 700px) {
+  .find-tool {display:flex;align-items:center;justify-content:center;position:absolute;right:12px;bottom:64px;z-index:6;width:44px;height:44px;padding:0;border-radius:50%;border:1px solid var(--line);background:#1b2128;color:#eef1f4;box-shadow:0 6px 16px rgba(0,0,0,.4);}
+  .find-tool svg {width:20px;height:20px;}
+  .find-tool span {display:none;}
+}
+/* Five kinds of figure: the add buttons wrap rather than push the panel sideways. */
+.button-row.people-add {flex-wrap:wrap;}
+.button-row.people-add button {flex:1 1 30%;min-width:0;}

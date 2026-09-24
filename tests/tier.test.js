@@ -1,7 +1,7 @@
 // Lite and Pro: one table, one question. See src/tier.js.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_TIER, PRO_ACTIONS, PRO_FEATURES, TIER_KEY, actionFeature, can, readTier, resolveTier, writeTier } from "../src/tier.js";
+import { DEFAULT_TIER, LOCKS_ON, PRO_ACTIONS, PRO_FEATURES, TIER_KEY, actionFeature, can, readTier, resolveTier, writeTier } from "../src/tier.js";
 
 const memory = (initial = {}) => {
   const data = { ...initial };
@@ -39,10 +39,17 @@ test("the tier is remembered per browser, and storage failing costs only the mem
   const store = memory();
   assert.equal(writeTier("lite", store), true);
   assert.equal(store.data[TIER_KEY], "lite");
-  assert.equal(readTier(store), "lite");
+  assert.equal(readTier(store, true), "lite");
   writeTier("bogus", store);
-  assert.equal(readTier(store), "pro", "an unknown tier is written as the default");
+  assert.equal(readTier(store, true), "pro", "an unknown tier is written as the default");
   const broken = { getItem() { throw new Error("denied"); }, setItem() { throw new Error("denied"); } };
-  assert.equal(readTier(broken), "pro");
+  assert.equal(readTier(broken, true), "pro");
   assert.equal(writeTier("lite", broken), false);
+});
+
+test("with the locks off, a browser that remembered Lite opens on Pro", () => {
+  const store = memory();
+  writeTier("lite", store);
+  assert.equal(LOCKS_ON, false, "unlocked at the owner's word, 2026-09-24");
+  assert.equal(readTier(store), "pro");
 });

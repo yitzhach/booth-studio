@@ -72,6 +72,35 @@ try {
   await page.waitForTimeout(100);
   assert.ok(await page.locator('.inspector-tabs [data-tab="export"].active').count(), 'Export opened');
 
+  // Every shortcut names a control the index really has, and typing one puts
+  // that control first, with its shortcut shown beside it.
+  const missing = await page.evaluate(async () => {
+    const { SHORTCUTS, isShortcutFor } = await import('/src/toolsearch.js');
+    const index = window.__booth.toolIndex();
+    return Object.entries(SHORTCUTS).filter(([, sc]) => !index.some((x) => isShortcutFor(sc, x))).map(([n]) => n);
+  });
+  assert.deepEqual(missing, [], 'every shortcut finds its control');
+  await page.keyboard.press('Control+k');
+  await page.keyboard.type('amb');
+  assert.match(await page.locator('#tool-results li').first().textContent(), /Ambient illumination\s*amb/, 'the shortcut ranks its tool first and shows its name');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(100);
+  assert.equal(await page.evaluate(() => document.activeElement.dataset.field), 'ambient', 'amb opens the ambient slider');
+
+  // Help lists them.
+  await page.click('[data-action="help"]');
+  assert.ok(await page.locator('.shortcut-help kbd', { hasText: 'amb' }).count(), 'Help lists the shortcuts');
+  await page.click('[data-action="close-help"]');
+
+  // On a phone the header box is out of reach; a button in the viewport focuses it.
+  assert.ok(await page.locator('.find-tool').isHidden(), 'no search button on a desktop');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(300);
+  await page.click('.find-tool');
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'tool-search', 'the phone button focuses the box');
+  await page.keyboard.press('Escape');
+  await page.setViewportSize({ width: 1280, height: 900 });
+
   const after = await page.evaluate(() => JSON.stringify({ ...window.__booth.project }));
   assert.equal(after, before, 'searching changed nothing in the booth');
   assert.deepEqual(errors, [], 'no page errors');

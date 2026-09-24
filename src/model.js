@@ -800,7 +800,7 @@ export function validateProject(p) {
     if (!Array.isArray(p.booth.people) || p.booth.people.length > 6) fail();
     for (const person of p.booth.people) {
       if (!person || typeof person !== "object") fail();
-      if (!["woman", "man"].includes(person.kind)) fail();
+      if (!["woman", "man", "child", "group", "wheelchair"].includes(person.kind)) fail();
       if (!finite(person.height, 48, 84)) fail();
       if (!finite(person.x, -600, 600) || !finite(person.z, -600, 600)) fail();
       if (person.rotation !== undefined && !finite(person.rotation, -360, 360)) fail();

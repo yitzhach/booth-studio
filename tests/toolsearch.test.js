@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { dedupe, fold, rankTools } from "../src/toolsearch.js";
+import { SHORTCUTS, dedupe, fold, rankTools, shortcutOf } from "../src/toolsearch.js";
 
 const entries = [
   { label: "Target height", where: "Lighting · Spotlights" },
@@ -42,4 +42,31 @@ test("the list is capped", () => {
 test("the same label twice in one place is one entry", () => {
   const list = dedupe([...entries, { label: "height", where: "Layout · Footprint" }, { label: " ", where: "x" }]);
   assert.equal(list.length, entries.length);
+});
+
+test("a shortcut typed exactly puts its tool first, and the rest still follow", () => {
+  const entries = [
+    { label: "Wall gap", where: "Artwork · Dimensions" },
+    { label: "Gap between booths", where: "Layout · Booth row" },
+    { label: "Ambient illumination", where: "Lighting" },
+  ];
+  assert.equal(rankTools(entries, "amb")[0].label, "Ambient illumination");
+  assert.equal(rankTools(entries, " AMB ")[0].label, "Ambient illumination", "case and spaces do not matter");
+  const gap = rankTools(entries, "gap");
+  assert.equal(gap[0].label, "Wall gap");
+  assert.equal(gap.length, 2, "the other gap is still listed");
+  assert.equal(shortcutOf(entries[2]), "amb");
+  assert.equal(shortcutOf({ label: "Nothing", where: "Nowhere" }), "");
+  assert.equal(rankTools(entries, "constructor").length, 0, "an object's own keys are not shortcuts");
+});
+
+test("shortcuts are short, lower case, and no two name the same control", () => {
+  const seen = new Set();
+  for (const [name, sc] of Object.entries(SHORTCUTS)) {
+    assert.match(name, /^[a-z0-9]{2,5}$/, name);
+    assert.ok(sc.label && sc.where && sc.group, name);
+    const key = fold(sc.label) + "|" + fold(sc.where);
+    assert.ok(!seen.has(key), `${name} names a control another shortcut already does`);
+    seen.add(key);
+  }
 });

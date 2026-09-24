@@ -38,6 +38,42 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-24, after the roadmap: tool shortcuts, three more people, a
+  smaller drag shadow, and Pro unlocked. On `claude/blissful-knuth-jonl0a`.**
+  The owner's list from Next, built together while they tested the live site.
+  1. **Tool shortcuts.** `SHORTCUTS` in `src/toolsearch.js` gives about sixty
+     tools a short name (`amb` ambient, `wh` wall height, `png` export PNG,
+     `pack` the show pack …). Typed exactly into the search box, a shortcut
+     puts its tool first; everything else the words match follows, so a
+     shortcut that is also a word (`gap`) hides nothing. The result list shows
+     each tool's shortcut beside it, and Help lists them all, grouped. **The
+     names are a first draft for the owner to edit** — change the table, and
+     view-toolsearch fails if a name no longer finds a real control. `/` and
+     Ctrl/⌘ K already jumped to the box; the tooltip now says so. On a phone
+     the header box is out of thumb's reach, so a round search button sits in
+     the viewport's lower right (phones only) and focuses it. **Voice was not
+     built:** the browser's speech recognition is missing in some browsers and
+     in Chrome sends the audio to Google, which the local-first rule forbids
+     without the owner's say-so. The phone keyboard's own dictation key
+     already types into the box.
+  2. **People: child (4′0″), pair (5′10″) and wheelchair user (4′4″
+     seated).** Layout → People for scale → Add child / Add pair / Add
+     wheelchair user. Their pictures are plain black silhouettes drawn for the
+     app in the man's style (`tools/people/*.svg`, rendered to
+     `public/assets/people/*.png`, boxes measured off the alpha), standing in
+     until the owner supplies better ones. Without the pictures a child is the
+     mannequin with a larger head, the pair is two mannequins, and the
+     wheelchair user is a seated mannequin in a chair. `validateProject`
+     accepts the three new kinds; an older backup is unaffected.
+  3. **Shadow maps are 512 during a drag** (`dragShadowMaps` in scene.js,
+     called from the loop when a drag starts or ends): a quarter of the depth
+     pass on the maps that are 1024. The shadow is softer while a piece
+     moves and sharp again when it is let go. This was the lever named in
+     Next for any stutter still left.
+  4. **Pro is unlocked for everyone** (`LOCKS_ON = false` in `src/tier.js`):
+     every page load starts on Pro even in a browser that once chose Lite.
+     The Plan switch still shows Lite for the rest of that visit. Turning the
+     lock on later is that one line.
 - **2026-09-24, roadmap batch E: the hall planner, and the power and
   rentals sheet. Pushed to `main`.** Both Pro (`hall`, `power`).
   1. **The hall planner** — for a promoter or an event company selling a
@@ -811,8 +847,9 @@ Extend it; do not rebuild it.
    silhouette against a dark wall? Is mirroring on facing welcome, or should
    the picture never flip? A cut-out seen from high overhead (Plan view) is a
    picture lying at an angle; if that reads wrong, Plan could draw a floor
-   marker instead. More kinds (a child, a group, a wheelchair user) are a
-   picture each plus a `PEOPLE` entry with its measured box.
+   marker instead. The child, the pair and the wheelchair user (see Now)
+   are silhouettes drawn here: do they read, and does the owner have better
+   pictures? A new picture needs its box re-measured in `PEOPLE`.
 1. **The roadmap, built 2026-09-24 — now it wants eyes.** Base, A, B, C, D
    and E are all on `main` (see Now). Every tool is tested in a real
    browser here; none has been used on the real machine or a real phone.
@@ -850,23 +887,13 @@ Extend it; do not rebuild it.
    the panels' own headings, labels and buttons, so a tool called something
    other than what people call it is a label worth renaming, or a synonym
    worth adding in `rankTools`. Is a slight stutter still there with shadows
-   refreshed every other frame? Past this, the next lever is a smaller shadow
-   map during a drag. Three labels are shared by several controls in one
+   refreshed every other frame? The smaller shadow map during a drag is now built
+   (see Now); past it, fast edit is the answer. Three labels are shared by several controls in one
    section (each perimeter wall's Width and Height, under Display walls): the
    search lists one of each and opens the first.
-1. **Tool names as search shortcuts, and a faster way into search.**
-   *Asked for 2026-09-24, not built.* The owner wants every tool to have a
-   short, agreed name, typed into the search box as a shortcut straight to
-   that tool, to save time. The names are still to be agreed with the owner
-   before any code: a short table (name → the control it opens) that
-   `rankTools` treats as an exact match, ranked first, and that Help lists.
-   Keyboard: `/` already focuses the search box (see its tooltip). Still to
-   do: Ctrl/⌘+K as well, because that is the key most apps use and people
-   will try it first. Mobile has no keyboard shortcut. Ideas, owner undecided:
-   a search button that stays in reach on the phone, or voice input through
-   the browser's own speech recognition. Speech recognition is not available
-   in every browser, and some browsers send the audio to a server, so check
-   that against the local-first rule before building it.
+1. **Tool shortcuts: the owner's names.** *Built 2026-09-24, see Now.* The
+   sixty names in `SHORTCUTS` are a draft; the owner renames, adds or drops
+   any. Voice search is undecided (see Now for why it was not built).
 1. **The 2026-09-23 work on the real machine, and the round that answered
    it.** *Answered 2026-09-23 — see the third-round bullet in Now; kept here
    for its reasoning.* The first report is in: **speed "much better"**, and five asks,

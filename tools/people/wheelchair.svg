@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="1300" viewBox="0 0 1100 1300">
+<defs><mask id="m"><rect width="1100" height="1300" fill="#fff"/>
+<circle cx="720" cy="960" r="250" fill="#000"/></mask></defs>
+<g fill="#000">
+<ellipse cx="560" cy="140" rx="95" ry="110"/>
+<path d="M470 120 Q480 30 565 28 Q650 32 660 120 Q640 70 565 72 Q500 75 470 120Z"/>
+<path d="M525 240 L600 240 L605 300 L520 300Z"/>
+<path d="M470 300 Q560 270 660 305 L700 560 Q705 660 690 720 L470 720 Q440 600 450 480Z"/>
+<path d="M470 330 Q420 360 415 460 L400 610 Q398 650 440 655 L560 640 Q590 630 580 600 Q570 585 540 588 L470 595 L490 460Z"/>
+<path d="M260 640 L690 640 Q720 680 700 760 L300 760 Q255 755 255 700Z"/>
+<path d="M255 690 L350 690 L360 1090 L270 1090Z"/>
+<path d="M160 1120 Q160 1080 250 1080 L370 1085 L372 1135 L170 1140Z"/>
+<rect x="690" y="330" width="40" height="470" rx="14"/>
+<path d="M730 330 L790 300 L805 320 L740 360Z"/>
+<rect x="240" y="760" width="500" height="36" rx="10"/>
+<rect x="330" y="790" width="26" height="340" rx="10"/>
+<rect x="150" y="1128" width="240" height="22" rx="8"/>
+<circle cx="720" cy="960" r="290" mask="url(#m)"/>
+<rect x="440" y="945" width="560" height="30" rx="10" transform="rotate(0 720 960)"/>
+<rect x="705" y="680" width="30" height="560" rx="10"/>
+<rect x="440" y="945" width="560" height="30" rx="10" transform="rotate(45 720 960)"/>
+<rect x="440" y="945" width="560" height="30" rx="10" transform="rotate(-45 720 960)"/>
+<circle cx="720" cy="960" r="45"/>
+<circle cx="345" cy="1195" r="55"/>
+<rect x="332" y="1100" width="26" height="100"/>
+</g></svg>

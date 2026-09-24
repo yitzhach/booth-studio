@@ -218,6 +218,39 @@ try {
     'and the rebuilt figure is still standing where it was put');
   assert.equal(await figureCount(), 2, 'with no second copy of it left behind');
 
+  // ---- Smaller shadow maps for the length of a drag -----------------------
+  const sizes = () => page.evaluate(() => {
+    const out = [];
+    window.__booth.scene.scene.traverse((o) => o.isLight && o.castShadow && out.push(o.shadow.mapSize.x));
+    return out;
+  });
+  const full = await sizes();
+  assert.ok(full.some((x) => x > 512), `some shadow map is bigger than 512 (${full})`);
+  await page.evaluate(() => { window.__booth.scene.drag = { pretend: true }; window.__booth.scene.invalidate(); });
+  await page.waitForTimeout(200);
+  assert.ok((await sizes()).every((x) => x <= 512), 'every shadow map is 512 during a drag');
+  await page.evaluate(() => { window.__booth.scene.drag = null; window.__booth.scene.invalidate(); });
+  await page.waitForTimeout(200);
+  assert.deepEqual(await sizes(), full, 'and back to full size after it');
+
+  // ---- Child, pair, wheelchair user -------------------------------------
+  // Each is its own picture at its own height: the top of the plane is the
+  // typed height, whatever the picture's width.
+  await page.click('[data-tab="layout"]');
+  for (const a of ['add-child', 'add-pair', 'add-wheelchair']) await page.click(`[data-action="${a}"]`);
+  const kinds = await page.evaluate(() => window.__booth.project.booth.people.slice(-3).map((x) => [x.kind, x.height]));
+  assert.deepEqual(kinds, [['child', 48], ['group', 70], ['wheelchair', 52]], 'three new kinds at their default heights');
+  await page.waitForFunction(() => {
+    const frames = Object.values(window.__booth.scene.personFrames);
+    return frames.length === 5 && frames.every((g) => g.children[0]?.userData.cutout);
+  }, null, { timeout: 15000 });
+  const heights = await page.evaluate(() => {
+    const ids = window.__booth.project.booth.people.slice(-3).map((x) => x.id);
+    return ids.map((id) => window.__booth.scene.personFrames[id].children[0].geometry.parameters.height);
+  });
+  [48, 70, 52].forEach((h, i) => assert.ok(Math.abs(heights[i] - h * 0.0254) < 0.005, `new kind ${i} is ${h}″ tall`));
+  assert.match(await page.textContent('.person-row:last-child'), /Wheelchair user 5/, 'its row is named for its kind');
+
   // ---- Without the pictures ----------------------------------------------
   // The app must run with `public/assets` empty: a missing picture leaves the
   // mannequin, and says nothing about it.
@@ -233,7 +266,7 @@ try {
     parts: g.children.length,
     cutout: g.children.some((m) => m.userData.cutout),
   })));
-  assert.ok(fallback.length && fallback.every((f) => f.parts > 1 && !f.cutout), 'with no picture each figure is the mannequin');
+  assert.ok(fallback.length === 5 && fallback.every((f) => f.parts >= 1 && !f.cutout), 'with no picture each figure is the mannequin');
 
   assert.deepEqual(errors, [], 'no page errors');
   console.log('PASS people for scale at real heights, cut-out pictures facing the camera with the mannequin as fallback, hide switch, placement and scale sliders, and spotlight housings hidden indoors with the rail kept.');

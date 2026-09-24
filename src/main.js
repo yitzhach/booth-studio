@@ -10,7 +10,7 @@ import { FRAMES, DEFAULT_FRAME, CUSTOM_FRAME, FRAME_MIN, FRAME_MAX, STILL_SIZES,
 import { SHADOW_FIELD, SHADOW_KINDS, SHADOW_MAX, globalAngle, normalAngle, shadowSpec } from "./dropshadow.js";
 import { MAX_SWATCHES, isColor, readPalette, savePalette, removeSwatch, rememberColor, previousColor } from "./swatches.js";
 import { applyImageEdits, DEFAULT_IMAGE_EDITS, normalizeImageEdits } from "./image-edit.js";
-import { PEOPLE, MAX_PEOPLE, MIN_HEIGHT, MAX_HEIGHT, newPerson, personHeight } from "./people.js";
+import { PEOPLE, MAX_PEOPLE, MIN_HEIGHT, MAX_HEIGHT, newPerson, personHeight, personName } from "./people.js";
 import { FLARE_SOURCES, DEFAULT_FLARE_SOURCE, OVERHEAD } from "./flare.js";
 import {
   DEFAULT_SPACE, MAX_GAP, MAX_SLOTS, MIN_SPACE, MAX_SPACE,
@@ -76,6 +76,7 @@ import {
   UserRound,
   SlidersHorizontal,
   Footprints,
+  Search,
   Bookmark,
   Tags,
   Magnet,
@@ -160,7 +161,7 @@ import { FOOTPRINTS, SHOWS, STARTERS, fromTemplate, quickStart, templateOf } fro
 import { PhotoEditor } from "./photo.js";
 import { hangingGuide } from "./guide.js";
 import { showPack } from "./showpack.js";
-import { dedupe, fold, rankTools } from "./toolsearch.js";
+import { SHORTCUTS, dedupe, fold, rankTools, shortcutOf } from "./toolsearch.js";
 import { PRO_FEATURES, TIERS, actionFeature, can, readTier, resolveTier, writeTier } from "./tier.js";
 async function boot() {
   const icons = {
@@ -208,6 +209,7 @@ async function boot() {
     UserRound,
     SlidersHorizontal,
     Footprints,
+    Search,
     Bookmark,
     Tags,
     Magnet,
@@ -372,8 +374,8 @@ async function boot() {
   tagAssetRoles(p);
   selected = p.art[0]?.id;
   document.querySelector("#app").innerHTML =
-    `<header><a class="brand" href="#" aria-label="Booth Studio">${icon("box")}<span>Artist OS</span></a><span class="app-badge">Booth Studio</span><div class="tool-search"><span aria-hidden="true">⌕</span><input id="tool-search" type="search" placeholder="Find a tool…" aria-label="Find a tool" title="Find a tool by name · press / to jump here" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-controls="tool-results" aria-expanded="false"/><ul id="tool-results" role="listbox" aria-label="Matching tools" hidden></ul></div><div class="project"><input id="project-name" aria-label="Project name" maxlength="120" value="${e(p.name)}"/>${icon("chevron-down")}</div><div class="save-status" id="save-status" role="status">Opening…</div>${btn("help", "Help", "help-circle", "icon-only")}<div class="avatar">IA</div></header>
-<div class="workspace"><aside class="library" id="library"></aside><main class="editor"><div class="toolbar"><div class="toolgroup">${btn("select", "Select", "mouse-pointer-2", "active")}${btn("move", "Move", "move")}${btn("snap", "Snap 1″", "grid-2x2", "active")}${btn("measure", "Measure", "ruler")}${btn("walk", "Walk", "footprints")}${btn("draw-box", "Box", "square")}${btn("draft", "Fast edit", "zap")}${btn("draft-lock", "Fast edit: follows the gesture", "lock", "draft-lock")}</div><div class="toolgroup">${btn("undo", "Undo", "undo-2", "icon-only")}${btn("redo", "Redo", "redo-2", "icon-only")}</div><div class="mode-switch"><button data-action="mode-3d">3D booth</button><button data-action="mode-photo">Photo</button></div>${btn("export-tab", "Export", "download", "export-top")}</div><div class="viewport"><div id="scene"></div><div id="photo" hidden></div><div class="scene-label"><span class="eyebrow" id="mode-label">MEASURED WORKSPACE</span><strong id="scene-title"></strong><span id="scene-subtitle"></span></div><div id="photo-empty" hidden><div>${icon("image-plus")}<h2>Start with your booth shot</h2><p>Add artwork and adjust its four corners to match the wall perspective.</p>${btn("upload-photo", "Upload booth photo", "plus", "primary")}</div></div><div class="walk-pad" hidden><button data-walk="forward" aria-label="Step forward">▲</button><button data-walk="left" aria-label="Step left">◀</button><button data-walk="back" aria-label="Step back">▼</button><button data-walk="right" aria-label="Step right">▶</button><button data-action="walk" class="walk-exit" aria-label="Stop walking">Done</button></div><div class="viewport-bottom"><div class="view-switch" id="view-switch"><button data-view="perspective" class="active">Perspective</button><button data-view="back">Back</button><button data-view="left">Left</button><button data-view="right">Right</button><button data-view="plan">Plan</button></div><label class="saved-view-pick" hidden><span>View</span><select id="saved-view" aria-label="Go to a saved view"></select></label><div class="zoom-controls"><span class="zoom-label">Zoom</span>${btn("zoom-out", "Zoom out", "minus", "icon-only")}${btn("zoom-in", "Zoom in", "plus", "icon-only")}${btn("reset-view", "Reset view", "rotate-ccw", "icon-only")}</div></div></div><div class="statusbar"><span id="gesture-hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</span><label class="preview-quality" title="Preview quality: how many pixels the viewport draws for each one on screen. Exports are never affected."><span>Preview</span><select id="quality-quick" aria-label="Preview quality"></select><output id="quality-now"></output></label><span id="selection-status"></span></div></main><aside class="inspector"><button class="sheet-toggle" data-action="sheet-toggle" aria-label="Fold the panel away" title="Fold the panel away"><span>Fold</span></button><div class="inspector-tabs">${["art", "layout", "show", "walls", "lighting", "video", "hall", "export"].map((t, i) => `<button data-tab="${t}">${icon(["image", "layout-panel-left", "building-2", "columns-2", "lightbulb", "video", "map", "download"][i])}<span>${["Artwork", "Layout", "Art show", "Walls", "Lighting", "Video", "Hall", "Export"][i]}</span></button>`).join("")}</div><div id="inspector-content"></div></aside></div><footer><span class="footer-brand">${icon("box")} BOOTH STUDIO <small>Prototype 01</small><small id="build-stamp" title="Version ${BUILD.version} · built ${BUILD.time} · commit ${BUILD.commit}">v${BUILD.version} · ${BUILD.short} UTC · ${BUILD.commit}</small></span><span>Your images. Your space. Your arrangement.</span><span id="network">Local workspace</span></footer><input type="file" id="art-input" accept="image/jpeg,image/png" multiple hidden/><input type="file" id="replace-input" accept="image/jpeg,image/png" hidden/><input type="file" id="photo-input" accept="image/jpeg,image/png" hidden/><input type="file" id="surround-input" accept="image/jpeg,image/png" hidden/><input type="file" id="ground-input" accept="image/jpeg,image/png" hidden/><input type="file" id="underlay-input" accept="image/jpeg,image/png" hidden/><input type="file" id="model-input" accept=".glb,model/gltf-binary" hidden/><input type="file" id="backup-input" accept=".json,.booth" hidden/><div id="toast" role="status"></div><dialog id="dialog"><div id="dialog-content"></div></dialog><dialog id="image-editor"><div id="image-editor-content"></div></dialog><dialog id="timeline-dialog" class="timeline-dialog"><div id="timeline-content"></div></dialog>`;
+    `<header><a class="brand" href="#" aria-label="Booth Studio">${icon("box")}<span>Artist OS</span></a><span class="app-badge">Booth Studio</span><div class="tool-search"><span aria-hidden="true">⌕</span><input id="tool-search" type="search" placeholder="Find a tool…" aria-label="Find a tool" title="Find a tool by name or shortcut · press / or Ctrl/⌘ K to jump here" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-controls="tool-results" aria-expanded="false"/><ul id="tool-results" role="listbox" aria-label="Matching tools" hidden></ul></div><div class="project"><input id="project-name" aria-label="Project name" maxlength="120" value="${e(p.name)}"/>${icon("chevron-down")}</div><div class="save-status" id="save-status" role="status">Opening…</div>${btn("help", "Help", "help-circle", "icon-only")}<div class="avatar">IA</div></header>
+<div class="workspace"><aside class="library" id="library"></aside><main class="editor"><div class="toolbar"><div class="toolgroup">${btn("select", "Select", "mouse-pointer-2", "active")}${btn("move", "Move", "move")}${btn("snap", "Snap 1″", "grid-2x2", "active")}${btn("measure", "Measure", "ruler")}${btn("walk", "Walk", "footprints")}${btn("draw-box", "Box", "square")}${btn("draft", "Fast edit", "zap")}${btn("draft-lock", "Fast edit: follows the gesture", "lock", "draft-lock")}</div><div class="toolgroup">${btn("undo", "Undo", "undo-2", "icon-only")}${btn("redo", "Redo", "redo-2", "icon-only")}</div><div class="mode-switch"><button data-action="mode-3d">3D booth</button><button data-action="mode-photo">Photo</button></div>${btn("export-tab", "Export", "download", "export-top")}</div><div class="viewport"><div id="scene"></div><div id="photo" hidden></div><div class="scene-label"><span class="eyebrow" id="mode-label">MEASURED WORKSPACE</span><strong id="scene-title"></strong><span id="scene-subtitle"></span></div><div id="photo-empty" hidden><div>${icon("image-plus")}<h2>Start with your booth shot</h2><p>Add artwork and adjust its four corners to match the wall perspective.</p>${btn("upload-photo", "Upload booth photo", "plus", "primary")}</div></div><button class="find-tool" data-action="find-tool" aria-label="Find a tool" title="Find a tool">${icon("search")}</button><div class="walk-pad" hidden><button data-walk="forward" aria-label="Step forward">▲</button><button data-walk="left" aria-label="Step left">◀</button><button data-walk="back" aria-label="Step back">▼</button><button data-walk="right" aria-label="Step right">▶</button><button data-action="walk" class="walk-exit" aria-label="Stop walking">Done</button></div><div class="viewport-bottom"><div class="view-switch" id="view-switch"><button data-view="perspective" class="active">Perspective</button><button data-view="back">Back</button><button data-view="left">Left</button><button data-view="right">Right</button><button data-view="plan">Plan</button></div><label class="saved-view-pick" hidden><span>View</span><select id="saved-view" aria-label="Go to a saved view"></select></label><div class="zoom-controls"><span class="zoom-label">Zoom</span>${btn("zoom-out", "Zoom out", "minus", "icon-only")}${btn("zoom-in", "Zoom in", "plus", "icon-only")}${btn("reset-view", "Reset view", "rotate-ccw", "icon-only")}</div></div></div><div class="statusbar"><span id="gesture-hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</span><label class="preview-quality" title="Preview quality: how many pixels the viewport draws for each one on screen. Exports are never affected."><span>Preview</span><select id="quality-quick" aria-label="Preview quality"></select><output id="quality-now"></output></label><span id="selection-status"></span></div></main><aside class="inspector"><button class="sheet-toggle" data-action="sheet-toggle" aria-label="Fold the panel away" title="Fold the panel away"><span>Fold</span></button><div class="inspector-tabs">${["art", "layout", "show", "walls", "lighting", "video", "hall", "export"].map((t, i) => `<button data-tab="${t}">${icon(["image", "layout-panel-left", "building-2", "columns-2", "lightbulb", "video", "map", "download"][i])}<span>${["Artwork", "Layout", "Art show", "Walls", "Lighting", "Video", "Hall", "Export"][i]}</span></button>`).join("")}</div><div id="inspector-content"></div></aside></div><footer><span class="footer-brand">${icon("box")} BOOTH STUDIO <small>Prototype 01</small><small id="build-stamp" title="Version ${BUILD.version} · built ${BUILD.time} · commit ${BUILD.commit}">v${BUILD.version} · ${BUILD.short} UTC · ${BUILD.commit}</small></span><span>Your images. Your space. Your arrangement.</span><span id="network">Local workspace</span></footer><input type="file" id="art-input" accept="image/jpeg,image/png" multiple hidden/><input type="file" id="replace-input" accept="image/jpeg,image/png" hidden/><input type="file" id="photo-input" accept="image/jpeg,image/png" hidden/><input type="file" id="surround-input" accept="image/jpeg,image/png" hidden/><input type="file" id="ground-input" accept="image/jpeg,image/png" hidden/><input type="file" id="underlay-input" accept="image/jpeg,image/png" hidden/><input type="file" id="model-input" accept=".glb,model/gltf-binary" hidden/><input type="file" id="backup-input" accept=".json,.booth" hidden/><div id="toast" role="status"></div><dialog id="dialog"><div id="dialog-content"></div></dialog><dialog id="image-editor"><div id="image-editor-content"></div></dialog><dialog id="timeline-dialog" class="timeline-dialog"><div id="timeline-content"></div></dialog>`;
   let scene;
   try {
     scene = new BoothScene(
@@ -1614,7 +1616,7 @@ async function boot() {
     if (people.length >= MAX_PEOPLE) return toast(`${MAX_PEOPLE} figures is the limit.`, true);
     const person = { ...newPerson(kind, uid()), x: (people.length % 3) * 30 - 30, z: 18 + Math.floor(people.length / 3) * 24 };
     mutate(() => (p.booth.people = [...people, person]));
-    toast(`${kind === "man" ? "Man" : "Woman"} added at ${Math.floor(person.height / 12)}′${person.height % 12}″.`);
+    toast(`${personName(kind)} added at ${Math.floor(person.height / 12)}′${person.height % 12}″.`);
   }
   // Figures for scale. A wall height in inches is hard to read; the same wall
   // beside a 5'6" visitor is not. They are a drawing aid, so they live in the
@@ -1812,11 +1814,11 @@ async function boot() {
     const shown = p.booth.showPeople !== false;
     const rows = people
       .map((person, i) => {
-        const label = person.kind === "man" ? "Man" : "Woman";
+        const label = personName(person.kind);
         return `<div class="person-row${isShown(person) ? "" : " is-hidden"}" data-person="${person.id}"><div class="key-head"><strong>${label} ${i + 1}${isShown(person) ? "" : ' <span class="badge">Hidden</span>'}</strong><span class="piece-actions"><span class="muted">${Math.floor(person.height / 12)}′${Math.round(person.height % 12)}″</span>${hideEye("person", person.id, `${label} ${i + 1}`, isShown(person))}</span></div>${field("Height", "height", person.height, MIN_HEIGHT, MAX_HEIGHT, 1, "in", "person-" + person.id)}${personSlider(person, "height", "Height")}<div class="field-pair">${field("Left / right", "x", person.x, -600, 600, 1, "in", "person-" + person.id)}${field("Front / back", "z", person.z, -600, 600, 1, "in", "person-" + person.id)}</div>${personSlider(person, "x", "Left / right")}${personSlider(person, "z", "Front / back")}${field("Facing", "rotation", person.rotation ?? 0, -180, 180, 5, "°", "person-" + person.id)}<div class="button-row">${btn("delete-person", "Remove", "trash-2")}</div></div>`;
       })
       .join("");
-    return `<section><h3>People for scale <span>${people.length} / ${MAX_PEOPLE}</span></h3><p class="muted">Stand-ins so the booth reads at human size. ${Object.values(PEOPLE).map((v) => e(v.label)).join(" · ")} by default, and every figure's height is editable. They are excluded from the hanging guide.</p>${people.length ? `<label class="check-field"><input type="checkbox" data-field="showPeople" data-scope="booth" ${shown ? "checked" : ""}/>Show the figures</label><p class="muted">${shown ? "Off takes every figure out of the picture and out of an export, and keeps where each one stands." : `Hidden. ${people.length} figure${people.length === 1 ? " is" : "s are"} still placed below and come back when this is switched on.`}</p>` : ""}${people.length < MAX_PEOPLE ? `<div class="button-row">${btn("add-woman", "Add woman", "user-round")}${btn("add-man", "Add man", "user-round")}</div>` : `<p class="muted">${MAX_PEOPLE} figures is the limit.</p>`}${rows}</section>`;
+    return `<section><h3>People for scale <span>${people.length} / ${MAX_PEOPLE}</span></h3><p class="muted">Stand-ins so the booth reads at human size. ${Object.values(PEOPLE).map((v) => e(v.label)).join(" · ")} by default, and every figure's height is editable. They are excluded from the hanging guide.</p>${people.length ? `<label class="check-field"><input type="checkbox" data-field="showPeople" data-scope="booth" ${shown ? "checked" : ""}/>Show the figures</label><p class="muted">${shown ? "Off takes every figure out of the picture and out of an export, and keeps where each one stands." : `Hidden. ${people.length} figure${people.length === 1 ? " is" : "s are"} still placed below and come back when this is switched on.`}</p>` : ""}${people.length < MAX_PEOPLE ? `<div class="button-row people-add">${btn("add-woman", "Add woman", "user-round")}${btn("add-man", "Add man", "user-round")}${btn("add-child", "Add child", "user-round")}${btn("add-pair", "Add pair", "user-round")}${btn("add-wheelchair", "Add wheelchair user", "user-round")}</div>` : `<p class="muted">${MAX_PEOPLE} figures is the limit.</p>`}${rows}</section>`;
   }
 
   // Video export. Offered only where it can actually be delivered: the encoder
@@ -2827,6 +2829,9 @@ async function boot() {
     },
     "add-woman": () => addPerson("woman"),
     "add-man": () => addPerson("man"),
+    "add-child": () => addPerson("child"),
+    "add-pair": () => addPerson("group"),
+    "add-wheelchair": () => addPerson("wheelchair"),
     "delete-person": (button) => {
       const id = button?.closest("[data-person]")?.dataset.person;
       mutate(() => (p.booth.people = (p.booth.people || []).filter((x) => x.id !== id)));
@@ -2902,11 +2907,18 @@ async function boot() {
     help: () => {
       const d = document.querySelector("#dialog");
       document.querySelector("#dialog-content").innerHTML =
-        `<div class="panel-heading"><h2>Welcome to Booth Studio</h2>${btn("close-help", "Close", "x", "icon-only")}</div><p>Start with Layout, upload your original artwork, and enter its actual dimensions. Sample panels are dimension placeholders, not artwork.</p><ol><li><strong>Arrange:</strong> select a work in the library. Set its wall, left edge, and bottom edge. Use Move to drag along the wall, or Center to align.</li><li><strong>Art show booth:</strong> the Art show tool switches this booth to an indoor convention booth — seamless white walls, a light bar with directional heads spotting each wall, and a white exhibition hall around you. Booth size, wall sizes and the individual display panel are all typed in inches there.</li><li><strong>Free-standing walls and pedestals:</strong> add them in the Walls tool, then click a wall — or double-click a pedestal — in the booth to pick it up. Drag it across the floor, or use its left/right and front/back sliders. Snap keeps a drag on whole inches.</li><li><strong>Navigate:</strong> drag empty space to orbit, scroll to zoom, right-drag to pan. On touch, use one finger to orbit and two to pan/zoom. Wall and Plan views give precise views.</li><li><strong>Light:</strong> adjust ambient light and each spotlight’s position, target, power, and temperature.</li><li><strong>Photo:</strong> upload a booth shot, select uploaded library artwork to add it, then drag its four corners. Lighting is a visual overlay. Existing photo objects remain baked in.</li><li><strong>Keep:</strong> autosave is on this browser/device only. Download a full backup to transfer or archive a project.</li><li><strong>Export:</strong> PNG captures the current view; the hanging guide gives measured artwork edges.</li></ol><p class="muted">Ctrl/⌘ Z: undo · Ctrl/⌘ Shift Z: redo · Delete: remove selected artwork · Arrows: nudge 1″ (Shift: 1′) · R / Shift R: turn a pedestal or wall 15° · Ctrl/⌘ D: duplicate · V: select · M: move · T: tape measure · Esc: put the tape away. No AI calls. Single images do not supply surface relief; baked-in lighting remains. Photorealism and exact display color are not guaranteed.</p>`;
+        `<div class="panel-heading"><h2>Welcome to Booth Studio</h2>${btn("close-help", "Close", "x", "icon-only")}</div><p>Start with Layout, upload your original artwork, and enter its actual dimensions. Sample panels are dimension placeholders, not artwork.</p><ol><li><strong>Arrange:</strong> select a work in the library. Set its wall, left edge, and bottom edge. Use Move to drag along the wall, or Center to align.</li><li><strong>Art show booth:</strong> the Art show tool switches this booth to an indoor convention booth — seamless white walls, a light bar with directional heads spotting each wall, and a white exhibition hall around you. Booth size, wall sizes and the individual display panel are all typed in inches there.</li><li><strong>Free-standing walls and pedestals:</strong> add them in the Walls tool, then click a wall — or double-click a pedestal — in the booth to pick it up. Drag it across the floor, or use its left/right and front/back sliders. Snap keeps a drag on whole inches.</li><li><strong>Navigate:</strong> drag empty space to orbit, scroll to zoom, right-drag to pan. On touch, use one finger to orbit and two to pan/zoom. Wall and Plan views give precise views.</li><li><strong>Light:</strong> adjust ambient light and each spotlight’s position, target, power, and temperature.</li><li><strong>Photo:</strong> upload a booth shot, select uploaded library artwork to add it, then drag its four corners. Lighting is a visual overlay. Existing photo objects remain baked in.</li><li><strong>Keep:</strong> autosave is on this browser/device only. Download a full backup to transfer or archive a project.</li><li><strong>Export:</strong> PNG captures the current view; the hanging guide gives measured artwork edges.</li></ol><p class="muted">Ctrl/⌘ Z: undo · Ctrl/⌘ Shift Z: redo · Delete: remove selected artwork · Arrows: nudge 1″ (Shift: 1′) · R / Shift R: turn a pedestal or wall 15° · Ctrl/⌘ D: duplicate · V: select · M: move · T: tape measure · Esc: put the tape away · / or Ctrl/⌘ K: find a tool.</p>${shortcutHelp()}<p class="muted">No AI calls. Single images do not supply surface relief; baked-in lighting remains. Photorealism and exact display color are not guaranteed.</p>`;
       refreshIcons();
       d.showModal();
     },
     "close-help": () => document.querySelector("#dialog").close(),
+    // The phone's way into search: the box is in the header, out of a
+    // thumb's reach, so a button in the viewport's corner focuses it.
+    "find-tool": () => {
+      const box = document.querySelector("#tool-search");
+      box.focus();
+      box.select();
+    },
     "add-panel": () =>
       mutate(() => {
         const panels = (p.booth.panels ||= []);
@@ -4148,6 +4160,12 @@ async function boot() {
     if (text) return text;
     return el.querySelector("[aria-label]")?.getAttribute("aria-label") || "";
   }
+  /** Help's table of tool shortcuts, grouped as `SHORTCUTS` groups them. */
+  function shortcutHelp() {
+    const groups = {};
+    for (const [name, sc] of Object.entries(SHORTCUTS)) (groups[sc.group] ||= []).push(`<li><kbd>${e(name)}</kbd> ${e(sc.label)}</li>`);
+    return `<h3>Tool shortcuts</h3><p class="muted">Type one in the search box and press Enter.</p><div class="shortcut-help">${Object.entries(groups).map(([g, items]) => `<section><h4>${e(g)}</h4><ul>${items.join("")}</ul></section>`).join("")}</div>`;
+  }
   function buildToolIndex() {
     const list = [];
     for (const [t, name] of Object.entries(TAB_NAMES)) list.push({ label: name, where: "Inspector tab", tab: t });
@@ -4189,7 +4207,7 @@ async function boot() {
     ul.innerHTML = !open
       ? ""
       : toolHits.length
-        ? toolHits.map((x, i) => `<li role="option" id="tool-hit-${i}" data-hit="${i}" aria-selected="${i === toolAt}" class="${i === toolAt ? "active" : ""}"><strong>${e(x.label)}</strong><span>${e(x.where)}</span></li>`).join("")
+        ? toolHits.map((x, i) => `<li role="option" id="tool-hit-${i}" data-hit="${i}" aria-selected="${i === toolAt}" class="${i === toolAt ? "active" : ""}"><strong>${e(x.label)}${shortcutOf(x) ? `<kbd>${e(shortcutOf(x))}</kbd>` : ""}</strong><span>${e(x.where)}</span></li>`).join("")
         : `<li class="none">Nothing called “${e(q.trim())}”</li>`;
     if (toolHits.length) box.setAttribute("aria-activedescendant", "tool-hit-" + toolAt);
     else box.removeAttribute("aria-activedescendant");
@@ -4436,6 +4454,9 @@ async function boot() {
       get tier() {
         return tier;
       },
+      // What tool search can find, without the elements, so a test can hold
+      // every shortcut to a real control.
+      toolIndex: () => buildToolIndex().map(({ label, where, tab }) => ({ label, where, tab: tab || null })),
       get picked() {
         return picked;
       },
