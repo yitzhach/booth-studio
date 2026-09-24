@@ -129,6 +129,8 @@ import {
   MAX_PEDESTALS,
   PEDESTAL,
   FURNITURE,
+  BOX_LIMITS,
+  MAX_MODELS,
   furnitureKind,
   VENUES,
   applyVenue,
@@ -146,10 +148,12 @@ import { load, save, download, readImage, thumbnailOf, THUMB_MAX } from "./stora
 import { decodeAt } from "./image-source.js";
 import { BoothScene, BACKDROP_FRAMING } from "./scene.js";
 import { AUTO_QUALITY, startScale } from "./adaptive.js";
-import { formatLength } from "./measure.js";
+import { distanceInches, formatLength } from "./measure.js";
 import { hangAt, nudge, sameWall, spaceEvenly } from "./arrange.js";
 import { ALIGN_MODES, alignWorks, distributeWorks } from "./align.js";
 import { MAX_VIEWS, STEP, STRIDE, TAGS, newView } from "./views.js";
+import { ACCESSIBLE, checkClearance } from "./clearance.js";
+import { elevationsHTML } from "./elevations.js";
 import { FOOTPRINTS, SHOWS, STARTERS, fromTemplate, quickStart, templateOf } from "./quickstart.js";
 import { PhotoEditor } from "./photo.js";
 import { hangingGuide } from "./guide.js";
@@ -355,13 +359,15 @@ async function boot() {
     if (project.booth.surroundAsset && project.assets[project.booth.surroundAsset]) project.assets[project.booth.surroundAsset].role = "surround";
     const ground = groundUpload(project);
     if (ground) project.assets[ground].role = "ground";
+    const plan = project.booth.underlay?.asset;
+    if (plan && project.assets[plan]) project.assets[plan].role = "underlay";
   }
   p ||= demoProject();
   tagAssetRoles(p);
   selected = p.art[0]?.id;
   document.querySelector("#app").innerHTML =
     `<header><a class="brand" href="#" aria-label="Booth Studio">${icon("box")}<span>Artist OS</span></a><span class="app-badge">Booth Studio</span><div class="tool-search"><span aria-hidden="true">⌕</span><input id="tool-search" type="search" placeholder="Find a tool…" aria-label="Find a tool" title="Find a tool by name · press / to jump here" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-controls="tool-results" aria-expanded="false"/><ul id="tool-results" role="listbox" aria-label="Matching tools" hidden></ul></div><div class="project"><input id="project-name" aria-label="Project name" maxlength="120" value="${e(p.name)}"/>${icon("chevron-down")}</div><div class="save-status" id="save-status" role="status">Opening…</div>${btn("help", "Help", "help-circle", "icon-only")}<div class="avatar">IA</div></header>
-<div class="workspace"><aside class="library" id="library"></aside><main class="editor"><div class="toolbar"><div class="toolgroup">${btn("select", "Select", "mouse-pointer-2", "active")}${btn("move", "Move", "move")}${btn("snap", "Snap 1″", "grid-2x2", "active")}${btn("measure", "Measure", "ruler")}${btn("walk", "Walk", "footprints")}${btn("draft", "Fast edit", "zap")}${btn("draft-lock", "Fast edit: follows the gesture", "lock", "draft-lock")}</div><div class="toolgroup">${btn("undo", "Undo", "undo-2", "icon-only")}${btn("redo", "Redo", "redo-2", "icon-only")}</div><div class="mode-switch"><button data-action="mode-3d">3D booth</button><button data-action="mode-photo">Photo</button></div>${btn("export-tab", "Export", "download", "export-top")}</div><div class="viewport"><div id="scene"></div><div id="photo" hidden></div><div class="scene-label"><span class="eyebrow" id="mode-label">MEASURED WORKSPACE</span><strong id="scene-title"></strong><span id="scene-subtitle"></span></div><div id="photo-empty" hidden><div>${icon("image-plus")}<h2>Start with your booth shot</h2><p>Add artwork and adjust its four corners to match the wall perspective.</p>${btn("upload-photo", "Upload booth photo", "plus", "primary")}</div></div><div class="walk-pad" hidden><button data-walk="forward" aria-label="Step forward">▲</button><button data-walk="left" aria-label="Step left">◀</button><button data-walk="back" aria-label="Step back">▼</button><button data-walk="right" aria-label="Step right">▶</button><button data-action="walk" class="walk-exit" aria-label="Stop walking">Done</button></div><div class="viewport-bottom"><div class="view-switch" id="view-switch"><button data-view="perspective" class="active">Perspective</button><button data-view="back">Back</button><button data-view="left">Left</button><button data-view="right">Right</button><button data-view="plan">Plan</button></div><label class="saved-view-pick" hidden><span>View</span><select id="saved-view" aria-label="Go to a saved view"></select></label><div class="zoom-controls"><span class="zoom-label">Zoom</span>${btn("zoom-out", "Zoom out", "minus", "icon-only")}${btn("zoom-in", "Zoom in", "plus", "icon-only")}${btn("reset-view", "Reset view", "rotate-ccw", "icon-only")}</div></div></div><div class="statusbar"><span id="gesture-hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</span><label class="preview-quality" title="Preview quality: how many pixels the viewport draws for each one on screen. Exports are never affected."><span>Preview</span><select id="quality-quick" aria-label="Preview quality"></select><output id="quality-now"></output></label><span id="selection-status"></span></div></main><aside class="inspector"><button class="sheet-toggle" data-action="sheet-toggle" aria-label="Fold the panel away" title="Fold the panel away"><span>Fold</span></button><div class="inspector-tabs">${["art", "layout", "show", "walls", "lighting", "video", "export"].map((t, i) => `<button data-tab="${t}">${icon(["image", "layout-panel-left", "building-2", "columns-2", "lightbulb", "video", "download"][i])}<span>${["Artwork", "Layout", "Art show", "Walls", "Lighting", "Video", "Export"][i]}</span></button>`).join("")}</div><div id="inspector-content"></div></aside></div><footer><span class="footer-brand">${icon("box")} BOOTH STUDIO <small>Prototype 01</small><small id="build-stamp" title="Version ${BUILD.version} · built ${BUILD.time} · commit ${BUILD.commit}">v${BUILD.version} · ${BUILD.short} UTC · ${BUILD.commit}</small></span><span>Your images. Your space. Your arrangement.</span><span id="network">Local workspace</span></footer><input type="file" id="art-input" accept="image/jpeg,image/png" multiple hidden/><input type="file" id="replace-input" accept="image/jpeg,image/png" hidden/><input type="file" id="photo-input" accept="image/jpeg,image/png" hidden/><input type="file" id="surround-input" accept="image/jpeg,image/png" hidden/><input type="file" id="ground-input" accept="image/jpeg,image/png" hidden/><input type="file" id="backup-input" accept=".json,.booth" hidden/><div id="toast" role="status"></div><dialog id="dialog"><div id="dialog-content"></div></dialog><dialog id="image-editor"><div id="image-editor-content"></div></dialog><dialog id="timeline-dialog" class="timeline-dialog"><div id="timeline-content"></div></dialog>`;
+<div class="workspace"><aside class="library" id="library"></aside><main class="editor"><div class="toolbar"><div class="toolgroup">${btn("select", "Select", "mouse-pointer-2", "active")}${btn("move", "Move", "move")}${btn("snap", "Snap 1″", "grid-2x2", "active")}${btn("measure", "Measure", "ruler")}${btn("walk", "Walk", "footprints")}${btn("draw-box", "Box", "square")}${btn("draft", "Fast edit", "zap")}${btn("draft-lock", "Fast edit: follows the gesture", "lock", "draft-lock")}</div><div class="toolgroup">${btn("undo", "Undo", "undo-2", "icon-only")}${btn("redo", "Redo", "redo-2", "icon-only")}</div><div class="mode-switch"><button data-action="mode-3d">3D booth</button><button data-action="mode-photo">Photo</button></div>${btn("export-tab", "Export", "download", "export-top")}</div><div class="viewport"><div id="scene"></div><div id="photo" hidden></div><div class="scene-label"><span class="eyebrow" id="mode-label">MEASURED WORKSPACE</span><strong id="scene-title"></strong><span id="scene-subtitle"></span></div><div id="photo-empty" hidden><div>${icon("image-plus")}<h2>Start with your booth shot</h2><p>Add artwork and adjust its four corners to match the wall perspective.</p>${btn("upload-photo", "Upload booth photo", "plus", "primary")}</div></div><div class="walk-pad" hidden><button data-walk="forward" aria-label="Step forward">▲</button><button data-walk="left" aria-label="Step left">◀</button><button data-walk="back" aria-label="Step back">▼</button><button data-walk="right" aria-label="Step right">▶</button><button data-action="walk" class="walk-exit" aria-label="Stop walking">Done</button></div><div class="viewport-bottom"><div class="view-switch" id="view-switch"><button data-view="perspective" class="active">Perspective</button><button data-view="back">Back</button><button data-view="left">Left</button><button data-view="right">Right</button><button data-view="plan">Plan</button></div><label class="saved-view-pick" hidden><span>View</span><select id="saved-view" aria-label="Go to a saved view"></select></label><div class="zoom-controls"><span class="zoom-label">Zoom</span>${btn("zoom-out", "Zoom out", "minus", "icon-only")}${btn("zoom-in", "Zoom in", "plus", "icon-only")}${btn("reset-view", "Reset view", "rotate-ccw", "icon-only")}</div></div></div><div class="statusbar"><span id="gesture-hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</span><label class="preview-quality" title="Preview quality: how many pixels the viewport draws for each one on screen. Exports are never affected."><span>Preview</span><select id="quality-quick" aria-label="Preview quality"></select><output id="quality-now"></output></label><span id="selection-status"></span></div></main><aside class="inspector"><button class="sheet-toggle" data-action="sheet-toggle" aria-label="Fold the panel away" title="Fold the panel away"><span>Fold</span></button><div class="inspector-tabs">${["art", "layout", "show", "walls", "lighting", "video", "export"].map((t, i) => `<button data-tab="${t}">${icon(["image", "layout-panel-left", "building-2", "columns-2", "lightbulb", "video", "download"][i])}<span>${["Artwork", "Layout", "Art show", "Walls", "Lighting", "Video", "Export"][i]}</span></button>`).join("")}</div><div id="inspector-content"></div></aside></div><footer><span class="footer-brand">${icon("box")} BOOTH STUDIO <small>Prototype 01</small><small id="build-stamp" title="Version ${BUILD.version} · built ${BUILD.time} · commit ${BUILD.commit}">v${BUILD.version} · ${BUILD.short} UTC · ${BUILD.commit}</small></span><span>Your images. Your space. Your arrangement.</span><span id="network">Local workspace</span></footer><input type="file" id="art-input" accept="image/jpeg,image/png" multiple hidden/><input type="file" id="replace-input" accept="image/jpeg,image/png" hidden/><input type="file" id="photo-input" accept="image/jpeg,image/png" hidden/><input type="file" id="surround-input" accept="image/jpeg,image/png" hidden/><input type="file" id="ground-input" accept="image/jpeg,image/png" hidden/><input type="file" id="underlay-input" accept="image/jpeg,image/png" hidden/><input type="file" id="model-input" accept=".glb,model/gltf-binary" hidden/><input type="file" id="backup-input" accept=".json,.booth" hidden/><div id="toast" role="status"></div><dialog id="dialog"><div id="dialog-content"></div></dialog><dialog id="image-editor"><div id="image-editor-content"></div></dialog><dialog id="timeline-dialog" class="timeline-dialog"><div id="timeline-content"></div></dialog>`;
   let scene;
   try {
     scene = new BoothScene(
@@ -454,9 +460,30 @@ async function boot() {
   loadViewPrefs();
   let adaptToasted = false;
   if (scene) {
+    // A footprint drawn with the Box tool becomes a box on the floor, 12″
+    // high to start: selected, so the Walls tool's Pull up is right there.
+    scene.onDrawBox = (r) => {
+      if (!allowed("box")) return toast("Draw a box is part of Booth Studio Pro.", true);
+      const list = boothPedestals(p);
+      if (list.length >= MAX_PEDESTALS) return toast(`${MAX_PEDESTALS} pieces is the limit.`, true);
+      const n = list.filter((x) => furnitureKind(x) === "box").length + 1;
+      const piece = { id: uid(), name: "Box " + n, kind: "box", x: r.x, z: r.z, width: Math.min(BOX_LIMITS.width[1], r.width), depth: Math.min(BOX_LIMITS.depth[1], r.depth), height: FURNITURE.box.height, rotation: 0 };
+      mutate(() => {
+        p.booth.pedestals = [...list, constrainPedestal(p, piece)];
+        selectedPedestal = piece.id;
+        selectedPanel = null;
+        selected = null;
+        tab = "walls";
+      });
+      setDrawingBox(false);
+      revealPedestalFields();
+      toast(`${piece.name}: ${formatLength(piece.width).split(" · ")[0]} × ${formatLength(piece.depth).split(" · ")[0]}, 12″ high. Pull it up in the Walls tool.`);
+    };
     scene.onMeasure = (inches) => {
       measureHint = inches == null ? MEASURE_HINT : "Measured " + formatLength(inches) + " · click to start a new tape · Esc to stop";
       renderStatus();
+      // The underlay's Scale plan reads the tape; redraw it with the reading.
+      if (p.booth.underlay && tab === "layout") renderInspector();
     };
     scene.setQuality(quality, quality === AUTO_QUALITY ? startScale(devicePixelRatio, autoScale) : undefined);
     // Auto stepping down is said once, so a softer picture is never a mystery,
@@ -571,6 +598,7 @@ async function boot() {
     if (selectedPanel && !findPanel(p, selectedPanel)) selectedPanel = null;
     if (selectedPedestal && !findPedestal(p, selectedPedestal)) selectedPedestal = null;
     scene?.update(p, selected, selectedPanel, selectedPedestal);
+    syncClearance();
     photo.update(p, photoSelected);
   }
   /**
@@ -741,6 +769,7 @@ async function boot() {
     const draft = !!scene?.draft;
     document.querySelector('[data-action="measure"]')?.classList.toggle("active", !!scene?.measure.on);
     document.querySelector('.toolbar [data-action="walk"]')?.classList.toggle("active", walking);
+    document.querySelector('.toolbar [data-action="draw-box"]')?.classList.toggle("active", !!scene?.drawingBox);
     document
       .querySelector('[data-action="snap"]')
       ?.classList.toggle("active", !!scene?.snap);
@@ -968,6 +997,7 @@ async function boot() {
     tier = resolveTier(next);
     writeTier(tier);
     renderInspector();
+    syncClearance();
     toast(tier === "pro" ? "Pro: every tool is unlocked." : "Lite: Pro tools show a lock. Anything already in this booth still draws.");
   }
   function panelFields() {
@@ -1043,8 +1073,8 @@ async function boot() {
         chosen = selectedPedestal === ped.id,
         f = (label, key, value, min, max, step, unit) =>
           field(label, key, value, min, max, step, unit, scope, name + " " + label);
-      return `<div class="wall-setting${chosen ? " selected" : ""}${isShown(ped) ? "" : " is-hidden"}" data-pedestal="${e(ped.id)}"><div class="panel-heading"><h4>${e(name)}${chosen ? ' <span class="badge">Selected</span>' : ""}${isShown(ped) ? "" : ' <span class="badge">Hidden</span>'}</h4><span class="piece-actions">${hideEye("pedestal", ped.id, name, isShown(ped))}${btn("delete-pedestal-" + ped.id, "Remove " + name, "trash-2", "icon-only")}</span></div>${f("Height", "height", ped.height, 6, 96, 1, "in")}${f("Width", "width", ped.width, 4, 96, 1, "in")}${f("Depth", "depth", ped.depth, 4, 96, 1, "in")}${colorField("Finish", "color", scope, ped.color || PEDESTAL.color, name + " finish")}${f("Position X", "x", ped.x, -360, 360, 1, "in")}${pedestalSlider(ped, name, "x", "Slide left / right")}${f("Position Z", "z", ped.z, -360, 360, 1, "in")}${pedestalSlider(ped, name, "z", "Slide front / back")}${f("Rotation", "rotation", ped.rotation, -180, 180, 5, "°")}</div>`;
-    }).join("")}${list.length < MAX_PEDESTALS ? `<label class="setting-label">Add to the floor<select id="furniture-kind" aria-label="Furniture to add">${Object.entries(FURNITURE).map(([k, f]) => `<option value="${k}" ${k === furnitureChoice ? "selected" : ""}>${e(f.label)} · ${f.width}×${f.depth}″</option>`).join("")}</select></label>${btn("add-pedestal", "Add " + FURNITURE[furnitureChoice].label.toLowerCase(), "plus", "wide")}` : `<p class="muted">${MAX_PEDESTALS} pieces is the limit.</p>`}</section>`;
+      return `<div class="wall-setting${chosen ? " selected" : ""}${isShown(ped) ? "" : " is-hidden"}" data-pedestal="${e(ped.id)}"><div class="panel-heading"><h4>${e(name)}${chosen ? ' <span class="badge">Selected</span>' : ""}${isShown(ped) ? "" : ' <span class="badge">Hidden</span>'}</h4><span class="piece-actions">${hideEye("pedestal", ped.id, name, isShown(ped))}${btn("delete-pedestal-" + ped.id, "Remove " + name, "trash-2", "icon-only")}</span></div>${furnitureKind(ped) === "box" ? `${f("Height", "height", ped.height, ...BOX_LIMITS.height, 1, "in")}${range("Pull up", "height", ped.height, BOX_LIMITS.height[0], Math.max(96, Math.ceil(ped.height)), 1, scope, "in")}${f("Width", "width", ped.width, ...BOX_LIMITS.width, 1, "in")}${f("Depth", "depth", ped.depth, ...BOX_LIMITS.depth, 1, "in")}` : `${f("Height", "height", ped.height, 6, 96, 1, "in")}${f("Width", "width", ped.width, 4, 96, 1, "in")}${f("Depth", "depth", ped.depth, 4, 96, 1, "in")}`}${colorField("Finish", "color", scope, ped.color || PEDESTAL.color, name + " finish")}${f("Position X", "x", ped.x, -360, 360, 1, "in")}${pedestalSlider(ped, name, "x", "Slide left / right")}${f("Position Z", "z", ped.z, -360, 360, 1, "in")}${pedestalSlider(ped, name, "z", "Slide front / back")}${f("Rotation", "rotation", ped.rotation, -180, 180, 5, "°")}</div>`;
+    }).join("")}${list.length < MAX_PEDESTALS ? `<label class="setting-label">Add to the floor<select id="furniture-kind" aria-label="Furniture to add">${Object.entries(FURNITURE).filter(([k]) => k !== "box" || allowed("box")).map(([k, f]) => `<option value="${k}" ${k === furnitureChoice ? "selected" : ""}>${e(f.label)} · ${f.width}×${f.depth}″</option>`).join("")}</select></label>${btn("add-pedestal", "Add " + FURNITURE[furnitureChoice].label.toLowerCase(), "plus", "wide")}` : `<p class="muted">${MAX_PEDESTALS} pieces is the limit.</p>`}</section>`;
   }
   /**
    * The art-show tool. Everything an indoor convention booth is measured by,
@@ -1635,6 +1665,55 @@ async function boot() {
       .map(([k, label]) => `<label class="check-field"><input type="checkbox" data-tag="${k}" ${hiddenTags.has(k) ? "" : "checked"}/>${e(label)}</label>`)
       .join("")}</div></section>`;
   }
+  /**
+   * Walls → 3D models (Pro): a .glb brought in from SketchUp, Blender or a
+   * maker's own scan — a sculpture, a custom display — stood on the floor at
+   * a typed height. Kept in the booth like an image, so a backup carries it.
+   */
+  function modelsSection() {
+    const models = p.booth.models || [];
+    const rows = models
+      .map((m, i) => {
+        const name = m.name || "Model " + (i + 1),
+          scope = "model-" + m.id,
+          f = (label, key, value, min, max, step, unit) => field(label, key, value, min, max, step, unit, scope, name + " " + label);
+        return `<div class="wall-setting${isShown(m) ? "" : " is-hidden"}" data-model="${e(m.id)}"><div class="panel-heading"><h4>${e(name)}${isShown(m) ? "" : ' <span class="badge">Hidden</span>'}</h4><span class="piece-actions">${hideEye("model", m.id, name, isShown(m))}${btn("delete-model-" + m.id, "Remove " + name, "trash-2", "icon-only")}</span></div>${f("Height", "height", m.height, 1, 240, 0.5, "in")}<div class="field-pair">${f("Left / right", "x", m.x, -600, 600, 1, "in")}${f("Front / back", "z", m.z, -600, 600, 1, "in")}</div>${f("Rotation", "rotation", m.rotation, -360, 360, 5, "°")}</div>`;
+      })
+      .join("");
+    return gated("glb", `<section><h3>3D models <span>${models.length} / ${MAX_MODELS}</span></h3><p class="muted">Bring in a .glb from SketchUp, Blender or a 3D scan — a sculpture, a custom display — and stand it on the floor. It is scaled to the height you type, so its own units do not matter. Saved in the booth and its backups.</p>${rows}${models.length < MAX_MODELS ? btn("upload-model", "Import .glb model", "upload", "wide") : `<p class="muted">${MAX_MODELS} models is the limit.</p>`}</section>`, "Bring in .glb models from SketchUp, Blender or a scan, and export the booth as .glb. Part of Booth Studio Pro.");
+  }
+  /**
+   * Layout → Floor plan underlay (Pro): the venue's plan, as an image, laid
+   * on the floor at its real width so the booth can be placed on it. Scaled
+   * by measuring a known distance on it with the tape and typing what it
+   * really is — two clicks and a number.
+   */
+  function underlaySection() {
+    const u = p.booth.underlay;
+    const tape = scene?.measure.points.length === 2 ? distanceInches(...scene.measure.points, 0.0254) : null;
+    const body = !u
+      ? `<p class="muted">Put the show's floor plan under your booth: a JPG or PNG of it (a screenshot of a PDF plan is fine). It lies on the floor, half see-through, and never reaches an export.</p>${btn("upload-underlay", "Add floor plan image", "map", "wide")}`
+      : `<label class="check-field"><input type="checkbox" data-field="on" data-scope="underlay" ${u.on === false ? "" : "checked"}/>Show the floor plan</label>${range("Opacity", "opacity", u.opacity, 0.1, 1, 0.05, "underlay")}${field("Real width of the image", "width", u.width, 12, 24000, 1, "in", "underlay")}<div class="field-pair">${field("Left / right", "x", u.x, -24000, 24000, 1, "in", "underlay")}${field("Front / back", "z", u.z, -24000, 24000, 1, "in", "underlay")}</div>${field("Rotation", "rotation", u.rotation, -360, 360, 1, "°", "underlay")}<h4>Scale it from the tape</h4><p class="muted">${tape ? `The tape reads <strong>${e(formatLength(tape))}</strong>. Type what that distance really is on the plan — a booth's width, an aisle — and the plan is scaled to match.` : "Switch to Plan view, pick up the tape (T) and measure something on the plan whose real length you know: a booth's width, an aisle, a scale bar."}</p><div class="field-pair"><label class="field"><span>Real length</span><div><input type="number" id="underlay-real" min="1" max="24000" step="0.25" aria-label="Real length of the taped distance" value="120"/><small>in</small></div></label>${btn("underlay-scale", "Scale plan", "ruler", tape ? "primary" : "disabled")}</div>${btn("remove-underlay", "Remove floor plan", "trash-2", "wide")}`;
+    return gated("underlay", `<section><h3>Floor plan underlay</h3>${body}</section>`, "Lay the venue's floor plan under your booth at its real scale, set by two clicks with the tape. Part of Booth Studio Pro.");
+  }
+  /**
+   * Layout → Clearance checks (Pro): the booth read as a fire marshal and a
+   * visitor in a wheelchair would read it. Problems first, then tight gaps;
+   * the gaps are drawn in red in Plan view.
+   */
+  function clearanceSection() {
+    const issues = checkClearance(p);
+    const rows = issues
+      .map((x, i) => `<li class="clearance-${x.level}"><span>${e(x.text)}</span>${x.ids.some((id) => id.startsWith("pedestal:") || id.startsWith("panel:") || id.startsWith("art:")) ? btn("clearance-show-" + i, "Show", "camera", "compact") : ""}</li>`)
+      .join("");
+    return gated("clearance", `<section><h3>Clearance checks <span>${issues.length ? issues.length + " to look at" : "all clear"}</span></h3><p class="muted">Floor pieces standing in each other or outside the booth, works hung over each other, and gaps narrower than the ${ACCESSIBLE}″ a wheelchair needs. Plan view draws the tight gaps in red. Pieces pushed right up against something are taken as meant.</p>${issues.length ? `<ul class="clearance-list">${rows}</ul>` : `<p class="ok-note">Nothing is in the way.</p>`}</section>`, "Warnings for pieces standing in each other or outside the booth, and gaps too narrow for a wheelchair. Part of Booth Studio Pro.");
+  }
+  /** Pro's clearance issues, for the plan view's red lines; none in Lite. */
+  function syncClearance() {
+    if (!scene) return;
+    scene.clearance = allowed("clearance") && p.mode === "3d" ? checkClearance(p) : [];
+    scene.refreshGuides();
+  }
   /** The View menu under the booth: the saved views, when there are any. */
   function syncSavedViews() {
     const pick = document.querySelector(".saved-view-pick");
@@ -1644,6 +1723,24 @@ async function boot() {
     pick.hidden = !views.length;
     select.innerHTML = `<option value="">Saved views…</option>${views.map((v) => `<option value="${e(v.id)}">${e(v.name)}</option>`).join("")}`;
   }
+  /** Select what a clearance warning is about and look at it from above. */
+  function showClearance(index) {
+    const issue = checkClearance(p)[index];
+    if (!issue) return;
+    const id = issue.ids.find((x) => x.startsWith("pedestal:") || x.startsWith("panel:") || x.startsWith("art:"));
+    if (!id) return;
+    if (id.startsWith("art:")) {
+      selected = id.slice(4);
+      selectedPanel = selectedPedestal = null;
+      scene?.focusWall(p.art.find((a) => a.id === selected)?.wall || "back");
+    } else {
+      if (id.startsWith("pedestal:")) { selectedPedestal = id.slice(9); selectedPanel = null; }
+      else { selectedPanel = id; selectedPedestal = null; }
+      scene?.setView("plan");
+      document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === "plan"));
+    }
+    renderSelection();
+  }
   function goToView(id) {
     const v = (p.views || []).find((x) => x.id === id);
     if (!v || !scene) return;
@@ -1651,6 +1748,16 @@ async function boot() {
     scene.setView("perspective");
     scene.applyPose(v);
     document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === "perspective"));
+  }
+  /** The Box tool on or off: the next press-and-drag on the floor draws one. */
+  function setDrawingBox(on) {
+    if (!scene || p.mode !== "3d") return;
+    if (on && walking) setWalking(false);
+    if (on && scene.measure.on) setMeasuring(false);
+    scene.setDrawingBox(!!on);
+    document.querySelector("#scene").classList.toggle("placing", !!on);
+    renderStatus();
+    syncTools();
   }
   /** Walk mode on or off, with its pad on screen and its hint in the status bar. */
   let walking = false;
@@ -1913,7 +2020,7 @@ async function boot() {
       html = `<div class="mobile-library">${libraryHTML(true)}</div>${a ? `${multiSection()}<div class="panel-heading"><h2>Artwork properties</h2><span class="badge">${a.kind === "sign" ? "Sign" : a.kind === "label" ? "Label" : a.asset ? "Original" : "Sample"}</span></div><div class="selected-art"><div class="thumb">${artThumb(a)}</div><div><input class="title-input" data-field="title" data-scope="art" aria-label="Artwork title" maxlength="120" value="${e(a.title)}"/><span>${a.kind === "sign" || a.kind === "label" ? "Editable wall asset" : a.asset ? "Original image preserved" : "Measured placeholder panel"}</span>${a.kind === "sign" || a.kind === "label" ? "" : btn("replace-art", a.asset ? "Replace image" : "Add original image", "image-plus", "text-button")}</div></div>${signFields(a)}${a.asset ? `<section><h3>Image adjustments</h3><p class="muted">Edits affect this placement only. The uploaded original stays unchanged.</p>${btn("edit-image", "Edit image", "image", "primary wide")}<div class="button-row">${btn("copy-edits", "Copy edits", "copy")}${btn("paste-edits", "Paste edits", "layers", p.editClipboard ? "" : "disabled")}</div></section>` : ""}<section><h3>Dimensions <span>inches</span></h3><p class="muted">Double-tap artwork to adjust. Corners scale proportionally; middle edge handles stretch width or height.</p>${scaleControl(a)}<label class="setting-label"><input type="checkbox" data-field="stretch" data-scope="art" ${a.stretch ? "checked" : ""}/> Stretch image to panel dimensions</label>${field("Width", "w", a.w, 1, 360)}${field("Height", "h", a.h, 1, 360)}${!a.stretch && mismatch(p, a) ? `<div class="warning">Image proportions differ from the panel. The full image is fitted inside without stretching.${btn("match-ratio", "Match height to image", null, "wide")}</div>` : ""}${field("Thickness", "thickness", a.thickness, 0.1, 12, 0.1)}<label class="setting-label">Edge material<select data-field="edgeTexture" data-scope="art" aria-label="Edge material">${["plain","concrete","wood","metal"].map(k=>`<option value="${k}" ${(a.edgeTexture || "plain") === k ? "selected" : ""}>${k === "wood" ? "Wood grain" : k[0].toUpperCase()+k.slice(1)}</option>`).join("")}</select></label>${edgeColorFields(a)}${field("Wall gap", "offset", a.offset, 0, 12, 0.1)}<p class="muted">How far the work stands off the wall. ${shadowSpec(p.booth, "behind").on || shadowSpec(p.booth, "under").on ? "Head-on, the drawn drop shadow is what makes a gap read; its distance and size are set in Lighting → Drop shadow." : "With both drawn shadows hidden (Lighting → Drop shadow), a gap is only visible looking along the wall."}</p></section><section><h3>Placement</h3><div class="exterior-callout"><strong>Interior and exterior walls</strong><span>Artwork can hang on either face of the three booth walls and of any free-standing wall.</span></div>${hasRow(p.booth) ? `<label class="select-field">Booth<select data-field="inBooth" data-scope="art" aria-label="Which booth this hangs in">${boothSlots(p.booth).map((b) => `<option value="${e(b.id)}" ${(a.booth || normalizeRow(p.booth).home) === b.id ? "selected" : ""}>${e(slotLabel(b))}</option>`).join("")}</select></label>` : ""}<label class="select-field">Wall location<select data-field="location" data-scope="art" aria-label="Wall location">${locationOptions(a)}</select></label><div class="button-row">${btn("face-view", "View wall face", "camera")}</div>${field("Left edge", "x", a.x, -360, 360)}${artSlider(a, "x", "Slide left / right")}${field("Bottom edge", "y", a.y, -360, 360)}${artSlider(a, "y", "Slide up / down")}<p class="muted">From the bottom-left corner, facing the ${a.face === "outside" ? "outside" : "inside"} of this wall.</p>${boundWarning(p, a) ? `<div class="warning">${boundWarning(p, a)}</div>` : ""}<div class="button-row">${btn("center", "Center", "align-center")}${btn("eye-level", "Center at 60″", "arrow-up-to-line")}</div><div class="button-row">${btn("multi-mode", addMode ? "Done selecting" : "Select several", "plus", addMode ? "active" : "")}</div>${addMode ? '<p class="muted">Tap works in the booth to add them to the selection; tap one again to take it out.</p>' : ""}<div class="button-row">${btn("space-wall", "Space this wall evenly", "columns-2")}${btn("hang-wall", "Hang this wall at 60″", "ruler")}</div><p class="muted">For every work on this face of this wall: equal gaps between them and at both ends, in the order they hang; or every centre at 60″. Arrow keys nudge the selected work an inch, Shift a foot.</p></section><section><h3>Actions</h3><div class="button-row">${btn("duplicate-art", "Duplicate", "copy")}${btn("delete-art", "Remove", "trash-2", "danger")}</div></section>` : `<div class="empty-inspector"><h2>Make room for your work.</h2><p>Uploading files an original in your library without hanging it. Tap one there to put it on a wall, then set its real dimensions here.</p>${btn("upload-art", "Upload artwork", "image-plus", "primary")}</div>`}`;
     }
     if (tab === "layout") {
-      html = `<div class="panel-heading"><h2>${p.mode === "photo" ? "Booth photograph" : "Booth layout"}</h2>${icon("layout-panel-left")}</div>${p.mode === "photo" ? `<p class="muted">The original photo stays intact. Added art and light overlays are saved separately. Existing objects in the photograph cannot be moved or erased in this prototype.</p>${btn("upload-photo", p.photo.asset ? "Replace booth photo" : "Upload booth photo", "image-plus", "wide")}${range("Photo exposure", "exposure", p.photo.exposure, -1, 1, 0.05, "photo")}` : `<section><h3>Footprint</h3><select data-field="preset" aria-label="Booth preset"><option value="120" ${p.booth.width === 120 ? "selected" : ""}>10 × 10 ft · Standard</option><option value="240" ${p.booth.width === 240 ? "selected" : ""}>10 × 20 ft · Double</option></select><p class="muted">Nominal footprint. Panels and 1.4″ canopy legs reduce usable space near edges.</p>${isArtShow(p) ? `<div class="warning">This is an art-show booth. Its footprint, walls and light bar are in the <strong>Art show</strong> tool, and a preset or a canopy here would put it back to an outdoor pop-up.</div>` : ""}${field("Wall height", "height", p.booth.height, 48, 144, 1, "in", "booth")}<label class="check-field"><input type="checkbox" data-field="tent" data-scope="booth" ${p.booth.tent ? "checked" : ""}/>White canopy & frame</label><label class="setting-label">Tent style<select aria-label="Tent style" data-field="tentStyle" data-scope="booth">${Object.entries(TENTS).map(([k,v])=>`<option value="${k}" ${(p.booth.tentStyle||'classic')===k?'selected':''}>${v}</option>`).join('')}</select></label><p class="muted">12″ fabric valance, rounded hems, roof ribs and folding frame. Inspired shapes; not manufacturer-certified models.</p></section><section><h3>Surroundings</h3><label class="setting-label">Environment<select aria-label="Environment" data-field="envPreset" data-scope="booth">${Object.entries(ENV_PRESETS).map(([k,v])=>`<option value="${k}" ${(p.booth.envPreset||DEFAULT_PRESET)===k?'selected':''}>${v.label}</option>`).join('')}</select></label><p class="muted">Presets light the booth from a photographed environment. Without its image files a preset keeps the procedural surroundings below.</p>${isArtShow(p) ? `<label class="check-field"><input type="checkbox" data-field="on" data-scope="hall" ${hallSpec(p.booth).on ? "checked" : ""}/>Stand this booth in a white exhibition hall</label><p class="muted">${hallSpec(p.booth).on ? "The hall's own walls stand around the booth. In a photographed environment they cut across it as a white band, so choosing one of those presets switches the hall off." : "Off: the booth stands in the environment above, with nothing of its own around it. The walls, the light bar and the panel module are unchanged — this is only the room."}</p>` : ""}<label class="setting-label">Artwork colour<select aria-label="Artwork colour" data-field="artFidelity" data-scope="booth">${Object.entries(ART_FIDELITY).map(([k,v])=>`<option value="${k}" ${(p.booth.artFidelity||DEFAULT_FIDELITY)===k?'selected':''}>${v}</option>`).join('')}</select></label>${groundFields()}<label class="setting-label">Horizon<select aria-label="Horizon" data-field="horizon" data-scope="booth">${Object.entries({studio:'Neutral studio',open:'Open sky',park:'Park · trees',urban:'Urban plaza'}).map(([k,v])=>`<option value="${k}" ${(p.booth.horizon||'studio')===k?'selected':''}>${v}</option>`).join('')}</select></label><label class="check-field"><input type="checkbox" data-field="neighbors" data-scope="booth" ${p.booth.neighbors?'checked':''}/>Surround with other booths</label>${surroundingsFields()}</section>${viewsSection()}${tagsSection()}${peopleSection()}<section><h3>Display walls</h3>${colorField("Fabric finish", "color", "booth", p.booth.color, "Fabric finish")}<label class="setting-label">Panel surface<select aria-label="Panel surface" data-field="wallFinish" data-scope="booth">${Object.entries({smooth:"Smooth print",fabric:"Fabric pro-panel"}).map(([k,v])=>`<option value="${k}" ${(p.booth.wallFinish||"smooth")===k?"selected":""}>${v}</option>`).join("")}</select></label>${(p.booth.wallFinish||"smooth")==="fabric"?`${range("Weave depth","wallTexture",p.booth.wallTexture??60,0,100,1,"booth","%")}<p class="muted">The weave only. Panels keep the colour above, so artwork is still judged against the finish you chose. Without the carpet texture files the panels stay smooth.</p>`:""}<div class="swatches">${["#45474a", "#25282b", "#b1aea4", "#d8d4ca"].map((c) => `<button data-color="${c}" style="background:${c}" aria-label="Wall finish ${c}"></button>`).join("")}</div>${["back", "left", "right"].map((w) => `<div class="wall-setting"><label class="check-field"><input type="checkbox" data-field="enabled" data-scope="wall-${w}" ${p.booth.walls[w].enabled ? "checked" : ""}/>${w[0].toUpperCase() + w.slice(1)} wall</label>${field("Width", "width", p.booth.walls[w].width, 12, w === "back" ? p.booth.width : p.booth.depth, 1, "in", "wall-" + w)}${field("Height", "height", p.booth.walls[w].height, 24, 144, 1, "in", "wall-" + w)}</div>`).join("")}</section><section><h3>Free-standing walls and pedestals</h3><p class="muted">Interior panels and pedestals live in the Walls tool, so this list stays the booth itself.</p>${btn("open-walls", "Open the Walls tool", "columns-2", "wide")}</section>${rowSection()}${draftSection()}`}<section><h3>Project</h3>${btn("quick-start", "Quick start a new booth", "zap", "primary wide")}${allowed("templates") ? btn("save-template", "Save this booth as a template", "save", "wide") : ""}${btn("copy-project", "Duplicate as alternative", "copy", "wide")}${btn("new-project", "New empty booth", "plus", "wide")}${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Backups include all original images. Download before switching projects.</p><label class="setting-label">Plan<select data-tier aria-label="Plan">${Object.entries(TIERS).map(([k, v]) => `<option value="${k}" ${tier === k ? "selected" : ""}>${e(v.label)}</option>`).join("")}</select></label><p class="muted">${tier === "pro" ? "Pro: every tool. Lite shows a lock on the Pro ones — switch to see what a Lite user sees." : "Lite: the Pro tools show a lock. A booth made in Pro still draws every part of itself here."} Remembered on this browser; never part of a backup.</p></section>`;
+      html = `<div class="panel-heading"><h2>${p.mode === "photo" ? "Booth photograph" : "Booth layout"}</h2>${icon("layout-panel-left")}</div>${p.mode === "photo" ? `<p class="muted">The original photo stays intact. Added art and light overlays are saved separately. Existing objects in the photograph cannot be moved or erased in this prototype.</p>${btn("upload-photo", p.photo.asset ? "Replace booth photo" : "Upload booth photo", "image-plus", "wide")}${range("Photo exposure", "exposure", p.photo.exposure, -1, 1, 0.05, "photo")}` : `<section><h3>Footprint</h3><select data-field="preset" aria-label="Booth preset"><option value="120" ${p.booth.width === 120 ? "selected" : ""}>10 × 10 ft · Standard</option><option value="240" ${p.booth.width === 240 ? "selected" : ""}>10 × 20 ft · Double</option></select><p class="muted">Nominal footprint. Panels and 1.4″ canopy legs reduce usable space near edges.</p>${isArtShow(p) ? `<div class="warning">This is an art-show booth. Its footprint, walls and light bar are in the <strong>Art show</strong> tool, and a preset or a canopy here would put it back to an outdoor pop-up.</div>` : ""}${field("Wall height", "height", p.booth.height, 48, 144, 1, "in", "booth")}<label class="check-field"><input type="checkbox" data-field="tent" data-scope="booth" ${p.booth.tent ? "checked" : ""}/>White canopy & frame</label><label class="setting-label">Tent style<select aria-label="Tent style" data-field="tentStyle" data-scope="booth">${Object.entries(TENTS).map(([k,v])=>`<option value="${k}" ${(p.booth.tentStyle||'classic')===k?'selected':''}>${v}</option>`).join('')}</select></label><p class="muted">12″ fabric valance, rounded hems, roof ribs and folding frame. Inspired shapes; not manufacturer-certified models.</p></section><section><h3>Surroundings</h3><label class="setting-label">Environment<select aria-label="Environment" data-field="envPreset" data-scope="booth">${Object.entries(ENV_PRESETS).map(([k,v])=>`<option value="${k}" ${(p.booth.envPreset||DEFAULT_PRESET)===k?'selected':''}>${v.label}</option>`).join('')}</select></label><p class="muted">Presets light the booth from a photographed environment. Without its image files a preset keeps the procedural surroundings below.</p>${isArtShow(p) ? `<label class="check-field"><input type="checkbox" data-field="on" data-scope="hall" ${hallSpec(p.booth).on ? "checked" : ""}/>Stand this booth in a white exhibition hall</label><p class="muted">${hallSpec(p.booth).on ? "The hall's own walls stand around the booth. In a photographed environment they cut across it as a white band, so choosing one of those presets switches the hall off." : "Off: the booth stands in the environment above, with nothing of its own around it. The walls, the light bar and the panel module are unchanged — this is only the room."}</p>` : ""}<label class="setting-label">Artwork colour<select aria-label="Artwork colour" data-field="artFidelity" data-scope="booth">${Object.entries(ART_FIDELITY).map(([k,v])=>`<option value="${k}" ${(p.booth.artFidelity||DEFAULT_FIDELITY)===k?'selected':''}>${v}</option>`).join('')}</select></label>${groundFields()}<label class="setting-label">Horizon<select aria-label="Horizon" data-field="horizon" data-scope="booth">${Object.entries({studio:'Neutral studio',open:'Open sky',park:'Park · trees',urban:'Urban plaza'}).map(([k,v])=>`<option value="${k}" ${(p.booth.horizon||'studio')===k?'selected':''}>${v}</option>`).join('')}</select></label><label class="check-field"><input type="checkbox" data-field="neighbors" data-scope="booth" ${p.booth.neighbors?'checked':''}/>Surround with other booths</label>${surroundingsFields()}</section>${viewsSection()}${tagsSection()}${peopleSection()}${underlaySection()}${clearanceSection()}<section><h3>Display walls</h3>${colorField("Fabric finish", "color", "booth", p.booth.color, "Fabric finish")}<label class="setting-label">Panel surface<select aria-label="Panel surface" data-field="wallFinish" data-scope="booth">${Object.entries({smooth:"Smooth print",fabric:"Fabric pro-panel"}).map(([k,v])=>`<option value="${k}" ${(p.booth.wallFinish||"smooth")===k?"selected":""}>${v}</option>`).join("")}</select></label>${(p.booth.wallFinish||"smooth")==="fabric"?`${range("Weave depth","wallTexture",p.booth.wallTexture??60,0,100,1,"booth","%")}<p class="muted">The weave only. Panels keep the colour above, so artwork is still judged against the finish you chose. Without the carpet texture files the panels stay smooth.</p>`:""}<div class="swatches">${["#45474a", "#25282b", "#b1aea4", "#d8d4ca"].map((c) => `<button data-color="${c}" style="background:${c}" aria-label="Wall finish ${c}"></button>`).join("")}</div>${["back", "left", "right"].map((w) => `<div class="wall-setting"><label class="check-field"><input type="checkbox" data-field="enabled" data-scope="wall-${w}" ${p.booth.walls[w].enabled ? "checked" : ""}/>${w[0].toUpperCase() + w.slice(1)} wall</label>${field("Width", "width", p.booth.walls[w].width, 12, w === "back" ? p.booth.width : p.booth.depth, 1, "in", "wall-" + w)}${field("Height", "height", p.booth.walls[w].height, 24, 144, 1, "in", "wall-" + w)}</div>`).join("")}</section><section><h3>Free-standing walls and pedestals</h3><p class="muted">Interior panels and pedestals live in the Walls tool, so this list stays the booth itself.</p>${btn("open-walls", "Open the Walls tool", "columns-2", "wide")}</section>${rowSection()}${draftSection()}`}<section><h3>Project</h3>${btn("quick-start", "Quick start a new booth", "zap", "primary wide")}${allowed("templates") ? btn("save-template", "Save this booth as a template", "save", "wide") : ""}${btn("copy-project", "Duplicate as alternative", "copy", "wide")}${btn("new-project", "New empty booth", "plus", "wide")}${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Backups include all original images. Download before switching projects.</p><label class="setting-label">Plan<select data-tier aria-label="Plan">${Object.entries(TIERS).map(([k, v]) => `<option value="${k}" ${tier === k ? "selected" : ""}>${e(v.label)}</option>`).join("")}</select></label><p class="muted">${tier === "pro" ? "Pro: every tool. Lite shows a lock on the Pro ones — switch to see what a Lite user sees." : "Lite: the Pro tools show a lock. A booth made in Pro still draws every part of itself here."} Remembered on this browser; never part of a backup.</p></section>`;
     }
     if (tab === "show") {
       html = p.mode === "photo"
@@ -1923,7 +2030,7 @@ async function boot() {
     if (tab === "walls") {
       html = p.mode === "photo"
         ? `<div class="panel-heading"><h2>Walls and pedestals</h2>${icon("columns-2")}</div><div class="empty-inspector"><p>Free-standing walls and pedestals are measured objects in the 3D booth. Switch to the 3D booth to place them.</p></div>`
-        : `<div class="panel-heading"><h2>Walls and pedestals</h2>${icon("columns-2")}</div><p class="muted">Everything that stands on the booth floor: interior display walls you can hang art on, and pedestals you cannot. Both are placed in inches and both can be dragged.</p>${panelFields()}${pedestalFields()}`;
+        : `<div class="panel-heading"><h2>Walls and pedestals</h2>${icon("columns-2")}</div><p class="muted">Everything that stands on the booth floor: interior display walls you can hang art on, and pedestals you cannot. Both are placed in inches and both can be dragged.</p>${panelFields()}${pedestalFields()}${modelsSection()}`;
     }
     if (tab === "lighting") {
       const photoMode = p.mode === "photo",
@@ -1938,7 +2045,7 @@ async function boot() {
         : `<div class="panel-heading"><h2>Video</h2>${icon("video")}</div><p class="muted">Everything about moving pictures in one place: the move, the clip, the timeline and a batch list. The Export tab keeps the same controls beside the PNG and the guide, and they are the same settings — this is not a second set.</p>${gated("video", videoSection() + batchSection(), "Camera moves, keyframed timelines and batch MP4 export. Part of Booth Studio Pro.")}<section><h3>Stills</h3><p class="muted">The frame you are looking at, as a PNG, without controls or outlines. The full image options are in Export.</p>${btn("export-image", "Export PNG · 4096 px", "download", "wide")}</section>`;
     }
     if (tab === "export") {
-      html = `<div class="panel-heading"><h2>Export your booth</h2>${icon("download")}</div><p class="muted">A clean image of the current ${p.mode === "photo" ? "photo composition" : "camera view"}, without controls or selection outlines.</p><section><h3>Image size</h3>${p.mode === "photo" ? "" : frameFields("export")}<label class="setting-label">Detail<select id="export-size" aria-label="Export image size">${STILL_SIZES.map((n) => `<option value="${n}" ${exportLong === n ? "selected" : ""}>${n} px on the long side${n <= 1440 ? " · Fast" : n >= 4096 ? " · High resolution" : ""}</option>`).join("")}</select></label><p class="muted">PNG · ${p.mode === "photo" ? "The photograph's own shape. Enlarging a small source cannot restore missing detail." : e(frameNote("export")) + " Preview textures are capped at 2048 px per artwork; originals remain in the backup."}</p>${btn("export-image", "Export PNG", "download", "primary wide")}</section>${p.mode === "photo" ? "" : gated("video", videoSection())}${gated("showPack", `<section><h3>Show pack</h3><p class="muted">For the van: a measured floor plan with every piece numbered and its clearances, the inventory of work with sizes, media and prices, and a packing and load-in checklist worked out from this booth. Open the downloaded HTML to print or save as PDF.</p>${btn("show-pack", "Download show pack", "layers", "wide")}</section>`)}${gated("guide", `<section><h3>Installation guide</h3><p class="muted">Measured wall elevations, panel sizes, and left/bottom placement references. Open the downloaded HTML to print or save as PDF. Photo overlays are excluded.</p>${btn("guide", "Download hanging guide", "layout-panel-left", "wide")}</section>`)}<section><h3>Keep your work</h3>${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Includes original artwork and photo files, booth layout, and lighting.</p></section><section><h3>Preview quality</h3><select id="quality" aria-label="Preview quality (Export)">${qualityOptions()}</select><p class="muted">Auto starts sharp and lowers the detail while it measures this computer drawing slower than it should. The light bar's shadows are drawn live at High detail only; exports always include them. The same menu is under the viewport, beside what it is drawing at now.</p></section>`;
+      html = `<div class="panel-heading"><h2>Export your booth</h2>${icon("download")}</div><p class="muted">A clean image of the current ${p.mode === "photo" ? "photo composition" : "camera view"}, without controls or selection outlines.</p><section><h3>Image size</h3>${p.mode === "photo" ? "" : frameFields("export")}<label class="setting-label">Detail<select id="export-size" aria-label="Export image size">${STILL_SIZES.map((n) => `<option value="${n}" ${exportLong === n ? "selected" : ""}>${n} px on the long side${n <= 1440 ? " · Fast" : n >= 4096 ? " · High resolution" : ""}</option>`).join("")}</select></label><p class="muted">PNG · ${p.mode === "photo" ? "The photograph's own shape. Enlarging a small source cannot restore missing detail." : e(frameNote("export")) + " Preview textures are capped at 2048 px per artwork; originals remain in the backup."}</p>${btn("export-image", "Export PNG", "download", "primary wide")}</section>${p.mode === "photo" ? "" : gated("video", videoSection())}${gated("showPack", `<section><h3>Show pack</h3><p class="muted">For the van: a measured floor plan with every piece numbered and its clearances, the inventory of work with sizes, media and prices, and a packing and load-in checklist worked out from this booth. Open the downloaded HTML to print or save as PDF.</p>${btn("show-pack", "Download show pack", "layers", "wide")}</section>`)}${p.mode === "photo" ? "" : gated("glb", `<section><h3>3D model</h3><p class="muted">The booth as a .glb — walls, work, furniture, figures and any models you brought in, in metres — for SketchUp, Blender or an AR viewer. Surroundings, lights and the drawn shadows stay behind.</p>${btn("export-glb", "Download booth as .glb", "box", "wide")}</section>`)}${p.mode === "photo" ? "" : gated("elevations", `<section><h3>Elevations to scale</h3><p class="muted">A floor plan and every wall with work on it, drawn at a real architectural scale with its dimension chain and centre lines — the drawing a carpenter or installer works from. Print at 100%.</p>${btn("elevations", "Download elevations", "ruler", "wide")}</section>`)}${gated("guide", `<section><h3>Installation guide</h3><p class="muted">Measured wall elevations, panel sizes, and left/bottom placement references. Open the downloaded HTML to print or save as PDF. Photo overlays are excluded.</p>${btn("guide", "Download hanging guide", "layout-panel-left", "wide")}</section>`)}<section><h3>Keep your work</h3>${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Includes original artwork and photo files, booth layout, and lighting.</p></section><section><h3>Preview quality</h3><select id="quality" aria-label="Preview quality (Export)">${qualityOptions()}</select><p class="muted">Auto starts sharp and lowers the detail while it measures this computer drawing slower than it should. The light bar's shadows are drawn live at High detail only; exports always include them. The same menu is under the viewport, beside what it is drawing at now.</p></section>`;
     }
     return html;
   }
@@ -1946,7 +2053,9 @@ async function boot() {
   // selection changes both of them and nothing else on the page.
   function renderStatus() {
     document.querySelector("#gesture-hint").textContent =
-      walking && p.mode !== "photo"
+      scene?.drawingBox && p.mode !== "photo"
+        ? "Box: press on the floor and drag out its footprint · Esc to stop"
+        : walking && p.mode !== "photo"
         ? "Walk: W/S or ↑/↓ forward and back · A/D or ←/→ sideways · Shift strides · drag to look round · Esc to stop"
         : scene?.measure.on && p.mode !== "photo"
         ? measureHint
@@ -2828,6 +2937,55 @@ async function boot() {
     // slider point, because the stored unit is what the light reads.
     "tier-pro": () => setTier("pro"),
     walk: () => setWalking(!walking),
+    "draw-box": () => setDrawingBox(!scene?.drawingBox),
+    "upload-model": () => document.querySelector("#model-input").click(),
+    "export-glb": async () => {
+      if (busy || !scene) return;
+      busy = true;
+      try {
+        toast("Writing the booth as .glb…");
+        const blob = await scene.exportGLB();
+        download(blob, safeName() + ".glb");
+        toast(`Booth exported as .glb · ${(blob.size / 1048576).toFixed(1)} MB. Opens in SketchUp (with the glTF importer), Blender and AR viewers.`);
+      } catch (err) {
+        toast(err.message || "The .glb could not be written.", true);
+      } finally {
+        busy = false;
+      }
+    },
+    "upload-underlay": () => document.querySelector("#underlay-input").click(),
+    "remove-underlay": () =>
+      mutate(() => {
+        const id = p.booth.underlay?.asset;
+        delete p.booth.underlay;
+        // The image is only the plan's: nothing else can be using it.
+        if (id && !p.art.some((a) => a.asset === id)) delete p.assets[id];
+      }),
+    "underlay-scale": () => {
+      const u = p.booth.underlay;
+      const pts = scene?.measure.points;
+      if (!u || pts?.length !== 2) return toast("Measure a known distance on the plan with the tape (T) first.", true);
+      const taped = distanceInches(pts[0], pts[1], 0.0254);
+      const real = Number(document.querySelector("#underlay-real")?.value);
+      if (!(taped > 0.5) || !(real > 0)) return toast("Type the real length of the distance you taped.", true);
+      const factor = real / taped;
+      const width = Math.max(12, Math.min(24000, u.width * factor));
+      // Scaled about the tape's start, so the point that was measured from
+      // stays under the cursor and the booth does not slide off the plan.
+      const ox = pts[0].x / 0.0254, oz = pts[0].z / 0.0254;
+      mutate(() => {
+        u.width = Math.round(width * 100) / 100;
+        u.x = Math.round((ox + (u.x - ox) * factor) * 100) / 100;
+        u.z = Math.round((oz + (u.z - oz) * factor) * 100) / 100;
+      });
+      scene.setMeasuring(false);
+      syncTools();
+      toast(`Plan scaled ×${factor.toFixed(3)}: the taped distance now measures ${formatLength(real)}.`);
+    },
+    elevations: () => {
+      download(new Blob([elevationsHTML(p)], { type: "text/html" }), safeName() + "-elevations.html");
+      toast("Elevations downloaded: a floor plan and every hung wall, to scale. Print at 100%.");
+    },
     "view-save": () => {
       if (!scene) return;
       const views = p.views || [];
@@ -2926,6 +3084,17 @@ async function boot() {
         }
         if (action.startsWith("row-remove-")) removeRowSlot(action.slice(11));
         else if (action.startsWith("view-go-")) goToView(action.slice(8));
+        else if (action.startsWith("clearance-show-")) showClearance(Number(action.slice(15)));
+        else if (action.startsWith("delete-model-")) {
+          const id = action.slice(13);
+          mutate(() => {
+            const gone = (p.booth.models || []).find((m) => m.id === id);
+            p.booth.models = (p.booth.models || []).filter((m) => m.id !== id);
+            if (!p.booth.models.length) delete p.booth.models;
+            // The file goes with its last placement.
+            if (gone && !(p.booth.models || []).some((m) => m.asset === gone.asset)) delete p.assets[gone.asset];
+          });
+        }
         else if (action.startsWith("view-update-")) {
           const id = action.slice(12);
           const pose = scene?.pose();
@@ -3005,7 +3174,7 @@ async function boot() {
     if (b.dataset.hide) {
       const kind = b.dataset.hide,
         id = b.dataset.hideId;
-      const list = kind === "pedestal" ? boothPedestals(p) : kind === "panel" ? boothPanels(p) : p.booth.people || [];
+      const list = kind === "pedestal" ? boothPedestals(p) : kind === "panel" ? boothPanels(p) : kind === "model" ? p.booth.models || [] : p.booth.people || [];
       const item = list.find((x) => x.id === id);
       if (!item) return;
       const hide = isShown(item);
@@ -3015,7 +3184,7 @@ async function boot() {
         if (hide && kind === "pedestal" && selectedPedestal === id) selectedPedestal = null;
         if (hide && kind === "panel" && selectedPanel === panelKey(id)) selectedPanel = null;
       });
-      const what = { pedestal: "Piece", panel: "Free-standing wall", person: "Figure" }[kind] || "Piece";
+      const what = { pedestal: "Piece", panel: "Free-standing wall", person: "Figure", model: "Model" }[kind] || "Piece";
       toast(hide ? `${what} hidden. Its size and place are kept; the eye brings it back.` : `${what} showing again.`);
       return;
     }
@@ -3084,6 +3253,62 @@ async function boot() {
     placeCopyAt(sourceKey, ev);
   });
 
+  document.querySelector("#model-input").onchange = async (ev) => {
+    const file = ev.target.files[0];
+    ev.target.value = "";
+    if (!file) return;
+    if (!allowed("glb")) return toast("3D model import is part of Booth Studio Pro.", true);
+    try {
+      if (!/\.glb$/i.test(file.name)) throw new Error("Choose a .glb file — binary glTF, which SketchUp, Blender and most scanners export.");
+      if (file.size > 28 * 1024 * 1024) throw new Error("That model is over 28 MB. Simplify or compress it and try again.");
+      const models = p.booth.models || [];
+      if (models.length >= MAX_MODELS) throw new Error(`${MAX_MODELS} models is the limit.`);
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      // glTF binary files start "glTF".
+      if (String.fromCharCode(...bytes.slice(0, 4)) !== "glTF") throw new Error("That file is not a binary glTF (.glb).");
+      const data = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).replace(/^data:[^;]*;/, "data:model/gltf-binary;"));
+        reader.onerror = () => reject(new Error("The model could not be read."));
+        reader.readAsDataURL(new Blob([bytes], { type: "model/gltf-binary" }));
+      });
+      const assetId = uid();
+      const model = { id: uid(), asset: assetId, name: file.name.replace(/\.glb$/i, "").slice(0, 120), height: 36, x: 0, z: 0, rotation: 0 };
+      mutate(() => {
+        p.assets[assetId] = { name: file.name, width: 1, height: 1, role: "model", data };
+        p.booth.models = [...models, model];
+        tab = "walls";
+      });
+      toast(`${model.name} stands in the booth at 36″. Type its real height in the Walls tool.`);
+    } catch (err) {
+      toast(err.message, true);
+    }
+  };
+  document.querySelector("#underlay-input").onchange = async (ev) => {
+    const file = ev.target.files[0];
+    ev.target.value = "";
+    if (!file) return;
+    if (!allowed("underlay")) return toast("The floor plan underlay is part of Booth Studio Pro.", true);
+    try {
+      if (Object.keys(p.assets).length >= 250) throw new Error("This prototype supports up to 250 images.");
+      const asset = await readImage(file);
+      mutate(() => {
+        const old = p.booth.underlay?.asset;
+        if (old && !p.art.some((a) => a.asset === old)) delete p.assets[old];
+        const id = uid();
+        asset.role = "underlay";
+        p.assets[id] = asset;
+        // A first guess: the plan ten times the booth's width, centred on it.
+        // The tape and Scale plan set the real scale.
+        p.booth.underlay = { asset: id, width: Math.min(24000, p.booth.width * 10), x: 0, z: 0, rotation: 0, opacity: 0.6, on: true };
+      });
+      scene?.setView("plan");
+      document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === "plan"));
+      toast("Floor plan laid under the booth. Measure something you know with the tape (T), then Scale plan.");
+    } catch (err) {
+      toast(err.message, true);
+    }
+  };
   for(const [input,key] of [["surround-input","surroundAsset"],["ground-input","groundAsset"]]){
     document.querySelector("#"+input).onchange=async ev=>{
       const file=ev.target.files[0];ev.target.value="";if(!file)return;
@@ -3137,6 +3362,10 @@ async function boot() {
               ? (p.booth.lightBar = lightBarSpec(p.booth))
             : scope === "hall"
               ? (p.booth.hall = hallSpec(p.booth))
+            : scope === "underlay"
+              ? p.booth.underlay
+            : scope?.startsWith("model-")
+              ? (p.booth.models || []).find((m) => m.id === scope.slice(6))
             : SHADOW_KINDS.some((kind) => SHADOW_FIELD[kind] === scope)
               ? (p.booth[scope] = shadowSpec(p.booth, SHADOW_KINDS.find((kind) => SHADOW_FIELD[kind] === scope)))
               : scope === "light"
@@ -4002,6 +4231,11 @@ async function boot() {
         return;
       }
     }
+    if (ev.key === "Escape" && scene?.drawingBox) {
+      ev.preventDefault();
+      setDrawingBox(false);
+      return;
+    }
     if (ev.key === "Escape" && scene?.measure.on) {
       ev.preventDefault();
       setMeasuring(false);
@@ -4065,7 +4299,7 @@ async function boot() {
    * is what the app did before thumbnails existed.
    */
   async function backfillThumbnails() {
-    const missing = Object.values(p.assets).filter((asset) => !asset.thumb);
+    const missing = Object.values(p.assets).filter((asset) => !asset.thumb && asset.role !== "model");
     if (!missing.length) return;
     for (const asset of missing) {
       try {

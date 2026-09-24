@@ -1989,3 +1989,12 @@ dialog li {
 .walk-pad [data-walk="back"] {grid-column:2;grid-row:3;}
 .walk-pad .walk-exit {grid-column:3;grid-row:3;font-size:11px;}
 #scene.walking canvas {cursor:grab;}
+
+/* Clearance checks. */
+.clearance-list {list-style:none;margin:8px 0;padding:0;display:grid;gap:6px;}
+.clearance-list li {display:flex;gap:8px;align-items:center;justify-content:space-between;padding:7px 9px;border-radius:8px;font-size:12px;line-height:1.4;}
+.clearance-list .clearance-problem {background:#3a1d1d;border:1px solid #7a3434;}
+.clearance-list .clearance-warning {background:#352c16;border:1px solid #6e5a24;}
+.clearance-list button.compact {flex-shrink:0;padding:4px 8px;font-size:11px;}
+.ok-note {color:#8fd19e;font-size:12px;}
+.scene-label-note.clearance {background:#ff4d4d;border-color:#ff4d4d;color:#1a0b0b;font-weight:600;}

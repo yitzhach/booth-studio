@@ -223,6 +223,18 @@ function placePanelFrame(g, panel) {
  * so this is the whole of it — but it is still one function the build and a
  * drag both go through, for the same reason `placePanelFrame` is.
  */
+/**
+ * A .glb held as a data URL, parsed into a three object. GLTFLoader is loaded
+ * on first use, so a booth with no models never downloads it.
+ */
+async function parseModel(dataUrl) {
+  const [{ GLTFLoader }, buffer] = await Promise.all([
+    import("three/addons/loaders/GLTFLoader.js"),
+    fetch(dataUrl).then((r) => r.arrayBuffer()),
+  ]);
+  const gltf = await new GLTFLoader().parseAsync(buffer, "");
+  return gltf.scene;
+}
 function placePedestal(g, ped) {
   g.position.set(ped.x * IN, 0, ped.z * IN);
   g.rotation.y = ((ped.rotation || 0) * Math.PI) / 180;
@@ -667,6 +679,7 @@ export class BoothScene {
     };
     settle(this, "texture");
     settle(this, "loadCutout");
+    settle(this, "loadingModel");
     settle(this.surfaces, "load");
     settle(this.lighting, "apply");
   }
@@ -1199,6 +1212,8 @@ export class BoothScene {
       floor.material.bumpMap = null; floor.material.userData.ownedMap = true;
       floor.material.needsUpdate = true;
     }).catch(() => {});
+    this.buildUnderlay(p, rev);
+    this.buildModels(p, rev);
     const ambient = new T.HemisphereLight("#e9f1ff", "#858079", p.ambient);
     this.group.add(ambient);
     const fill = new T.DirectionalLight("#fff4df", 0.6);
@@ -1689,6 +1704,14 @@ export class BoothScene {
       this.group.add(g);
       this.pedestalFrames[ped.id] = g;
       const kind = furnitureKind(ped);
+      if (kind === "box") {
+        // A drawn box is exactly its measurements: one block, no reveal.
+        const block = this.box(ped.width * IN, ped.height * IN, ped.depth * IN, 0, (ped.height * IN) / 2, 0,
+          new T.MeshStandardMaterial({ color: ped.color || FURNITURE.box.color, roughness: 0.8 }), g);
+        block.userData.pedestal = ped.id;
+        this.pedestalObjects.push(block);
+        continue;
+      }
       if (kind !== "pedestal") {
         // Furniture: the same group, placement and drag, another shape.
         for (const part of buildFurniture(kind, { ...ped, color: ped.color || FURNITURE[kind].color }, g, this.box.bind(this))) {
@@ -1914,11 +1937,21 @@ export class BoothScene {
     this.group.add(this.guides);
     this.annotations = [];
     const segments = [];
+    const tight = [];
     const Y = 0.006;
     if (this.view === "plan") {
       const ped = this.selectedPedestal && findPedestal(this.p, this.selectedPedestal);
       const panel = this.selectedPanel && findPanel(this.p, this.selectedPanel);
       const item = ped ? ped : panel ? { ...panel, depth: 3 } : null;
+      // Clearance: each gap narrower than a wheelchair needs, in red. Set by
+      // main.js from src/clearance.js, and only in Pro.
+      for (const issue of this.clearance || []) {
+        if (issue.kind !== "tight") continue;
+        const a = new T.Vector3(issue.from[0] * IN, Y, issue.from[1] * IN),
+          b = new T.Vector3(issue.to[0] * IN, Y, issue.to[1] * IN);
+        tight.push(a, b);
+        this.annotations.push({ at: a.clone().lerp(b, 0.5), text: formatLength(issue.inches), kind: "clearance" });
+      }
       for (const line of planDimensions(this.p.booth, item)) {
         const a = new T.Vector3(line.from.x * IN, Y, line.from.z * IN),
           b = new T.Vector3(line.to.x * IN, Y, line.to.z * IN);
@@ -1937,6 +1970,15 @@ export class BoothScene {
       segments.push(m0, m1);
       this.annotations.push({ at: m0.clone().lerp(m1, 0.5), text: formatLength(distanceInches(m0, m1, IN)), kind: "tape" });
     }
+    if (tight.length) {
+      const red = new T.LineSegments(
+        new T.BufferGeometry().setFromPoints(tight),
+        new T.LineBasicMaterial({ color: "#ff4d4d", depthTest: false, transparent: true }),
+      );
+      red.renderOrder = 10;
+      red.userData.editorOnly = true;
+      this.guides.add(red);
+    }
     if (segments.length) {
       const lines = new T.LineSegments(
         new T.BufferGeometry().setFromPoints(segments),
@@ -1946,6 +1988,154 @@ export class BoothScene {
       lines.userData.editorOnly = true;
       this.guides.add(lines);
     }
+    this.invalidate();
+  }
+  /**
+   * The venue's floor plan, laid on the floor at its real width: an image
+   * plane just above the ground, under everything else, half see-through.
+   * Editor-only — a planning aid, never in an export — and not pickable, so
+   * the tape measures through it to the floor, which is the same place.
+   */
+  buildUnderlay(p, rev) {
+    const u = p.booth.underlay;
+    const asset = u && p.assets[u.asset];
+    if (!asset || u.on === false) return;
+    this.texture(u.asset).then((t) => {
+      if (this.revision !== rev) return;
+      const aspect = (asset.height || 1) / (asset.width || 1);
+      const map = t.clone();
+      map.needsUpdate = true;
+      const plane = new T.Mesh(
+        new T.PlaneGeometry(u.width * IN, u.width * aspect * IN),
+        new T.MeshBasicMaterial({ map, transparent: true, opacity: u.opacity ?? 0.6, depthWrite: false, toneMapped: false }),
+      );
+      plane.material.userData.ownedMap = true;
+      plane.rotation.order = "YXZ";
+      plane.rotation.set(-Math.PI / 2, ((u.rotation || 0) * Math.PI) / 180, 0);
+      plane.position.set(u.x * IN, 0.004, u.z * IN);
+      plane.renderOrder = -2;
+      plane.name = "underlay";
+      plane.userData.editorOnly = true;
+      this.group.add(plane);
+      this.invalidate();
+    }).catch(() => {});
+  }
+  /**
+   * The .glb models brought in (booth.models), each stood on the floor at its
+   * typed height: scaled uniformly so its tallest point is that height, its
+   * footprint centred on its X/Z and its lowest point on the floor. A model
+   * file is parsed once per asset and cloned per placement.
+   */
+  buildModels(p, rev) {
+    this.modelFrames = {};
+    const list = (p.booth.models || []).filter(isShown);
+    if (!list.length) return;
+    this.modelCache ||= new Map();
+    for (const m of list) {
+      const asset = p.assets[m.asset];
+      if (!asset) continue;
+      let parsed = this.modelCache.get(m.asset);
+      if (!parsed) {
+        parsed = parseModel(asset.data);
+        this.modelCache.set(m.asset, parsed);
+        // A model that will not parse is forgotten, so a fixed file can try again.
+        parsed.catch(() => this.modelCache.delete(m.asset));
+      }
+      this.loadingModel(parsed).then((source) => {
+        if (this.revision !== rev) return;
+        const g = new T.Group();
+        g.name = "model:" + m.id;
+        g.userData.tag = "furniture";
+        const model = source.clone(true);
+        const box = new T.Box3().setFromObject(model);
+        const size = box.getSize(new T.Vector3());
+        const k = size.y > 0 ? (m.height * IN) / size.y : 1;
+        model.scale.setScalar(k);
+        const centre = box.getCenter(new T.Vector3());
+        model.position.set(-centre.x * k, -box.min.y * k, -centre.z * k);
+        model.traverse((o) => {
+          if (o.isMesh) {
+            o.castShadow = true;
+            o.receiveShadow = true;
+          }
+        });
+        g.add(model);
+        g.position.set(m.x * IN, 0, m.z * IN);
+        g.rotation.y = ((m.rotation || 0) * Math.PI) / 180;
+        this.group.add(g);
+        this.modelFrames[m.id] = g;
+        this.applyTags(g);
+      }).catch(() => {});
+    }
+  }
+  /** A model load in flight, counted like every other load (watchForChanges). */
+  loadingModel(promise) {
+    return promise;
+  }
+  /**
+   * The booth as a binary glTF (.glb), for SketchUp, Blender, an AR viewer or
+   * a fabricator: the booth, the work, the furniture, the figures and any
+   * models — not the surroundings, the ground, the lights, the drawn drop
+   * shadows or anything editor-only, and nothing a hidden tag has taken out.
+   * Metres, which is glTF's unit.
+   */
+  async exportGLB() {
+    const { GLTFExporter } = await import("three/addons/exporters/GLTFExporter.js");
+    const off = [];
+    this.group.traverse((o) => {
+      if (o === this.group || !o.visible) return;
+      const drop =
+        o.isLight ||
+        o.userData.editorOnly ||
+        o.userData.artShadow ||
+        o.userData.tag === "surroundings" ||
+        o.name === "environment-ground" ||
+        o.name === "underlay" ||
+        (!o.isGroup && (o.layers.mask & 1) === 0);
+      if (drop) {
+        o.visible = false;
+        off.push(o);
+      }
+    });
+    try {
+      const result = await new GLTFExporter().parseAsync(this.group, { binary: true, onlyVisible: true });
+      return new Blob([result], { type: "model/gltf-binary" });
+    } finally {
+      for (const o of off) o.visible = true;
+    }
+  }
+  /**
+   * The Box tool: press on the floor, drag out a rectangle, let go. Snapped
+   * to whole inches with Snap on. The finished footprint goes to `onDrawBox`,
+   * which makes it a box piece; a click without a drag draws nothing.
+   */
+  setDrawingBox(on) {
+    this.drawingBox = on ? { start: null } : null;
+    this.showBoxPreview(null);
+    this.controls.enabled = true;
+  }
+  boxFrom(a, b) {
+    const grid = this.snap ? 1 : 0.25;
+    const q = (m) => Math.round(m / IN / grid) * grid;
+    const x0 = q(a.x), z0 = q(a.z), x1 = q(b.x), z1 = q(b.z);
+    return { x: (x0 + x1) / 2, z: (z0 + z1) / 2, width: Math.abs(x1 - x0), depth: Math.abs(z1 - z0) };
+  }
+  showBoxPreview(r) {
+    if (this.boxPreview) {
+      this.boxPreview.parent?.remove(this.boxPreview);
+      this.boxPreview.geometry.dispose();
+      this.boxPreview.material.dispose();
+      this.boxPreview = null;
+    }
+    this.snapNotes = [];
+    if (!r) return this.invalidate();
+    const Y = 0.008, x0 = (r.x - r.width / 2) * IN, x1 = (r.x + r.width / 2) * IN, z0 = (r.z - r.depth / 2) * IN, z1 = (r.z + r.depth / 2) * IN;
+    const pts = [[x0, z0], [x1, z0], [x1, z0], [x1, z1], [x1, z1], [x0, z1], [x0, z1], [x0, z0]].map(([x, z]) => new T.Vector3(x, Y, z));
+    this.boxPreview = new T.LineSegments(new T.BufferGeometry().setFromPoints(pts), new T.LineBasicMaterial({ color: "#ff5fa2", depthTest: false, transparent: true }));
+    this.boxPreview.renderOrder = 11;
+    this.boxPreview.userData.editorOnly = true;
+    this.group.add(this.boxPreview);
+    this.snapNotes = [{ at: new T.Vector3(r.x * IN, Y, r.z * IN), text: `${formatLength(r.width).split(" · ")[0]} × ${formatLength(r.depth).split(" · ")[0]}`, kind: "snap" }];
     this.invalidate();
   }
   /**
@@ -2240,6 +2430,15 @@ export class BoothScene {
     });
     c.addEventListener("pointerdown", e => {
       if (e.button !== 0 || this.drag) return;
+      if (this.drawingBox) {
+        this.point(e);
+        const at = this.ray.ray.intersectPlane(FLOOR, new T.Vector3());
+        if (!at) return;
+        this.drawingBox.start = at;
+        this.controls.enabled = false;
+        c.setPointerCapture(e.pointerId);
+        return;
+      }
       if (this.measure.on) {
         this.measurePoint(e);
         return;
@@ -2317,6 +2516,12 @@ export class BoothScene {
     // drawn can be seen, so the rest is work thrown away: the event is stored
     // and applied once, from the render loop.
     c.addEventListener("pointermove", e => {
+      if (this.drawingBox?.start) {
+        this.point(e);
+        const at = this.ray.ray.intersectPlane(FLOOR, new T.Vector3());
+        if (at) this.showBoxPreview(this.boxFrom(this.drawingBox.start, at));
+        return;
+      }
       if (!this.drag) return;
       this.pendingMove = e;
     });
@@ -2377,6 +2582,17 @@ export class BoothScene {
       }
     };
     c.addEventListener("pointerup", e => {
+      if (this.drawingBox?.start) {
+        this.point(e);
+        const at = this.ray.ray.intersectPlane(FLOOR, new T.Vector3());
+        const r = at && this.boxFrom(this.drawingBox.start, at);
+        this.drawingBox.start = null;
+        this.controls.enabled = true;
+        this.showBoxPreview(null);
+        if (c.hasPointerCapture(e.pointerId)) c.releasePointerCapture(e.pointerId);
+        if (r && r.width >= 4 && r.depth >= 4) this.onDrawBox?.(r);
+        return;
+      }
       if (this.drag) {
         // The last move still pending has to land before the drag ends, or a
         // quick flick finishes an inch short of where it was released.

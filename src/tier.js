@@ -72,6 +72,12 @@ export const PRO_ACTIONS = {
   "align-bottom": "align",
   "distribute-x": "align",
   "distribute-y": "align",
+  "upload-underlay": "underlay",
+  "underlay-scale": "underlay",
+  elevations: "elevations",
+  "draw-box": "box",
+  "upload-model": "glb",
+  "export-glb": "glb",
 };
 
 export const resolveTier = (tier) => (TIERS[tier] ? tier : DEFAULT_TIER);

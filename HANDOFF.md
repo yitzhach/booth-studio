@@ -16,10 +16,10 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-24 — roadmap batch B: saved views, tags and walk
-  mode** (the first bullet below), after batch A (smart guides, a multiple
-  selection), the roadmap's base (Lite / Pro, the phone layout) and the
-  cut-out people, all the same day.
+- **Last deploy: 2026-09-24 — roadmap batches C and D** (floor plan
+  underlay, clearance checks, elevations to scale; draw-a-box, `.glb` import
+  and export — the first two bullets below), after batches A and B, the
+  roadmap's base and the cut-out people, all the same day.
   Before that, **2026-09-23, three times.** First the ten speed-and-planning
   improvements, then — the same day, after the owner's first look on the real
   machine — the second round: the drag shadow, the fast-edit redraw leak, the
@@ -38,6 +38,86 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-24, roadmap batch D: draw-a-box, and 3D models in and out.
+  Pushed to `main`.** All Pro (`box`, `glb`).
+  1. **Draw a box.** Toolbar → **Box**: press on the floor, drag out a
+     footprint (a pink outline with its size follows the pointer, whole
+     inches with Snap on), let go. It becomes a floor piece of the new
+     furniture kind **`box`** — a plain block at exactly its measurements,
+     12″ high to start, selected, with a **Pull up** slider beside its Height
+     in the Walls tool. A riser, a plinth, a stage, a custom counter. Esc puts
+     the tool away; a click without a drag draws nothing. A box is a pedestal
+     record like any other furniture (`booth.pedestals`, `kind: "box"`), so it
+     drags, turns, hides, nudges, lands in the show pack and is checked for
+     clearance with no new code; its limits are wider than furniture's
+     (`BOX_LIMITS`: up to 360″ across, 144″ high) so it can be a stage.
+     `setDrawingBox` / `boxFrom` / `showBoxPreview` in scene.js.
+  2. **Export the booth as `.glb`.** Export → 3D model: the booth, the work
+     with its images, the furniture, the figures and any imported models, in
+     metres, through three's GLTFExporter (loaded on first use). Left out:
+     surroundings, the ground, lights, the drawn drop shadows, the underlay,
+     anything editor-only and anything a hidden tag has taken out
+     (`exportGLB` hides them for the write and puts them back). Opens in
+     Blender and AR viewers; SketchUp needs its glTF importer. A cut-out
+     figure is a flat picture there, facing the way its rotation says.
+  3. **Import a `.glb` model.** Walls → 3D models → **Import .glb model**: a
+     sculpture, a custom display, a scan. It is checked for the `glTF` magic
+     bytes, kept in the booth as an asset of the new role **`model`**
+     (`data:model/gltf-binary;base64,…`, up to 28 MB) and placed through the
+     new optional **`booth.models`** list — `{ id, asset, name, height, x, z,
+     rotation, hidden? }`, up to 8 (`MAX_MODELS`). It is scaled uniformly so
+     its tallest point is the typed height (36″ to start), centred on its X/Z
+     and stood on the floor, so the file's own units never matter. Sliders
+     and typed numbers place it; it has an eye and a remove, and removing the
+     last placement of a file removes the file. It is not draggable in the
+     viewport yet. `buildModels` / `parseModel` in scene.js; GLTFLoader loads
+     on first use.
+  `tests/box-model.test.js`; `tests/view-box.mjs` draws a box with the mouse,
+  pulls it up and reads the geometry back, exports the booth, checks the
+  bytes are glTF with meshes and no lights, then imports that same file as a
+  model and checks it stands on the floor at 36″ and survives a reload.
+- **2026-09-24, roadmap batch C: floor plan underlay, clearance checks,
+  elevations to scale. Pushed to `main`.** All Pro (`underlay`, `clearance`,
+  `elevations`).
+  1. **Floor plan underlay.** Layout → Floor plan underlay → **Add floor
+     plan image** (JPG or PNG — a screenshot of a PDF plan is fine; PDFs
+     themselves would need pdf.js and were not taken on). It lies on the
+     floor under everything, half see-through, editor-only so it never
+     reaches an export, and the view switches to Plan. **Scaling it**: pick
+     up the tape (T), measure something on the plan whose real length is
+     known, type that length and press **Scale plan** — the plan is scaled
+     about the tape's start, so the measured point stays put. Then opacity,
+     X/Z, rotation and on/off place it. Stored as the optional
+     **`booth.underlay`** `{ asset, width, x, z, rotation, opacity, on }`,
+     its image an asset of the new role **`underlay`** that never shows in
+     the artwork library; removing the plan removes the image.
+     `buildUnderlay` in scene.js. **Found and fixed on the way:** the
+     backup validator only knew four asset roles, so a booth with a plan
+     would have failed to reopen — `underlay` and `model` are now allowed,
+     and `tests/clearance.test.js` pins a round trip.
+  2. **Clearance checks.** Layout → Clearance checks lists, worst first:
+     floor pieces standing in each other or in a wall, a piece poking out of
+     the footprint, works hung over each other, and every gap narrower than
+     **36″ (the accessible route width)** between two pieces or a piece and a
+     wall. Gaps under 4″ are taken as a piece pushed against something on
+     purpose. **Show** selects the piece and switches to Plan view, where
+     each tight gap is a red line with its width. `src/clearance.js` is the
+     geometry, pure — rectangles turned the way three turns a group,
+     separating-axis overlap, exact polygon gaps — and `scene.clearance`
+     carries the tight gaps to `refreshGuides`. Lite draws none.
+  3. **Elevations to scale.** Export → Elevations to scale downloads one
+     printable page: a floor plan and every wall face with work on it (every
+     enabled inside face regardless), each at the largest standard
+     architectural scale that fits a landscape Letter sheet — 1″, ¾″, ½″ or
+     ¼″ to the foot (`fitScale`) — with the chain of gaps along the floor,
+     overall width and height, each work numbered with its centre line, a 1′
+     scale bar, and the plan's tight gaps in dashed red. SVGs are sized in
+     physical inches, so a print at 100% measures true. `src/elevations.js`,
+     pure. The hanging guide is unchanged: it is the table of numbers, this
+     is the drawing.
+  `tests/clearance.test.js`; `tests/view-plan.mjs` uploads a plan, scales it
+  from a taped metre, reloads, lists and draws a tight gap, downloads the
+  elevations and checks all three are locked in Lite.
 - **2026-09-24, roadmap batch B: saved views, tags, walk mode. Pushed to
   `main`.** All three are Lite. `src/views.js` holds the rules, pure.
   1. **Saved views** — SketchUp's Scenes. Layout → Saved views: **Save this
@@ -1472,6 +1552,9 @@ regression — it is the editor and the test sharing one server.
   from each tab's `inspectorHTML()`.
 - `src/tier.js` — Lite and Pro: the one table of Pro features and `can()`.
   `gated` / `proLock` and the action gate in `src/main.js` use it.
+- `src/clearance.js` — clearance geometry; `src/elevations.js` — the
+  to-scale drawings. `buildUnderlay`, `buildModels`, `exportGLB` and the Box
+  tool (`setDrawingBox`) are in `src/scene.js`.
 - `src/views.js` — saved views, tags and walk mode's rules; `applyTags` and
   `startWalk` / `walk` / `stopWalk` in `src/scene.js` do the work.
 - `src/guides.js` — smart guides' snapping arithmetic; `showSnap` in

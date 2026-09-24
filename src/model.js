@@ -372,7 +372,14 @@ export const FURNITURE = {
   gridwall: { label: "Gridwall panel", width: 24, depth: 12, height: 72, color: "#1e1f22" },
   banner: { label: "Banner stand", width: 33, depth: 12, height: 80, color: "#91beff" },
   tv: { label: "Screen on a stand", width: 44, depth: 20, height: 72, color: "#15171a" },
+  // Draw-a-box: a plain block at any size — a riser, a plinth, a stage, a
+  // custom counter. Drawn on the floor with the Box tool, then pulled up.
+  box: { label: "Box · riser, plinth or stage", width: 48, depth: 24, height: 12, color: "#e9e6df" },
 };
+/** A drawn box may be far bigger than a piece of furniture: a stage. */
+export const BOX_LIMITS = { width: [1, 360], depth: [1, 360], height: [1, 144] };
+/** Models brought in as .glb, stood on the floor. */
+export const MAX_MODELS = 8;
 export const furnitureKind = (ped) => (ped?.kind && FURNITURE[ped.kind] ? ped.kind : "pedestal");
 export const boothPedestals = (p) => p.booth.pedestals || [];
 export const findPedestal = (p, id) =>
@@ -700,9 +707,9 @@ export function validateProject(p) {
         !ped.id ||
         ped.id.length > 200 ||
         seen.has(ped.id) ||
-        !finite(ped.width, 4, 96) ||
-        !finite(ped.depth, 4, 96) ||
-        !finite(ped.height, 6, 96) ||
+        !finite(ped.width, ...(ped.kind === "box" ? BOX_LIMITS.width : [4, 96])) ||
+        !finite(ped.depth, ...(ped.kind === "box" ? BOX_LIMITS.depth : [4, 96])) ||
+        !finite(ped.height, ...(ped.kind === "box" ? BOX_LIMITS.height : [6, 96])) ||
         !finite(ped.x, -360, 360) ||
         !finite(ped.z, -360, 360) ||
         !finite(ped.rotation, -180, 180)
@@ -739,8 +746,52 @@ export function validateProject(p) {
   if (p.booth.fixtures !== undefined && !["auto", "always", "never"].includes(p.booth.fixtures)) fail();
   // Whether the figures are drawn. Optional and absent from every backup
   // written before it, so undefined means "shown", which is what they all say.
+  // 3D models brought in as .glb: each names a model asset in this backup.
+  if (p.booth.models !== undefined) {
+    if (!Array.isArray(p.booth.models) || p.booth.models.length > MAX_MODELS) fail();
+    const seenModels = new Set();
+    for (const m of p.booth.models) {
+      if (
+        !m ||
+        typeof m !== "object" ||
+        typeof m.id !== "string" ||
+        !m.id ||
+        m.id.length > 200 ||
+        seenModels.has(m.id) ||
+        typeof m.asset !== "string" ||
+        p.assets[m.asset]?.role !== "model" ||
+        !finite(m.height, 1, 240) ||
+        !finite(m.x, -600, 600) ||
+        !finite(m.z, -600, 600) ||
+        !finite(m.rotation, -360, 360)
+      )
+        fail();
+      if (m.name !== undefined && (typeof m.name !== "string" || m.name.length > 200)) fail();
+      if (m.hidden !== undefined && typeof m.hidden !== "boolean") fail();
+      seenModels.add(m.id);
+    }
+  }
   // Saved views: optional, so every backup written before them opens.
   if (!validViews(p.views)) fail();
+  // The floor plan underlay: an image of the venue's plan laid on the floor
+  // at a real width. Optional; when present it must name an image in this
+  // backup, or it would be a plan of nothing.
+  if (p.booth.underlay !== undefined) {
+    const u = p.booth.underlay;
+    if (
+      !u ||
+      typeof u !== "object" ||
+      typeof u.asset !== "string" ||
+      !p.assets[u.asset] ||
+      !finite(u.width, 12, 24000) ||
+      !finite(u.x, -24000, 24000) ||
+      !finite(u.z, -24000, 24000) ||
+      !finite(u.rotation, -360, 360) ||
+      !finite(u.opacity, 0, 1) ||
+      (u.on !== undefined && typeof u.on !== "boolean")
+    )
+      fail();
+  }
   if (p.booth.showPeople !== undefined && typeof p.booth.showPeople !== "boolean") fail();
   if (p.booth.people !== undefined) {
     if (!Array.isArray(p.booth.people) || p.booth.people.length > 6) fail();
@@ -817,9 +868,12 @@ export function validateProject(p) {
       !asset ||
       !finite(asset.width, 1, 30000) ||
       !finite(asset.height, 1, 30000) ||
-      (asset.role !== undefined && !["artwork", "photo", "surround", "ground"].includes(asset.role)) ||
+      (asset.role !== undefined && !["artwork", "photo", "surround", "ground", "underlay", "model"].includes(asset.role)) ||
       typeof asset.data !== "string" ||
-      !/^data:image\/(png|jpeg);base64,/.test(asset.data) ||
+      // An image, or — for a 3D model someone brought in — a binary glTF.
+      !(asset.role === "model"
+        ? /^data:model\/gltf-binary;base64,/.test(asset.data)
+        : /^data:image\/(png|jpeg);base64,/.test(asset.data)) ||
       asset.data.length > 40000000 ||
       // Optional, and derived from `data` rather than standing in for it: a
       // small JPEG the library and the inspector show instead of asking the
