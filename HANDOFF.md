@@ -1425,7 +1425,7 @@ the picker became one list.
 
 ```sh
 npm ci
-npm test                 # 358 Node tests
+npm test                 # 359 Node tests
 npm run build
 npm run test:view        # 26 suites: city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
