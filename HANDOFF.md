@@ -16,7 +16,8 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-23, three times.** First the ten speed-and-planning
+- **Last deploy: 2026-09-24 — cut-out people** (the bullet below). Before
+  that, **2026-09-23, three times.** First the ten speed-and-planning
   improvements, then — the same day, after the owner's first look on the real
   machine — the second round: the drag shadow, the fast-edit redraw leak, the
   cheaper click, Photoshop drop shadows, hide instead of delete, and the
@@ -34,6 +35,42 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-24: people are the owner's cut-out pictures. Pushed straight to
+  `main` at the owner's word.** Two PNGs with transparent backgrounds, supplied
+  in chat — a black silhouette of a man, and a posterised woman in colour
+  ("the female one is for woman") — are `public/assets/people/man.png` and
+  `woman.png`, and Layout → People → Add woman / Add man now draws them.
+  - **A figure is one plane that turns to face the camera**, the way
+    SketchUp's face-me people and architects' entourage work, so it never
+    shows its edge. The turn is written into `matrixWorld` in the mesh's
+    `onBeforeRender` (`makeCutout` in `src/people.js`), so it follows every
+    camera that draws it — the viewport, exports, video, and each light's
+    shadow camera, which is why the shadow is always the whole silhouette.
+    Nothing else sees the turn: the figure's position, `rotation` and every
+    test reading them are untouched.
+  - **The typed height is still the height.** The picture's own box (the
+    figure inside its transparent margin, measured off the alpha channel) is
+    in `PEOPLE[kind].cutout` and mapped onto the plane's UVs, so the top of
+    the hair is the typed height and the soles are on the floor.
+    `tests/view-people.mjs` reads both heights back in metres and checks each
+    plane faces the camera.
+  - **A figure's facing now only mirrors the picture.** Both pictures look to
+    the viewer's left; when a figure's rotation points to the viewer's right
+    the picture flips, so two figures turned to face each other do. The
+    rotation field is otherwise inert for a cut-out — a picture cannot show
+    its back.
+  - **Alpha test, not blending**, so the figures need no sorting against the
+    artwork and cast a correct shadow. Lit like everything else
+    (MeshStandardMaterial, roughness 1), so a dim booth dims them too.
+  - **The mannequin is the fallback.** The app must run with `public/assets`
+    empty: a missing picture leaves the grey mannequin, silently. The scene
+    loads each kind's picture once (`cutoutFor` / `loadCutout`), shares it
+    across figures and rebuilds, and swaps mannequins for pictures when it
+    lands; the test reloads with the pictures refused and checks for the
+    mannequin. Schema untouched — the pictures are assets, not data.
+  - **Where the pictures came from is the owner's to know.** They arrived in
+    chat with no source; `public/third-party-licenses.txt` says nothing about
+    them.
 - **2026-09-23, third round: the owner's answers, and tool search. Pushed
   straight to `main` at the owner's word.** The answers to Next item 1, as a
   quick question sheet: a drag with fast edit off is a "slight stutter, but
@@ -542,6 +579,27 @@ Extend it; do not rebuild it.
 
 ## Next
 
+1. **The cut-out people, by eye.** Do they read right in the booth — size
+   against the walls, the woman's colours under the booth's light, the black
+   silhouette against a dark wall? Is mirroring on facing welcome, or should
+   the picture never flip? A cut-out seen from high overhead (Plan view) is a
+   picture lying at an angle; if that reads wrong, Plan could draw a floor
+   marker instead. More kinds (a child, a group, a wheelchair user) are a
+   picture each plus a `PEOPLE` entry with its measured box.
+1. **The proposed roadmap — lite / pro and the SketchUp-style tools — is
+   waiting on the owner's pick.** Proposed 2026-09-24, not agreed. The tool
+   ideas, in priority order: snap and smart guides; a floor-plan underlay
+   scaled by two clicks; saved views; multi-select with align and
+   distribute; tags (visibility groups); walk mode; a draw-a-box / pull-up
+   tool; elevations printed to scale; a hall planner of numbered booths;
+   clearance checks; a power and rentals sheet; `.glb` import and export.
+   Proposed route: first a small capability layer (`src/tier.js`: one
+   `can(feature)` check, a lite/pro switch stored per browser, a lock badge
+   on pro controls) and a mobile pass over the existing panels, then the
+   tools in batches of two or three per session, each gated through `can()`
+   from the day it lands. Local-first rules out real licensing: without a
+   backend, pro can only be an honour-system unlock or a signed key checked
+   in the browser, and that decision is the owner's.
 1. **Tool search and the third round, on the real machine.** Does the
    search find what you type, by the name you would type? Its words come from
    the panels' own headings, labels and buttons, so a tool called something

@@ -57,6 +57,40 @@ try {
   assert.ok(Math.abs(built[1] - 72 * 0.0254) < 0.02, `the 6'0" figure stands ${built[1].toFixed(3)} m tall`);
   assert.ok(built[1] > built[0], 'and the taller default is taller in the render');
 
+  // ---- The cut-out pictures -----------------------------------------------
+  // With `public/assets/people` present each figure becomes the owner's
+  // picture on one plane, still the typed height, turned to face the camera.
+  await page.waitForFunction(() => {
+    const frames = Object.values(window.__booth.scene.personFrames);
+    return frames.length === 2 && frames.every((g) => g.children.length === 1 && g.children[0].userData.cutout);
+  }, null, { timeout: 15000 });
+  const cutouts = await page.evaluate(() => {
+    const scene = window.__booth.scene;
+    scene.renderFrame();
+    const Vector3 = scene.camera.position.constructor;
+    return Object.values(scene.personFrames).map((g) => {
+      const mesh = g.children[0];
+      // Where the drawn plane's normal points, from the matrix the last frame
+      // used — read first, because getWorldPosition recomputes it from the
+      // figure's own rotation.
+      const e = mesh.matrixWorld.elements;
+      const normal = new Vector3(e[8], e[9], e[10]).normalize();
+      const at = new Vector3();
+      mesh.getWorldPosition(at);
+      const top = at.y + mesh.geometry.parameters.height / 2;
+      const toCamera = scene.camera.position.clone().sub(at).setY(0).normalize();
+      return { top, facing: normal.x * toCamera.x + normal.z * toCamera.z, hasMap: !!mesh.material.map };
+    });
+  });
+  for (const c of cutouts) {
+    assert.ok(c.hasMap, 'a cut-out carries its picture');
+    assert.ok(c.facing > 0.999, `a cut-out turns to face the camera (${c.facing.toFixed(4)})`);
+  }
+  const cutTops = cutouts.map((c) => c.top).sort((a, b) => a - b);
+  assert.ok(Math.abs(cutTops[0] - 66 * 0.0254) < 0.02, `the 5'6" cut-out stands ${cutTops[0].toFixed(3)} m tall`);
+  assert.ok(Math.abs(cutTops[1] - 72 * 0.0254) < 0.02, `the 6'0" cut-out stands ${cutTops[1].toFixed(3)} m tall`);
+  if (process.env.BOOTH_SHOT) await page.screenshot({ path: process.env.BOOTH_SHOT });
+
   // Editing a height moves the geometry, which is what makes it a measurement.
   const raised = await page.evaluate(async () => {
     const project = window.__booth.project;
@@ -184,8 +218,25 @@ try {
     'and the rebuilt figure is still standing where it was put');
   assert.equal(await figureCount(), 2, 'with no second copy of it left behind');
 
+  // ---- Without the pictures ----------------------------------------------
+  // The app must run with `public/assets` empty: a missing picture leaves the
+  // mannequin, and says nothing about it.
+  // The same page, reloaded with the pictures refused: the figures are kept
+  // with the project, so they come back — as mannequins. (A second page is
+  // not an option; the single-process browser these suites run allows one.)
+  await page.route('**/assets/people/**', (route) => route.fulfill({ status: 404, body: '' }));
+  await page.waitForTimeout(800);
+  await page.reload();
+  await page.waitForFunction(() => Object.keys(window.__booth?.scene?.personFrames || {}).length > 0, null, { timeout: 15000 });
+  await page.waitForTimeout(1500);
+  const fallback = await page.evaluate(() => Object.values(window.__booth.scene.personFrames).map((g) => ({
+    parts: g.children.length,
+    cutout: g.children.some((m) => m.userData.cutout),
+  })));
+  assert.ok(fallback.length && fallback.every((f) => f.parts > 1 && !f.cutout), 'with no picture each figure is the mannequin');
+
   assert.deepEqual(errors, [], 'no page errors');
-  console.log('PASS people for scale at real heights, hide switch, placement and scale sliders, and spotlight housings hidden indoors with the rail kept.');
+  console.log('PASS people for scale at real heights, cut-out pictures facing the camera with the mannequin as fallback, hide switch, placement and scale sliders, and spotlight housings hidden indoors with the rail kept.');
 } finally {
   await browser.close();
   await server.close();

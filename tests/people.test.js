@@ -77,3 +77,20 @@ test("a schema-1 backup with no people at all still opens", () => {
   delete old.booth.fixtures;
   assert.doesNotThrow(() => validateProject(old));
 });
+
+test("a cut-out maps the figure's own box, not the picture's margin", async () => {
+  const { cutoutUV, cutoutAspect } = await import("../src/people.js");
+  for (const kind of Object.keys(PEOPLE)) {
+    const { size: [w, h], box } = PEOPLE[kind].cutout;
+    assert.ok(box[0] >= 0 && box[2] < w && box[1] >= 0 && box[3] < h, `${kind}'s box is inside its picture`);
+    const [u0, v0, u1, v1] = cutoutUV(kind);
+    assert.ok(0 <= u0 && u0 < u1 && u1 <= 1 && 0 <= v0 && v0 < v1 && v1 <= 1);
+    // v runs up: the soles are the low v, the top of the hair the high one.
+    assert.equal(v0, 1 - (box[3] + 1) / h);
+    assert.equal(v1, 1 - box[1] / h);
+    // A figure far wider than a quarter of its height would be a stretched one.
+    const aspect = cutoutAspect(kind);
+    assert.ok(aspect > 0.2 && aspect < 0.35, `${kind} is ${aspect.toFixed(3)} wide per unit of height`);
+    assert.equal(PEOPLE[kind].cutout.file, `assets/people/${kind}.png`);
+  }
+});

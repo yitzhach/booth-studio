@@ -11,7 +11,7 @@ import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
 import { decodeAt, isPreflipped } from "./image-source.js";
 import { IN, PEDESTAL, FURNITURE, furnitureKind, boothPedestals, isShown, edgeColorOf, lightVisible, constrain, groundKind, groundUpload, constrainPanel, constrainPedestal, findPanel, findPedestal, isArtShow, lightBarSpec, isPanelKey, scalePanel, wallKeys, wallSpec } from "./model.js";
 import { lightBarBounce, lightBarFixtures, lightBarOptics, lightBarRail } from "./lightbar.js";
-import { makePerson, placePerson } from "./people.js";
+import { PEOPLE, makePerson, placePerson, resolvePerson } from "./people.js";
 import { rowLayout } from "./row.js";
 /**
  * The longest edge a preview texture is decoded to. An original stays whole
@@ -338,6 +338,10 @@ export class BoothScene {
     this.pedestalObjects = [];
     this.pedestalFrames = {};
     this.personFrames = {};
+    // Each figure kind's cut-out picture, loaded once and shared by every
+    // figure of that kind across rebuilds. `texture` stays null while loading
+    // and for good when the file is missing, which leaves the mannequin.
+    this.cutouts = {};
     this.view = "perspective";
     this.move = false;
     // On by default, matching the toolbar button's own initial state: this is a
@@ -656,6 +660,7 @@ export class BoothScene {
       };
     };
     settle(this, "texture");
+    settle(this, "loadCutout");
     settle(this.surfaces, "load");
     settle(this.lighting, "apply");
   }
@@ -1437,7 +1442,7 @@ export class BoothScene {
     // to take one clean shot without a person in it is the reason the switch
     // exists. The list is kept, so switching back restores where they stood.
     for (const person of (p.booth.showPeople === false ? [] : (p.booth.people || []).filter(isShown))) {
-      const figure = makePerson(person.kind, person.height);
+      const figure = makePerson(person.kind, person.height, this.cutoutFor(person.kind));
       figure.name = "person:" + person.id;
       placePerson(figure, person);
       this.group.add(figure);
@@ -1711,20 +1716,55 @@ export class BoothScene {
     list[index] = person;
     let figure = this.personFrames[person.id];
     if (!figure) return;
-    if (before.height !== person.height || before.kind !== person.kind) {
-      figure.traverse((o) => {
-        o.geometry?.dispose();
-        // The material is shared across one figure's meshes and owned by it.
-        if (o.material) o.material.dispose();
-      });
-      this.group.remove(figure);
-      figure = makePerson(person.kind, person.height);
-      figure.name = "person:" + person.id;
-      this.group.add(figure);
-      this.personFrames[person.id] = figure;
-    }
+    if (before.height !== person.height || before.kind !== person.kind) figure = this.rebuildFigure(person);
     placePerson(figure, person);
     this.touchShadows();
+  }
+  /** Replace one figure's meshes, in place, for a new height, kind or picture. */
+  rebuildFigure(person) {
+    const old = this.personFrames[person.id];
+    old.traverse((o) => {
+      o.geometry?.dispose();
+      // The material is owned by the figure. A cut-out's picture is not — it
+      // is shared through `this.cutouts` — and disposing a material leaves
+      // its map alone.
+      if (o.material) o.material.dispose();
+    });
+    this.group.remove(old);
+    const figure = makePerson(person.kind, person.height, this.cutoutFor(person.kind));
+    figure.name = "person:" + person.id;
+    placePerson(figure, person);
+    this.group.add(figure);
+    this.personFrames[person.id] = figure;
+    return figure;
+  }
+  /** A figure kind's cut-out picture, or null while it loads or if it is missing. */
+  cutoutFor(kind) {
+    const id = resolvePerson(kind);
+    if (!this.cutouts[id]) {
+      this.cutouts[id] = { texture: null };
+      this.loadCutout(id);
+    }
+    return this.cutouts[id].texture;
+  }
+  /**
+   * Load a cut-out, then swap every figure of that kind from mannequin to
+   * picture. A missing file is not an error: the mannequin is the fallback,
+   * and the app must run with `public/assets` empty.
+   */
+  loadCutout(id) {
+    return new T.TextureLoader().loadAsync(PEOPLE[id].cutout.file).then((texture) => {
+      texture.colorSpace = T.SRGBColorSpace;
+      texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+      this.cutouts[id].texture = texture;
+      let swapped = false;
+      for (const person of this.p?.booth.people || []) {
+        if (resolvePerson(person.kind) !== id || !this.personFrames[person.id]) continue;
+        this.rebuildFigure(person);
+        swapped = true;
+      }
+      if (swapped) this.touchShadows();
+    }, () => {});
   }
   movePedestal(ped) {
     const list = this.p.booth.pedestals || [];

@@ -5,11 +5,13 @@
 // screen; a 96-inch wall beside a 5'6" person means exactly what it means in
 // the aisle.
 //
-// These are deliberately stylised — no faces, no clothing, no attempt at
-// likeness. A figure detailed enough to look like a person invites the eye to
-// judge the person instead of the booth, and this app renders artwork whose
-// colour has to be judged honestly. Matte mid-grey keeps them out of the way
-// of that, and out of the artwork's reflections.
+// Each figure is a cut-out photograph when its file is present — the way
+// architects' entourage and SketchUp's face-me people work: a flat picture that
+// turns to face the camera, so it never shows its edge. The owner supplied the
+// two pictures in `public/assets/people`: a black silhouette for the man and a
+// posterised woman in colour. Without those files (the app must run with
+// `public/assets` empty) a figure is the stylised mannequin below — no face, no
+// clothing, matte mid-grey, out of the way of the artwork's colour.
 //
 // Heights are the defaults the user asked for and are editable per figure:
 // 5 ft 6 for a woman, 6 ft for a man. They are averages standing in for a
@@ -17,9 +19,22 @@
 import * as T from "three";
 import { IN } from "./model.js";
 
+// `cutout.box` is the figure's own extent in the picture, in pixels, from the
+// top of the hair to the soles — left, top, right, bottom, inclusive — out of
+// `size`. Measured off the alpha channel once; the rest of each picture is
+// transparent margin. The figure's height maps onto the box, so the top of the
+// hair is the typed height and the soles stand on the floor.
 export const PEOPLE = {
-  woman: { label: "Woman · 5′6″", height: 66 },
-  man: { label: "Man · 6′0″", height: 72 },
+  woman: {
+    label: "Woman · 5′6″",
+    height: 66,
+    cutout: { file: "assets/people/woman.png", size: [750, 1827], box: [130, 40, 603, 1781] },
+  },
+  man: {
+    label: "Man · 6′0″",
+    height: 72,
+    cutout: { file: "assets/people/man.png", size: [750, 1827], box: [152, 28, 586, 1764] },
+  },
 };
 export const DEFAULT_PERSON = "woman";
 export const MAX_PEOPLE = 6;
@@ -46,13 +61,100 @@ const PALETTE = {
 };
 
 /**
+ * The cut-out's rectangle in texture space, `[u0, v0, u1, v1]`, with v up the
+ * way three's default `flipY` lays an image out. Pure, so a test can hold it.
+ */
+export function cutoutUV(kind) {
+  const { size: [w, h], box: [left, top, right, bottom] } = PEOPLE[resolvePerson(kind)].cutout;
+  return [left / w, 1 - (bottom + 1) / h, (right + 1) / w, 1 - top / h];
+}
+
+/** Width over height of a figure's picture, so a cut-out is never stretched. */
+export function cutoutAspect(kind) {
+  const { box: [left, top, right, bottom] } = PEOPLE[resolvePerson(kind)].cutout;
+  return (right - left + 1) / (bottom - top + 1);
+}
+
+// Scratch objects for the face-the-camera turn, which runs once per figure per
+// drawn frame and per shadow pass.
+const UP = new T.Vector3(0, 1, 0);
+const seat = new T.Vector3();
+const eye = new T.Vector3();
+const turn = new T.Quaternion();
+const flip = new T.Vector3();
+
+/**
+ * A cut-out figure: one plane carrying the picture, cut along its alpha.
+ *
+ * It turns about the vertical to face whatever camera draws it — the viewport,
+ * an export, a video frame, and each light's shadow camera, so the shadow is
+ * always the full silhouette rather than a sliver. The turn is written into
+ * `matrixWorld` in `onBeforeRender`, which three calls after it has updated
+ * the world matrices and before it uses this one, so nothing else — the
+ * figure's placement, its `rotation`, a test reading its position — sees it.
+ *
+ * Both pictures look to the viewer's left. The figure's own facing still
+ * means something: when it points to the viewer's right the picture is
+ * mirrored, so two people placed to face each other do.
+ */
+function makeCutout(id, height, texture) {
+  const width = height * cutoutAspect(id);
+  const geometry = new T.PlaneGeometry(width, height);
+  const [u0, v0, u1, v1] = cutoutUV(id);
+  // PlaneGeometry's corners run top-left, top-right, bottom-left, bottom-right.
+  geometry.attributes.uv.array.set([u0, v1, u1, v1, u0, v0, u1, v0]);
+  const material = new T.MeshStandardMaterial({
+    map: texture,
+    // A hard cut rather than blending: blended planes need sorting against
+    // the artwork behind them and the shadow pass ignores blending entirely,
+    // while the alpha test is honoured by both.
+    alphaTest: 0.5,
+    side: T.DoubleSide,
+    roughness: 1,
+    metalness: 0,
+  });
+  const mesh = new T.Mesh(geometry, material);
+  mesh.position.y = height / 2;
+  mesh.castShadow = true;
+  mesh.userData.person = true;
+  mesh.userData.cutout = true;
+  mesh.onBeforeRender = (renderer, scene, camera) => {
+    const group = mesh.parent;
+    if (!group) return;
+    seat.setFromMatrixPosition(group.matrixWorld);
+    camera.getWorldPosition(eye);
+    const dx = eye.x - seat.x;
+    const dz = eye.z - seat.z;
+    // Straight overhead there is no horizontal direction to face; keep the
+    // figure's own.
+    const yaw = Math.hypot(dx, dz) < 1e-6 ? group.rotation.y : Math.atan2(dx, dz);
+    const faceX = Math.sin(group.rotation.y);
+    const faceZ = Math.cos(group.rotation.y);
+    // The viewer's right, seen from the camera, is (dz, -dx).
+    const mirrored = faceX * dz - faceZ * dx > 1e-9;
+    turn.setFromAxisAngle(UP, yaw);
+    seat.y += height / 2;
+    flip.set(mirrored ? -1 : 1, 1, 1);
+    mesh.matrixWorld.compose(seat, turn, flip);
+  };
+  return mesh;
+}
+
+/**
  * One figure, standing at the origin and facing +Z (the aisle), built to a
  * real height in inches so it can be measured against the walls beside it.
+ * With `texture` — that kind's picture, loaded by the scene — it is the
+ * cut-out; without, the mannequin.
  */
-export function makePerson(kind = DEFAULT_PERSON, inches = 0) {
+export function makePerson(kind = DEFAULT_PERSON, inches = 0, texture = null) {
   const id = resolvePerson(kind);
   const height = (inches > 0 ? inches : personHeight(id)) * IN;
   const group = new T.Group();
+  if (texture) {
+    group.add(makeCutout(id, height, texture));
+    group.userData.person = true;
+    return group;
+  }
   const skin = new T.MeshStandardMaterial({
     color: PALETTE[id] || PALETTE.woman,
     roughness: 0.85,
