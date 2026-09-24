@@ -16,7 +16,9 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-24 — roadmap batch E, the last of the roadmap**
+- **Last deploy: 2026-09-24 — tool shortcuts, three more people, the
+  smaller drag shadow and Pro unlocked** (the first bullet below). Before
+  it, the same day: roadmap batch E, the last of the roadmap
   (the hall planner and the power and rentals sheet — the first bullet
   below), after batches C and D, A and B, the roadmap's base and the cut-out
   people, all the same day. **The roadmap proposed on 2026-09-24 is built.**
@@ -39,7 +41,7 @@ Extend it; do not rebuild it.
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
 - **2026-09-24, after the roadmap: tool shortcuts, three more people, a
-  smaller drag shadow, and Pro unlocked. On `claude/blissful-knuth-jonl0a`.**
+  smaller drag shadow, and Pro unlocked. Merged to `main` and deployed.**
   The owner's list from Next, built together while they tested the live site.
   1. **Tool shortcuts.** `SHORTCUTS` in `src/toolsearch.js` gives about sixty
      tools a short name (`amb` ambient, `wh` wall height, `png` export PNG,
