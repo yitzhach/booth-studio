@@ -14,6 +14,7 @@ import { lightBarBounce, lightBarFixtures, lightBarOptics, lightBarRail } from "
 import { PEOPLE, makePerson, placePerson, resolvePerson } from "./people.js";
 import { rowLayout } from "./row.js";
 import { smartSnap } from "./guides.js";
+import { tagShown, walkStart, walkStep } from "./views.js";
 import { sameWall } from "./arrange.js";
 /**
  * The longest edge a preview texture is decoded to. An original stays whole
@@ -340,6 +341,9 @@ export class BoothScene {
     this.pedestalObjects = [];
     this.pedestalFrames = {};
     this.personFrames = {};
+    // Tags hidden right now (see src/views.js). A view setting: main.js owns
+    // the set and hands it over; `applyTags` does the hiding.
+    this.hiddenTags = new Set();
     // Each figure kind's cut-out picture, loaded once and shared by every
     // figure of that kind across rebuilds. `texture` stays null while loading
     // and for good when the file is missing, which leaves the mannequin.
@@ -890,6 +894,9 @@ export class BoothScene {
   // at its current distance, so orbiting down slides along the ground instead
   // of stopping at eye level or punching through the ground plane.
   clampToGround() {
+    // Walking, the camera is at eye height by construction and the head is
+    // free to look up at a high work.
+    if (this.walking) return;
     if (!this.camera.isPerspectiveCamera || !this.controls.enableRotate) return;
     const radius = this.camera.position.distanceTo(this.controls.target);
     if (!(radius > 0)) return;
@@ -1125,7 +1132,12 @@ export class BoothScene {
       H = p.booth.height * IN;
     const rough = (c) =>
       new T.MeshStandardMaterial({ color: c, roughness: 0.92 });
+    const beforeEnvironment = this.group.children.length;
     environment(this.scene, this.group, p.booth);
+    // Everything environment() stood around the booth is the Surroundings
+    // tag — except the ground, which the booth stands on.
+    for (const o of this.group.children.slice(beforeEnvironment))
+      if (o.name !== "environment-ground") o.userData.tag = "surroundings";
     // environment() has just put the procedural sky back on the scene, so the
     // backdrop settings it knows nothing about are reset here, before anything
     // that loads an image can claim them. Resetting afterwards would undo the
@@ -1202,6 +1214,7 @@ export class BoothScene {
     const wallConsumers = new Set();
     for (const wall of wallKeys(p)) {
       const g = this.wallFrame(wall);
+      if (isPanelKey(wall)) g.userData.tag = "panels";
       this.frames[wall] = g;
       this.group.add(g);
       const config = wallSpec(p, wall),
@@ -1305,6 +1318,7 @@ export class BoothScene {
       if (!frame || !wallSpec(p, a.wall)?.enabled) continue;
       const art = new T.Group();
       this.artGroups.set(a.id, { group: art, initial: { ...a } });
+      art.userData.tag = "art";
       art.position.set(
         (a.x + a.w / 2) * IN,
         (a.y + a.h / 2) * IN,
@@ -1409,6 +1423,7 @@ export class BoothScene {
         new T.CylinderGeometry(0.045, 0.055, 0.13, 16),
         rough("#25282b"),
       );
+      housing.userData.tag = "fixtures";
       housing.position.copy(light.position);
       housing.quaternion.setFromUnitVectors(
         new T.Vector3(0, -1, 0),
@@ -1428,6 +1443,7 @@ export class BoothScene {
             .normalize()
             .multiplyScalar(0.07),
         );
+      glow.userData.tag = "fixtures";
       this.group.add(glow);
     }
     // The pop-up's front header rail. An art-show booth has no canopy frame
@@ -1446,6 +1462,8 @@ export class BoothScene {
     for (const person of (p.booth.showPeople === false ? [] : (p.booth.people || []).filter(isShown))) {
       const figure = makePerson(person.kind, person.height, this.cutoutFor(person.kind));
       figure.name = "person:" + person.id;
+    figure.userData.tag = "people";
+      figure.userData.tag = "people";
       placePerson(figure, person);
       this.group.add(figure);
       this.personFrames[person.id] = figure;
@@ -1475,6 +1493,7 @@ export class BoothScene {
         }) || applied;
       if (applied) this.renderer.shadowMap.needsUpdate = true;
     }).catch(() => {});
+    this.applyTags();
     this.applySelection();
     this.refreshGuides();
     if (!this.initialized) {
@@ -1587,6 +1606,7 @@ export class BoothScene {
     const optics = lightBarOptics(spec);
     const bar = new T.Group();
     bar.name = "light-bar";
+    bar.userData.tag = "fixtures";
     this.group.add(bar);
     // The white hall bouncing the bar back at itself. Without it every surface
     // the nine beams miss falls to black, which reads harsher than the beams.
@@ -1664,6 +1684,7 @@ export class BoothScene {
     for (const ped of boothPedestals(p).filter(isShown)) {
       const g = new T.Group();
       g.name = "pedestal:" + ped.id;
+      g.userData.tag = "furniture";
       placePedestal(g, ped);
       this.group.add(g);
       this.pedestalFrames[ped.id] = g;
@@ -1745,9 +1766,11 @@ export class BoothScene {
     this.group.remove(old);
     const figure = makePerson(person.kind, person.height, this.cutoutFor(person.kind));
     figure.name = "person:" + person.id;
+    figure.userData.tag = "people";
     placePerson(figure, person);
     this.group.add(figure);
     this.personFrames[person.id] = figure;
+    this.applyTags(figure);
     return figure;
   }
   /** A figure kind's cut-out picture, or null while it loads or if it is missing. */
@@ -1827,6 +1850,8 @@ export class BoothScene {
     this.touchShadows();
   }
   setView(view) {
+    // Any fixed view ends a walk; stopWalk itself comes back through here.
+    if (this.walking) this.stopWalk();
     this.view = view;
     const W = this.p.booth.width * IN,
       D = this.p.booth.depth * IN,
@@ -1922,6 +1947,72 @@ export class BoothScene {
       this.guides.add(lines);
     }
     this.invalidate();
+  }
+  /**
+   * Hide every object whose tag is hidden, and show the rest. Hidden means
+   * moved to layer 1, which the camera, every shadow camera and the raycaster
+   * all leave out — so a hidden work is out of the picture, casts nothing and
+   * cannot be clicked. Lights are never moved: the Light fixtures tag hides
+   * the housings and the bar, not the light they give.
+   */
+  applyTags(root = this.group) {
+    const hidden = this.hiddenTags;
+    const walk = (o, off) => {
+      const tag = o.userData?.tag;
+      const hide = off || (!!tag && !tagShown(hidden, tag));
+      if (!o.isLight) o.layers.set(hide ? 1 : 0);
+      for (const child of o.children) walk(child, hide);
+    };
+    let parentHidden = false;
+    for (let o = root.parent; o; o = o.parent) if (o.userData?.tag && !tagShown(hidden, o.userData.tag)) parentHidden = true;
+    walk(root, parentHidden);
+    this.renderer.shadowMap.needsUpdate = true;
+    this.invalidate();
+  }
+  setHiddenTags(tags) {
+    this.hiddenTags = new Set(tags);
+    this.applyTags();
+  }
+  /**
+   * Walk mode: the camera at a visitor's eye height in the aisle, looking at
+   * the booth. The orbit controls orbit a target a centimetre ahead, which is
+   * looking round from where you stand; zoom and pan are off, because a
+   * visitor walks rather than zooms. `walk(forward, right, inches)` steps.
+   * Leaving puts the controls and the view back.
+   */
+  startWalk() {
+    if (this.walking) return;
+    this.setView("perspective");
+    this.walking = {
+      minDistance: this.controls.minDistance,
+      maxDistance: this.controls.maxDistance,
+      maxPolar: this.controls.maxPolarAngle,
+    };
+    this.controls.minDistance = 0.001;
+    this.controls.maxDistance = 0.05;
+    this.controls.maxPolarAngle = Math.PI;
+    this.controls.enableZoom = false;
+    this.controls.enablePan = false;
+    this.controls.enableDamping = false;
+    this.controls.rotateSpeed = -0.35;
+    this.applyPose(walkStart(this.p.booth));
+  }
+  walk(forward, right, inches) {
+    if (!this.walking) return;
+    this.applyPose(walkStep(this.pose(), forward, right, inches));
+  }
+  stopWalk() {
+    if (!this.walking) return;
+    const w = this.walking;
+    this.walking = null;
+    this.controls.minDistance = w.minDistance;
+    this.controls.maxDistance = w.maxDistance;
+    this.controls.maxPolarAngle = w.maxPolar;
+    this.controls.enableZoom = true;
+    this.controls.enablePan = true;
+    this.controls.enableDamping = true;
+    this.controls.rotateSpeed = 1;
+    this.setView("perspective");
   }
   /**
    * The smart guides of the drag in progress: pink lines on the wall the

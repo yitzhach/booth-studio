@@ -1972,3 +1972,20 @@ dialog li {
 .multi-select {border:1px solid #6d4f78;border-radius:10px;padding:10px 12px;background:#1f1824;}
 .align-row {flex-wrap:wrap;}
 .align-row button.compact {flex:1 1 30%;font-size:11px;padding:6px;}
+
+/* Saved views, tags and walk mode. */
+.saved-view-pick {display:flex;align-items:center;gap:6px;padding:3px 8px;border-radius:8px;background:#20252aee;font-size:11px;color:#d8e1ea;}
+.saved-view-pick[hidden] {display:none!important;}
+.saved-view-pick select {min-height:34px;max-width:160px;}
+.view-row {display:flex;gap:6px;align-items:center;margin:6px 0;}
+.view-row input {flex:1;min-width:0;}
+.tag-list .check-field {margin:6px 0;}
+.walk-pad {position:absolute;right:14px;bottom:70px;display:grid;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(3,44px);gap:4px;z-index:2;}
+.walk-pad[hidden] {display:none;}
+.walk-pad button {min-height:44px;padding:0;font-size:16px;background:#20252aee;}
+.walk-pad [data-walk="forward"] {grid-column:2;grid-row:1;}
+.walk-pad [data-walk="left"] {grid-column:1;grid-row:2;}
+.walk-pad [data-walk="right"] {grid-column:3;grid-row:2;}
+.walk-pad [data-walk="back"] {grid-column:2;grid-row:3;}
+.walk-pad .walk-exit {grid-column:3;grid-row:3;font-size:11px;}
+#scene.walking canvas {cursor:grab;}

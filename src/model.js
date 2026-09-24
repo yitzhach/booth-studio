@@ -1,3 +1,4 @@
+import { validViews } from "./views.js";
 import { editedAspect, validImageEdits } from "./image-edit.js";
 import { SHADOW_FIELD, SHADOW_MAX, shadowSpec } from "./dropshadow.js";
 import { hasRow, normalizeRow, rowLayout, MAX_SLOTS, MIN_SPACE, MAX_SPACE, MAX_GAP } from "./row.js";
@@ -738,6 +739,8 @@ export function validateProject(p) {
   if (p.booth.fixtures !== undefined && !["auto", "always", "never"].includes(p.booth.fixtures)) fail();
   // Whether the figures are drawn. Optional and absent from every backup
   // written before it, so undefined means "shown", which is what they all say.
+  // Saved views: optional, so every backup written before them opens.
+  if (!validViews(p.views)) fail();
   if (p.booth.showPeople !== undefined && typeof p.booth.showPeople !== "boolean") fail();
   if (p.booth.people !== undefined) {
     if (!Array.isArray(p.booth.people) || p.booth.people.length > 6) fail();

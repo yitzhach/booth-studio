@@ -16,9 +16,10 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-24 — roadmap batch A: smart guides and a multiple
-  selection** (the first bullet below), after the roadmap's base (Lite / Pro,
-  the phone layout) and the cut-out people the same day.
+- **Last deploy: 2026-09-24 — roadmap batch B: saved views, tags and walk
+  mode** (the first bullet below), after batch A (smart guides, a multiple
+  selection), the roadmap's base (Lite / Pro, the phone layout) and the
+  cut-out people, all the same day.
   Before that, **2026-09-23, three times.** First the ten speed-and-planning
   improvements, then — the same day, after the owner's first look on the real
   machine — the second round: the drag shadow, the fast-edit redraw leak, the
@@ -37,6 +38,40 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-24, roadmap batch B: saved views, tags, walk mode. Pushed to
+  `main`.** All three are Lite. `src/views.js` holds the rules, pure.
+  1. **Saved views** — SketchUp's Scenes. Layout → Saved views: **Save this
+     view** keeps the camera as a named pose (up to 12, `MAX_VIEWS`); each row
+     renames in place, goes back to it, replaces it with the current camera
+     or deletes it. A **View** menu appears under the booth, beside Zoom, as
+     soon as there is one. **Export all as PNG** renders every view at the
+     Export tab's size and frame, one file each, named after the view, and
+     puts the camera back. Views belong to the booth, so they are saved in it
+     as the optional `p.views`, validated by `validViews` from
+     `validateProject`; every older backup simply has none.
+  2. **Tags** — visibility groups: Artwork, Pedestals and furniture,
+     Free-standing walls, People, Light fixtures, Surroundings. Layout → Tags
+     unticks a group out of the viewport, every export and the pick. The
+     scene marks each built object's `userData.tag` and `applyTags()` moves a
+     hidden one's meshes to **layer 1**, which the camera, the shadow cameras
+     and the raycaster all ignore — so a hidden work casts nothing and cannot
+     be clicked. Lights are never moved: Light fixtures hides housings and the
+     bar, not the light. **Not saved** — a booth reopening with its art
+     switched off by a forgotten tick is the wrong failure — and kept through
+     rebuilds (`update()` ends in `applyTags()`).
+  3. **Walk mode** — toolbar **Walk** (or W). The camera stands in the aisle
+     at a 5′6″ visitor's eye height (62″, `EYE_HEIGHT`) looking in; W/S or
+     ↑/↓ step forward and back, A/D or ←/→ sideways, 6″ a press and 2′ with
+     Shift, always along the floor whatever the head is doing; drag to look
+     round. On touch a four-arrow pad appears in the viewport with **Done**.
+     Esc, Done, any fixed view or a saved view ends it and hands the orbit
+     controls back exactly as they were. The trick is the orbit controls
+     orbiting a target a centimetre ahead (`startWalk` / `walk` / `stopWalk`
+     in scene.js), so there is no second camera controller to keep in step.
+  `tests/views.test.js`, `tests/view-views.mjs` (which also checks the one
+  PNG per view and that a hidden work cannot be picked). **Not seen on real
+  hardware**: whether 6″ steps feel right, whether drag-to-look wants to be
+  inverted (it is set to feel like turning your head, `rotateSpeed` −0.35).
 - **2026-09-24, roadmap batch A: smart guides, and several works at once.
   Pushed to `main`.**
   1. **Smart guides** — SketchUp's inference, for a work dragged along its
@@ -1437,6 +1472,8 @@ regression — it is the editor and the test sharing one server.
   from each tab's `inspectorHTML()`.
 - `src/tier.js` — Lite and Pro: the one table of Pro features and `can()`.
   `gated` / `proLock` and the action gate in `src/main.js` use it.
+- `src/views.js` — saved views, tags and walk mode's rules; `applyTags` and
+  `startWalk` / `walk` / `stopWalk` in `src/scene.js` do the work.
 - `src/guides.js` — smart guides' snapping arithmetic; `showSnap` in
   `src/scene.js` draws it. `src/align.js` — align and distribute.
 - `FUTURE_BUILD.md` — requested, deliberately not started. Currently empty.
