@@ -16,8 +16,9 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-24 — cut-out people** (the bullet below). Before
-  that, **2026-09-23, three times.** First the ten speed-and-planning
+- **Last deploy: 2026-09-24 — the roadmap's base: Lite / Pro and the phone
+  layout** (the first bullet below), after the cut-out people the same day.
+  Before that, **2026-09-23, three times.** First the ten speed-and-planning
   improvements, then — the same day, after the owner's first look on the real
   machine — the second round: the drag shadow, the fast-edit redraw leak, the
   cheaper click, Photoshop drop shadows, hide instead of delete, and the
@@ -35,6 +36,50 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-24: the roadmap, agreed, and its base — Lite / Pro and the phone
+  layout. Pushed straight to `main` at the owner's word.** The owner's
+  instruction: "go ahead with the base first (pro version up and going —
+  will make it a separate plan later). If this tests green, move to A–E.
+  Test each tool. If green continue. Update handoff after each new tool."
+  The roadmap is item 2 of Next, and **its tools land in batches A–E, one
+  commit and one push to `main` each, with this file updated every time**, so
+  a session that stops mid-roadmap leaves `main` green and this file true.
+  1. **`src/tier.js` is the whole of Lite and Pro.** `PRO_FEATURES` is the one
+     table of what is Pro (booth row, show pack, hanging guide, video export,
+     templates, and the roadmap's align/distribute, floor plan underlay,
+     clearance checks, elevations, draw-a-box, 3D model import/export, hall
+     planner and power sheet); anything not in it is everyone's. `can(tier,
+     feature)` is the only question asked. `PRO_ACTIONS` maps `data-action`
+     names to features, and the click handler in main.js refuses a Pro action
+     in Lite at that one gate with a toast, whatever drew the button.
+  2. **Pro is the default**, at the owner's word. The tier is a view setting
+     in `localStorage["booth.tier"]`, switched at Layout → Project → Plan —
+     never in a backup, never in schema 1. **How Pro is unlocked is not
+     decided**: there is no backend to check a purchase against, so it will
+     be an honour-system switch or a signed key checked in the browser, and
+     that is the owner's "separate plan". A Lite browser opening a Pro booth
+     draws all of it; it only cannot add to or export the Pro parts.
+  3. **In Lite a Pro section is replaced by its lock** (`proLock` / `gated`
+     in main.js): the name, a gold Pro badge and **Switch to Pro**. The
+     section's controls are not drawn at all, so nothing is half-usable.
+     Every roadmap tool is gated through `gated()` and `PRO_ACTIONS` from the
+     day it lands.
+  4. **The phone layout.** At 390 px the toolbar and the seven inspector tabs
+     overflowed — Photo, Export and the Export tab were cut off. Both now
+     scroll sideways (scrollbars hidden), tabs stack icon over label, and the
+     inspector's inputs, selects and buttons are at least 40 px tall. A
+     **sheet handle** above the panel folds it down to its tab bar so the
+     booth gets the screen; choosing any tab unfolds it (`setSheet`). Not
+     remembered — it is a gesture of the moment. The tool-search input is
+     16 px on a phone, which stops iOS zooming the page when it is focused.
+  5. The icons `video`, `user-round` and `sliders-horizontal` were used and
+     never imported, so the Video tab, Add woman / Add man and Edit timeline
+     showed no icon. They are imported now, with the ones the roadmap tools
+     will need.
+  `tests/tier.test.js` holds the table; `tests/view-tier.mjs` switches to
+  Lite and back, smuggles a Pro button into the page to prove the gate, and
+  checks the phone layout: no sideways scroll, every tab reachable, the fold
+  giving the viewport its height.
 - **2026-09-24: people are the owner's cut-out pictures. Pushed straight to
   `main` at the owner's word.** Two PNGs with transparent backgrounds, supplied
   in chat — a black silhouette of a man, and a posterised woman in colour
@@ -586,8 +631,15 @@ Extend it; do not rebuild it.
    picture lying at an angle; if that reads wrong, Plan could draw a floor
    marker instead. More kinds (a child, a group, a wheelchair user) are a
    picture each plus a `PEOPLE` entry with its measured box.
-1. **The proposed roadmap — lite / pro and the SketchUp-style tools — is
-   waiting on the owner's pick.** Proposed 2026-09-24, not agreed. The tool
+1. **The roadmap — agreed 2026-09-24 and under way.** Base (Lite / Pro, the
+   phone layout) is done; see Now. Then batches, each tested, pushed to
+   `main` and written up here before the next starts: **A** snap guides and
+   multi-select with align/distribute; **B** saved views, tags, walk mode;
+   **C** floor plan underlay, clearance checks, elevations to scale; **D**
+   draw-a-box, `.glb` import and export; **E** hall planner, power and
+   rentals sheet. Whichever batch is not in Now is the next one to build.
+   **The Pro unlock itself is the owner's separate plan** — see the base
+   bullet in Now. What was proposed: The tool
    ideas, in priority order: snap and smart guides; a floor-plan underlay
    scaled by two clicks; saved views; multi-select with align and
    distribute; tags (visibility groups); walk mode; a draw-a-box / pull-up

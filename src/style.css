@@ -1933,3 +1933,36 @@ dialog li {
     width: min(320px, calc(100vw - 32px));
   }
 }
+
+/* Lite and Pro: the lock a Pro section shows in Lite. See src/tier.js. */
+.pro-badge {display:inline-flex;align-items:center;gap:3px;margin-left:6px;padding:1px 7px;border-radius:999px;background:#3a2f12;color:#f2c14e;font-size:10px;font-weight:600;letter-spacing:.02em;vertical-align:middle;}
+.pro-badge svg {width:11px;height:11px;}
+.pro-lock {border:1px dashed #6b5a2a;border-radius:10px;padding:12px 14px;background:#1d1a12;}
+.pro-lock h3 {margin-top:0;}
+
+/* The sheet handle: phones only. It folds the inspector down to its tab bar so
+   the booth gets the screen, and any tab brings the panel back. */
+.sheet-toggle {display:none;}
+
+/* Mobile pass. The toolbar and the seven inspector tabs scroll sideways
+   rather than running off the edge of a 390 px screen, and every control a
+   thumb needs is at least 40 px. */
+@media (max-width: 700px) {
+  .toolbar {overflow-x:auto;overflow-y:hidden;scrollbar-width:none;flex-wrap:nowrap;}
+  .toolbar::-webkit-scrollbar, .inspector-tabs::-webkit-scrollbar {display:none;}
+  .toolbar > * {flex-shrink:0;}
+  .toolbar .export-top {display:inline-flex;}
+  .toolbar button {min-width:36px;min-height:36px;}
+  .inspector-tabs {overflow-x:auto;scrollbar-width:none;padding:0 4px;}
+  .inspector-tabs button {flex:0 0 auto;min-width:64px;flex-direction:column;gap:3px;font-size:10px;padding:6px 8px;}
+  .inspector-tabs button span {white-space:nowrap;}
+  .sheet-toggle {display:flex;align-items:center;justify-content:center;order:0;flex-shrink:0;height:22px;min-height:22px;width:100%;border:0;border-radius:0;background:none;padding:0;cursor:pointer;}
+  .sheet-toggle span {display:block;width:44px;height:5px;border-radius:3px;background:#56626e;font-size:0;overflow:hidden;}
+  body.sheet-collapsed .editor {flex:1;height:auto;}
+  body.sheet-collapsed .inspector {flex:0 0 auto;}
+  body.sheet-collapsed #inspector-content {display:none;}
+  #inspector-content button, #inspector-content select, #inspector-content input[type="number"], #inspector-content input[type="text"] {min-height:40px;}
+  #inspector-content input[type="range"] {min-height:32px;}
+  .tool-search input {font-size:16px;}
+  .save-status {display:none;}
+}
