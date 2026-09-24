@@ -1998,3 +1998,12 @@ dialog li {
 .clearance-list button.compact {flex-shrink:0;padding:4px 8px;font-size:11px;}
 .ok-note {color:#8fd19e;font-size:12px;}
 .scene-label-note.clearance {background:#ff4d4d;border-color:#ff4d4d;color:#1a0b0b;font-weight:600;}
+
+/* The hall planner. */
+.hall-map-wrap {background:#fbfbfa;border-radius:8px;padding:6px;overflow:auto;max-height:420px;}
+.hall-map-wrap svg {width:100%;height:auto;display:block;}
+.hall-map-wrap [data-hall-booth] {cursor:pointer;}
+.hall-map-wrap [data-hall-booth]:focus {outline:none;}
+.hall-map-wrap [data-hall-booth]:focus rect {stroke:#2f7de1;}
+.hall-totals {font-size:12px;color:var(--muted);margin:8px 0 0;}
+.hall-booth {border:1px solid #2f5f9e;border-radius:10px;padding:10px 12px;background:#17202b;}

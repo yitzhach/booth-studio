@@ -16,10 +16,10 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-24 — roadmap batches C and D** (floor plan
-  underlay, clearance checks, elevations to scale; draw-a-box, `.glb` import
-  and export — the first two bullets below), after batches A and B, the
-  roadmap's base and the cut-out people, all the same day.
+- **Last deploy: 2026-09-24 — roadmap batch E, the last of the roadmap**
+  (the hall planner and the power and rentals sheet — the first bullet
+  below), after batches C and D, A and B, the roadmap's base and the cut-out
+  people, all the same day. **The roadmap proposed on 2026-09-24 is built.**
   Before that, **2026-09-23, three times.** First the ten speed-and-planning
   improvements, then — the same day, after the owner's first look on the real
   machine — the second round: the drag shadow, the fast-edit redraw leak, the
@@ -38,6 +38,40 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-24, roadmap batch E: the hall planner, and the power and
+  rentals sheet. Pushed to `main`.** Both Pro (`hall`, `power`).
+  1. **The hall planner** — for a promoter or an event company selling a
+     whole show. A new inspector tab, **Hall** (the eighth; they scroll on a
+     phone). **Start a hall plan** makes two back-to-back rows of eight
+     10 × 10s on 10′ aisles, numbered from 101; the Layout section types rows,
+     booths per row, booth width and depth, aisle width, back-to-back pairs,
+     the first number and a default price, up to 1,200 booths (whichever of
+     rows and booths-per-row was just typed wins). The map is an SVG in the
+     panel: tap a booth — or focus it and press Enter — to set its status
+     (open / held / sold, coloured), exhibitor, price and note, or mark it as
+     **your** booth (outlined pink). Totals count sold, held and open and add
+     up sold and held money. **Download hall map** is a printable page with
+     the map, a legend, the totals and every booth; **Exhibitor list (CSV)**
+     opens in any spreadsheet. The plan is the whole show, not this booth, so
+     it is saved beside it as the optional **`p.hall`** — `{ rows, perRow,
+     boothWidth, boothDepth, aisle, backToBack, start, price, mine?, booths:
+     { "<number>": { status?, name?, price?, note? } } }` — validated by
+     `validHall`. Deleting it asks first and is one undo step. `src/hall.js`,
+     pure. Not done: booths of mixed sizes, corner/island blocks, and linking
+     a hall booth to its own 3D booth — the obvious next steps if promoters
+     use it.
+  2. **Power and rentals** — Export → Power and rentals says what to order
+     from the show's service desk (**watts, amps at 120 V, circuits of 15 A
+     at the 80% continuous rule**) and downloads a printable sheet: every
+     load (visible spotlights at 15 W, light-bar heads at 12 W, screens at
+     120 W, and the typed number of general outlets at 150 W), then every
+     floor piece to rent by kind with carpet for the booth's area, price
+     columns left blank. The wattages are typical LED figures, printed beside
+     each line and said to be assumptions. `src/power.js`, pure; `WATTS` is
+     where they live.
+  `tests/hall-power.test.js`; `tests/view-hall.mjs` sells a booth, grows the
+  hall against its ceiling, downloads the map and the CSV, reloads, reads
+  the power total and the sheet, checks both are Pro and undoes a delete.
 - **2026-09-24, roadmap batch D: draw-a-box, and 3D models in and out.
   Pushed to `main`.** All Pro (`box`, `glb`).
   1. **Draw a box.** Toolbar → **Box**: press on the floor, drag out a
@@ -779,15 +813,26 @@ Extend it; do not rebuild it.
    picture lying at an angle; if that reads wrong, Plan could draw a floor
    marker instead. More kinds (a child, a group, a wheelchair user) are a
    picture each plus a `PEOPLE` entry with its measured box.
-1. **The roadmap — agreed 2026-09-24 and under way.** Base (Lite / Pro, the
-   phone layout) is done; see Now. Then batches, each tested, pushed to
-   `main` and written up here before the next starts: **A** snap guides and
-   multi-select with align/distribute; **B** saved views, tags, walk mode;
-   **C** floor plan underlay, clearance checks, elevations to scale; **D**
-   draw-a-box, `.glb` import and export; **E** hall planner, power and
-   rentals sheet. Whichever batch is not in Now is the next one to build.
+1. **The roadmap, built 2026-09-24 — now it wants eyes.** Base, A, B, C, D
+   and E are all on `main` (see Now). Every tool is tested in a real
+   browser here; none has been used on the real machine or a real phone.
+   In rough order of what to look at:
+   - **The phone**: the scrolling toolbar and tabs, the fold handle, the
+     walk pad, Select several. Is anything still out of thumb's reach?
+   - **Smart guides**: is 2″ the right pull? Too sticky → lower
+     `SNAP_RANGE`; too weak → raise it.
+   - **Walk mode**: step size (6″, 2′ with Shift) and whether drag-to-look
+     should be inverted.
+   - **Clearance**: is 36″ the right line for art shows, or noisy? Are the
+     outside-the-footprint and 4″ "pushed against" rules right?
+   - **Elevations**: print one at 100% and check the 1′ bar with a ruler.
+   - **.glb**: open an export in Blender or an AR viewer, and bring in a
+     real model; the scale-to-height rule assumes the model stands upright.
+   - **Hall planner and power sheet**: do promoters want mixed booth sizes,
+     islands and corner booths? Are the wattages what shows ask for?
    **The Pro unlock itself is the owner's separate plan** — see the base
-   bullet in Now. What was proposed: The tool
+   bullet in Now; `src/tier.js` is the one place it plugs in. What was
+   proposed, for the record: The tool
    ideas, in priority order: snap and smart guides; a floor-plan underlay
    scaled by two clicks; saved views; multi-select with align and
    distribute; tags (visibility groups); walk mode; a draw-a-box / pull-up
@@ -1552,6 +1597,8 @@ regression — it is the editor and the test sharing one server.
   from each tab's `inspectorHTML()`.
 - `src/tier.js` — Lite and Pro: the one table of Pro features and `can()`.
   `gated` / `proLock` and the action gate in `src/main.js` use it.
+- `src/hall.js` — the hall planner (layout, totals, map, CSV);
+  `src/power.js` — the power and rentals sheet.
 - `src/clearance.js` — clearance geometry; `src/elevations.js` — the
   to-scale drawings. `buildUnderlay`, `buildModels`, `exportGLB` and the Box
   tool (`setDrawingBox`) are in `src/scene.js`.

@@ -78,6 +78,11 @@ export const PRO_ACTIONS = {
   "draw-box": "box",
   "upload-model": "glb",
   "export-glb": "glb",
+  "hall-start": "hall",
+  "hall-map": "hall",
+  "hall-csv": "hall",
+  "hall-mine": "hall",
+  "power-sheet": "power",
 };
 
 export const resolveTier = (tier) => (TIERS[tier] ? tier : DEFAULT_TIER);
