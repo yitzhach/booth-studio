@@ -114,6 +114,11 @@ import {
   Upload,
   AlignHorizontalDistributeCenter,
   AlignStartVertical,
+  SkipBack,
+  SkipForward,
+  Images,
+  Crop,
+  ArrowUp,
 } from "lucide";
 import {
   demoProject,
@@ -194,6 +199,11 @@ import { PRO_FEATURES, TIERS, actionFeature, can, readTier, resolveTier, writeTi
 async function boot() {
   const icons = {
     Grid2x2: Grid2X2,
+    SkipBack,
+    SkipForward,
+    Images,
+    Crop,
+    ArrowUp,
     Box,
     ImagePlus,
     LayoutPanelLeft,
@@ -342,6 +352,10 @@ async function boot() {
     // scrubbing and playing, so the guide moves with the clip. Null when the
     // frame is not keyframed, and then the Video tab's placement is the one.
     livePlace = null,
+    // Where the render in progress sits in the viewport (fractions), from the
+    // scene's onRenderRect: the guide is drawn there while a file renders,
+    // so it and the picture inside it always agree.
+    renderRect = null,
     // True for the length of one drag of a figure's slider, so the gesture is
     // one entry in the undo history rather than one per pixel.
     personGesture = false,
@@ -615,6 +629,10 @@ async function boot() {
   }
   let adaptToasted = false;
   if (scene) {
+    scene.onRenderRect = (rect) => {
+      renderRect = rect;
+      updateFrameGuide();
+    };
     // A footprint drawn with the Box tool becomes a box on the floor, 12″
     // high to start: selected, so the Walls tool's Pull up is right there.
     scene.onDrawBox = (r) => {
@@ -2224,7 +2242,7 @@ async function boot() {
             .join("")}</select></label>`
     }</div>${speed === null ? "" : `<p class="muted">Then travels ${speed.toFixed(2)} m/s to the next keyframe.</p>`}<div class="button-row">${btn("timeline-go", "Show this view", "camera")}${btn("timeline-recapture", "Replace with current view", "rotate-ccw")}${tl.keys.length > MIN_KEYS ? btn("timeline-delete", "Delete", "trash-2") : ""}</div></div>`;
     document.querySelector("#timeline-content").innerHTML =
-      `<div class="panel-heading"><h2>Camera timeline</h2>${btn("close-timeline", "Close", "x", "icon-only")}</div><ol class="tl-steps"><li>Frame a shot in the booth behind this panel.</li><li>Press <strong>Add keyframe</strong>. Repeat for each shot.</li><li>Drag a diamond to change when the camera gets there; drag the track to scrub.</li></ol><div class="tl-bar">${tl.keys.length < MAX_KEYS ? btn("timeline-add", "Add keyframe", "plus", "primary") : `<span class="muted">${MAX_KEYS} keyframes max</span>`}<span class="tl-transport">${btn("timeline-prev", "Previous keyframe", "skip-back", "icon-only")}${busyPreview ? btn("timeline-pause", "Pause", "pause", "primary") : btn("timeline-play", tlPlayhead > 0.05 && tlPlayhead < seconds - 0.05 ? "Play from here" : "Play", "play")}${btn("timeline-next", "Next keyframe", "skip-forward", "icon-only")}</span><label class="setting-label tl-length">Length (s)<input type="number" id="timeline-seconds" min="${MIN_SECONDS}" max="${MAX_SECONDS}" step="1" value="${seconds}" aria-label="Clip length in seconds"/></label></div><div class="tl-track" data-tl-track role="group" aria-label="Timeline track">${timelineTrackHTML()}</div><div class="tl-legend"><span><i class="tl-sw seg"></i>move · curve = ramp</span><span><i class="tl-sw hold"></i>hold</span><span><i class="tl-sw fade"></i>fade</span></div><div class="tl-strip">${strip}</div>${card}${timelineFrameSection(tl)}<section><h3>Motion</h3><label class="setting-label">Camera flow<select id="timeline-flow" aria-label="Camera flow">${Object.entries(FLOWS).map(([id, v]) => `<option value="${id}" ${tl.flow === id ? "selected" : ""}>${e(v.label)}</option>`).join("")}</select></label><p class="muted">${tl.flow === "glide" ? "The camera eases in once, moves at a steady speed through every keyframe without stopping, and eases out at the end — the look of a slider or a gimbal. A hold still stops it." : "Each move has its own ramp, so the camera settles on every keyframe. Choose the glide for one unbroken move."}</p>${tl.keys.length > 2 ? btn("timeline-auto", "Auto timing · even speed", "zap", "wide") : ""}<p class="muted">${tl.keys.length > 2 ? "Respaces the middle keyframes so the camera covers the same distance every second." : "Auto timing spaces middle keyframes; add one to use it."}</p>${tlBeforeAuto ? btn("timeline-auto-undo", "Put the timing back", "undo-2", "wide") : ""}</section><section><h3>Fades</h3><div class="field-pair"><label class="setting-label">Fade in<input type="number" id="timeline-fade-in" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.in.toFixed(1)}" aria-label="Fade in seconds"/></label><label class="setting-label">Fade out<input type="number" id="timeline-fade-out" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.out.toFixed(1)}" aria-label="Fade out seconds"/></label></div><p class="muted">Seconds of black at each end. Zero disables. The fade is drawn over the finished frame, so it reaches real black rather than a dark wash.</p></section><section><h3>Lens flare</h3><label class="check-field"><input type="checkbox" id="timeline-flare" ${tl.flare.on ? "checked" : ""}/>Lens flare during the move</label><label class="setting-label">Comes from<select id="timeline-flare-source" aria-label="Lens flare source">${Object.entries(FLARE_SOURCES).map(([k, v]) => `<option value="${k}" ${tl.flare.source === k ? "selected" : ""} ${k === "spot" && noLights ? "disabled" : ""}>${e(v)}</option>`).join("")}</select></label>${tl.flare.source === "spot" && noLights ? `<p class="warn-note">This booth has no spotlights, so a flare from one would never appear. Use the overhead source, or add a spotlight in Lighting.</p>` : ""}${range("Flare strength", "flare-strength", Math.round(tl.flare.strength * 100), 0, 100, 1, "timeline", "%")}<p class="muted">${tl.flare.source === "overhead" ? `An unseen light ${Math.round(OVERHEAD.y / 12)} ft over the centre of the booth, standing in for the sun or a hall's high bay. Nothing is drawn there and nothing is lit by it — only the flare says it is there.` : "The brightest spotlight in the booth."} The flare tracks the camera: its ghosts sit on the line from that light through the centre of frame, and it fades out as the light leaves the shot.</p></section>${timelineExportSection()}${batchSection()}<div class="button-row">${btn("close-timeline", "Done", "check", "primary")}</div>`;
+      `<div class="panel-heading"><h2>Camera timeline</h2>${btn("close-timeline", "Close", "x", "icon-only")}</div><ol class="tl-steps"><li>Frame a shot in the booth behind this panel.</li><li>Press <strong>Add keyframe</strong>. Repeat for each shot.</li><li>Drag a diamond to change when the camera gets there; drag the track to scrub.</li></ol><div class="tl-bar">${tl.keys.length < MAX_KEYS ? btn("timeline-add", "Add keyframe", "plus", "primary") : `<span class="muted">${MAX_KEYS} keyframes max</span>`}${videoSupported() ? (busyVideo ? btn("cancel-video", "Cancel export", "x") : btn("export-video", "Export MP4", "download")) : ""}<span class="tl-transport">${btn("timeline-prev", "Previous keyframe", "skip-back", "icon-only")}${busyPreview ? btn("timeline-pause", "Pause", "pause", "primary") : btn("timeline-play", tlPlayhead > 0.05 && tlPlayhead < seconds - 0.05 ? "Play from here" : "Play", "play")}${btn("timeline-next", "Next keyframe", "skip-forward", "icon-only")}</span><label class="setting-label tl-length">Length (s)<input type="number" id="timeline-seconds" min="${MIN_SECONDS}" max="${MAX_SECONDS}" step="1" value="${seconds}" aria-label="Clip length in seconds"/></label></div><div class="tl-track" data-tl-track role="group" aria-label="Timeline track">${timelineTrackHTML()}</div><div class="tl-legend"><span><i class="tl-sw seg"></i>move · curve = ramp</span><span><i class="tl-sw hold"></i>hold</span><span><i class="tl-sw fade"></i>fade</span></div><div class="tl-strip">${strip}</div>${card}${timelineFrameSection(tl)}<section><h3>Motion</h3><label class="setting-label">Camera flow<select id="timeline-flow" aria-label="Camera flow">${Object.entries(FLOWS).map(([id, v]) => `<option value="${id}" ${tl.flow === id ? "selected" : ""}>${e(v.label)}</option>`).join("")}</select></label><p class="muted">${tl.flow === "glide" ? "The camera eases in once, moves at a steady speed through every keyframe without stopping, and eases out at the end — the look of a slider or a gimbal. A hold still stops it." : "Each move has its own ramp, so the camera settles on every keyframe. Choose the glide for one unbroken move."}</p>${tl.keys.length > 2 ? btn("timeline-auto", "Auto timing · even speed", "zap", "wide") : ""}<p class="muted">${tl.keys.length > 2 ? "Respaces the middle keyframes so the camera covers the same distance every second." : "Auto timing spaces middle keyframes; add one to use it."}</p>${tlBeforeAuto ? btn("timeline-auto-undo", "Put the timing back", "undo-2", "wide") : ""}</section><section><h3>Fades</h3><div class="field-pair"><label class="setting-label">Fade in<input type="number" id="timeline-fade-in" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.in.toFixed(1)}" aria-label="Fade in seconds"/></label><label class="setting-label">Fade out<input type="number" id="timeline-fade-out" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.out.toFixed(1)}" aria-label="Fade out seconds"/></label></div><p class="muted">Seconds of black at each end. Zero disables. The fade is drawn over the finished frame, so it reaches real black rather than a dark wash.</p></section><section><h3>Lens flare</h3><label class="check-field"><input type="checkbox" id="timeline-flare" ${tl.flare.on ? "checked" : ""}/>Lens flare during the move</label><label class="setting-label">Comes from<select id="timeline-flare-source" aria-label="Lens flare source">${Object.entries(FLARE_SOURCES).map(([k, v]) => `<option value="${k}" ${tl.flare.source === k ? "selected" : ""} ${k === "spot" && noLights ? "disabled" : ""}>${e(v)}</option>`).join("")}</select></label>${tl.flare.source === "spot" && noLights ? `<p class="warn-note">This booth has no spotlights, so a flare from one would never appear. Use the overhead source, or add a spotlight in Lighting.</p>` : ""}${range("Flare strength", "flare-strength", Math.round(tl.flare.strength * 100), 0, 100, 1, "timeline", "%")}<p class="muted">${tl.flare.source === "overhead" ? `An unseen light ${Math.round(OVERHEAD.y / 12)} ft over the centre of the booth, standing in for the sun or a hall's high bay. Nothing is drawn there and nothing is lit by it — only the flare says it is there.` : "The brightest spotlight in the booth."} The flare tracks the camera: its ghosts sit on the line from that light through the centre of frame, and it fades out as the light leaves the shot.</p></section>${timelineExportSection()}${batchSection()}<div class="button-row">${btn("close-timeline", "Done", "check", "primary")}</div>`;
     refreshIcons();
   }
   /**
@@ -2629,7 +2647,11 @@ async function boot() {
     guide.hidden = !shape;
     if (!shape) return;
     guide.dataset.which = shape.which;
-    const r = placeRect(host.clientWidth, host.clientHeight, shape.aspect, getPlace(shape.which));
+    const W = host.clientWidth,
+      H = host.clientHeight;
+    const r = renderRect
+      ? { x: renderRect.x * W, y: renderRect.y * H, width: renderRect.width * W, height: renderRect.height * H }
+      : placeRect(W, H, shape.aspect, getPlace(shape.which));
     Object.assign(guide.style, {
       left: `${host.offsetLeft}px`,
       top: `${host.offsetTop}px`,

@@ -2912,6 +2912,25 @@ export class BoothScene {
    * whole viewport for "This window", otherwise the frame guide's rectangle —
    * the chosen shape, placed where it was dragged. See placeRect.
    */
+  /**
+   * While a file renders, the canvas's drawing buffer holds only the export's
+   * rectangle of the view, and the browser stretches it over the whole
+   * viewport — reported as the export "not showing the proper framing" while
+   * it runs, though the file was right. The canvas is scaled into that
+   * rectangle instead, so the picture sits exactly inside the frame guide,
+   * and `onRenderRect` tells main.js where, so the guide follows a frame
+   * that is keyframed. Fractions of the viewport; `clearRenderRect` undoes it.
+   */
+  showRenderRect(rect, viewW, viewH) {
+    const style = this.renderer.domElement.style;
+    style.transformOrigin = "0 0";
+    style.transform = `translate(${(rect.x / viewW) * 100}%, ${(rect.y / viewH) * 100}%) scale(${rect.width / viewW}, ${rect.height / viewH})`;
+    this.onRenderRect?.({ x: rect.x / viewW, y: rect.y / viewH, width: rect.width / viewW, height: rect.height / viewH });
+  }
+  clearRenderRect() {
+    this.renderer.domElement.style.transform = "";
+    this.onRenderRect?.(null);
+  }
   frameRect(frame, viewW, viewH, aspect, place) {
     if (frame === DEFAULT_FRAME || !FRAMES_WITH_SHAPE(frame)) return { x: 0, y: 0, width: viewW, height: viewH };
     return placeRect(viewW, viewH, aspect, place);
@@ -2998,6 +3017,7 @@ export class BoothScene {
       this.renderer.setSize(width, height, false);
       this.camera.aspect = viewW / viewH;
       this.camera.setViewOffset(viewW, viewH, rect.x, rect.y, rect.width, rect.height);
+      this.showRenderRect(rect, viewW, viewH);
       const recorded = await recordMp4({
         count: clip.count,
         fps,
@@ -3020,6 +3040,7 @@ export class BoothScene {
           if (frame.place) {
             const r = this.frameRect(frameId, viewW, viewH, width / height, frame.place);
             this.camera.setViewOffset(viewW, viewH, r.x, r.y, r.width, r.height);
+            this.showRenderRect(r, viewW, viewH);
           }
           this.camera.updateProjectionMatrix();
           // Shadows are static between edits, so the map is refreshed once per
@@ -3055,6 +3076,7 @@ export class BoothScene {
       this.camera.quaternion.copy(restore.quaternion);
       this.controls.target.copy(restore.target);
       this.camera.clearViewOffset();
+      this.clearRenderRect();
       this.camera.aspect = restore.aspect;
       this.camera.fov = restore.fov;
       this.controls.maxPolarAngle = restore.maxPolar;
@@ -3129,6 +3151,7 @@ export class BoothScene {
       // stretching when the frame is not the window's shape.
       const rect = this.frameRect(frame, w, h, width / height, place);
       this.camera.setViewOffset(w, h, rect.x, rect.y, rect.width, rect.height);
+      this.showRenderRect(rect, w, h);
       // Once, unlike a recorded frame. `toBlob` reads the canvas back, and a
       // readback flushes everything the GPU still owed — so a still cannot
       // catch a half-finished frame the way a captured video frame can. A
@@ -3152,6 +3175,7 @@ export class BoothScene {
       }
       this.renderer.setPixelRatio(pixel);
       this.camera.clearViewOffset();
+      this.clearRenderRect();
       if (this.camera.isPerspectiveCamera) {
         this.camera.aspect = wasAspect;
         this.camera.fov = wasFov;

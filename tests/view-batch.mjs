@@ -124,9 +124,24 @@ try {
   // Export all: one MP4 and one PNG.
   const files = [];
   page.on('download', (d) => files.push(d.suggestedFilename()));
+  // Export MP4 is at the top of the timeline as well as the bottom.
+  assert.equal(await dlg('.tl-bar [data-action="export-video"]').count(), 1, 'Export MP4 sits in the top bar');
+  // Every icon drew: an unregistered one leaves an empty <i>.
+  assert.equal(await page.evaluate(() => document.querySelectorAll('#timeline-content i[data-lucide]').length), 0, 'no icon left undrawn');
   await dlg('[data-action="batch-export"]').click();
+  // While it renders, the picture sits inside the frame, not stretched over
+  // the viewport, and the guide is drawn round the same rectangle.
+  const during = await page.waitForFunction(() => {
+    const c = window.__booth.scene.renderer.domElement;
+    if (!/scale/.test(c.style.transform)) return null;
+    const a = c.getBoundingClientRect(), b = document.querySelector('.frame-guide-box').getBoundingClientRect();
+    return { dx: Math.abs(a.left - b.left) + Math.abs(a.top - b.top), dw: Math.abs(a.width - b.width) + Math.abs(a.height - b.height) };
+  }, null, { timeout: 60000, polling: 50 });
+  const d = await during.jsonValue();
+  assert.ok(d.dx < 3 && d.dw < 3, `the rendering picture and the guide agree: ${JSON.stringify(d)}`);
   await page.waitForFunction(() => !document.querySelector('[data-action="cancel-video"]'), null, { timeout: 240000 });
   await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => window.__booth.scene.renderer.domElement.style.transform), '', 'the canvas is back to normal afterwards');
   assert.equal(files.length, 2, `two files downloaded: ${files.join(', ')}`);
   assert.ok(files.some((f) => /-01-rise\.mp4$/.test(f)) && files.some((f) => /-02-still\.png$/.test(f)), files.join(', '));
 

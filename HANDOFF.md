@@ -16,7 +16,11 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-25, second round — a movable, resizable export
+- **Last deploy: 2026-09-25, fourth round — icons on the keyframe arrows,
+  Export MP4 at the top of the timeline, and the right framing on screen
+  while a file renders; after the third round the same day — a keyframed
+  frame, sliding end keys, previous / next keyframe and a batch of clips and
+  stills** (the first two bullets below). Before them, the second round — a movable, resizable export
   frame, Play / Pause in the timeline, Edit timeline always offered, a click
   on nothing opening Layout, and the build stamp in New York time and on a
   phone** (the first bullet below). Before it the same day: the frame guide,
@@ -46,9 +50,34 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-25, fourth round: the owner's first look at the third. Merged to
+  `main` and deployed.**
+  1. **Blank buttons fixed.** The previous / next keyframe arrows (and the
+     batch's crop, move-up and "every keyframe" buttons) drew empty: their
+     icons — `skip-back`, `skip-forward`, `crop`, `arrow-up`, `images` —
+     were never imported from lucide or put in `icons`, and an unregistered
+     name draws nothing without an error. They are registered now, and
+     `tests/icons.test.js` reads every `btn(…, "name")` and `icon("name")`
+     out of main.js and fails on any name not registered — it lists exactly
+     those five against the previous commit.
+  2. **Export MP4 at the top of the timeline** as well, in the bar beside
+     Add keyframe (Cancel export while one runs), "so you don't have to
+     always scroll to the bottom".
+  3. **The framing shown while exporting.** Reported: the viewport "doesn't
+     show the proper framing when exporting", though the file was right.
+     During a render the canvas's drawing buffer holds only the frame's
+     rectangle of the view, and the browser stretched it over the whole
+     viewport. `showRenderRect` in scene.js now scales the canvas (a CSS
+     transform) into that rectangle for the render, so the picture sits
+     exactly inside the guide, and `onRenderRect` tells main.js where, so
+     the guide is drawn round the rectangle being rendered — frame by frame
+     for a keyframed frame. `clearRenderRect` undoes both in the finally.
+     The still export does the same for its moment. view-batch checks the
+     rendering picture and the guide agree within 3 px and that the canvas
+     is back to normal afterwards.
 - **2026-09-25, third round: a keyframed frame, sliding end keys, previous /
-  next keyframe, and a batch of clips and stills. On branch
-  `claude/laughing-hopper-g3fc2i`, not yet merged — so not deployed.**
+  next keyframe, and a batch of clips and stills. Merged to `main` and
+  deployed.**
   Asked for as "add 'frame up down' slider also in timeline … and make it a
   keyframeable feature so the frame can move too; allow sliding of end key
   frames — if they slide, after them the framing remains unchanged; have a
@@ -1127,8 +1156,9 @@ Extend it; do not rebuild it.
 
 ## Next
 
-1. **The 2026-09-25 third round, on the real machine** (merge the branch
-   first). Keyframe the frame, give Start and End different frames, and
+1. **The 2026-09-25 third and fourth rounds, on the real machine.** Check
+   the arrows draw and that an export now shows the picture inside the
+   frame while it renders. Keyframe the frame, give Start and End different frames, and
    export: does the frame's move read as intended, and should it have its
    own ramp rather than the camera's? Slide an end key in: is a held tail
    the right answer, or should the clip be trimmed? Is the batch panel too
