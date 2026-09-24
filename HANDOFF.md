@@ -1178,9 +1178,9 @@ the picker became one list.
 
 ```sh
 npm ci
-npm test                 # 297 Node tests
+npm test                 # 343 Node tests
 npm run build
-npm run test:view        # 19 suites: city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search
+npm run test:view        # 25 suites: city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
 npm run test:browser     # 25 end-to-end checks
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
@@ -1208,6 +1208,17 @@ before the failure. Print the suite's own `$?` immediately after it and read
 vite dev server, so saving a module hot-reloads the page mid-assertion and the
 run dies on `window.__booth` being undefined. That is not a flake and not a
 regression — it is the editor and the test sharing one server.
+
+**And do not run two browser suites at once.** The sandbox has four cores and
+swiftshader draws on all of them: with a second suite running, a 4096 px PNG
+export or a 3× frame passes Playwright's 30 s timeout and the suite fails
+with a `TimeoutError` that is not a bug — found on 2026-09-24, where
+view-responsive and e2e both failed that way and both passed alone. The way
+to keep working while the whole chain runs (it takes about 25 minutes now) is
+a snapshot: `git worktree add ../bs-test HEAD`, `cp -al node_modules
+../bs-test/` (hard links — a symlink puts the fonts outside vite's allow
+list), run the chain there in the background, and edit here without running
+anything else in a browser until it is done.
 
 ## Rules that are easy to break
 
