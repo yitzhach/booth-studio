@@ -457,7 +457,7 @@ header {
   font-size: 16px;
   font-weight: 500;
 }
-.scene-label > span:last-child {
+#scene-subtitle {
   font-size: 11px;
   opacity: 0.75;
 }
@@ -823,6 +823,13 @@ footer {
   border-radius: 3px;
   color: #95a6b8;
 }
+.scene-label .mobile-stamp {
+  display: none;
+  margin-top: 2px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  opacity: 0.7;
+}
 #build-stamp {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   background: #1f2d3d;
@@ -1118,7 +1125,7 @@ dialog li {
   .scene-label strong {
     font-size: 13px;
   }
-  .scene-label > span:last-child {
+  #scene-subtitle {
     font-size: 10px;
   }
   .viewport-bottom {
@@ -1272,6 +1279,10 @@ dialog li {
   }
   footer {
     display: none;
+  }
+  /* The footer is gone on a phone, so the build it names moves here. */
+  .scene-label .mobile-stamp {
+    display: block;
   }
   #toast {
     bottom: 65px;
@@ -2075,9 +2086,12 @@ dialog li {
 body:has(.timeline-dialog[open]) .find-tool {display:none;}
 @media (max-width: 900px) {.timeline-dialog {max-height:62dvh;}}
 
-/* The export frame over the viewport. Everything outside the box is dimmed by
-   the box's own shadow; the wrapper clips it to the viewport. Never takes a
-   pointer: orbiting, picking and keyframing go straight through it. */
+/* The export frame over the viewport. The handles sit just inside the box,
+   so a frame filling the viewport can still be grabbed at its edges. Everything outside the box is dimmed by
+   the box's own shadow (80%: asked for "about 50% darker" than the first
+   55%); the wrapper clips it to the viewport. The wrapper and the box take no
+   pointer, so orbiting, picking and keyframing go straight through; only the
+   label (move) and the handles (resize, reshape) do. */
 .frame-guide {
   position: absolute;
   overflow: hidden;
@@ -2086,16 +2100,47 @@ body:has(.timeline-dialog[open]) .find-tool {display:none;}
 }
 .frame-guide-box {
   position: absolute;
-  box-shadow: 0 0 0 9999px rgba(10, 12, 16, 0.55);
+  box-shadow: 0 0 0 9999px rgba(10, 12, 16, 0.8);
   outline: 1px solid rgba(255, 255, 255, 0.85);
 }
-.frame-guide-box span {
+.frame-guide .fg-move {
   position: absolute;
   top: 6px;
-  left: 8px;
-  padding: 2px 6px;
+  left: 26px;
+  padding: 3px 8px;
+  border: 0;
   border-radius: 4px;
+  font: inherit;
   font-size: 11px;
   color: #fff;
-  background: rgba(10, 12, 16, 0.6);
+  background: rgba(10, 12, 16, 0.7);
+  cursor: move;
+  pointer-events: auto;
+  touch-action: none;
+}
+.frame-guide .fg-h {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border: 1px solid #2a3440;
+  pointer-events: auto;
+  touch-action: none;
+}
+.frame-guide .fg-corner {
+  border-radius: 2px;
+}
+.frame-guide .fg-h[data-fg="nw"] { left: 0; top: 0; cursor: nwse-resize; }
+.frame-guide .fg-h[data-fg="se"] { right: 0; bottom: 0; cursor: nwse-resize; }
+.frame-guide .fg-h[data-fg="ne"] { right: 0; top: 0; cursor: nesw-resize; }
+.frame-guide .fg-h[data-fg="sw"] { left: 0; bottom: 0; cursor: nesw-resize; }
+.frame-guide .fg-edge { border-radius: 7px; background: #cfe3ff; }
+.frame-guide .fg-h[data-fg="n"] { top: 0; left: calc(50% - 7px); cursor: ns-resize; }
+.frame-guide .fg-h[data-fg="s"] { bottom: 0; left: calc(50% - 7px); cursor: ns-resize; }
+.frame-guide .fg-h[data-fg="e"] { right: 0; top: calc(50% - 7px); cursor: ew-resize; }
+.frame-guide .fg-h[data-fg="w"] { left: 0; top: calc(50% - 7px); cursor: ew-resize; }
+@media (pointer: coarse) {
+  .frame-guide .fg-h { width: 24px; height: 24px; }
+  .frame-guide .fg-h[data-fg="n"], .frame-guide .fg-h[data-fg="s"] { left: calc(50% - 12px); }
+  .frame-guide .fg-h[data-fg="e"], .frame-guide .fg-h[data-fg="w"] { top: calc(50% - 12px); }
 }

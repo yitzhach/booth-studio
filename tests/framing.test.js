@@ -66,7 +66,7 @@ test("a viewport that has not been measured yet does not produce a zero frame", 
   }
 });
 
-import { DEFAULT_CLIP_FRAME, guideRect, frameLens } from "../src/framing.js";
+import { DEFAULT_CLIP_FRAME, guideRect, placeRect, placeFromRect, normalPlace, DEFAULT_PLACE } from "../src/framing.js";
 
 test("a clip starts widescreen, not the window's shape", () => {
   assert.equal(DEFAULT_CLIP_FRAME, "desktop");
@@ -86,13 +86,24 @@ test("the frame guide is the largest centred rectangle of the frame's shape", ()
   assert.ok(Math.abs(tall.x + tall.width / 2 - 800) < 1e-9, "centred");
 });
 
-test("the export lens shows exactly what the guide outlines", () => {
-  // Narrower than the window: the camera keeps its own lens.
-  assert.equal(frameLens(50, 16 / 9, 1), 50);
-  // Wider than the window: the vertical view closes so the guide's height is
-  // the file's height. tan(half) scales by the guide's share of the viewport.
-  const fov = frameLens(50, 1.25, 16 / 9);
-  const share = guideRect(1250, 1000, 16 / 9).height / 1000;
-  const ratio = Math.tan((fov * Math.PI) / 360) / Math.tan((50 * Math.PI) / 360);
-  assert.ok(Math.abs(ratio - share) < 1e-9);
+test("an unmoved frame is the guide; a placed one stays inside the viewport", () => {
+  assert.deepEqual(placeRect(1000, 800, 16 / 9, DEFAULT_PLACE), guideRect(1000, 800, 16 / 9));
+  const r = placeRect(1000, 800, 16 / 9, { scale: 0.5, x: -1, y: 1 });
+  assert.equal(r.x, 0, "x -1 is flush left");
+  assert.ok(Math.abs(r.y + r.height - 800) < 1e-9, "y 1 is flush with the bottom");
+  assert.ok(Math.abs(r.width - 500) < 1e-9);
+  // Out-of-range input is clamped, never thrown.
+  assert.deepEqual(normalPlace({ scale: 9, x: -4, y: "no" }), { scale: 1, x: -1, y: 0 });
+  assert.equal(normalPlace({ scale: 0 }).scale, 0.2);
+});
+
+test("a dragged rectangle round-trips through its placement", () => {
+  const rect = { x: 120, y: 90, width: 400, height: 300 };
+  const { aspect, place } = placeFromRect(1000, 800, rect);
+  assert.ok(Math.abs(aspect - 4 / 3) < 1e-9);
+  const back = placeRect(1000, 800, aspect, place);
+  for (const k of ["x", "y", "width", "height"]) assert.ok(Math.abs(back[k] - rect[k]) < 1e-6, k);
+  // Dragged past the edge: stopped at it.
+  const out = placeRect(1000, 800, 1, placeFromRect(1000, 800, { x: 900, y: -50, width: 200, height: 200 }).place);
+  assert.ok(Math.abs(out.x - 800) < 1e-6 && Math.abs(out.y) < 1e-6);
 });

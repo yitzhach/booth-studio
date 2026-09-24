@@ -225,6 +225,18 @@ try {
   const back = await page.evaluate(() => window.__booth.timeline().keys.map((k) => k.t));
   assert.deepEqual(back, timed, 'Put the timing back restores the key times');
 
+  // Play and Pause in the dialog: Pause leaves the camera and the playhead
+  // where the clip had got to, and the next Play carries on from there.
+  await page.click('#timeline-content [data-action="timeline-play"]');
+  await page.waitForSelector('#timeline-content [data-action="timeline-pause"]');
+  await page.waitForTimeout(700);
+  await page.click('#timeline-content [data-action="timeline-pause"]');
+  await page.waitForSelector('#timeline-content [data-action="timeline-play"]');
+  const paused = await page.textContent('.tl-playhead');
+  const pausedAt = parseFloat(paused);
+  assert.ok(pausedAt > 0, `pausing keeps the playhead part-way, at ${paused}`);
+  assert.match(await page.textContent('#timeline-content [data-action="timeline-play"]'), /Play from here/, 'and Play offers to carry on');
+
   // The frame guide: a 16:9 box over the viewport while the timeline is open.
   const guide = await page.evaluate(() => {
     const g = document.querySelector('.frame-guide');

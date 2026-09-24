@@ -16,9 +16,12 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-25 — the frame guide, figures lowered as well as
-  raised and picked by double-click, and the timeline's glide, auto timing
-  and scrubbed fades** (the first bullet below). Before it, 2026-09-24:
+- **Last deploy: 2026-09-25, second round — a movable, resizable export
+  frame, Play / Pause in the timeline, Edit timeline always offered, a click
+  on nothing opening Layout, and the build stamp in New York time and on a
+  phone** (the first bullet below). Before it the same day: the frame guide,
+  figures lowered as well as raised and picked by double-click, and the
+  timeline's glide, auto timing and scrubbed fades. Before that, 2026-09-24:
   locked floor pieces, raised figures and the visual camera timeline; and the
   same day before that: tool shortcuts, three more people, the smaller drag shadow and Pro
   unlocked; and before that roadmap batch E, the last of the roadmap
@@ -43,6 +46,68 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-25, second round: the owner's asks after seeing the frame
+  guide. Merged to `main` and deployed.**
+  1. **The export frame can be moved, resized and reshaped.** Asked for as
+     "the export frame size with the option to manually drag or move the
+     export window or change the shape manually (with handles, or sliders)".
+     On the guide over the viewport: the **label** (top left, "16:9" or the
+     custom size) drags the frame; the four **corners** resize it and keep
+     its shape; the four **edges** change its shape, which switches the frame
+     to Custom at the new ratio (the long side keeps the custom size's, at
+     least 1080). The same placement has three sliders under Frame in Video
+     and in Export — **Frame size** (20–100% of the largest fit), **Frame
+     left / right** and **Frame up / down** (−100..100% of the room left
+     over) — and **Reset frame to fit**. The clip and the still each have
+     their own placement (`framePlace.video` / `.export`), remembered in
+     `booth.view` with the other export choices and never in the booth. A
+     queued clip keeps the placement it was queued with. Only the label and
+     the handles take the pointer, so orbiting inside the frame still works.
+     `placeRect` / `placeFromRect` / `normalPlace` in `src/framing.js` hold
+     the placement as scale plus −1..1 offsets rather than pixels, so it
+     survives a window resize.
+     **How the export matches it:** both `recordVideo` and the still
+     `export` now keep the viewport's own projection and call
+     `camera.setViewOffset` with the frame's rectangle (`frameRect` in
+     scene.js), so the file is exactly that rectangle of the viewport, off
+     centre or not. The backdrop pass copies the same offset onto the
+     backdrop camera. This replaced the morning's `frameLens` (which could
+     only do a centred frame), and as a side effect a Plan or wall view
+     exported at a shape other than the window's no longer stretches.
+  2. **The dimming outside the frame is darker**: 80% black, from 55% —
+     "about 50% darker", as asked.
+  3. **Play and Pause in the timeline dialog** (replacing its Preview /
+     Stop). Play runs the clip from the playhead — "Play from here" when the
+     playhead is part-way — and Pause stops it where it is: the camera, the
+     playhead and the fade are all left on that moment (`previewMove` takes
+     `from`, and `stopPreview({ keep: true })` skips putting the camera
+     back). The Video tab's own "Preview the move" is unchanged.
+  4. **Edit timeline… is always there** in the Video section, not only once
+     Custom is picked from the Camera move menu; pressing it on a fixed move
+     switches the move to Custom and opens the dialog.
+  5. **A click on nothing opens Layout.** A click on empty space used to open
+     Artwork, whose empty state is "Make room for your work"; asked to land
+     on Layout instead. Precisely: a click on nothing while Artwork is open
+     moves to Layout, and on any other tab stays put, so orbiting from Video
+     or Lighting does not throw the panel away. A click on a work still opens
+     Artwork.
+  6. **The build stamp, in New York time, and on a phone.** The footer's
+     time is now month, day, hour and minute run together in New York time
+     — 24 September at 10:36 is `9241036` — labelled EST as asked (it is
+     EDT in summer; `BUILD.stamp` in main.js). On a phone, where the footer
+     is hidden, the same stamp and the commit sit under the booth's name in
+     the viewport's top-left label (`.mobile-stamp`).
+  The owner also asked what **Show this view** does, on a keyframe's card:
+  it moves the viewport's camera to that keyframe's view, so the shot can be
+  looked at (and, with Replace with current view, adjusted and put back). It
+  changes nothing in the timeline.
+  Tests: `tests/framing.test.js` (placement round trip, clamping);
+  `tests/view-frame.mjs`, a new suite — the stamp's format, a click on
+  nothing opening Layout, Edit timeline from a fixed move, a corner resize
+  that keeps 16:9, a label drag, an edge drag that makes the frame custom,
+  the sliders and reset, a placed square export at 1080 with the view offset
+  cleared afterwards, the placement surviving a reload, and the stamp
+  visible at phone width; `view-timeline` pauses a playing clip part-way.
 - **2026-09-25, the owner's answers to the lock/lift/timeline round. Merged
   to `main` and deployed.** The owner also reported the 2014 iMac's speed as
   good now, and approved the tool shortcuts as drafted (see 5).
@@ -66,9 +131,10 @@ Extend it; do not rebuild it.
      - **The file is exactly what is inside the guide.** A frame narrower
        than the window was already that (the camera keeps its height). A
        frame wider than the window used to keep the height too and so showed
-       more at the sides than anyone had seen; now `frameLens` closes the
-       vertical field of view so the file's top and bottom are the guide's.
-       Both `recordVideo` and the still `export` use it and restore the fov.
+       more at the sides than anyone had seen. This was first done by
+       narrowing the lens (`frameLens`); the second round replaced that with
+       a camera view offset, which also handles a frame moved off centre —
+       see the bullet above.
        The keyframe pictures in the timeline strip are cropped to the frame
        as well. The old note — "a frame that is not the window's shape shows
        more or less at the sides" — is gone, because it is no longer true.
@@ -1012,9 +1078,16 @@ Extend it; do not rebuild it.
    (see Now); past it, fast edit is the answer. Three labels are shared by several controls in one
    section (each perimeter wall's Width and Height, under Display walls): the
    search lists one of each and opens the first.
+1. **The second 2026-09-25 round, on the real machine.** Do the frame's
+   handles grab easily (14 px, 24 px on touch) and does an edge drag
+   switching the frame to Custom surprise anyone? The custom size is one
+   size shared by the still and the clip — reshaping the clip's frame
+   reshapes a still set to Custom too; if that bites, give each its own.
+   Is Play from the playhead right, or should Play always start from 0?
+   Is the stamp readable on a phone at 10 px?
 1. **The 2026-09-25 round, on the real machine.** Build `main`'s tip first
    (`window.BOOTH_BUILD`). Then: does the frame guide read as "this is the
-   shot" — is 55% dimming right, and should it show on every tab rather
+   shot" — the dimming is now 80% (see Now) — and should it show on every tab rather
    than only Video / Export / the timeline? Export a 16:9 clip from a narrow
    window and check the file matches the guide. Is the glide the look that
    was meant, and is a 20% ramp (`GLIDE_RAMP`) too quick or too slow? Does
@@ -1354,7 +1427,7 @@ the picker became one list.
 npm ci
 npm test                 # 358 Node tests
 npm run build
-npm run test:view        # 25 suites: city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall
+npm run test:view        # 26 suites: city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
 npm run test:browser     # 25 end-to-end checks
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs

@@ -90,8 +90,8 @@ export const CLIP_SIZES = [720, 1080, 1440];
 /**
  * Where a frame of `aspect` sits inside a viewport of `width` x `height`
  * pixels: the largest rectangle of that shape that fits, centred. This is
- * the frame guide drawn over the viewport, and — through `frameLens` — the
- * exact picture an export of that frame delivers, so what is inside the guide
+ * the frame guide drawn over the viewport, and — rendered as a view offset of
+ * the camera (scene.js `frameRect`) — the exact picture an export delivers, so what is inside the guide
  * is what is in the file. Reported as "if it's set at 16:9, I need to see
  * this aspect ratio in the preview so changes can be made before export".
  */
@@ -104,20 +104,54 @@ export function guideRect(width, height, aspect) {
 }
 
 /**
- * The vertical field of view, in degrees, that makes an export of `aspect`
- * show exactly what `guideRect` outlines in a viewport of `viewAspect` drawn
- * at `fov`.
+ * Where the frame sits in the viewport, when it has been moved or resized by
+ * hand: `scale` is its size as a share of the largest frame of its shape that
+ * fits (1 is the whole fit, the default), and `x` / `y` run -1..1 across the
+ * room left over on each axis (0 is centred, -1 the left or top edge). Stored
+ * this way rather than in pixels so it survives a window resize: a frame
+ * moved to the left third of the viewport stays in the left third.
  *
- * A frame narrower than the window keeps the camera's own height — the guide
- * is full height, the sides are trimmed — so the lens is unchanged. A frame
- * wider than the window is full width in the guide and trimmed top and
- * bottom, so the export's vertical view closes by the ratio of the two
- * shapes. Before the guide existed a wider frame kept the height and showed
- * more at the sides than the viewport ever did, which is the "preview is not
- * the export" that was reported.
+ * Asked for as "the export frame, with the option to manually drag or move
+ * the export window or change the shape manually, with handles or sliders".
  */
-export function frameLens(fov, viewAspect, aspect) {
-  if (!(fov > 0 && viewAspect > 0 && aspect > 0) || aspect <= viewAspect) return fov;
-  const half = Math.tan((fov * Math.PI) / 360) * (viewAspect / aspect);
-  return (Math.atan(half) * 360) / Math.PI;
+export const DEFAULT_PLACE = { scale: 1, x: 0, y: 0 };
+export const MIN_PLACE_SCALE = 0.2;
+const clamp01 = (n, lo, hi, fallback) => (Number.isFinite(Number(n)) ? Math.max(lo, Math.min(hi, Number(n))) : fallback);
+export const normalPlace = (place) => ({
+  scale: clamp01(place?.scale, MIN_PLACE_SCALE, 1, 1),
+  x: clamp01(place?.x, -1, 1, 0),
+  y: clamp01(place?.y, -1, 1, 0),
+});
+
+/** The placed frame, in the viewport's own units. */
+export function placeRect(width, height, aspect, place) {
+  const { scale, x, y } = normalPlace(place);
+  const fit = guideRect(width, height, aspect);
+  const w = fit.width * scale,
+    h = fit.height * scale;
+  return { x: ((width - w) / 2) * (1 + x), y: ((height - h) / 2) * (1 + y), width: w, height: h };
+}
+
+/**
+ * The inverse, for a frame dragged by its handles: the shape it now has and
+ * the placement that reproduces it. The rectangle is clamped inside the
+ * viewport first, so a handle dragged past the edge stops at it.
+ */
+export function placeFromRect(width, height, rect) {
+  const w = Math.max(1, Math.min(width, rect.width)),
+    h = Math.max(1, Math.min(height, rect.height));
+  const left = Math.max(0, Math.min(width - w, rect.x)),
+    top = Math.max(0, Math.min(height - h, rect.y));
+  const aspect = w / h;
+  const fit = guideRect(width, height, aspect);
+  const slackX = width - w,
+    slackY = height - h;
+  return {
+    aspect,
+    place: normalPlace({
+      scale: w / fit.width,
+      x: slackX > 1e-6 ? (left * 2) / slackX - 1 : 0,
+      y: slackY > 1e-6 ? (top * 2) / slackY - 1 : 0,
+    }),
+  };
 }

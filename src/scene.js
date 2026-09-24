@@ -27,7 +27,8 @@ import { frameTimes, resolveMove, samplePath } from "./camera-path.js";
 import { fadeAt, isTimeline, sampleTimeline, timelineSeconds } from "./timeline.js";
 import { flareGhosts, flareOrigin } from "./flare.js";
 import { DEFAULT_SIZE, SIZES, evenSize, recordMp4, videoSupported } from "./video.js";
-import { DEFAULT_FRAME, frameSize, frameLens } from "./framing.js";
+import { DEFAULT_FRAME, FRAMES, frameSize, placeRect } from "./framing.js";
+const FRAMES_WITH_SHAPE = (id) => !!FRAMES[id] && id !== DEFAULT_FRAME;
 import { AUTO_QUALITY, FrameBudget, startScale, stepDown } from "./adaptive.js";
 import { distanceInches, formatLength, planDimensions } from "./measure.js";
 import { buildFurniture } from "./furniture.js";
@@ -825,6 +826,11 @@ export class BoothScene {
           this.backdropEdgeLimit,
         );
     this.backdropCamera.fov = lens;
+    // An export renders one rectangle of the view (see frameRect); the
+    // backdrop pass has to crop the same rectangle or the surroundings would
+    // be the whole panorama squeezed into it.
+    if (this.camera.view?.enabled) this.backdropCamera.view = { ...this.camera.view };
+    else this.backdropCamera.view = null;
     this.backdropCamera.updateProjectionMatrix();
     this.backdropCamera.quaternion.copy(this.camera.quaternion);
     // Horizon lock: see lockedPitch. YXZ, so pitch can be scaled on its own
@@ -2794,7 +2800,7 @@ export class BoothScene {
   // that is correct here for the same reason it is wrong there: a preview
   // should take the number of seconds it claims even if the machine drops
   // frames doing it, whereas a file must contain every frame it promises.
-  previewMove({ move, seconds, onProgress = () => {}, signal } = {}) {
+  previewMove({ move, seconds, from = 0, onProgress = () => {}, signal } = {}) {
     // Any preview already running is stopped *before* the framing is read,
     // because stopping it is what puts the camera back. Reading first would
     // capture a camera halfway through the old move and make that the place
@@ -2824,7 +2830,9 @@ export class BoothScene {
     // A drag mid-preview would still reach the controls and fight the path.
     this.controls.enabled = false;
     let done = false;
-    const finish = () => {
+    // `keep` is a pause: the camera stays where the move had got to, for the
+    // timeline's Play / Pause, instead of going back to where it started.
+    const finish = (keep = false) => {
       if (done) return;
       done = true;
       cancelAnimationFrame(this.previewFrame);
@@ -2832,15 +2840,21 @@ export class BoothScene {
       // The live loop and export() share this renderer, so a fade left at 0.3
       // after a cancelled preview is a viewport that looks broken.
       this.overlay = { fade: 1, flare: null };
-      this.camera.position.copy(restore.position);
-      this.controls.target.copy(restore.target);
+      if (!keep) {
+        this.camera.position.copy(restore.position);
+        this.controls.target.copy(restore.target);
+      }
       this.camera.lookAt(this.controls.target);
       this.controls.enabled = restore.enabled;
       this.controls.update();
       this.startLoop();
     };
     return new Promise((resolve) => {
-      const started = performance.now();
+      // Starting part-way — Play from the timeline's playhead — is the same
+      // clock started that much earlier.
+      const start = Math.min(0.999, Math.max(0, from));
+      const started = performance.now() - start * duration;
+      let t = start;
       const step = () => {
         if (signal?.aborted) {
           finish();
@@ -2850,7 +2864,7 @@ export class BoothScene {
         // for the opposite reason: a preview should take the seconds it claims
         // even if the machine drops frames, whereas a file must contain every
         // frame it promises.
-        const t = Math.min(1, (performance.now() - started) / duration);
+        t = Math.min(1, (performance.now() - started) / duration);
         const frame = samplePath(move, base, t);
         this.camera.position.set(...frame.position);
         this.controls.target.set(...frame.target);
@@ -2870,9 +2884,9 @@ export class BoothScene {
       };
       // Cancellable from outside: someone who sees the wrong move in the first
       // second should not have to wait out the rest.
-      this.stopPreview = () => {
-        finish();
-        resolve({ cancelled: true });
+      this.stopPreview = ({ keep = false } = {}) => {
+        finish(keep);
+        resolve({ cancelled: true, t });
       };
       // The first frame now rather than on the next animation frame: with the
       // live loop drawing on demand, an idle page may be handed its next
@@ -2893,7 +2907,16 @@ export class BoothScene {
   // a finally block: this drives the same camera the user is holding, and
   // leaving it parked mid-move after a cancelled recording would look like the
   // viewport had broken.
-  async recordVideo({ move, seconds, fps, size, frame = DEFAULT_FRAME, custom, settle = true, onProgress = () => {}, signal } = {}) {
+  /**
+   * The rectangle of a `viewW` x `viewH` viewport an export renders: the
+   * whole viewport for "This window", otherwise the frame guide's rectangle —
+   * the chosen shape, placed where it was dragged. See placeRect.
+   */
+  frameRect(frame, viewW, viewH, aspect, place) {
+    if (frame === DEFAULT_FRAME || !FRAMES_WITH_SHAPE(frame)) return { x: 0, y: 0, width: viewW, height: viewH };
+    return placeRect(viewW, viewH, aspect, place);
+  }
+  async recordVideo({ move, seconds, fps, size, frame = DEFAULT_FRAME, custom, place, settle = true, onProgress = () => {}, signal } = {}) {
     if (!videoSupported())
       throw new Error(
         "This browser cannot encode video. Chrome, Edge and Safari 16.4 or newer can; Export PNG works everywhere.",
@@ -2964,14 +2987,16 @@ export class BoothScene {
     const wasBarShadows = this.barShadows;
     this.setBarShadows(true);
     try {
-      // The clip is what the frame guide outlines in the viewport: a frame
-      // wider than the window closes the lens so the top and bottom trim
-      // match the guide, rather than the file showing sides nobody saw.
-      const viewAspect = canvas.width / canvas.height;
+      // The clip is exactly what the frame guide outlines in the viewport —
+      // wherever it has been dragged to and however big — so the camera keeps
+      // the viewport's own projection and renders only that rectangle of it.
+      const viewW = canvas.width,
+        viewH = canvas.height;
+      const rect = this.frameRect(frame, viewW, viewH, width / height, place);
       this.renderer.setPixelRatio(1);
       this.renderer.setSize(width, height, false);
-      this.camera.aspect = width / height;
-      this.camera.fov = frameLens(restore.fov, viewAspect, width / height);
+      this.camera.aspect = viewW / viewH;
+      this.camera.setViewOffset(viewW, viewH, rect.x, rect.y, rect.width, rect.height);
       const recorded = await recordMp4({
         count: clip.count,
         fps,
@@ -3022,6 +3047,7 @@ export class BoothScene {
       this.camera.position.copy(restore.position);
       this.camera.quaternion.copy(restore.quaternion);
       this.controls.target.copy(restore.target);
+      this.camera.clearViewOffset();
       this.camera.aspect = restore.aspect;
       this.camera.fov = restore.fov;
       this.controls.maxPolarAngle = restore.maxPolar;
@@ -3047,7 +3073,7 @@ export class BoothScene {
    * the whole bug behind a stretched export, so it is set here and restored in
    * the finally beside everything else.
    */
-  async export(long, { frame = DEFAULT_FRAME, custom } = {}) {
+  async export(long, { frame = DEFAULT_FRAME, custom, place } = {}) {
     await Promise.allSettled(this.textureCache.pending());
     const canvas = this.renderer.domElement,
       w = canvas.width,
@@ -3081,12 +3107,12 @@ export class BoothScene {
     try {
       this.renderer.setPixelRatio(1);
       this.renderer.setSize(width, height, false);
-      if (this.camera.isPerspectiveCamera) {
-        this.camera.aspect = width / height;
-        // Same rule as a clip: the still is what the frame guide outlines.
-        this.camera.fov = frameLens(wasFov, w / h, width / height);
-        this.camera.updateProjectionMatrix();
-      }
+      // Same rule as a clip: the still is exactly what the frame guide
+      // outlines, rendered as that rectangle of the viewport's own view. An
+      // orthographic view gets it too, which also keeps a Plan export from
+      // stretching when the frame is not the window's shape.
+      const rect = this.frameRect(frame, w, h, width / height, place);
+      this.camera.setViewOffset(w, h, rect.x, rect.y, rect.width, rect.height);
       // Once, unlike a recorded frame. `toBlob` reads the canvas back, and a
       // readback flushes everything the GPU still owed — so a still cannot
       // catch a half-finished frame the way a captured video frame can. A
@@ -3103,6 +3129,7 @@ export class BoothScene {
     } finally {
       hidden.forEach((o) => (o.visible = true));
       this.renderer.setPixelRatio(pixel);
+      this.camera.clearViewOffset();
       if (this.camera.isPerspectiveCamera) {
         this.camera.aspect = wasAspect;
         this.camera.fov = wasFov;

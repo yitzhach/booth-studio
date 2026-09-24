@@ -7,7 +7,7 @@ import {
   keySchedule, keyTAt, sampleTimeline, easeFn, FLOWS, autoTime,
 } from "./timeline.js";
 import { SIZES, DEFAULT_SIZE, FPS, DEFAULT_FPS, videoSupported, pickCodec } from "./video.js";
-import { FRAMES, DEFAULT_FRAME, DEFAULT_CLIP_FRAME, CUSTOM_FRAME, FRAME_MIN, FRAME_MAX, STILL_SIZES, frameSize, guideRect } from "./framing.js";
+import { FRAMES, DEFAULT_FRAME, DEFAULT_CLIP_FRAME, CUSTOM_FRAME, FRAME_MIN, FRAME_MAX, STILL_SIZES, frameSize, guideRect, placeRect, placeFromRect, normalPlace, DEFAULT_PLACE } from "./framing.js";
 import { SHADOW_FIELD, SHADOW_KINDS, SHADOW_MAX, globalAngle, normalAngle, shadowSpec } from "./dropshadow.js";
 import { MAX_SWATCHES, isColor, readPalette, savePalette, removeSwatch, rememberColor, previousColor } from "./swatches.js";
 import { applyImageEdits, DEFAULT_IMAGE_EDITS, normalizeImageEdits } from "./image-edit.js";
@@ -31,6 +31,30 @@ const BUILD = {
   time: __BUILD_TIME__,
   short: __BUILD_TIME__.slice(0, 16).replace("T", " "),
 };
+// The build time as the owner reads it: New York time, month, day, hour and
+// minute run together — 24 September at 10:36 is "9241036". Asked for in
+// place of the UTC timestamp so the footer can be checked against a clock at
+// a glance. New York's own offset, so it is EDT in summer, labelled EST as
+// asked. Falls back to the UTC form if this browser has no time zone data.
+BUILD.stamp = (() => {
+  try {
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        month: "numeric",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      })
+        .formatToParts(new Date(BUILD.time))
+        .map((x) => [x.type, x.value]),
+    );
+    return `${parts.month}${parts.day}${parts.hour}${parts.minute} EST`;
+  } catch {
+    return `${BUILD.short} UTC`;
+  }
+})();
 window.BOOTH_BUILD = BUILD;
 import {
   createIcons,
@@ -64,6 +88,7 @@ import {
   Layers,
   RotateCcw,
   Play,
+  Pause,
   Building2,
   Columns2,
   Ruler,
@@ -198,6 +223,7 @@ async function boot() {
     Layers,
     RotateCcw,
     Play,
+    Pause,
     Building2,
     Columns2,
     Ruler,
@@ -323,6 +349,11 @@ async function boot() {
     // beside the fast-edit lock: a frame is a judgement about where the file
     // is going, not about the booth.
     videoFrameShape = DEFAULT_CLIP_FRAME,
+    // Where each frame sits in the viewport once dragged, resized or slid
+    // (see placeRect). One for the clip and one for the still, like the
+    // frames themselves. A view setting, remembered with the other export
+    // choices, never part of the booth.
+    framePlace = { video: { ...DEFAULT_PLACE }, export: { ...DEFAULT_PLACE } },
     // Whether each recorded frame is drawn a second time before it is
     // captured. On by default because the reported bug — glitches in an
     // exported MP4 — is what a frame captured mid-upload looks like, and a
@@ -384,7 +415,7 @@ async function boot() {
   selected = p.art[0]?.id;
   document.querySelector("#app").innerHTML =
     `<header><a class="brand" href="#" aria-label="Booth Studio">${icon("box")}<span>Artist OS</span></a><span class="app-badge">Booth Studio</span><div class="tool-search"><span aria-hidden="true">⌕</span><input id="tool-search" type="search" placeholder="Find a tool…" aria-label="Find a tool" title="Find a tool by name or shortcut · press / or Ctrl/⌘ K to jump here" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-controls="tool-results" aria-expanded="false"/><ul id="tool-results" role="listbox" aria-label="Matching tools" hidden></ul></div><div class="project"><input id="project-name" aria-label="Project name" maxlength="120" value="${e(p.name)}"/>${icon("chevron-down")}</div><div class="save-status" id="save-status" role="status">Opening…</div>${btn("help", "Help", "help-circle", "icon-only")}<div class="avatar">IA</div></header>
-<div class="workspace"><aside class="library" id="library"></aside><main class="editor"><div class="toolbar"><div class="toolgroup">${btn("select", "Select", "mouse-pointer-2", "active")}${btn("move", "Move", "move")}${btn("snap", "Snap 1″", "grid-2x2", "active")}${btn("measure", "Measure", "ruler")}${btn("walk", "Walk", "footprints")}${btn("draw-box", "Box", "square")}${btn("draft", "Fast edit", "zap")}${btn("draft-lock", "Fast edit: follows the gesture", "lock", "draft-lock")}</div><div class="toolgroup">${btn("undo", "Undo", "undo-2", "icon-only")}${btn("redo", "Redo", "redo-2", "icon-only")}</div><div class="mode-switch"><button data-action="mode-3d">3D booth</button><button data-action="mode-photo">Photo</button></div>${btn("export-tab", "Export", "download", "export-top")}</div><div class="viewport"><div id="scene"></div><div class="frame-guide" hidden aria-hidden="true"><div class="frame-guide-box"><span></span></div></div><div id="photo" hidden></div><div class="scene-label"><span class="eyebrow" id="mode-label">MEASURED WORKSPACE</span><strong id="scene-title"></strong><span id="scene-subtitle"></span></div><div id="photo-empty" hidden><div>${icon("image-plus")}<h2>Start with your booth shot</h2><p>Add artwork and adjust its four corners to match the wall perspective.</p>${btn("upload-photo", "Upload booth photo", "plus", "primary")}</div></div><button class="find-tool" data-action="find-tool" aria-label="Find a tool" title="Find a tool">${icon("search")}</button><div class="walk-pad" hidden><button data-walk="forward" aria-label="Step forward">▲</button><button data-walk="left" aria-label="Step left">◀</button><button data-walk="back" aria-label="Step back">▼</button><button data-walk="right" aria-label="Step right">▶</button><button data-action="walk" class="walk-exit" aria-label="Stop walking">Done</button></div><div class="viewport-bottom"><div class="view-switch" id="view-switch"><button data-view="perspective" class="active">Perspective</button><button data-view="back">Back</button><button data-view="left">Left</button><button data-view="right">Right</button><button data-view="plan">Plan</button></div><label class="saved-view-pick" hidden><span>View</span><select id="saved-view" aria-label="Go to a saved view"></select></label><div class="zoom-controls"><span class="zoom-label">Zoom</span>${btn("zoom-out", "Zoom out", "minus", "icon-only")}${btn("zoom-in", "Zoom in", "plus", "icon-only")}${btn("reset-view", "Reset view", "rotate-ccw", "icon-only")}</div></div></div><div class="statusbar"><span id="gesture-hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</span><label class="preview-quality" title="Preview quality: how many pixels the viewport draws for each one on screen. Exports are never affected."><span>Preview</span><select id="quality-quick" aria-label="Preview quality"></select><output id="quality-now"></output></label><span id="selection-status"></span></div></main><aside class="inspector"><button class="sheet-toggle" data-action="sheet-toggle" aria-label="Fold the panel away" title="Fold the panel away"><span>Fold</span></button><div class="inspector-tabs">${["art", "layout", "show", "walls", "lighting", "video", "hall", "export"].map((t, i) => `<button data-tab="${t}">${icon(["image", "layout-panel-left", "building-2", "columns-2", "lightbulb", "video", "map", "download"][i])}<span>${["Artwork", "Layout", "Art show", "Walls", "Lighting", "Video", "Hall", "Export"][i]}</span></button>`).join("")}</div><div id="inspector-content"></div></aside></div><footer><span class="footer-brand">${icon("box")} BOOTH STUDIO <small>Prototype 01</small><small id="build-stamp" title="Version ${BUILD.version} · built ${BUILD.time} · commit ${BUILD.commit}">v${BUILD.version} · ${BUILD.short} UTC · ${BUILD.commit}</small></span><span>Your images. Your space. Your arrangement.</span><span id="network">Local workspace</span></footer><input type="file" id="art-input" accept="image/jpeg,image/png" multiple hidden/><input type="file" id="replace-input" accept="image/jpeg,image/png" hidden/><input type="file" id="photo-input" accept="image/jpeg,image/png" hidden/><input type="file" id="surround-input" accept="image/jpeg,image/png" hidden/><input type="file" id="ground-input" accept="image/jpeg,image/png" hidden/><input type="file" id="underlay-input" accept="image/jpeg,image/png" hidden/><input type="file" id="model-input" accept=".glb,model/gltf-binary" hidden/><input type="file" id="backup-input" accept=".json,.booth" hidden/><div id="toast" role="status"></div><dialog id="dialog"><div id="dialog-content"></div></dialog><dialog id="image-editor"><div id="image-editor-content"></div></dialog><dialog id="timeline-dialog" class="timeline-dialog"><div id="timeline-content"></div></dialog>`;
+<div class="workspace"><aside class="library" id="library"></aside><main class="editor"><div class="toolbar"><div class="toolgroup">${btn("select", "Select", "mouse-pointer-2", "active")}${btn("move", "Move", "move")}${btn("snap", "Snap 1″", "grid-2x2", "active")}${btn("measure", "Measure", "ruler")}${btn("walk", "Walk", "footprints")}${btn("draw-box", "Box", "square")}${btn("draft", "Fast edit", "zap")}${btn("draft-lock", "Fast edit: follows the gesture", "lock", "draft-lock")}</div><div class="toolgroup">${btn("undo", "Undo", "undo-2", "icon-only")}${btn("redo", "Redo", "redo-2", "icon-only")}</div><div class="mode-switch"><button data-action="mode-3d">3D booth</button><button data-action="mode-photo">Photo</button></div>${btn("export-tab", "Export", "download", "export-top")}</div><div class="viewport"><div id="scene"></div><div class="frame-guide" hidden><div class="frame-guide-box"><button class="fg-move" data-fg="move" title="Drag to move the frame" aria-label="Move the export frame"><span class="fg-label"></span></button>${["nw", "ne", "sw", "se"].map((c) => `<i class="fg-h fg-corner" data-fg="${c}" title="Drag to resize the frame"></i>`).join("")}${["n", "s", "e", "w"].map((c) => `<i class="fg-h fg-edge" data-fg="${c}" title="Drag to change the frame\'s shape"></i>`).join("")}</div></div><div id="photo" hidden></div><div class="scene-label"><span class="eyebrow" id="mode-label">MEASURED WORKSPACE</span><strong id="scene-title"></strong><span id="scene-subtitle"></span><small class="mobile-stamp" title="Built ${BUILD.time} · commit ${BUILD.commit}">${BUILD.stamp} · ${BUILD.commit}</small></div><div id="photo-empty" hidden><div>${icon("image-plus")}<h2>Start with your booth shot</h2><p>Add artwork and adjust its four corners to match the wall perspective.</p>${btn("upload-photo", "Upload booth photo", "plus", "primary")}</div></div><button class="find-tool" data-action="find-tool" aria-label="Find a tool" title="Find a tool">${icon("search")}</button><div class="walk-pad" hidden><button data-walk="forward" aria-label="Step forward">▲</button><button data-walk="left" aria-label="Step left">◀</button><button data-walk="back" aria-label="Step back">▼</button><button data-walk="right" aria-label="Step right">▶</button><button data-action="walk" class="walk-exit" aria-label="Stop walking">Done</button></div><div class="viewport-bottom"><div class="view-switch" id="view-switch"><button data-view="perspective" class="active">Perspective</button><button data-view="back">Back</button><button data-view="left">Left</button><button data-view="right">Right</button><button data-view="plan">Plan</button></div><label class="saved-view-pick" hidden><span>View</span><select id="saved-view" aria-label="Go to a saved view"></select></label><div class="zoom-controls"><span class="zoom-label">Zoom</span>${btn("zoom-out", "Zoom out", "minus", "icon-only")}${btn("zoom-in", "Zoom in", "plus", "icon-only")}${btn("reset-view", "Reset view", "rotate-ccw", "icon-only")}</div></div></div><div class="statusbar"><span id="gesture-hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</span><label class="preview-quality" title="Preview quality: how many pixels the viewport draws for each one on screen. Exports are never affected."><span>Preview</span><select id="quality-quick" aria-label="Preview quality"></select><output id="quality-now"></output></label><span id="selection-status"></span></div></main><aside class="inspector"><button class="sheet-toggle" data-action="sheet-toggle" aria-label="Fold the panel away" title="Fold the panel away"><span>Fold</span></button><div class="inspector-tabs">${["art", "layout", "show", "walls", "lighting", "video", "hall", "export"].map((t, i) => `<button data-tab="${t}">${icon(["image", "layout-panel-left", "building-2", "columns-2", "lightbulb", "video", "map", "download"][i])}<span>${["Artwork", "Layout", "Art show", "Walls", "Lighting", "Video", "Hall", "Export"][i]}</span></button>`).join("")}</div><div id="inspector-content"></div></aside></div><footer><span class="footer-brand">${icon("box")} BOOTH STUDIO <small>Prototype 01</small><small id="build-stamp" title="Version ${BUILD.version} · built ${BUILD.time} · commit ${BUILD.commit}">v${BUILD.version} · ${BUILD.stamp} · ${BUILD.commit}</small></span><span>Your images. Your space. Your arrangement.</span><span id="network">Local workspace</span></footer><input type="file" id="art-input" accept="image/jpeg,image/png" multiple hidden/><input type="file" id="replace-input" accept="image/jpeg,image/png" hidden/><input type="file" id="photo-input" accept="image/jpeg,image/png" hidden/><input type="file" id="surround-input" accept="image/jpeg,image/png" hidden/><input type="file" id="ground-input" accept="image/jpeg,image/png" hidden/><input type="file" id="underlay-input" accept="image/jpeg,image/png" hidden/><input type="file" id="model-input" accept=".glb,model/gltf-binary" hidden/><input type="file" id="backup-input" accept=".json,.booth" hidden/><div id="toast" role="status"></div><dialog id="dialog"><div id="dialog-content"></div></dialog><dialog id="image-editor"><div id="image-editor-content"></div></dialog><dialog id="timeline-dialog" class="timeline-dialog"><div id="timeline-content"></div></dialog>`;
   let scene;
   try {
     scene = new BoothScene(
@@ -409,7 +440,12 @@ async function boot() {
         // at that booth, so the next original lands beside the one just
         // clicked rather than back at home.
         if (id) activeBooth = p.art.find((x) => x.id === id)?.booth || null;
-        tab = "art";
+        // A click on a work opens Artwork. A click on nothing used to as well,
+        // which left the panel on "Make room for your work" — reported, and
+        // asked to land on Layout instead. Any other tab stays where it is,
+        // so orbiting from Video or Lighting does not throw the panel away.
+        if (id) tab = "art";
+        else if (tab === "art") tab = "layout";
         renderSelection();
       },
       (a) => {
@@ -492,6 +528,86 @@ async function boot() {
   if (typeof ResizeObserver !== "undefined") {
     const host = document.querySelector("#scene");
     if (host) new ResizeObserver(() => updateFrameGuide()).observe(host);
+  }
+  // Dragging the frame guide. The label moves the frame; a corner resizes it
+  // and keeps its shape; an edge changes its shape, which makes the frame a
+  // custom size with the new ratio (the long side keeps the custom size's).
+  // Live on the guide during the drag, saved and redrawn in the panel after.
+  {
+    const guide = document.querySelector(".frame-guide");
+    const MIN = 40;
+    let drag = null;
+    guide?.addEventListener("pointerdown", (ev) => {
+      const handle = ev.target.closest?.("[data-fg]");
+      const shape = frameGuideShape();
+      const host = document.querySelector("#scene");
+      if (!handle || !shape || !host || ev.button !== 0) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const W = host.clientWidth,
+        H = host.clientHeight;
+      drag = {
+        kind: handle.dataset.fg,
+        which: shape.which,
+        aspect: shape.aspect,
+        W,
+        H,
+        x0: ev.clientX,
+        y0: ev.clientY,
+        rect: placeRect(W, H, shape.aspect, framePlace[shape.which]),
+        box: host.getBoundingClientRect(),
+      };
+      handle.setPointerCapture(ev.pointerId);
+    });
+    guide?.addEventListener("pointermove", (ev) => {
+      if (!drag) return;
+      const { kind, W, H, rect: r, aspect, box } = drag;
+      const dx = ev.clientX - drag.x0,
+        dy = ev.clientY - drag.y0;
+      const px = Math.max(0, Math.min(W, ev.clientX - box.left)),
+        py = Math.max(0, Math.min(H, ev.clientY - box.top));
+      let next;
+      if (kind === "move") next = { ...r, x: r.x + dx, y: r.y + dy };
+      else if (kind.length === 2) {
+        // Corner: the opposite corner stays put and the shape is kept.
+        const ax = kind.includes("w") ? r.x + r.width : r.x,
+          ay = kind.includes("n") ? r.y + r.height : r.y;
+        const roomW = kind.includes("w") ? ax : W - ax,
+          roomH = kind.includes("n") ? ay : H - ay;
+        let w = Math.max(Math.abs(px - ax), Math.abs(py - ay) * aspect);
+        w = Math.max(MIN, Math.min(w, roomW, roomH * aspect));
+        const h = w / aspect;
+        next = { x: kind.includes("w") ? ax - w : ax, y: kind.includes("n") ? ay - h : ay, width: w, height: h };
+      } else {
+        // Edge: only that side moves, so the ratio changes.
+        next = { ...r };
+        if (kind === "e") next.width = Math.max(MIN, px - r.x);
+        if (kind === "w") (next.width = Math.max(MIN, r.x + r.width - px)), (next.x = r.x + r.width - next.width);
+        if (kind === "s") next.height = Math.max(MIN, py - r.y);
+        if (kind === "n") (next.height = Math.max(MIN, r.y + r.height - py)), (next.y = r.y + r.height - next.height);
+      }
+      const { aspect: shaped, place } = placeFromRect(W, H, next);
+      if (kind.length === 1) {
+        const long = Math.max(customFrame.width, customFrame.height, 1080);
+        const wide = shaped >= 1;
+        customFrame = {
+          width: Math.max(FRAME_MIN, Math.min(FRAME_MAX, Math.round((wide ? long : long * shaped) / 2) * 2)),
+          height: Math.max(FRAME_MIN, Math.min(FRAME_MAX, Math.round((wide ? long / shaped : long) / 2) * 2)),
+        };
+        if (drag.which === "video") videoFrameShape = "custom";
+        else exportFrame = "custom";
+      }
+      framePlace[drag.which] = place;
+      updateFrameGuide();
+    });
+    const end = () => {
+      if (!drag) return;
+      drag = null;
+      saveViewPrefs();
+      renderInspector();
+    };
+    guide?.addEventListener("pointerup", end);
+    guide?.addEventListener("pointercancel", end);
   }
   let adaptToasted = false;
   if (scene) {
@@ -858,6 +974,8 @@ async function boot() {
     if (FRAMES[saved.videoFrameShape] && saved.clipFrame === 2) videoFrameShape = saved.videoFrameShape;
     if (STILL_SIZES.includes(Number(saved.exportLong))) exportLong = Number(saved.exportLong);
     if (typeof saved.videoSettle === "boolean") videoSettle = saved.videoSettle;
+    if (saved.framePlace && typeof saved.framePlace === "object")
+      framePlace = { video: normalPlace(saved.framePlace.video), export: normalPlace(saved.framePlace.export) };
     if (saved.customFrame) {
       const clamp = (n, fallback) =>
         Number.isFinite(Number(n)) ? Math.max(FRAME_MIN, Math.min(FRAME_MAX, Math.round(Number(n)))) : fallback;
@@ -876,7 +994,7 @@ async function boot() {
     try {
       localStorage.setItem(
         "booth.view",
-        JSON.stringify({ exportFrame, exportLong, customFrame, videoFrameShape, clipFrame: 2, videoSettle, palette, colorHistory, lastEdge, quality, autoScale }),
+        JSON.stringify({ exportFrame, exportLong, customFrame, videoFrameShape, clipFrame: 2, framePlace, videoSettle, palette, colorHistory, lastEdge, quality, autoScale }),
       );
     } catch {
       // A browser with storage switched off keeps all of this for the
@@ -1223,7 +1341,17 @@ async function boot() {
       value === "custom"
         ? `<div class="field-row"><label class="field"><span>Width</span><div><input type="number" data-frame-custom="width" data-frame-which="${which}" aria-label="Custom frame width" value="${customFrame.width}" min="${FRAME_MIN}" max="${FRAME_MAX}" step="2"/><small>px</small></div></label><label class="field"><span>Height</span><div><input type="number" data-frame-custom="height" data-frame-which="${which}" aria-label="Custom frame height" value="${customFrame.height}" min="${FRAME_MIN}" max="${FRAME_MAX}" step="2"/><small>px</small></div></label></div><p class="muted">One custom size, shared by the still and the clip. Sides are rounded to even numbers, which is what an H.264 encoder requires.</p>`
         : "";
-    return `<label class="setting-label">Frame<select data-frame="${which}" aria-label="${which === "video" ? "Video frame" : "Export frame"}">${options}</select></label>${custom}`;
+    const place = framePlace[which];
+    const slider = (key, label, min, v) =>
+      `<label class="range"><span>${label}<output>${Math.round(v * 100)}%</output></span><input type="range" data-frame-place="${key}" data-frame-which="${which}" aria-label="${e(label)} (${which === "video" ? "video" : "still"})" min="${min}" max="100" step="1" value="${Math.round(v * 100)}"/></label>`;
+    // The frame's place in the viewport: the same thing the guide's handles
+    // drag, as sliders. Only for a frame with its own shape — "This window"
+    // is the viewport and has nowhere to move.
+    const placing =
+      value === "view"
+        ? ""
+        : `${slider("scale", "Frame size", 20, place.scale)}${slider("x", "Frame left / right", -100, place.x)}${slider("y", "Frame up / down", -100, place.y)}<p class="muted">Or drag the frame in the viewport: its label moves it, a corner resizes it, an edge changes its shape (and makes it a custom size).</p>${place.scale !== 1 || place.x !== 0 || place.y !== 0 ? btn(`frame-reset-${which}`, "Reset frame to fit", "rotate-ccw", "wide") : ""}`;
+    return `<label class="setting-label">Frame<select data-frame="${which}" aria-label="${which === "video" ? "Video frame" : "Export frame"}">${options}</select></label>${custom}${placing}`;
   }
   /** What the chosen frame will actually produce, in pixels, said out loud. */
   function frameNote(which) {
@@ -1878,7 +2006,7 @@ async function boot() {
       ? `${btn("edit-timeline", "Edit timeline…", "sliders-horizontal", "wide")}<p class="muted">${e(timelineSummary())}</p>`
       : `<label class="setting-label">Length<select id="video-seconds" aria-label="Clip length">${[6, 8, 10, 12, 14, 16, 20]
           .map((sec) => `<option value="${sec}" ${videoSeconds === sec ? "selected" : ""}>${sec} seconds</option>`)
-          .join("")}</select></label>`;
+          .join("")}</select></label>${btn("edit-timeline", "Edit timeline…", "sliders-horizontal", "wide")}<p class="muted">Opens your own keyframed move, and switches the camera move to Custom.</p>`;
     const describe = custom
       ? "Your own keyframes, in the order you set them. Compose a shot in the viewport, add it as a keyframe, and repeat — each one is the exact view you captured, not a gesture applied to the current framing."
       : `${e(move.describe)} The move starts and ends on the view you have now, so compose the shot first.`;
@@ -1941,7 +2069,7 @@ async function boot() {
       videoFrameShape === "custom"
         ? customFrame.width / customFrame.height
         : FRAMES[videoFrameShape]?.aspect || src.width / src.height;
-    const r = guideRect(src.width, src.height, aspect);
+    const r = videoFrameShape === "view" ? guideRect(src.width, src.height, aspect) : placeRect(src.width, src.height, aspect, framePlace.video);
     const c = document.createElement("canvas");
     c.width = 160;
     c.height = Math.max(1, Math.round((160 * r.height) / r.width));
@@ -2029,7 +2157,7 @@ async function boot() {
             .join("")}</select></label>`
     }</div>${speed === null ? "" : `<p class="muted">Then travels ${speed.toFixed(2)} m/s to the next keyframe.</p>`}<div class="button-row">${btn("timeline-go", "Show this view", "camera")}${btn("timeline-recapture", "Replace with current view", "rotate-ccw")}${tl.keys.length > MIN_KEYS ? btn("timeline-delete", "Delete", "trash-2") : ""}</div></div>`;
     document.querySelector("#timeline-content").innerHTML =
-      `<div class="panel-heading"><h2>Camera timeline</h2>${btn("close-timeline", "Close", "x", "icon-only")}</div><ol class="tl-steps"><li>Frame a shot in the booth behind this panel.</li><li>Press <strong>Add keyframe</strong>. Repeat for each shot.</li><li>Drag a diamond to change when the camera gets there; drag the track to scrub.</li></ol><div class="tl-bar">${tl.keys.length < MAX_KEYS ? btn("timeline-add", "Add keyframe", "plus", "primary") : `<span class="muted">${MAX_KEYS} keyframes max</span>`}${busyPreview ? btn("stop-preview", "Stop", "x") : btn("preview-move", "Preview", "play")}<label class="setting-label tl-length">Length (s)<input type="number" id="timeline-seconds" min="${MIN_SECONDS}" max="${MAX_SECONDS}" step="1" value="${seconds}" aria-label="Clip length in seconds"/></label></div><div class="tl-track" data-tl-track role="group" aria-label="Timeline track">${timelineTrackHTML()}</div><div class="tl-legend"><span><i class="tl-sw seg"></i>move · curve = ramp</span><span><i class="tl-sw hold"></i>hold</span><span><i class="tl-sw fade"></i>fade</span></div><div class="tl-strip">${strip}</div>${card}<section><h3>Motion</h3><label class="setting-label">Camera flow<select id="timeline-flow" aria-label="Camera flow">${Object.entries(FLOWS).map(([id, v]) => `<option value="${id}" ${tl.flow === id ? "selected" : ""}>${e(v.label)}</option>`).join("")}</select></label><p class="muted">${tl.flow === "glide" ? "The camera eases in once, moves at a steady speed through every keyframe without stopping, and eases out at the end — the look of a slider or a gimbal. A hold still stops it." : "Each move has its own ramp, so the camera settles on every keyframe. Choose the glide for one unbroken move."}</p>${tl.keys.length > 2 ? btn("timeline-auto", "Auto timing · even speed", "zap", "wide") : ""}<p class="muted">${tl.keys.length > 2 ? "Respaces the middle keyframes so the camera covers the same distance every second." : "Auto timing spaces middle keyframes; add one to use it."}</p>${tlBeforeAuto ? btn("timeline-auto-undo", "Put the timing back", "undo-2", "wide") : ""}</section><section><h3>Fades</h3><div class="field-pair"><label class="setting-label">Fade in<input type="number" id="timeline-fade-in" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.in.toFixed(1)}" aria-label="Fade in seconds"/></label><label class="setting-label">Fade out<input type="number" id="timeline-fade-out" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.out.toFixed(1)}" aria-label="Fade out seconds"/></label></div><p class="muted">Seconds of black at each end. Zero disables. The fade is drawn over the finished frame, so it reaches real black rather than a dark wash.</p></section><section><h3>Lens flare</h3><label class="check-field"><input type="checkbox" id="timeline-flare" ${tl.flare.on ? "checked" : ""}/>Lens flare during the move</label><label class="setting-label">Comes from<select id="timeline-flare-source" aria-label="Lens flare source">${Object.entries(FLARE_SOURCES).map(([k, v]) => `<option value="${k}" ${tl.flare.source === k ? "selected" : ""} ${k === "spot" && noLights ? "disabled" : ""}>${e(v)}</option>`).join("")}</select></label>${tl.flare.source === "spot" && noLights ? `<p class="warn-note">This booth has no spotlights, so a flare from one would never appear. Use the overhead source, or add a spotlight in Lighting.</p>` : ""}${range("Flare strength", "flare-strength", Math.round(tl.flare.strength * 100), 0, 100, 1, "timeline", "%")}<p class="muted">${tl.flare.source === "overhead" ? `An unseen light ${Math.round(OVERHEAD.y / 12)} ft over the centre of the booth, standing in for the sun or a hall's high bay. Nothing is drawn there and nothing is lit by it — only the flare says it is there.` : "The brightest spotlight in the booth."} The flare tracks the camera: its ghosts sit on the line from that light through the centre of frame, and it fades out as the light leaves the shot.</p></section><div class="button-row">${btn("close-timeline", "Done", "check", "primary")}</div>`;
+      `<div class="panel-heading"><h2>Camera timeline</h2>${btn("close-timeline", "Close", "x", "icon-only")}</div><ol class="tl-steps"><li>Frame a shot in the booth behind this panel.</li><li>Press <strong>Add keyframe</strong>. Repeat for each shot.</li><li>Drag a diamond to change when the camera gets there; drag the track to scrub.</li></ol><div class="tl-bar">${tl.keys.length < MAX_KEYS ? btn("timeline-add", "Add keyframe", "plus", "primary") : `<span class="muted">${MAX_KEYS} keyframes max</span>`}${busyPreview ? btn("timeline-pause", "Pause", "pause", "primary") : btn("timeline-play", tlPlayhead > 0.05 && tlPlayhead < seconds - 0.05 ? "Play from here" : "Play", "play")}<label class="setting-label tl-length">Length (s)<input type="number" id="timeline-seconds" min="${MIN_SECONDS}" max="${MAX_SECONDS}" step="1" value="${seconds}" aria-label="Clip length in seconds"/></label></div><div class="tl-track" data-tl-track role="group" aria-label="Timeline track">${timelineTrackHTML()}</div><div class="tl-legend"><span><i class="tl-sw seg"></i>move · curve = ramp</span><span><i class="tl-sw hold"></i>hold</span><span><i class="tl-sw fade"></i>fade</span></div><div class="tl-strip">${strip}</div>${card}<section><h3>Motion</h3><label class="setting-label">Camera flow<select id="timeline-flow" aria-label="Camera flow">${Object.entries(FLOWS).map(([id, v]) => `<option value="${id}" ${tl.flow === id ? "selected" : ""}>${e(v.label)}</option>`).join("")}</select></label><p class="muted">${tl.flow === "glide" ? "The camera eases in once, moves at a steady speed through every keyframe without stopping, and eases out at the end — the look of a slider or a gimbal. A hold still stops it." : "Each move has its own ramp, so the camera settles on every keyframe. Choose the glide for one unbroken move."}</p>${tl.keys.length > 2 ? btn("timeline-auto", "Auto timing · even speed", "zap", "wide") : ""}<p class="muted">${tl.keys.length > 2 ? "Respaces the middle keyframes so the camera covers the same distance every second." : "Auto timing spaces middle keyframes; add one to use it."}</p>${tlBeforeAuto ? btn("timeline-auto-undo", "Put the timing back", "undo-2", "wide") : ""}</section><section><h3>Fades</h3><div class="field-pair"><label class="setting-label">Fade in<input type="number" id="timeline-fade-in" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.in.toFixed(1)}" aria-label="Fade in seconds"/></label><label class="setting-label">Fade out<input type="number" id="timeline-fade-out" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.out.toFixed(1)}" aria-label="Fade out seconds"/></label></div><p class="muted">Seconds of black at each end. Zero disables. The fade is drawn over the finished frame, so it reaches real black rather than a dark wash.</p></section><section><h3>Lens flare</h3><label class="check-field"><input type="checkbox" id="timeline-flare" ${tl.flare.on ? "checked" : ""}/>Lens flare during the move</label><label class="setting-label">Comes from<select id="timeline-flare-source" aria-label="Lens flare source">${Object.entries(FLARE_SOURCES).map(([k, v]) => `<option value="${k}" ${tl.flare.source === k ? "selected" : ""} ${k === "spot" && noLights ? "disabled" : ""}>${e(v)}</option>`).join("")}</select></label>${tl.flare.source === "spot" && noLights ? `<p class="warn-note">This booth has no spotlights, so a flare from one would never appear. Use the overhead source, or add a spotlight in Lighting.</p>` : ""}${range("Flare strength", "flare-strength", Math.round(tl.flare.strength * 100), 0, 100, 1, "timeline", "%")}<p class="muted">${tl.flare.source === "overhead" ? `An unseen light ${Math.round(OVERHEAD.y / 12)} ft over the centre of the booth, standing in for the sun or a hall's high bay. Nothing is drawn there and nothing is lit by it — only the flare says it is there.` : "The brightest spotlight in the booth."} The flare tracks the camera: its ghosts sit on the line from that light through the centre of frame, and it fades out as the light leaves the shot.</p></section><div class="button-row">${btn("close-timeline", "Done", "check", "primary")}</div>`;
     refreshIcons();
   }
   /** Scrub: put the playhead at `sec` and show the camera there. */
@@ -2140,6 +2268,7 @@ async function boot() {
       // exactly what the frame picker is for.
       frame: videoFrameShape,
       custom: { ...customFrame },
+      place: { ...framePlace.video },
       settle: videoSettle,
     };
   }
@@ -2182,6 +2311,7 @@ async function boot() {
           size: job.size,
           frame: job.frame,
           custom: job.custom,
+          place: job.place,
           settle: job.settle !== false,
           signal: videoAbort.signal,
           onProgress: (fraction) => {
@@ -2243,16 +2373,16 @@ async function boot() {
    * the timeline dialog is up, or a move is previewing — the places a shot is
    * composed for a file — and only when the frame is not "This window", which
    * is the viewport already. The export draws exactly what is inside it
-   * (`frameLens`), so composing to the guide is composing the file.
+   * (scene.js `frameRect`), so composing to the guide is composing the file.
    */
   function frameGuideShape() {
     if (!scene || p.mode === "photo") return null;
     const timelineOpen = document.querySelector("#timeline-dialog")?.open;
-    const id =
-      tab === "export" ? exportFrame : tab === "video" || timelineOpen || busyPreview ? videoFrameShape : null;
+    const which = tab === "export" ? "export" : tab === "video" || timelineOpen || busyPreview ? "video" : null;
+    const id = which === "export" ? exportFrame : which === "video" ? videoFrameShape : null;
     if (!id || id === "view" || !FRAMES[id]) return null;
     const aspect = id === "custom" ? customFrame.width / customFrame.height : FRAMES[id].aspect;
-    return { id, aspect, label: id === "custom" ? `${customFrame.width} × ${customFrame.height}` : FRAMES[id].label.split(" · ")[1] || FRAMES[id].label };
+    return { id, which, aspect, label: id === "custom" ? `${customFrame.width} × ${customFrame.height}` : FRAMES[id].label.split(" · ")[1] || FRAMES[id].label };
   }
   function updateFrameGuide() {
     const guide = document.querySelector(".frame-guide");
@@ -2261,7 +2391,8 @@ async function boot() {
     const shape = frameGuideShape();
     guide.hidden = !shape;
     if (!shape) return;
-    const r = guideRect(host.clientWidth, host.clientHeight, shape.aspect);
+    guide.dataset.which = shape.which;
+    const r = placeRect(host.clientWidth, host.clientHeight, shape.aspect, framePlace[shape.which]);
     Object.assign(guide.style, {
       left: `${host.offsetLeft}px`,
       top: `${host.offsetTop}px`,
@@ -2274,7 +2405,7 @@ async function boot() {
       width: `${r.width}px`,
       height: `${r.height}px`,
     });
-    guide.querySelector("span").textContent = shape.label;
+    guide.querySelector(".fg-label").textContent = shape.label;
   }
   /** The open tab's inspector, as markup. Tool search reads every tab's. */
   function inspectorHTML() {
@@ -2997,7 +3128,7 @@ async function boot() {
           // booth's alone and photo mode keeps taking a width.
           blob = await (p.mode === "photo"
             ? photo.export(long)
-            : scene?.export(long, { frame: exportFrame, custom: customFrame }));
+            : scene?.export(long, { frame: exportFrame, custom: customFrame, place: framePlace.export }));
         if (!blob)
           throw new Error(
             "3D is not available. Photo exports and guides still work.",
@@ -3047,6 +3178,7 @@ async function boot() {
       videoFps = job.fps;
       videoSize = job.size;
       if (FRAMES[job.frame]) videoFrameShape = job.frame;
+      if (job.place) framePlace.video = normalPlace(job.place);
       if (job.custom) customFrame = { ...job.custom };
       if (typeof job.settle === "boolean") videoSettle = job.settle;
       saveViewPrefs();
@@ -3073,6 +3205,12 @@ async function boot() {
     "cancel-video": () => videoAbort?.abort(),
     "edit-timeline": () => {
       if (!scene) return toast("3D is not available, so there is no view to keyframe.", true);
+      // Offered whatever move is chosen, not only once Custom is picked from
+      // the menu: opening the timeline is choosing Custom.
+      if (videoMove !== CUSTOM_MOVE) {
+        videoMove = CUSTOM_MOVE;
+        renderInspector();
+      }
       timeline();
       renderTimelineDialog();
       // show(), not showModal(). A modal would block the viewport, and the
@@ -3182,6 +3320,55 @@ async function boot() {
       }
     },
     "stop-preview": () => scene?.stopPreview?.(),
+    // The timeline's own transport: Play runs the clip from the playhead (from
+    // the start when the playhead is at the end), Pause stops it where it is —
+    // camera, playhead and fade all left on that moment — so the next Play
+    // carries on from there.
+    "timeline-play": async () => {
+      if (busy || busyVideo || busyPreview || !scene) return;
+      const tl = timeline();
+      videoMove = CUSTOM_MOVE;
+      const from = tlPlayhead >= tl.seconds - 0.05 ? 0 : tlPlayhead / tl.seconds;
+      busyPreview = true;
+      renderInspector();
+      renderTimelineDialog();
+      try {
+        const { cancelled, t } = await scene.previewMove({
+          move: tl,
+          seconds: tl.seconds,
+          from,
+          onProgress: (t) => {
+            tlPlayhead = t * tl.seconds;
+            const head = document.querySelector("#timeline-content .tl-playhead");
+            if (head) {
+              head.style.left = `${(t * 100).toFixed(3)}%`;
+              head.firstElementChild.textContent = `${tlPlayhead.toFixed(1)}s`;
+            }
+          },
+        });
+        tlPlayhead = (cancelled ? t : 1) * tl.seconds;
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        busyPreview = false;
+        renderInspector();
+        if (document.querySelector("#timeline-dialog")?.open) {
+          renderTimelineDialog();
+          scene.showMoment(tl, tlPlayhead / tl.seconds);
+        }
+      }
+    },
+    "timeline-pause": () => scene?.stopPreview?.({ keep: true }),
+    "frame-reset-video": () => {
+      framePlace.video = { ...DEFAULT_PLACE };
+      saveViewPrefs();
+      renderInspector();
+    },
+    "frame-reset-export": () => {
+      framePlace.export = { ...DEFAULT_PLACE };
+      saveViewPrefs();
+      renderInspector();
+    },
     help: () => {
       const d = document.querySelector("#dialog");
       document.querySelector("#dialog-content").innerHTML =
@@ -3361,7 +3548,7 @@ async function boot() {
         for (const [i, v] of views.entries()) {
           toast(`Rendering ${i + 1} of ${views.length}: ${v.name}…`);
           scene.applyPose(v);
-          const blob = await scene.export(exportLong, { frame: exportFrame, custom: customFrame });
+          const blob = await scene.export(exportLong, { frame: exportFrame, custom: customFrame, place: framePlace.export });
           if (blob) download(blob, `${safeName()}-${v.name.replace(/[^a-z0-9-]+/gi, "-").replace(/^-|-$/g, "") || "view-" + (i + 1)}.png`);
         }
         toast(`${views.length} views exported as ${exportLong} px PNGs.`);
@@ -3970,6 +4157,11 @@ async function boot() {
       renderInspector();
       return;
     }
+    if (el.dataset.framePlace) {
+      saveViewPrefs();
+      renderInspector();
+      return;
+    }
     if (el.dataset.frameCustom) {
       const side = Math.max(FRAME_MIN, Math.min(FRAME_MAX, Math.round(Number(el.value) || 0)));
       customFrame = { ...customFrame, [el.dataset.frameCustom]: side };
@@ -4186,6 +4378,16 @@ async function boot() {
     });
   });
   document.addEventListener("input", (ev) => {
+    // The frame's size and position sliders: live on the guide, saved on change.
+    if (ev.target.dataset?.framePlace) {
+      const which = ev.target.dataset.frameWhich === "export" ? "export" : "video";
+      const key = ev.target.dataset.framePlace;
+      const v = Number(ev.target.value) / 100;
+      framePlace[which] = normalPlace({ ...framePlace[which], [key]: v });
+      ev.target.closest("label")?.querySelector("output")?.replaceChildren(`${Math.round(Number(ev.target.value))}%`);
+      updateFrameGuide();
+      return;
+    }
     if (ev.target.dataset?.fxLive !== undefined) {
       setShadowLive(ev.target.dataset.scope, ev.target.dataset.field, ev.target.value, ev.target);
       return;
@@ -4749,6 +4951,15 @@ async function boot() {
       },
       get selectedPedestal() {
         return selectedPedestal;
+      },
+      get tab() {
+        return tab;
+      },
+      get framePlace() {
+        return framePlace;
+      },
+      get frames() {
+        return { video: videoFrameShape, export: exportFrame, custom: customFrame };
       },
       get tier() {
         return tier;
