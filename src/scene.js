@@ -13,6 +13,8 @@ import { IN, PEDESTAL, FURNITURE, furnitureKind, boothPedestals, isShown, edgeCo
 import { lightBarBounce, lightBarFixtures, lightBarOptics, lightBarRail } from "./lightbar.js";
 import { PEOPLE, makePerson, placePerson, resolvePerson } from "./people.js";
 import { rowLayout } from "./row.js";
+import { smartSnap } from "./guides.js";
+import { sameWall } from "./arrange.js";
 /**
  * The longest edge a preview texture is decoded to. An original stays whole
  * in the project and in a backup; this is what the wall is shown at, and it
@@ -1489,8 +1491,11 @@ export class BoothScene {
    * rule `movePanel` follows: a rebuild is for a change of what is in the
    * scene, not for a change of what is selected.
    */
-  setSelection(selected, selectedPanel = null, selectedPedestal = null) {
+  setSelection(selected, selectedPanel = null, selectedPedestal = null, also = []) {
     this.selected = selected;
+    // The rest of a multiple selection: outlined, but only the primary one —
+    // `selected` — carries handles and an inspector.
+    this.also = also.filter((id) => id !== selected);
     this.selectedPanel = findPanel(this.p, selectedPanel) ? selectedPanel : null;
     this.selectedPedestal = findPedestal(this.p, selectedPedestal) ? selectedPedestal : null;
     if (this.scaleId !== selected) this.scaleId = null;
@@ -1536,6 +1541,13 @@ export class BoothScene {
           this.resizeHandles.push(handle);
         }
       }
+    }
+    for (const id of this.also || []) {
+      const other = this.artGroups.get(id);
+      if (!other?.box) continue;
+      const edge = outline(new T.EdgesGeometry(other.box.geometry), other.group);
+      edge.material.color.set("#f2a0ff");
+      edge.scale.set(1.007, 1.007, 1.007);
     }
     const wallMesh = this.wallObjects.find((m) => m.userData.wall === this.selectedPanel);
     if (this.selectedPanel && wallMesh?.parent) {
@@ -1911,11 +1923,52 @@ export class BoothScene {
     }
     this.invalidate();
   }
+  /**
+   * The smart guides of the drag in progress: pink lines on the wall the
+   * work is being dragged along, and a readout for each equal gap. Lines are
+   * editor-only, labels are DOM, so neither can reach an export; both go when
+   * the drag ends. `frame` null clears them.
+   */
+  showSnap(frame, snapped = null) {
+    if (this.snapGuides) {
+      this.snapGuides.parent?.remove(this.snapGuides);
+      this.snapGuides.geometry.dispose();
+      this.snapGuides.material.dispose();
+      this.snapGuides = null;
+    }
+    this.snapNotes = [];
+    this.lastSnap = snapped && (snapped.guides.length || snapped.gaps.length) ? snapped : null;
+    if (!frame || !this.lastSnap) return;
+    const Z = 0.03;
+    const points = [];
+    for (const g of snapped.guides) {
+      if (g.axis === "x") points.push(new T.Vector3(g.at * IN, g.from * IN, Z), new T.Vector3(g.at * IN, g.to * IN, Z));
+      else points.push(new T.Vector3(g.from * IN, g.at * IN, Z), new T.Vector3(g.to * IN, g.at * IN, Z));
+    }
+    frame.updateWorldMatrix(true, false);
+    for (const gap of snapped.gaps) {
+      const a = new T.Vector3(gap.from * IN, gap.at * IN, Z), b = new T.Vector3(gap.to * IN, gap.at * IN, Z);
+      points.push(a, b);
+      const tick = 1.5 * IN;
+      for (const end of [a, b]) points.push(end.clone().setY(end.y - tick), end.clone().setY(end.y + tick));
+      this.snapNotes.push({ at: frame.localToWorld(a.clone().lerp(b, 0.5)), text: formatLength(gap.inches), kind: "snap" });
+    }
+    const lines = new T.LineSegments(
+      new T.BufferGeometry().setFromPoints(points),
+      new T.LineBasicMaterial({ color: "#ff5fa2", depthTest: false, transparent: true }),
+    );
+    lines.renderOrder = 11;
+    lines.userData.editorOnly = true;
+    lines.name = "snap-guides";
+    frame.add(lines);
+    this.snapGuides = lines;
+    this.invalidate();
+  }
   /** Stand each label over its point on screen. Called after every frame. */
   placeAnnotations() {
     const layer = this.labelLayer;
     if (!layer) return;
-    const list = this.annotations;
+    const list = this.snapNotes?.length ? [...this.annotations, ...this.snapNotes] : this.annotations;
     while (layer.children.length > list.length) layer.lastChild.remove();
     while (layer.children.length < list.length) layer.append(document.createElement("span"));
     if (!list.length) return;
@@ -2216,9 +2269,20 @@ export class BoothScene {
         this.onMove(scalePanel(this.p, a, radius / Math.max(.01,d.radius)));
       } else {
         const a = this.p.art.find(x => x.id === d.id), grid = this.snap ? 1 : .01;
-        this.onMove(constrain(this.p, {...a,
+        let next = constrain(this.p, {...a,
           x:Math.round((local.x/IN-d.dx)/grid)*grid,
-          y:Math.round((local.y/IN-d.dy)/grid)*grid}));
+          y:Math.round((local.y/IN-d.dy)/grid)*grid});
+        // Smart guides: with Snap on, an edge or a centre that comes within
+        // two inches of another work's, the wall's centre or the hang line
+        // jumps to it, and the line it jumped to is drawn. Alt holds them off
+        // for one drag, the way it does in every drawing program.
+        const wall = wallSpec(this.p, a.wall);
+        if (this.snap && !e.altKey && wall) {
+          const snapped = smartSnap(next, sameWall(this.p.art, a).filter((b) => b.id !== a.id), wall);
+          next = constrain(this.p, { ...next, x: snapped.x, y: snapped.y });
+          this.showSnap(d.frame, snapped);
+        } else this.showSnap(null);
+        this.onMove(next);
       }
     };
     c.addEventListener("pointerup", e => {
@@ -2227,6 +2291,7 @@ export class BoothScene {
         // quick flick finishes an inch short of where it was released.
         this.flushDrag();
         this.drag = null; this.down = null; this.controls.enabled = true;
+        this.showSnap(null);
         if (this.shadowsOwed) this.touchShadows();
         if (c.hasPointerCapture(e.pointerId)) c.releasePointerCapture(e.pointerId);
         this.onEnd();
@@ -2279,13 +2344,16 @@ export class BoothScene {
           // supersampling come back the moment the arranging stops.
           if (id !== this.scaleId) this.letGoOfArt();
           this.lastTap = id ? { id, time: now, x: e.clientX, y: e.clientY } : null;
-          this.onSelect(id);
+          // Shift adds to the selection rather than replacing it; main.js
+          // keeps the set, because the set is about the inspector.
+          this.onSelect(id, { add: e.shiftKey });
         }
       }
       this.down = null;
     });
     c.addEventListener("pointercancel", () => {
       this.drag = null; this.controls.enabled = true; this.down = null;
+      this.showSnap(null);
       this.onEnd();
     });
   }

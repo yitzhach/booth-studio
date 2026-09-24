@@ -16,8 +16,9 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-24 — the roadmap's base: Lite / Pro and the phone
-  layout** (the first bullet below), after the cut-out people the same day.
+- **Last deploy: 2026-09-24 — roadmap batch A: smart guides and a multiple
+  selection** (the first bullet below), after the roadmap's base (Lite / Pro,
+  the phone layout) and the cut-out people the same day.
   Before that, **2026-09-23, three times.** First the ten speed-and-planning
   improvements, then — the same day, after the owner's first look on the real
   machine — the second round: the drag shadow, the fast-edit redraw leak, the
@@ -36,6 +37,38 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-24, roadmap batch A: smart guides, and several works at once.
+  Pushed to `main`.**
+  1. **Smart guides** — SketchUp's inference, for a work dragged along its
+     wall. With Snap on, an edge or centre that comes within 2″
+     (`SNAP_RANGE`) of another work's edge or centre on the same face of the
+     same wall, the wall's centre or edges, or — for a centre only — the 60″
+     hang line jumps to it, and a pink line is drawn through what it
+     matched. Between two neighbours it also finds the spot that leaves
+     **equal gaps** either side and labels both gaps in inches. Alt holds the
+     guides off for that drag and leaves the plain 1″ grid. `src/guides.js`
+     is the arithmetic, pure; `scene.showSnap()` draws it in the wall's own
+     frame (editor-only lines, DOM labels in `snapNotes`, so neither reaches
+     an export) and clears it on pointer-up. Lite, like the rest of Snap.
+  2. **A multiple selection.** Shift-click adds a work to the selection or
+     takes it out; on a phone, Artwork → Placement → **Select several** makes
+     every tap do that until **Done selecting**. `picked` in main.js is the
+     set, including the primary `selected` work, which keeps the handles and
+     the inspector; the others are outlined in violet (`scene.also`). View
+     state only: never saved, never in the history. Arrow keys move the lot
+     together, Delete removes the lot, the status bar counts them.
+  3. **Align and distribute (Pro).** The Artwork panel shows **N works
+     selected** with Align left edges / centres / right edges / tops /
+     middles / bottoms and Distribute across / up — the Illustrator and
+     SketchUp rule: aligned to the box the works make together, and
+     distributing keeps the two outermost where they are. Only the works on
+     the same face of the same wall as the primary one move; the rest are
+     named in the toast. `src/align.js`, pure. In Lite the buttons are the
+     Pro lock; the selection itself is everyone's.
+  Not done, and the obvious next refinements: a box-drag (marquee)
+  selection, which fights orbiting for the same gesture; guides for floor
+  pieces dragged across the floor; and a saved group ("my triptych") that
+  moves as one. `tests/guides.test.js`, `tests/view-guides.mjs`.
 - **2026-09-24: the roadmap, agreed, and its base — Lite / Pro and the phone
   layout. Pushed straight to `main` at the owner's word.** The owner's
   instruction: "go ahead with the base first (pro version up and going —
@@ -1402,6 +1435,10 @@ regression — it is the editor and the test sharing one server.
 - `src/showpack.js` — the show pack: floor plan, inventory, checklist.
 - `src/toolsearch.js` — tool search's ranking; the index is built in main.js
   from each tab's `inspectorHTML()`.
+- `src/tier.js` — Lite and Pro: the one table of Pro features and `can()`.
+  `gated` / `proLock` and the action gate in `src/main.js` use it.
+- `src/guides.js` — smart guides' snapping arithmetic; `showSnap` in
+  `src/scene.js` draws it. `src/align.js` — align and distribute.
 - `FUTURE_BUILD.md` — requested, deliberately not started. Currently empty.
 - `docs/HDRI-ASSETS.md`, `docs/TEXTURE-ASSETS.md` — adding asset files.
 - `AI_EXPORT_PHASE.md` — only for AI-export implementation.

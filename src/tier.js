@@ -64,6 +64,14 @@ export const PRO_ACTIONS = {
   "row-count-right": "row",
   "row-space-left": "row",
   "row-space-right": "row",
+  "align-left": "align",
+  "align-center": "align",
+  "align-right": "align",
+  "align-top": "align",
+  "align-middle": "align",
+  "align-bottom": "align",
+  "distribute-x": "align",
+  "distribute-y": "align",
 };
 
 export const resolveTier = (tier) => (TIERS[tier] ? tier : DEFAULT_TIER);
