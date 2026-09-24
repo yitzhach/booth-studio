@@ -216,7 +216,7 @@ try {
 
   // --- The export frame: a chosen shape, not the browser window's.
   await page.click('[data-tab="export"]');
-  await page.getByLabel('Export frame').selectOption('phone');
+  await page.getByLabel('Export frame', { exact: true }).selectOption('phone');
   await page.waitForTimeout(300);
   const shot = await page.evaluate(async () => {
     const scene = window.__booth.scene;
