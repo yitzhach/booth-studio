@@ -854,6 +854,19 @@ Extend it; do not rebuild it.
    map during a drag. Three labels are shared by several controls in one
    section (each perimeter wall's Width and Height, under Display walls): the
    search lists one of each and opens the first.
+1. **Tool names as search shortcuts, and a faster way into search.**
+   *Asked for 2026-09-24, not built.* The owner wants every tool to have a
+   short, agreed name, typed into the search box as a shortcut straight to
+   that tool, to save time. The names are still to be agreed with the owner
+   before any code: a short table (name → the control it opens) that
+   `rankTools` treats as an exact match, ranked first, and that Help lists.
+   Keyboard: `/` already focuses the search box (see its tooltip). Still to
+   do: Ctrl/⌘+K as well, because that is the key most apps use and people
+   will try it first. Mobile has no keyboard shortcut. Ideas, owner undecided:
+   a search button that stays in reach on the phone, or voice input through
+   the browser's own speech recognition. Speech recognition is not available
+   in every browser, and some browsers send the audio to a server, so check
+   that against the local-first rule before building it.
 1. **The 2026-09-23 work on the real machine, and the round that answered
    it.** *Answered 2026-09-23 — see the third-round bullet in Now; kept here
    for its reasoning.* The first report is in: **speed "much better"**, and five asks,
