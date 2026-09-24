@@ -200,6 +200,40 @@ try {
   assert.equal(overhead.fromSpot, null, 'where a spotlight flare has nothing to come from');
   assert.equal(overhead.overheadInches, 240, '20 feet up');
 
+  // Scrubbing into a fade shows the fade: asked for so the start and end of a
+  // clip can be judged on the track rather than only in the file.
+  await page.fill('#timeline-fade-in', '3');
+  await page.dispatchEvent('#timeline-fade-in', 'change');
+  await page.locator('[data-tl-track]').scrollIntoViewIfNeeded();
+  const track2 = await page.locator('[data-tl-track]').boundingBox();
+  await page.mouse.click(track2.x + track2.width * 0.1, track2.y + track2.height - 8);
+  const faded = await page.evaluate(() => window.__booth.scene.overlay.fade);
+  assert.ok(faded < 0.6, `a scrub inside the fade-in darkens the viewport, fade=${faded}, playhead ${await page.textContent(".tl-playhead")}, fade-in ${await page.evaluate(() => window.__booth.timeline().fade.in)}`);
+  await page.mouse.click(track2.x + track2.width * 0.7, track2.y + track2.height - 8);
+  assert.equal(await page.evaluate(() => window.__booth.scene.overlay.fade), 1, 'past the fade it is fully lit');
+
+  // Motion: the glide, and auto timing with its own undo.
+  await page.selectOption('#timeline-flow', 'glide');
+  assert.equal(await page.evaluate(() => window.__booth.timeline().flow), 'glide');
+  assert.equal(await page.locator('[data-key-field="ease"]').count(), 0, 'a glide has no per-key ramp');
+  const timed = await page.evaluate(() => window.__booth.timeline().keys.map((k) => k.t));
+  await page.click('[data-action="timeline-auto"]');
+  const auto = await page.evaluate(() => window.__booth.timeline().keys.map((k) => k.t));
+  assert.equal(auto[0], 0);
+  assert.equal(auto.at(-1), 1);
+  await page.click('[data-action="timeline-auto-undo"]');
+  const back = await page.evaluate(() => window.__booth.timeline().keys.map((k) => k.t));
+  assert.deepEqual(back, timed, 'Put the timing back restores the key times');
+
+  // The frame guide: a 16:9 box over the viewport while the timeline is open.
+  const guide = await page.evaluate(() => {
+    const g = document.querySelector('.frame-guide');
+    const box = g?.firstElementChild?.getBoundingClientRect();
+    return { hidden: g?.hidden, aspect: box ? box.width / box.height : 0 };
+  });
+  assert.equal(guide.hidden, false, 'the frame guide shows while composing a clip');
+  assert.ok(Math.abs(guide.aspect - 16 / 9) < 0.02, `and it is 16:9, got ${guide.aspect}`);
+
   await page.click('[data-action="close-timeline"]');
   await page.waitForFunction(() => document.querySelector('#timeline-dialog').open === false);
 

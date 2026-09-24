@@ -16,9 +16,11 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-24 — locked floor pieces, raised figures and the
-  visual camera timeline** (the first bullet below). Before it, the same
-  day: tool shortcuts, three more people, the smaller drag shadow and Pro
+- **Last deploy: 2026-09-25 — the frame guide, figures lowered as well as
+  raised and picked by double-click, and the timeline's glide, auto timing
+  and scrubbed fades** (the first bullet below). Before it, 2026-09-24:
+  locked floor pieces, raised figures and the visual camera timeline; and the
+  same day before that: tool shortcuts, three more people, the smaller drag shadow and Pro
   unlocked; and before that roadmap batch E, the last of the roadmap
   (the hall planner and the power and rentals sheet — the first bullet
   below), after batches C and D, A and B, the roadmap's base and the cut-out
@@ -41,6 +43,83 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-25, the owner's answers to the lock/lift/timeline round. Merged
+  to `main` and deployed.** The owner also reported the 2014 iMac's speed as
+  good now, and approved the tool shortcuts as drafted (see 5).
+  1. **The frame guide, and exports that match it.** Reported: "video export
+     seems to export the same dimensions the preview window is at, not the
+     preset size … if it's set at 16:9, I need to see this aspect ratio in the
+     preview so changes can be made before export." Three changes:
+     - **A clip now starts in widescreen 16:9** (`DEFAULT_CLIP_FRAME` in
+       `src/framing.js`). "This window" is still in the Frame menu for anyone
+       who wants the window's shape — both are options, as asked. Every
+       browser that had saved "This window" had it only because it was the
+       default, so view prefs saved before this (no `clipFrame: 2` in
+       `booth.view`) are not read for the clip frame; a choice made since is
+       kept. The still keeps "This window" as its default.
+     - **The frame guide**: while the Video or Export tab is open, the
+       timeline dialog is up, or a move is previewing, the chosen frame is
+       outlined over the viewport, labelled, with everything outside it
+       dimmed (`updateFrameGuide` in main.js, `guideRect` in framing.js; a
+       `.frame-guide` div that takes no pointer events). Hidden when the
+       frame is "This window", because then the viewport is the frame.
+     - **The file is exactly what is inside the guide.** A frame narrower
+       than the window was already that (the camera keeps its height). A
+       frame wider than the window used to keep the height too and so showed
+       more at the sides than anyone had seen; now `frameLens` closes the
+       vertical field of view so the file's top and bottom are the guide's.
+       Both `recordVideo` and the still `export` use it and restore the fov.
+       The keyframe pictures in the timeline strip are cropped to the frame
+       as well. The old note — "a frame that is not the window's shape shows
+       more or less at the sides" — is gone, because it is no longer true.
+  2. **Figures: 0 is the middle, and half inches.** Raised off the floor now
+     runs **−120″ to +120″** (`MIN_LIFT`, `MAX_LIFT`, `LIFT_STEP = 0.5` in
+     `src/people.js`), so the slider starts at its centre and lowers as far
+     as it raises — into a stepped-down floor or a pit. `validateProject`
+     accepts −120..120; everything saved before was 0..120, so every older
+     backup still loads.
+  3. **Double-click a figure to select it.** The figure's card in Layout →
+     People for scale opens, scrolls into view and is outlined blue with a
+     Selected badge (`pickPerson` in scene.js — recursive, because a figure
+     is a group, and walls, artwork and pedestals in front of it win; the
+     scene's `onSelectPerson` is set by main.js after construction rather
+     than added to the constructor's positional callbacks). A figure is
+     still placed by its sliders, not dragged in the viewport; dragging is
+     the obvious next step if it is wanted.
+  4. **The timeline, three steps up — kept small.**
+     - **Scrubbing shows the fade** (and the flare): `scene.showMoment(tl,
+       t)` poses the camera and sets the overlay the recorder would. The
+       fade stays on the viewport while the scrub is left there, and goes
+       the moment the camera is moved by hand (the controls' `start` event
+       calls `clearMoment`), a keyframe is shown, or the dialog closes.
+     - **Camera flow: one continuous glide.** A new Motion section with a
+       Camera flow menu — *Ease at every keyframe* (what it always did: with
+       the default ramp the camera settles on every key) or *One continuous
+       glide*: eases in once, travels at a steady speed through every
+       keyframe without stopping, eases out at the end, like a slider or a
+       gimbal. A hold still stops it; the glide eases into and out of each
+       hold. `flow` on the timeline (`FLOWS`, `glideEase` — 20% ramp up and
+       down, peak speed 1.25× the average — and `sampleGlide` in
+       `src/timeline.js`). In a glide the per-key Ramp menu is hidden and
+       the track draws each segment straight.
+     - **Auto timing · even speed**: respaces the middle keyframes so the
+       camera covers the same distance every second (`autoTime`: each
+       segment's arc length along the orbit, plus half its aim's swing so a
+       pan on the spot gets time too). Ends, holds and length are kept.
+       **Put the timing back** undoes it — the timeline is view state
+       outside the project's undo history, so it needs its own.
+     The timeline is not part of the project, so none of this touches the
+     schema.
+  5. **Tool shortcuts approved.** The draft names in `SHORTCUTS` stand. One
+     added: `frm`, the Video tab's Frame menu. Voice search is still not
+     built (see the shortcuts bullet below for why).
+  Tests: `tests/framing.test.js` (the clip default, `guideRect`,
+  `frameLens`), `tests/timeline.test.js` (flow, the glide ease, a glide not
+  stopping at a middle key while per-key easing does, holds in a glide, auto
+  timing), `tests/people.test.js` (negative and half-inch lifts);
+  `view-timeline` scrubs into a fade, switches to the glide, runs and undoes
+  auto timing and measures the 16:9 guide; `view-people` checks the lift
+  slider's −120..120 / 0.5 and double-clicks a figure.
 - **2026-09-24, the owner's next three: lock a box, raise a figure, a
   visual timeline. Merged to `main` and deployed.**
   1. **Lock a floor piece.** Every pedestal, piece of furniture and drawn box
@@ -933,13 +1012,23 @@ Extend it; do not rebuild it.
    (see Now); past it, fast edit is the answer. Three labels are shared by several controls in one
    section (each perimeter wall's Width and Height, under Display walls): the
    search lists one of each and opens the first.
+1. **The 2026-09-25 round, on the real machine.** Build `main`'s tip first
+   (`window.BOOTH_BUILD`). Then: does the frame guide read as "this is the
+   shot" — is 55% dimming right, and should it show on every tab rather
+   than only Video / Export / the timeline? Export a 16:9 clip from a narrow
+   window and check the file matches the guide. Is the glide the look that
+   was meant, and is a 20% ramp (`GLIDE_RAMP`) too quick or too slow? Does
+   Auto timing feel even? Does a figure pick on double-click where you
+   expect — a cut-out's pick is its whole picture rectangle, transparent
+   corners included? Should a figure drag in the viewport like a pedestal?
 1. **Lock, lift and the timeline, on the real machine.** Is the padlock
    where you would look for it? Should free-standing walls lock too (not
    built: only floor pieces)? Does the timeline read at a glance, and are
-   the diamonds easy to grab with a thumb?
-1. **Tool shortcuts: the owner's names.** *Built 2026-09-24, see Now.* The
-   sixty names in `SHORTCUTS` are a draft; the owner renames, adds or drops
-   any. Voice search is undecided (see Now for why it was not built).
+   the diamonds easy to grab with a thumb? (Lift and the timeline were
+   answered 2026-09-25 — see Now; the lock is still open.)
+1. **Tool shortcuts.** *Approved as drafted 2026-09-25.* Rename in
+   `SHORTCUTS` whenever a name does not stick. Voice search is undecided
+   (see Now for why it was not built).
 1. **The 2026-09-23 work on the real machine, and the round that answered
    it.** *Answered 2026-09-23 — see the third-round bullet in Now; kept here
    for its reasoning.* The first report is in: **speed "much better"**, and five asks,
@@ -983,12 +1072,10 @@ Extend it; do not rebuild it.
    on `main`. Judgements that need a browser and a pair of eyes:
    - ~~The drop shadow's three defaults~~ — answered on the real machine:
      it was asked to work like Photoshop's, and now does. See item 1.
-   - **Whether a vertical or square export frames the booth usefully.** The
-     camera keeps its vertical field of view and the width follows the ratio,
-     so a 9:16 clip shows the walls and loses the aisle. If a vertical frame
-     wants a wider view, that is a zoom before exporting — or an argument for
-     the frame adjusting the lens, which was deliberately not done, because a
-     lens that changes with the frame means the preview is not the export.
+   - ~~Whether a vertical or square export frames the booth usefully.~~
+     Answered 2026-09-25 by the frame guide: the viewport now outlines the
+     frame and the file is exactly what is inside it, so a vertical clip is
+     composed to its own shape (a zoom out gives it more aisle).
    - **Whether careful rendering actually fixes the glitches**, and whether
      doubling the render is a price worth paying by default on a 2014 iMac.
      It is a checkbox; off is one click.
@@ -1117,8 +1204,8 @@ Extend it; do not rebuild it.
      It is the start of a drag, so it should be invisible — but the shadows go
      as it comes on, and that is a visible change nobody asked for in that
      moment.
-   - **Whether any of the speed work is enough on the 2014 iMac.** Everything
-     measured is in the tests; what is not known is how it feels. See item 10.
+   - ~~Whether any of the speed work is enough on the 2014 iMac.~~ Answered
+     2026-09-25: "imac speed seems good". See item 10.
 9. **Nobody has looked at the ground picker or the artwork sliders.**
    Both are on `main` and live. Whether two labelled groups in one dropdown
    read as obviously as intended; whether "Delete this ground photograph"
@@ -1134,7 +1221,8 @@ Extend it; do not rebuild it.
    10 x 10 ones; and whether the fast edit toggle is worth its place in the
    toolbar. That last one is half answered: it is now automatic on a
    double-tap and also a switch in Layout, and the toolbar button stays.
-10. **Is it actually faster now?** Reported still slow on a 2014 iMac in
+10. **Is it actually faster now?** *Answered 2026-09-25: yes, "imac speed
+   seems good". Kept for the levers below if it ever regresses.* Reported still slow on a 2014 iMac in
    Chrome — and, tellingly, **fast with the sample panels and slow with
    uploaded photographs**. That last part was the diagnosis: four separate
    places treated a 25 MB base64 original as free. The undo history and every

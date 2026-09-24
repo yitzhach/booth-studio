@@ -4,14 +4,14 @@ import { MOVES, DEFAULT_MOVE, CUSTOM_MOVE, resolveMove, frameTimes } from "./cam
 import {
   EASES, MAX_KEYS, MIN_KEYS, MIN_SECONDS, MAX_SECONDS,
   emptyTimeline, keyFrom, normalizeTimeline, segmentSpeed, timelineSeconds,
-  keySchedule, keyTAt, sampleTimeline, easeFn,
+  keySchedule, keyTAt, sampleTimeline, easeFn, FLOWS, autoTime,
 } from "./timeline.js";
 import { SIZES, DEFAULT_SIZE, FPS, DEFAULT_FPS, videoSupported, pickCodec } from "./video.js";
-import { FRAMES, DEFAULT_FRAME, CUSTOM_FRAME, FRAME_MIN, FRAME_MAX, STILL_SIZES, frameSize } from "./framing.js";
+import { FRAMES, DEFAULT_FRAME, DEFAULT_CLIP_FRAME, CUSTOM_FRAME, FRAME_MIN, FRAME_MAX, STILL_SIZES, frameSize, guideRect } from "./framing.js";
 import { SHADOW_FIELD, SHADOW_KINDS, SHADOW_MAX, globalAngle, normalAngle, shadowSpec } from "./dropshadow.js";
 import { MAX_SWATCHES, isColor, readPalette, savePalette, removeSwatch, rememberColor, previousColor } from "./swatches.js";
 import { applyImageEdits, DEFAULT_IMAGE_EDITS, normalizeImageEdits } from "./image-edit.js";
-import { PEOPLE, MAX_PEOPLE, MIN_HEIGHT, MAX_HEIGHT, MAX_LIFT, newPerson, personHeight, personName } from "./people.js";
+import { PEOPLE, MAX_PEOPLE, MIN_HEIGHT, MAX_HEIGHT, MAX_LIFT, MIN_LIFT, LIFT_STEP, newPerson, personHeight, personName } from "./people.js";
 import { FLARE_SOURCES, DEFAULT_FLARE_SOURCE, OVERHEAD } from "./flare.js";
 import {
   DEFAULT_SPACE, MAX_GAP, MAX_SLOTS, MIN_SPACE, MAX_SPACE,
@@ -275,6 +275,10 @@ async function boot() {
     // its id. Exclusive with `selectedPanel` and with `selected`: one
     // inspector, one thing being moved.
     selectedPedestal = null,
+    // The figure last double-clicked in the viewport, by its id. View state
+    // only: it lights that figure's card in Layout → People for scale and
+    // nothing else, because a figure is placed by its sliders, not dragged.
+    selectedPerson = null,
     photoSelected = null,
     tab = "art",
     history = [],
@@ -301,6 +305,8 @@ async function boot() {
     // other video setting this is view state: it is not saved with the booth,
     // is not in the undo history and does not touch schema 1.
     videoTimeline = null,
+    // Key times from before the last Auto timing, for its undo button.
+    tlBeforeAuto = null,
     // The batch list: clips queued with the settings they were queued with, so
     // a list built over ten minutes of composing still renders what was asked
     // for rather than whatever the panel says when Export all is pressed.
@@ -316,7 +322,7 @@ async function boot() {
     // for the frame that asks for one. View settings, remembered per browser
     // beside the fast-edit lock: a frame is a judgement about where the file
     // is going, not about the booth.
-    videoFrameShape = DEFAULT_FRAME,
+    videoFrameShape = DEFAULT_CLIP_FRAME,
     // Whether each recorded frame is drawn a second time before it is
     // captured. On by default because the reported bug — glitches in an
     // exported MP4 — is what a frame captured mid-upload looks like, and a
@@ -378,7 +384,7 @@ async function boot() {
   selected = p.art[0]?.id;
   document.querySelector("#app").innerHTML =
     `<header><a class="brand" href="#" aria-label="Booth Studio">${icon("box")}<span>Artist OS</span></a><span class="app-badge">Booth Studio</span><div class="tool-search"><span aria-hidden="true">⌕</span><input id="tool-search" type="search" placeholder="Find a tool…" aria-label="Find a tool" title="Find a tool by name or shortcut · press / or Ctrl/⌘ K to jump here" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-controls="tool-results" aria-expanded="false"/><ul id="tool-results" role="listbox" aria-label="Matching tools" hidden></ul></div><div class="project"><input id="project-name" aria-label="Project name" maxlength="120" value="${e(p.name)}"/>${icon("chevron-down")}</div><div class="save-status" id="save-status" role="status">Opening…</div>${btn("help", "Help", "help-circle", "icon-only")}<div class="avatar">IA</div></header>
-<div class="workspace"><aside class="library" id="library"></aside><main class="editor"><div class="toolbar"><div class="toolgroup">${btn("select", "Select", "mouse-pointer-2", "active")}${btn("move", "Move", "move")}${btn("snap", "Snap 1″", "grid-2x2", "active")}${btn("measure", "Measure", "ruler")}${btn("walk", "Walk", "footprints")}${btn("draw-box", "Box", "square")}${btn("draft", "Fast edit", "zap")}${btn("draft-lock", "Fast edit: follows the gesture", "lock", "draft-lock")}</div><div class="toolgroup">${btn("undo", "Undo", "undo-2", "icon-only")}${btn("redo", "Redo", "redo-2", "icon-only")}</div><div class="mode-switch"><button data-action="mode-3d">3D booth</button><button data-action="mode-photo">Photo</button></div>${btn("export-tab", "Export", "download", "export-top")}</div><div class="viewport"><div id="scene"></div><div id="photo" hidden></div><div class="scene-label"><span class="eyebrow" id="mode-label">MEASURED WORKSPACE</span><strong id="scene-title"></strong><span id="scene-subtitle"></span></div><div id="photo-empty" hidden><div>${icon("image-plus")}<h2>Start with your booth shot</h2><p>Add artwork and adjust its four corners to match the wall perspective.</p>${btn("upload-photo", "Upload booth photo", "plus", "primary")}</div></div><button class="find-tool" data-action="find-tool" aria-label="Find a tool" title="Find a tool">${icon("search")}</button><div class="walk-pad" hidden><button data-walk="forward" aria-label="Step forward">▲</button><button data-walk="left" aria-label="Step left">◀</button><button data-walk="back" aria-label="Step back">▼</button><button data-walk="right" aria-label="Step right">▶</button><button data-action="walk" class="walk-exit" aria-label="Stop walking">Done</button></div><div class="viewport-bottom"><div class="view-switch" id="view-switch"><button data-view="perspective" class="active">Perspective</button><button data-view="back">Back</button><button data-view="left">Left</button><button data-view="right">Right</button><button data-view="plan">Plan</button></div><label class="saved-view-pick" hidden><span>View</span><select id="saved-view" aria-label="Go to a saved view"></select></label><div class="zoom-controls"><span class="zoom-label">Zoom</span>${btn("zoom-out", "Zoom out", "minus", "icon-only")}${btn("zoom-in", "Zoom in", "plus", "icon-only")}${btn("reset-view", "Reset view", "rotate-ccw", "icon-only")}</div></div></div><div class="statusbar"><span id="gesture-hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</span><label class="preview-quality" title="Preview quality: how many pixels the viewport draws for each one on screen. Exports are never affected."><span>Preview</span><select id="quality-quick" aria-label="Preview quality"></select><output id="quality-now"></output></label><span id="selection-status"></span></div></main><aside class="inspector"><button class="sheet-toggle" data-action="sheet-toggle" aria-label="Fold the panel away" title="Fold the panel away"><span>Fold</span></button><div class="inspector-tabs">${["art", "layout", "show", "walls", "lighting", "video", "hall", "export"].map((t, i) => `<button data-tab="${t}">${icon(["image", "layout-panel-left", "building-2", "columns-2", "lightbulb", "video", "map", "download"][i])}<span>${["Artwork", "Layout", "Art show", "Walls", "Lighting", "Video", "Hall", "Export"][i]}</span></button>`).join("")}</div><div id="inspector-content"></div></aside></div><footer><span class="footer-brand">${icon("box")} BOOTH STUDIO <small>Prototype 01</small><small id="build-stamp" title="Version ${BUILD.version} · built ${BUILD.time} · commit ${BUILD.commit}">v${BUILD.version} · ${BUILD.short} UTC · ${BUILD.commit}</small></span><span>Your images. Your space. Your arrangement.</span><span id="network">Local workspace</span></footer><input type="file" id="art-input" accept="image/jpeg,image/png" multiple hidden/><input type="file" id="replace-input" accept="image/jpeg,image/png" hidden/><input type="file" id="photo-input" accept="image/jpeg,image/png" hidden/><input type="file" id="surround-input" accept="image/jpeg,image/png" hidden/><input type="file" id="ground-input" accept="image/jpeg,image/png" hidden/><input type="file" id="underlay-input" accept="image/jpeg,image/png" hidden/><input type="file" id="model-input" accept=".glb,model/gltf-binary" hidden/><input type="file" id="backup-input" accept=".json,.booth" hidden/><div id="toast" role="status"></div><dialog id="dialog"><div id="dialog-content"></div></dialog><dialog id="image-editor"><div id="image-editor-content"></div></dialog><dialog id="timeline-dialog" class="timeline-dialog"><div id="timeline-content"></div></dialog>`;
+<div class="workspace"><aside class="library" id="library"></aside><main class="editor"><div class="toolbar"><div class="toolgroup">${btn("select", "Select", "mouse-pointer-2", "active")}${btn("move", "Move", "move")}${btn("snap", "Snap 1″", "grid-2x2", "active")}${btn("measure", "Measure", "ruler")}${btn("walk", "Walk", "footprints")}${btn("draw-box", "Box", "square")}${btn("draft", "Fast edit", "zap")}${btn("draft-lock", "Fast edit: follows the gesture", "lock", "draft-lock")}</div><div class="toolgroup">${btn("undo", "Undo", "undo-2", "icon-only")}${btn("redo", "Redo", "redo-2", "icon-only")}</div><div class="mode-switch"><button data-action="mode-3d">3D booth</button><button data-action="mode-photo">Photo</button></div>${btn("export-tab", "Export", "download", "export-top")}</div><div class="viewport"><div id="scene"></div><div class="frame-guide" hidden aria-hidden="true"><div class="frame-guide-box"><span></span></div></div><div id="photo" hidden></div><div class="scene-label"><span class="eyebrow" id="mode-label">MEASURED WORKSPACE</span><strong id="scene-title"></strong><span id="scene-subtitle"></span></div><div id="photo-empty" hidden><div>${icon("image-plus")}<h2>Start with your booth shot</h2><p>Add artwork and adjust its four corners to match the wall perspective.</p>${btn("upload-photo", "Upload booth photo", "plus", "primary")}</div></div><button class="find-tool" data-action="find-tool" aria-label="Find a tool" title="Find a tool">${icon("search")}</button><div class="walk-pad" hidden><button data-walk="forward" aria-label="Step forward">▲</button><button data-walk="left" aria-label="Step left">◀</button><button data-walk="back" aria-label="Step back">▼</button><button data-walk="right" aria-label="Step right">▶</button><button data-action="walk" class="walk-exit" aria-label="Stop walking">Done</button></div><div class="viewport-bottom"><div class="view-switch" id="view-switch"><button data-view="perspective" class="active">Perspective</button><button data-view="back">Back</button><button data-view="left">Left</button><button data-view="right">Right</button><button data-view="plan">Plan</button></div><label class="saved-view-pick" hidden><span>View</span><select id="saved-view" aria-label="Go to a saved view"></select></label><div class="zoom-controls"><span class="zoom-label">Zoom</span>${btn("zoom-out", "Zoom out", "minus", "icon-only")}${btn("zoom-in", "Zoom in", "plus", "icon-only")}${btn("reset-view", "Reset view", "rotate-ccw", "icon-only")}</div></div></div><div class="statusbar"><span id="gesture-hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</span><label class="preview-quality" title="Preview quality: how many pixels the viewport draws for each one on screen. Exports are never affected."><span>Preview</span><select id="quality-quick" aria-label="Preview quality"></select><output id="quality-now"></output></label><span id="selection-status"></span></div></main><aside class="inspector"><button class="sheet-toggle" data-action="sheet-toggle" aria-label="Fold the panel away" title="Fold the panel away"><span>Fold</span></button><div class="inspector-tabs">${["art", "layout", "show", "walls", "lighting", "video", "hall", "export"].map((t, i) => `<button data-tab="${t}">${icon(["image", "layout-panel-left", "building-2", "columns-2", "lightbulb", "video", "map", "download"][i])}<span>${["Artwork", "Layout", "Art show", "Walls", "Lighting", "Video", "Hall", "Export"][i]}</span></button>`).join("")}</div><div id="inspector-content"></div></aside></div><footer><span class="footer-brand">${icon("box")} BOOTH STUDIO <small>Prototype 01</small><small id="build-stamp" title="Version ${BUILD.version} · built ${BUILD.time} · commit ${BUILD.commit}">v${BUILD.version} · ${BUILD.short} UTC · ${BUILD.commit}</small></span><span>Your images. Your space. Your arrangement.</span><span id="network">Local workspace</span></footer><input type="file" id="art-input" accept="image/jpeg,image/png" multiple hidden/><input type="file" id="replace-input" accept="image/jpeg,image/png" hidden/><input type="file" id="photo-input" accept="image/jpeg,image/png" hidden/><input type="file" id="surround-input" accept="image/jpeg,image/png" hidden/><input type="file" id="ground-input" accept="image/jpeg,image/png" hidden/><input type="file" id="underlay-input" accept="image/jpeg,image/png" hidden/><input type="file" id="model-input" accept=".glb,model/gltf-binary" hidden/><input type="file" id="backup-input" accept=".json,.booth" hidden/><div id="toast" role="status"></div><dialog id="dialog"><div id="dialog-content"></div></dialog><dialog id="image-editor"><div id="image-editor-content"></div></dialog><dialog id="timeline-dialog" class="timeline-dialog"><div id="timeline-content"></div></dialog>`;
   let scene;
   try {
     scene = new BoothScene(
@@ -398,7 +404,7 @@ async function boot() {
         // Artwork and a free-standing wall are two selections with one pair of
         // arrow-free controls between them; holding both at once would leave
         // the sliders pointing at a wall nobody is looking at.
-        if (id) { selectedPanel = null; selectedPedestal = null; }
+        if (id) { selectedPanel = null; selectedPedestal = null; selectedPerson = null; }
         // Selecting a work in another booth of the row points the row picker
         // at that booth, so the next original lands beside the one just
         // clicked rather than back at home.
@@ -424,7 +430,7 @@ async function boot() {
       (key) => {
         if (selectedPanel === key) return;
         selectedPanel = key;
-        if (key) { selectedPedestal = null; tab = "walls"; }
+        if (key) { selectedPedestal = null; selectedPerson = null; tab = "walls"; }
         renderSelection();
         if (key) revealPanelFields();
       },
@@ -443,7 +449,7 @@ async function boot() {
       (id) => {
         if (selectedPedestal === id) return;
         selectedPedestal = id;
-        if (id) { selectedPanel = null; selected = null; tab = "walls"; }
+        if (id) { selectedPanel = null; selected = null; selectedPerson = null; tab = "walls"; }
         renderSelection();
         if (id) revealPedestalFields();
       },
@@ -457,6 +463,18 @@ async function boot() {
         syncPedestalInputs(ped);
       },
     );
+    // Double-clicking a figure opens its card: Layout, scrolled to it, lit.
+    scene.onSelectPerson = (id) => {
+      selectedPerson = id;
+      selected = null;
+      selectedPanel = null;
+      selectedPedestal = null;
+      tab = "layout";
+      renderSelection();
+      document
+        .querySelector(`.person-row[data-person="${CSS.escape(id)}"]`)
+        ?.scrollIntoView({ block: "nearest" });
+    };
   } catch (err) {
     document.querySelector("#scene").innerHTML =
       '<div class="webgl-error"><h2>3D is unavailable on this browser</h2><p>Enable hardware acceleration or try another browser. Photo editing, project backups, and hanging guides remain available.</p></div>';
@@ -469,6 +487,12 @@ async function boot() {
     // No storage, no remembered lock: auto is the default and is correct.
   }
   loadViewPrefs();
+  // The frame guide follows the viewport's size: a window resize, the
+  // inspector folding away on a phone, the timeline dialog opening beside it.
+  if (typeof ResizeObserver !== "undefined") {
+    const host = document.querySelector("#scene");
+    if (host) new ResizeObserver(() => updateFrameGuide()).observe(host);
+  }
   let adaptToasted = false;
   if (scene) {
     // A footprint drawn with the Box tool becomes a box on the floor, 12″
@@ -827,7 +851,11 @@ async function boot() {
     }
     if (!saved || typeof saved !== "object") return;
     if (FRAMES[saved.exportFrame]) exportFrame = saved.exportFrame;
-    if (FRAMES[saved.videoFrameShape]) videoFrameShape = saved.videoFrameShape;
+    // Before 2026-09-25 every browser saved "This window" for a clip, because
+    // that was the default, not because anyone chose it. Those are left at
+    // the new widescreen default; a choice saved since (`clipFrame: 2`) is
+    // kept, "This window" included.
+    if (FRAMES[saved.videoFrameShape] && saved.clipFrame === 2) videoFrameShape = saved.videoFrameShape;
     if (STILL_SIZES.includes(Number(saved.exportLong))) exportLong = Number(saved.exportLong);
     if (typeof saved.videoSettle === "boolean") videoSettle = saved.videoSettle;
     if (saved.customFrame) {
@@ -848,7 +876,7 @@ async function boot() {
     try {
       localStorage.setItem(
         "booth.view",
-        JSON.stringify({ exportFrame, exportLong, customFrame, videoFrameShape, videoSettle, palette, colorHistory, lastEdge, quality, autoScale }),
+        JSON.stringify({ exportFrame, exportLong, customFrame, videoFrameShape, clipFrame: 2, videoSettle, palette, colorHistory, lastEdge, quality, autoScale }),
       );
     } catch {
       // A browser with storage switched off keeps all of this for the
@@ -1211,7 +1239,7 @@ async function boot() {
           })
         : frameSize(exportFrame, { long: exportLong, viewport, custom: customFrame });
     const chosen = which === "video" ? videoFrameShape : exportFrame;
-    return `${shape.width} × ${shape.height} px${chosen === "view" ? ", the shape of this window" : ""}. A frame that is not the window's shape shows more or less at the sides than the viewport does, because the camera keeps its height and the width follows the ratio.`;
+    return `${shape.width} × ${shape.height} px${chosen === "view" ? ", the shape of this window" : ""}. ${chosen === "view" ? "" : "The viewport outlines it while this tab is open: what is inside the outline is what the file shows."}`;
   }
   /**
    * The two drawn shadows, laid out the way Photoshop's Drop Shadow dialog is
@@ -1639,10 +1667,10 @@ async function boot() {
     const reach = key === "height" || key === "lift"
       ? null
       : Math.max(panelRange(p)[key] + 48, Math.abs(person[key] || 0));
-    const min = key === "height" ? MIN_HEIGHT : key === "lift" ? 0 : -Math.ceil(reach);
+    const min = key === "height" ? MIN_HEIGHT : key === "lift" ? MIN_LIFT : -Math.ceil(reach);
     const max = key === "height" ? Math.max(MAX_HEIGHT, Math.ceil(person[key])) : key === "lift" ? MAX_LIFT : Math.ceil(reach);
     const value = person[key] ?? 0;
-    return `<label class="range"><span>${label}<output>${Number(value.toFixed(2))}${unit}</output></span><input type="range" data-field="${key}" data-scope="person-${e(person.id)}" aria-label="${e(label)} slider" min="${min}" max="${max}" step="1" value="${value}"/></label>`;
+    return `<label class="range"><span>${label}<output>${Number(value.toFixed(2))}${unit}</output></span><input type="range" data-field="${key}" data-scope="person-${e(person.id)}" aria-label="${e(label)} slider" min="${min}" max="${max}" step="${key === "lift" ? LIFT_STEP : 1}" value="${value}"/></label>`;
   }
   /**
    * Fast edit, where someone arranging a booth will look for it. The toolbar
@@ -1818,7 +1846,8 @@ async function boot() {
     const rows = people
       .map((person, i) => {
         const label = personName(person.kind);
-        return `<div class="person-row${isShown(person) ? "" : " is-hidden"}" data-person="${person.id}"><div class="key-head"><strong>${label} ${i + 1}${isShown(person) ? "" : ' <span class="badge">Hidden</span>'}</strong><span class="piece-actions"><span class="muted">${Math.floor(person.height / 12)}′${Math.round(person.height % 12)}″</span>${hideEye("person", person.id, `${label} ${i + 1}`, isShown(person))}</span></div>${field("Height", "height", person.height, MIN_HEIGHT, MAX_HEIGHT, 1, "in", "person-" + person.id)}${personSlider(person, "height", "Height")}<div class="field-pair">${field("Left / right", "x", person.x, -600, 600, 1, "in", "person-" + person.id)}${field("Front / back", "z", person.z, -600, 600, 1, "in", "person-" + person.id)}</div>${personSlider(person, "x", "Left / right")}${personSlider(person, "z", "Front / back")}${field("Raised off the floor", "lift", person.lift ?? 0, 0, MAX_LIFT, 1, "in", "person-" + person.id)}${personSlider(person, "lift", "Raise / lower")}${field("Facing", "rotation", person.rotation ?? 0, -180, 180, 5, "°", "person-" + person.id)}<div class="button-row">${btn("delete-person", "Remove", "trash-2")}</div></div>`;
+        const chosen = selectedPerson === person.id;
+        return `<div class="person-row${isShown(person) ? "" : " is-hidden"}${chosen ? " selected" : ""}" data-person="${person.id}"><div class="key-head"><strong>${label} ${i + 1}${chosen ? ' <span class="badge">Selected</span>' : ""}${isShown(person) ? "" : ' <span class="badge">Hidden</span>'}</strong><span class="piece-actions"><span class="muted">${Math.floor(person.height / 12)}′${Math.round(person.height % 12)}″</span>${hideEye("person", person.id, `${label} ${i + 1}`, isShown(person))}</span></div>${field("Height", "height", person.height, MIN_HEIGHT, MAX_HEIGHT, 1, "in", "person-" + person.id)}${personSlider(person, "height", "Height")}<div class="field-pair">${field("Left / right", "x", person.x, -600, 600, 1, "in", "person-" + person.id)}${field("Front / back", "z", person.z, -600, 600, 1, "in", "person-" + person.id)}</div>${personSlider(person, "x", "Left / right")}${personSlider(person, "z", "Front / back")}${field("Raised off the floor", "lift", person.lift ?? 0, MIN_LIFT, MAX_LIFT, LIFT_STEP, "in", "person-" + person.id)}${personSlider(person, "lift", "Raise / lower")}${field("Facing", "rotation", person.rotation ?? 0, -180, 180, 5, "°", "person-" + person.id)}<div class="button-row">${btn("delete-person", "Remove", "trash-2")}</div></div>`;
       })
       .join("");
     return `<section><h3>People for scale <span>${people.length} / ${MAX_PEOPLE}</span></h3><p class="muted">Stand-ins so the booth reads at human size. ${Object.values(PEOPLE).map((v) => e(v.label)).join(" · ")} by default, and every figure's height is editable. They are excluded from the hanging guide.</p>${people.length ? `<label class="check-field"><input type="checkbox" data-field="showPeople" data-scope="booth" ${shown ? "checked" : ""}/>Show the figures</label><p class="muted">${shown ? "Off takes every figure out of the picture and out of an export, and keeps where each one stands." : `Hidden. ${people.length} figure${people.length === 1 ? " is" : "s are"} still placed below and come back when this is switched on.`}</p>` : ""}${people.length < MAX_PEOPLE ? `<div class="button-row people-add">${btn("add-woman", "Add woman", "user-round")}${btn("add-man", "Add man", "user-round")}${btn("add-child", "Add child", "user-round")}${btn("add-pair", "Add pair", "user-round")}${btn("add-wheelchair", "Add wheelchair user", "user-round")}</div>` : `<p class="muted">${MAX_PEOPLE} figures is the limit.</p>`}${rows}</section>`;
@@ -1906,10 +1935,17 @@ async function boot() {
   function grabThumb() {
     const src = scene?.renderer?.domElement;
     if (!src?.width) return null;
+    // Cropped to the clip's frame, so a keyframe's picture is the shot the
+    // file will have rather than the whole window around it.
+    const aspect =
+      videoFrameShape === "custom"
+        ? customFrame.width / customFrame.height
+        : FRAMES[videoFrameShape]?.aspect || src.width / src.height;
+    const r = guideRect(src.width, src.height, aspect);
     const c = document.createElement("canvas");
     c.width = 160;
-    c.height = Math.max(1, Math.round((160 * src.height) / src.width));
-    c.getContext("2d").drawImage(src, 0, 0, c.width, c.height);
+    c.height = Math.max(1, Math.round((160 * r.height) / r.width));
+    c.getContext("2d").drawImage(src, r.x, r.y, r.width, r.height, 0, 0, c.width, c.height);
     return c.toDataURL("image/jpeg", 0.72);
   }
   /**
@@ -1944,9 +1980,11 @@ async function boot() {
       if (to - from <= 1e-6) continue;
       // The ramp, drawn: speed would be its slope, so an ease-in visibly
       // starts flat and an ease-out lands flat.
-      const f = easeFn(tl.keys[i].ease);
+      // In a glide the segments are walked at the run's own speed, so each
+      // is drawn straight and the ease lives at the run's two ends.
+      const f = easeFn(tl.flow === "glide" ? "linear" : tl.keys[i].ease);
       const pts = Array.from({ length: 21 }, (_, n) => `${n * 5},${(30 - f(n / 20) * 26).toFixed(2)}`).join(" ");
-      segs += `<div class="tl-seg" style="left:${at(from)};width:calc(${at(to)} - ${at(from)})" title="${e(EASES[tl.keys[i].ease]?.label || "")}"><svg viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}"/></svg></div>`;
+      segs += `<div class="tl-seg" style="left:${at(from)};width:calc(${at(to)} - ${at(from)})" title="${e(tl.flow === "glide" ? FLOWS.glide.label : EASES[tl.keys[i].ease]?.label || "")}"><svg viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}"/></svg></div>`;
     }
     const holds = sched
       .filter((x) => x.leave - x.arrive > 1e-6)
@@ -1984,21 +2022,21 @@ async function boot() {
       last = i === tl.keys.length - 1;
     const speed = last ? null : segmentSpeed(tl, i);
     const card = `<div class="key-row" data-key="${k.id}"><div class="key-head"><strong>${e(keyName(i, tl.keys.length))}</strong><span class="muted">arrives at ${sched[i].arrive.toFixed(1)}s</span></div><div class="key-fields"><label class="setting-label">At (s)<input type="number" data-key-field="t" data-key="${k.id}" min="0" max="${seconds}" step="0.1" value="${sched[i].arrive.toFixed(1)}" ${first || last ? "disabled" : ""} aria-label="Keyframe time in seconds"/></label><label class="setting-label">Hold (s)<input type="number" data-key-field="hold" data-key="${k.id}" min="0" max="10" step="0.1" value="${(k.hold || 0).toFixed(1)}" aria-label="Seconds held on this pose"/></label>${
-      last
+      last || tl.flow === "glide"
         ? ""
         : `<label class="setting-label">Ramp to next<select data-key-field="ease" data-key="${k.id}" aria-label="Segment ramp">${Object.entries(EASES)
             .map(([id, v]) => `<option value="${id}" ${k.ease === id ? "selected" : ""}>${e(v.label)}</option>`)
             .join("")}</select></label>`
     }</div>${speed === null ? "" : `<p class="muted">Then travels ${speed.toFixed(2)} m/s to the next keyframe.</p>`}<div class="button-row">${btn("timeline-go", "Show this view", "camera")}${btn("timeline-recapture", "Replace with current view", "rotate-ccw")}${tl.keys.length > MIN_KEYS ? btn("timeline-delete", "Delete", "trash-2") : ""}</div></div>`;
     document.querySelector("#timeline-content").innerHTML =
-      `<div class="panel-heading"><h2>Camera timeline</h2>${btn("close-timeline", "Close", "x", "icon-only")}</div><ol class="tl-steps"><li>Frame a shot in the booth behind this panel.</li><li>Press <strong>Add keyframe</strong>. Repeat for each shot.</li><li>Drag a diamond to change when the camera gets there; drag the track to scrub.</li></ol><div class="tl-bar">${tl.keys.length < MAX_KEYS ? btn("timeline-add", "Add keyframe", "plus", "primary") : `<span class="muted">${MAX_KEYS} keyframes max</span>`}${busyPreview ? btn("stop-preview", "Stop", "x") : btn("preview-move", "Preview", "play")}<label class="setting-label tl-length">Length (s)<input type="number" id="timeline-seconds" min="${MIN_SECONDS}" max="${MAX_SECONDS}" step="1" value="${seconds}" aria-label="Clip length in seconds"/></label></div><div class="tl-track" data-tl-track role="group" aria-label="Timeline track">${timelineTrackHTML()}</div><div class="tl-legend"><span><i class="tl-sw seg"></i>move · curve = ramp</span><span><i class="tl-sw hold"></i>hold</span><span><i class="tl-sw fade"></i>fade</span></div><div class="tl-strip">${strip}</div>${card}<section><h3>Fades</h3><div class="field-pair"><label class="setting-label">Fade in<input type="number" id="timeline-fade-in" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.in.toFixed(1)}" aria-label="Fade in seconds"/></label><label class="setting-label">Fade out<input type="number" id="timeline-fade-out" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.out.toFixed(1)}" aria-label="Fade out seconds"/></label></div><p class="muted">Seconds of black at each end. Zero disables. The fade is drawn over the finished frame, so it reaches real black rather than a dark wash.</p></section><section><h3>Lens flare</h3><label class="check-field"><input type="checkbox" id="timeline-flare" ${tl.flare.on ? "checked" : ""}/>Lens flare during the move</label><label class="setting-label">Comes from<select id="timeline-flare-source" aria-label="Lens flare source">${Object.entries(FLARE_SOURCES).map(([k, v]) => `<option value="${k}" ${tl.flare.source === k ? "selected" : ""} ${k === "spot" && noLights ? "disabled" : ""}>${e(v)}</option>`).join("")}</select></label>${tl.flare.source === "spot" && noLights ? `<p class="warn-note">This booth has no spotlights, so a flare from one would never appear. Use the overhead source, or add a spotlight in Lighting.</p>` : ""}${range("Flare strength", "flare-strength", Math.round(tl.flare.strength * 100), 0, 100, 1, "timeline", "%")}<p class="muted">${tl.flare.source === "overhead" ? `An unseen light ${Math.round(OVERHEAD.y / 12)} ft over the centre of the booth, standing in for the sun or a hall's high bay. Nothing is drawn there and nothing is lit by it — only the flare says it is there.` : "The brightest spotlight in the booth."} The flare tracks the camera: its ghosts sit on the line from that light through the centre of frame, and it fades out as the light leaves the shot.</p></section><div class="button-row">${btn("close-timeline", "Done", "check", "primary")}</div>`;
+      `<div class="panel-heading"><h2>Camera timeline</h2>${btn("close-timeline", "Close", "x", "icon-only")}</div><ol class="tl-steps"><li>Frame a shot in the booth behind this panel.</li><li>Press <strong>Add keyframe</strong>. Repeat for each shot.</li><li>Drag a diamond to change when the camera gets there; drag the track to scrub.</li></ol><div class="tl-bar">${tl.keys.length < MAX_KEYS ? btn("timeline-add", "Add keyframe", "plus", "primary") : `<span class="muted">${MAX_KEYS} keyframes max</span>`}${busyPreview ? btn("stop-preview", "Stop", "x") : btn("preview-move", "Preview", "play")}<label class="setting-label tl-length">Length (s)<input type="number" id="timeline-seconds" min="${MIN_SECONDS}" max="${MAX_SECONDS}" step="1" value="${seconds}" aria-label="Clip length in seconds"/></label></div><div class="tl-track" data-tl-track role="group" aria-label="Timeline track">${timelineTrackHTML()}</div><div class="tl-legend"><span><i class="tl-sw seg"></i>move · curve = ramp</span><span><i class="tl-sw hold"></i>hold</span><span><i class="tl-sw fade"></i>fade</span></div><div class="tl-strip">${strip}</div>${card}<section><h3>Motion</h3><label class="setting-label">Camera flow<select id="timeline-flow" aria-label="Camera flow">${Object.entries(FLOWS).map(([id, v]) => `<option value="${id}" ${tl.flow === id ? "selected" : ""}>${e(v.label)}</option>`).join("")}</select></label><p class="muted">${tl.flow === "glide" ? "The camera eases in once, moves at a steady speed through every keyframe without stopping, and eases out at the end — the look of a slider or a gimbal. A hold still stops it." : "Each move has its own ramp, so the camera settles on every keyframe. Choose the glide for one unbroken move."}</p>${tl.keys.length > 2 ? btn("timeline-auto", "Auto timing · even speed", "zap", "wide") : ""}<p class="muted">${tl.keys.length > 2 ? "Respaces the middle keyframes so the camera covers the same distance every second." : "Auto timing spaces middle keyframes; add one to use it."}</p>${tlBeforeAuto ? btn("timeline-auto-undo", "Put the timing back", "undo-2", "wide") : ""}</section><section><h3>Fades</h3><div class="field-pair"><label class="setting-label">Fade in<input type="number" id="timeline-fade-in" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.in.toFixed(1)}" aria-label="Fade in seconds"/></label><label class="setting-label">Fade out<input type="number" id="timeline-fade-out" min="0" max="${(seconds / 2).toFixed(1)}" step="0.1" value="${tl.fade.out.toFixed(1)}" aria-label="Fade out seconds"/></label></div><p class="muted">Seconds of black at each end. Zero disables. The fade is drawn over the finished frame, so it reaches real black rather than a dark wash.</p></section><section><h3>Lens flare</h3><label class="check-field"><input type="checkbox" id="timeline-flare" ${tl.flare.on ? "checked" : ""}/>Lens flare during the move</label><label class="setting-label">Comes from<select id="timeline-flare-source" aria-label="Lens flare source">${Object.entries(FLARE_SOURCES).map(([k, v]) => `<option value="${k}" ${tl.flare.source === k ? "selected" : ""} ${k === "spot" && noLights ? "disabled" : ""}>${e(v)}</option>`).join("")}</select></label>${tl.flare.source === "spot" && noLights ? `<p class="warn-note">This booth has no spotlights, so a flare from one would never appear. Use the overhead source, or add a spotlight in Lighting.</p>` : ""}${range("Flare strength", "flare-strength", Math.round(tl.flare.strength * 100), 0, 100, 1, "timeline", "%")}<p class="muted">${tl.flare.source === "overhead" ? `An unseen light ${Math.round(OVERHEAD.y / 12)} ft over the centre of the booth, standing in for the sun or a hall's high bay. Nothing is drawn there and nothing is lit by it — only the flare says it is there.` : "The brightest spotlight in the booth."} The flare tracks the camera: its ghosts sit on the line from that light through the centre of frame, and it fades out as the light leaves the shot.</p></section><div class="button-row">${btn("close-timeline", "Done", "check", "primary")}</div>`;
     refreshIcons();
   }
   /** Scrub: put the playhead at `sec` and show the camera there. */
   function scrubTo(sec) {
     const tl = timeline();
     tlPlayhead = Math.min(tl.seconds, Math.max(0, sec));
-    scene?.applyPose(sampleTimeline(tl, tlPlayhead / tl.seconds));
+    scene?.showMoment(tl, tlPlayhead / tl.seconds);
   }
   // The track's pointer handling, bound once on the dialog's content (which
   // is never replaced) and capturing on the track itself, whose children are
@@ -2197,6 +2235,46 @@ async function boot() {
       .forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
     document.querySelector("#inspector-content").innerHTML = inspectorHTML();
     refreshIcons();
+    updateFrameGuide();
+  }
+  /**
+   * The frame guide: the chosen export frame outlined over the viewport, with
+   * everything outside it dimmed. Shown while the Video or Export tab is open,
+   * the timeline dialog is up, or a move is previewing — the places a shot is
+   * composed for a file — and only when the frame is not "This window", which
+   * is the viewport already. The export draws exactly what is inside it
+   * (`frameLens`), so composing to the guide is composing the file.
+   */
+  function frameGuideShape() {
+    if (!scene || p.mode === "photo") return null;
+    const timelineOpen = document.querySelector("#timeline-dialog")?.open;
+    const id =
+      tab === "export" ? exportFrame : tab === "video" || timelineOpen || busyPreview ? videoFrameShape : null;
+    if (!id || id === "view" || !FRAMES[id]) return null;
+    const aspect = id === "custom" ? customFrame.width / customFrame.height : FRAMES[id].aspect;
+    return { id, aspect, label: id === "custom" ? `${customFrame.width} × ${customFrame.height}` : FRAMES[id].label.split(" · ")[1] || FRAMES[id].label };
+  }
+  function updateFrameGuide() {
+    const guide = document.querySelector(".frame-guide");
+    const host = document.querySelector("#scene");
+    if (!guide || !host) return;
+    const shape = frameGuideShape();
+    guide.hidden = !shape;
+    if (!shape) return;
+    const r = guideRect(host.clientWidth, host.clientHeight, shape.aspect);
+    Object.assign(guide.style, {
+      left: `${host.offsetLeft}px`,
+      top: `${host.offsetTop}px`,
+      width: `${host.clientWidth}px`,
+      height: `${host.clientHeight}px`,
+    });
+    Object.assign(guide.firstElementChild.style, {
+      left: `${r.x}px`,
+      top: `${r.y}px`,
+      width: `${r.width}px`,
+      height: `${r.height}px`,
+    });
+    guide.querySelector("span").textContent = shape.label;
   }
   /** The open tab's inspector, as markup. Tool search reads every tab's. */
   function inspectorHTML() {
@@ -3002,9 +3080,11 @@ async function boot() {
       // shot, press Add, orbit, press Add again.
       const panel = document.querySelector("#timeline-dialog");
       if (!panel.open) panel.show();
+      updateFrameGuide();
     },
     "close-timeline": () => {
       document.querySelector("#timeline-dialog").close();
+      scene?.clearMoment();
       renderInspector();
     },
     "timeline-add": () => {
@@ -3030,6 +3110,23 @@ async function boot() {
       tlSelected = tl.keys[index].id;
       tlPlayhead = keySchedule(tl)[index].arrive;
       scene?.applyPose(tl.keys[index]);
+      renderTimelineDialog();
+    },
+    "timeline-auto": () => {
+      tlBeforeAuto = timeline().keys.map((k) => ({ id: k.id, t: k.t }));
+      videoTimeline = autoTime(timeline());
+      renderTimelineDialog();
+      toast("Keyframes respaced for an even speed.");
+    },
+    // Auto timing's own undo: the key times from just before it, matched by
+    // id so a key added or deleted since is left alone. The timeline is view
+    // state outside the project's undo history, so it needs this one.
+    "timeline-auto-undo": () => {
+      if (!tlBeforeAuto) return;
+      const was = new Map(tlBeforeAuto.map((k) => [k.id, k.t]));
+      const tl = timeline();
+      videoTimeline = normalizeTimeline({ ...tl, keys: tl.keys.map((k) => (was.has(k.id) ? { ...k, t: was.get(k.id) } : k)) });
+      tlBeforeAuto = null;
       renderTimelineDialog();
     },
     "timeline-go": (button) => {
@@ -3794,6 +3891,11 @@ async function boot() {
       const tl = timeline();
       const fade = { ...tl.fade, [el.id === "timeline-fade-in" ? "in" : "out"]: +el.value };
       videoTimeline = normalizeTimeline({ ...tl, fade });
+      renderTimelineDialog();
+      return;
+    }
+    if (el.id === "timeline-flow") {
+      videoTimeline = normalizeTimeline({ ...timeline(), flow: el.value });
       renderTimelineDialog();
       return;
     }

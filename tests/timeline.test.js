@@ -195,3 +195,65 @@ test("the schedule places each key in clip seconds, holds included, and keyTAt i
   assert.ok(Math.abs(keyTAt(tl, 1, 5.5) - 0.5) < 1e-9);
   assert.equal(keyTAt(tl, 1, -4), 0, "clamped");
 });
+
+import { FLOWS, DEFAULT_FLOW, glideEase, autoTime, keySchedule } from "../src/timeline.js";
+
+const C = { position: [0.5, 1.8, -4], target: [0, 1.3, 0] };
+
+test("flow defaults to per-keyframe easing, and an unknown flow falls back", () => {
+  assert.equal(DEFAULT_FLOW, "keys");
+  assert.equal(normalizeTimeline({ keys: [A, B] }).flow, "keys");
+  assert.equal(normalizeTimeline({ keys: [A, B], flow: "warp" }).flow, "keys");
+  assert.equal(normalizeTimeline({ keys: [A, B], flow: "glide" }).flow, "glide");
+  assert.ok(FLOWS.glide.label);
+});
+
+test("the glide ease is continuous, monotonic and lands on both ends", () => {
+  assert.equal(glideEase(0), 0);
+  assert.ok(Math.abs(glideEase(1) - 1) < 1e-12);
+  let last = -1;
+  for (let i = 0; i <= 1000; i++) {
+    const v = glideEase(i / 1000);
+    assert.ok(v >= last - 1e-12);
+    last = v;
+  }
+  assert.ok(Math.abs(glideEase(0.2 - 1e-9) - glideEase(0.2 + 1e-9)) < 1e-6);
+  assert.ok(Math.abs(glideEase(0.8 - 1e-9) - glideEase(0.8 + 1e-9)) < 1e-6);
+});
+
+test("a glide passes through a middle keyframe without stopping; per-key easing stops there", () => {
+  const keys = [{ ...A, t: 0 }, { ...B, t: 0.5 }, { ...C, t: 1 }];
+  const step = 0.002;
+  const speedAt = (tl, t) => {
+    const a = sampleTimeline(tl, t - step).position,
+      b = sampleTimeline(tl, t + step).position;
+    return Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+  };
+  const glide = normalizeTimeline({ seconds: 10, keys, flow: "glide" });
+  const stepped = normalizeTimeline({ seconds: 10, keys });
+  assert.ok(speedAt(glide, 0.5) > 0.01, "the glide is moving at the middle key");
+  assert.ok(speedAt(stepped, 0.5) < speedAt(glide, 0.5) / 10, "per-key easing all but stops");
+  // Still exact at the ends and at the key itself.
+  assert.deepEqual(sampleTimeline(glide, 0).position.map((n) => +n.toFixed(6)), A.position);
+  assert.deepEqual(sampleTimeline(glide, 1).position.map((n) => +n.toFixed(6)), C.position);
+});
+
+test("a glide still stops for a hold, and holds its pose through it", () => {
+  const tl = normalizeTimeline({ seconds: 10, flow: "glide", keys: [{ ...A, t: 0 }, { ...B, t: 0.5, hold: 2 }, { ...C, t: 1 }] });
+  const s = keySchedule(tl)[1];
+  const during = sampleTimeline(tl, (s.arrive + s.leave) / 2 / 10).position;
+  B.position.forEach((n, i) => assert.ok(Math.abs(during[i] - n) < 1e-6));
+});
+
+test("auto timing gives each segment time in proportion to its travel", () => {
+  // B is far from A and close to C, so B should arrive late.
+  const near = { position: [-3.2, 2.1, -2.6], target: [0, 1.4, 0] };
+  const tl = autoTime({ seconds: 12, keys: [{ ...A, t: 0 }, { ...B, t: 0.5 }, { ...near, t: 1 }] });
+  assert.equal(tl.keys[0].t, 0);
+  assert.equal(tl.keys.at(-1).t, 1);
+  assert.ok(tl.keys[1].t > 0.8, `B arrives at ${tl.keys[1].t}`);
+  assert.equal(tl.seconds, 12, "the length is kept");
+  // Two identical poses: nothing to measure, nothing changes.
+  const still = autoTime({ keys: [{ ...A, t: 0 }, { ...A, t: 0.3 }, { ...A, t: 1 }] });
+  assert.ok(Math.abs(still.keys[1].t - 0.3) < 1e-9);
+});

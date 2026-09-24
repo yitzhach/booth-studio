@@ -261,6 +261,38 @@ try {
   const y = await page.evaluate((id) => window.__booth.scene.personFrames[id].position.y, lastId);
   assert.ok(Math.abs(y - 24 * 0.0254) < 1e-6, `and the figure stands 24″ up (${(y / 0.0254).toFixed(2)}″)`);
 
+  // Its slider has 0 at the middle, lowers as far as it raises, and moves in
+  // half inches.
+  const range = await lift.evaluate((el) => [Number(el.min), Number(el.max), Number(el.step)]);
+  assert.deepEqual(range, [-120, 120, 0.5], 'lift slider runs -120..120 in ½″ steps');
+  await lift.fill('-6.5');
+  await lift.dispatchEvent('change');
+  await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(() => window.__booth.project.booth.people.at(-1).lift), -6.5, 'a half-inch lowering is kept');
+
+  // Double-clicking a figure in the viewport selects it and opens its card.
+  const spots = await page.evaluate(() => {
+    const s = window.__booth.scene;
+    const r = s.renderer.domElement.getBoundingClientRect();
+    return Object.entries(s.personFrames).map(([id, g]) => {
+      const box = new g.position.constructor();
+      g.updateMatrixWorld(true);
+      g.getWorldPosition(box);
+      box.y += 0.8;
+      box.project(s.camera);
+      return { id, x: r.left + ((box.x + 1) / 2) * r.width, y: r.top + ((1 - box.y) / 2) * r.height };
+    });
+  });
+  let picked = null;
+  for (const spot of spots) {
+    await page.mouse.dblclick(spot.x, spot.y);
+    await page.waitForTimeout(150);
+    picked = await page.evaluate(() => document.querySelector('.person-row.selected')?.dataset.person || null);
+    if (picked) break;
+  }
+  assert.ok(picked, 'double-clicking a figure selects it');
+  assert.equal(await page.evaluate(() => document.querySelector('[data-tab="layout"]').classList.contains('active')), true, 'in the Layout tab');
+
   // ---- Without the pictures ----------------------------------------------
   // The app must run with `public/assets` empty: a missing picture leaves the
   // mannequin, and says nothing about it.

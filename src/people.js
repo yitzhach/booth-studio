@@ -64,8 +64,15 @@ export const MIN_HEIGHT = 48;
 export const MAX_HEIGHT = 84;
 // How far a figure can be raised off the floor, in inches: onto a pedestal, a
 // drawn box used as a stage, or a riser. Optional on the record; absent is on
-// the floor, which is every figure saved before it existed.
+// the floor, which is every figure saved before it existed. The range runs as
+// far below the floor as above it, so the slider's travel has 0 at its middle
+// — asked for so that raise and lower start from the same place — and a
+// figure can be sunk into a stepped-down floor or a pit as easily as stood on
+// a riser. Half-inch steps: a figure standing on a 3/4" platform is a real
+// thing, and whole inches could not say it.
 export const MAX_LIFT = 120;
+export const MIN_LIFT = -120;
+export const LIFT_STEP = 0.5;
 export const personHeight = (kind) => (PEOPLE[kind] || PEOPLE[DEFAULT_PERSON]).height;
 export const resolvePerson = (kind) => (PEOPLE[kind] ? kind : DEFAULT_PERSON);
 

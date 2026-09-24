@@ -806,7 +806,7 @@ export function validateProject(p) {
       if (!finite(person.x, -600, 600) || !finite(person.z, -600, 600)) fail();
       if (person.rotation !== undefined && !finite(person.rotation, -360, 360)) fail();
       if (person.hidden !== undefined && typeof person.hidden !== "boolean") fail();
-      if (person.lift !== undefined && !finite(person.lift, 0, 120)) fail();
+      if (person.lift !== undefined && !finite(person.lift, -120, 120)) fail();
     }
   }
   // Free-standing panels. Absent in every schema-1 backup written before they

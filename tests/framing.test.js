@@ -65,3 +65,34 @@ test("a viewport that has not been measured yet does not produce a zero frame", 
     assert.ok(width > 0 && height > 0, `viewport ${viewport}`);
   }
 });
+
+import { DEFAULT_CLIP_FRAME, guideRect, frameLens } from "../src/framing.js";
+
+test("a clip starts widescreen, not the window's shape", () => {
+  assert.equal(DEFAULT_CLIP_FRAME, "desktop");
+  assert.equal(FRAMES[DEFAULT_CLIP_FRAME].aspect, 16 / 9);
+});
+
+test("the frame guide is the largest centred rectangle of the frame's shape", () => {
+  // A 16:9 frame in a squarish viewport: full width, trimmed top and bottom.
+  const wide = guideRect(1000, 800, 16 / 9);
+  assert.equal(wide.width, 1000);
+  assert.ok(Math.abs(wide.height - 562.5) < 1e-9);
+  assert.ok(Math.abs(wide.y - 118.75) < 1e-9);
+  // A vertical frame in a wide viewport: full height, trimmed at the sides.
+  const tall = guideRect(1600, 900, 9 / 16);
+  assert.equal(tall.height, 900);
+  assert.ok(Math.abs(tall.width - 506.25) < 1e-9);
+  assert.ok(Math.abs(tall.x + tall.width / 2 - 800) < 1e-9, "centred");
+});
+
+test("the export lens shows exactly what the guide outlines", () => {
+  // Narrower than the window: the camera keeps its own lens.
+  assert.equal(frameLens(50, 16 / 9, 1), 50);
+  // Wider than the window: the vertical view closes so the guide's height is
+  // the file's height. tan(half) scales by the guide's share of the viewport.
+  const fov = frameLens(50, 1.25, 16 / 9);
+  const share = guideRect(1250, 1000, 16 / 9).height / 1000;
+  const ratio = Math.tan((fov * Math.PI) / 360) / Math.tan((50 * Math.PI) / 360);
+  assert.ok(Math.abs(ratio - share) < 1e-9);
+});

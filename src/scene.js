@@ -24,10 +24,10 @@ import { sameWall } from "./arrange.js";
  */
 export const ART_TEXTURE_MAX = 2048;
 import { frameTimes, resolveMove, samplePath } from "./camera-path.js";
-import { fadeAt, isTimeline, timelineSeconds } from "./timeline.js";
+import { fadeAt, isTimeline, sampleTimeline, timelineSeconds } from "./timeline.js";
 import { flareGhosts, flareOrigin } from "./flare.js";
 import { DEFAULT_SIZE, SIZES, evenSize, recordMp4, videoSupported } from "./video.js";
-import { DEFAULT_FRAME, frameSize } from "./framing.js";
+import { DEFAULT_FRAME, frameSize, frameLens } from "./framing.js";
 import { AUTO_QUALITY, FrameBudget, startScale, stepDown } from "./adaptive.js";
 import { distanceInches, formatLength, planDimensions } from "./measure.js";
 import { buildFurniture } from "./furniture.js";
@@ -358,6 +358,9 @@ export class BoothScene {
     this.pedestalObjects = [];
     this.pedestalFrames = {};
     this.personFrames = {};
+    // Double-clicking a figure. Set by main.js after construction rather than
+    // added to the constructor's long list of positional callbacks.
+    this.onSelectPerson = () => {};
     // Tags hidden right now (see src/views.js). A view setting: main.js owns
     // the set and hands it over; `applyTags` does the hiding.
     this.hiddenTags = new Set();
@@ -684,6 +687,8 @@ export class BoothScene {
     for (const type of ["pointerdown", "pointerup", "click", "dblclick", "input", "change", "keydown", "keyup", "wheel"])
       document.addEventListener(type, touch, { capture: true, passive: true });
     this.controls.addEventListener("change", touch);
+    // A scrubbed fade is for looking at, not for orbiting under.
+    this.controls.addEventListener("start", () => this.clearMoment());
     for (const name of ["update", "updateArtwork", "updateShadows", "setSelection", "applySelection", "setView", "zoom", "resize",
       "movePerson", "movePedestal", "movePanel", "focusWall", "applyPose", "setDraft", "letGoOfArt", "touchShadows"]) {
       const method = this[name];
@@ -1883,6 +1888,29 @@ export class BoothScene {
     return hit?.object.userData.pedestal ? hit : null;
   }
   /**
+   * The figure under the pointer, as its person id, or null. Figures are
+   * groups (a cut-out picture, or a mannequin of several meshes, plus a drawn
+   * shadow), so the pick is recursive and walks back up to the group whose
+   * name carries the id. Artwork, walls and pedestals in front of a figure
+   * win, the same rule `pickPedestal` keeps.
+   */
+  pickPerson() {
+    this.group.updateMatrixWorld(true);
+    const figures = Object.values(this.personFrames).filter((f) => f.parent && f.visible);
+    if (!figures.length) return null;
+    const hits = this.ray.intersectObjects(
+      [...this.artObjects, ...this.wallObjects, ...this.pedestalObjects, ...figures],
+      true,
+    );
+    for (const hit of hits) {
+      if (!hit.object.visible) continue;
+      let o = hit.object;
+      while (o && !o.name?.startsWith("person:")) o = o.parent;
+      return o ? o.name.slice(7) : null;
+    }
+    return null;
+  }
+  /**
    * A dragged pedestal's new position, measured on the floor plane the same
    * way a wall's is, so both read identically from any orbit.
    */
@@ -2461,6 +2489,16 @@ export class BoothScene {
         this.onSelectPedestal(id);
         return;
       }
+      // A figure is not dragged in the viewport — its sliders place it — but
+      // double-clicking one opens its controls, which is the part of picking
+      // it up that was asked for. Tried before artwork only when no artwork
+      // is in front of it; `pickPerson` keeps that order itself.
+      const person = this.pickPerson();
+      if (person) {
+        e.preventDefault();
+        this.onSelectPerson(person);
+        return;
+      }
       const hit = this.pickArt();
       if (!hit) return;
       e.preventDefault();
@@ -2709,9 +2747,38 @@ export class BoothScene {
   pose() {
     return { position: this.camera.position.toArray(), target: this.controls.target.toArray() };
   }
+  /**
+   * One moment of a timeline in the viewport — its pose, and its fade and
+   * flare — for the scrub. Asked for so that scrubbing through the start or
+   * the end of a clip shows the fade rather than a fully lit frame the file
+   * will never contain. The fade stays until the camera is next moved by hand
+   * (`clearMoment`, from the controls' start event) or the dialog closes, so
+   * a scrub left at 0.4 s can be looked at.
+   */
+  showMoment(timeline, t) {
+    const pose = sampleTimeline(timeline, t);
+    this.applyPose(pose);
+    this.overlay = {
+      fade: fadeAt(timeline, t),
+      flare: timeline.flare?.on ? this.flareState(timeline.flare.strength, timeline.flare.source) : null,
+    };
+    this.momentShown = true;
+    this.renderFrame();
+  }
+  clearMoment() {
+    if (!this.momentShown) return;
+    this.momentShown = false;
+    this.overlay = { fade: 1, flare: null };
+    this.invalidate?.();
+    this.renderFrame();
+  }
   applyPose(pose) {
     if (!pose?.position || !pose?.target) return;
     this.stopPreview?.();
+    if (this.momentShown) {
+      this.momentShown = false;
+      this.overlay = { fade: 1, flare: null };
+    }
     this.controls.target.set(...pose.target);
     this.camera.position.set(...pose.position);
     this.camera.lookAt(this.controls.target);
@@ -2868,6 +2935,7 @@ export class BoothScene {
       quaternion: this.camera.quaternion.clone(),
       target: this.controls.target.clone(),
       aspect: this.camera.aspect,
+      fov: this.camera.fov,
       enabled: this.controls.enabled,
       damping: this.controls.enableDamping,
       maxPolar: this.controls.maxPolarAngle,
@@ -2896,9 +2964,14 @@ export class BoothScene {
     const wasBarShadows = this.barShadows;
     this.setBarShadows(true);
     try {
+      // The clip is what the frame guide outlines in the viewport: a frame
+      // wider than the window closes the lens so the top and bottom trim
+      // match the guide, rather than the file showing sides nobody saw.
+      const viewAspect = canvas.width / canvas.height;
       this.renderer.setPixelRatio(1);
       this.renderer.setSize(width, height, false);
       this.camera.aspect = width / height;
+      this.camera.fov = frameLens(restore.fov, viewAspect, width / height);
       const recorded = await recordMp4({
         count: clip.count,
         fps,
@@ -2950,6 +3023,7 @@ export class BoothScene {
       this.camera.quaternion.copy(restore.quaternion);
       this.controls.target.copy(restore.target);
       this.camera.aspect = restore.aspect;
+      this.camera.fov = restore.fov;
       this.controls.maxPolarAngle = restore.maxPolar;
       this.controls.enableDamping = restore.damping;
       this.controls.enabled = restore.enabled;
@@ -2995,7 +3069,8 @@ export class BoothScene {
     const wasBarShadows = this.barShadows;
     this.setBarShadows(true);
     const pixel = this.renderer.getPixelRatio();
-    const wasAspect = this.camera.aspect;
+    const wasAspect = this.camera.aspect,
+      wasFov = this.camera.fov;
     const hidden = [];
     this.group.traverse((o) => {
       if (o.isLineSegments || o.userData.editorOnly) {
@@ -3008,6 +3083,8 @@ export class BoothScene {
       this.renderer.setSize(width, height, false);
       if (this.camera.isPerspectiveCamera) {
         this.camera.aspect = width / height;
+        // Same rule as a clip: the still is what the frame guide outlines.
+        this.camera.fov = frameLens(wasFov, w / h, width / height);
         this.camera.updateProjectionMatrix();
       }
       // Once, unlike a recorded frame. `toBlob` reads the canvas back, and a
@@ -3026,7 +3103,10 @@ export class BoothScene {
     } finally {
       hidden.forEach((o) => (o.visible = true));
       this.renderer.setPixelRatio(pixel);
-      if (this.camera.isPerspectiveCamera) this.camera.aspect = wasAspect;
+      if (this.camera.isPerspectiveCamera) {
+        this.camera.aspect = wasAspect;
+        this.camera.fov = wasFov;
+      }
       this.resize();
       this.setBarShadows(wasBarShadows);
       this.setDraft(wasDraft);

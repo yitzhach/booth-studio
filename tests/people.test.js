@@ -114,7 +114,10 @@ test("a figure can be raised off the floor, within bounds, and absent means on t
   const p = blankProject();
   p.booth.people = [{ ...newPerson("woman", "a"), lift: 30 }];
   assert.doesNotThrow(() => validateProject(p));
-  p.booth.people[0].lift = -5;
+  // Lowered as well as raised: the slider has 0 at its middle.
+  p.booth.people[0].lift = -5.5;
+  assert.doesNotThrow(() => validateProject(p));
+  p.booth.people[0].lift = -500;
   assert.throws(() => validateProject(p));
   p.booth.people[0].lift = 500;
   assert.throws(() => validateProject(p));

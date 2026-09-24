@@ -1556,6 +1556,11 @@ dialog li {
   padding: 12px;
   margin: 10px 0;
 }
+/* The figure double-clicked in the viewport. Same blue as a selected wall. */
+.person-row.selected {
+  border-color: #78b4ff;
+  box-shadow: 0 0 0 1px #78b4ff;
+}
 
 /* A queued clip in the Video tab's batch list. Same card as a keyframe row and
    a figure's row: a small record with its own fields and a delete. */
@@ -2069,3 +2074,28 @@ dialog li {
 .timeline-dialog[open] {z-index:60;}
 body:has(.timeline-dialog[open]) .find-tool {display:none;}
 @media (max-width: 900px) {.timeline-dialog {max-height:62dvh;}}
+
+/* The export frame over the viewport. Everything outside the box is dimmed by
+   the box's own shadow; the wrapper clips it to the viewport. Never takes a
+   pointer: orbiting, picking and keyframing go straight through it. */
+.frame-guide {
+  position: absolute;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 2;
+}
+.frame-guide-box {
+  position: absolute;
+  box-shadow: 0 0 0 9999px rgba(10, 12, 16, 0.55);
+  outline: 1px solid rgba(255, 255, 255, 0.85);
+}
+.frame-guide-box span {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #fff;
+  background: rgba(10, 12, 16, 0.6);
+}

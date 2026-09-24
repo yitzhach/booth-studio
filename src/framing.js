@@ -31,6 +31,12 @@ export const FRAMES = {
   custom: { label: "Custom size", aspect: null, long: 1920 },
 };
 export const DEFAULT_FRAME = "view";
+// A clip starts in widescreen. "This window" was its default too, and was
+// reported as "video export exports the same dimensions the preview window is
+// at, not the preset size": a clip is nearly always delivered somewhere with
+// a shape of its own. The frame guide shows the 16:9 over the viewport, so
+// the window's shape no longer decides anything unless it is chosen.
+export const DEFAULT_CLIP_FRAME = "desktop";
 export const CUSTOM_FRAME = { width: 1920, height: 1080 };
 /** The widest and narrowest a custom frame may be, per side, in pixels. */
 export const FRAME_MIN = 64;
@@ -80,3 +86,38 @@ export function frameSize(id, { long, viewport = 16 / 9, custom } = {}) {
 export const STILL_SIZES = [1080, 1440, 2048, 3072, 4096];
 /** What the video size select offers. Keeps the old 720/1080/1440 numbers. */
 export const CLIP_SIZES = [720, 1080, 1440];
+
+/**
+ * Where a frame of `aspect` sits inside a viewport of `width` x `height`
+ * pixels: the largest rectangle of that shape that fits, centred. This is
+ * the frame guide drawn over the viewport, and — through `frameLens` — the
+ * exact picture an export of that frame delivers, so what is inside the guide
+ * is what is in the file. Reported as "if it's set at 16:9, I need to see
+ * this aspect ratio in the preview so changes can be made before export".
+ */
+export function guideRect(width, height, aspect) {
+  if (!(width > 0 && height > 0 && aspect > 0)) return { x: 0, y: 0, width: width || 0, height: height || 0 };
+  const view = width / height;
+  const w = aspect <= view ? height * aspect : width;
+  const h = aspect <= view ? height : width / aspect;
+  return { x: (width - w) / 2, y: (height - h) / 2, width: w, height: h };
+}
+
+/**
+ * The vertical field of view, in degrees, that makes an export of `aspect`
+ * show exactly what `guideRect` outlines in a viewport of `viewAspect` drawn
+ * at `fov`.
+ *
+ * A frame narrower than the window keeps the camera's own height — the guide
+ * is full height, the sides are trimmed — so the lens is unchanged. A frame
+ * wider than the window is full width in the guide and trimmed top and
+ * bottom, so the export's vertical view closes by the ratio of the two
+ * shapes. Before the guide existed a wider frame kept the height and showed
+ * more at the sides than the viewport ever did, which is the "preview is not
+ * the export" that was reported.
+ */
+export function frameLens(fov, viewAspect, aspect) {
+  if (!(fov > 0 && viewAspect > 0 && aspect > 0) || aspect <= viewAspect) return fov;
+  const half = Math.tan((fov * Math.PI) / 360) * (viewAspect / aspect);
+  return (Math.atan(half) * 360) / Math.PI;
+}

@@ -87,6 +87,7 @@ export const SHORTCUTS = {
   // Export.
   png: { label: "Export PNG", where: "Export", group: "Export" },
   mp4: { label: "Export MP4", where: "Export", group: "Export" },
+  frm: { label: "Frame", where: "Video", group: "Export" },
   pack: { label: "Download show pack", where: "Export", group: "Export" },
   pwr: { label: "Download power and rentals sheet", where: "Export", group: "Export" },
   elev: { label: "Download elevations", where: "Export", group: "Export" },

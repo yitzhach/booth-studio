@@ -54,6 +54,36 @@ export const EASES = {
   linear: { label: "Linear · constant", fn: (t) => t },
 };
 export const DEFAULT_EASE = "smooth";
+
+// How the camera moves through its keyframes as a whole. "keys" is what a
+// timeline always did: each segment ramps on its own, so with the default
+// ease the camera comes to rest on every keyframe. "glide" is one continuous
+// move — it eases in at the start, travels at a steady speed through every
+// keyframe without stopping, and eases out at the end — which is how a
+// camera on a slider or a gimbal reads, and what makes a multi-key clip look
+// shot rather than stepped. A hold still stops the camera; the glide then
+// eases out into the hold and back in after it, as a camera operator would.
+export const FLOWS = {
+  keys: { label: "Ease at every keyframe" },
+  glide: { label: "One continuous glide" },
+};
+export const DEFAULT_FLOW = "keys";
+// The fraction of a glide spent speeding up, and again slowing down.
+export const GLIDE_RAMP = 0.2;
+/**
+ * A glide's progress: constant acceleration for the first GLIDE_RAMP of the
+ * run, constant speed through the middle, constant deceleration at the end.
+ * Continuous in position and speed, and its peak speed is only 1.25x the
+ * average — smootherstep's is 1.875x, which is why a long move eased with it
+ * rushes through its middle.
+ */
+export function glideEase(u, ramp = GLIDE_RAMP) {
+  const x = Math.min(1, Math.max(0, u));
+  const v = 1 / (1 - ramp);
+  if (x < ramp) return (v * x * x) / (2 * ramp);
+  if (x > 1 - ramp) return 1 - (v * (1 - x) * (1 - x)) / (2 * ramp);
+  return v * (x - ramp / 2);
+}
 export const easeFn = (id) => (EASES[id] || EASES[DEFAULT_EASE]).fn;
 
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, Number.isFinite(+n) ? +n : lo));
@@ -135,6 +165,7 @@ export function normalizeTimeline(raw, fallbackPose) {
     version: 1,
     seconds,
     keys,
+    flow: FLOWS[raw?.flow] ? raw.flow : DEFAULT_FLOW,
     fade: { in: fadeIn, out: fadeOut },
     flare: {
       on: !!raw?.flare?.on,
@@ -175,6 +206,7 @@ export function sampleTimeline(timeline, t) {
   // identity and a timeline is exactly its keys' own times.
   const moving = Math.max(0.001, clipSeconds - heldSeconds);
   const now = clamp(t, 0, 1) * clipSeconds;
+  if (tl.flow === "glide") return sampleGlide(keys, now, moving);
 
   let elapsed = 0;
   let index = keys.length - 2;
@@ -199,6 +231,78 @@ export function sampleTimeline(timeline, t) {
     elapsed += span;
   }
   return poseBetween(keys[index], keys[index + 1], easeFn(keys[index].ease)(local));
+}
+
+/**
+ * A glide's pose at `now` clip seconds. The clip is cut into runs at every
+ * held keyframe (and at the two ends); each run is eased as one move by
+ * `glideEase`, and inside it the segments are walked linearly in time, so the
+ * camera passes through a middle keyframe at speed instead of stopping.
+ */
+function sampleGlide(keys, now, moving) {
+  const n = keys.length;
+  const arrive = [],
+    leave = [];
+  let before = 0;
+  for (const k of keys) {
+    arrive.push(k.t * moving + before);
+    before += k.hold || 0;
+    leave.push(arrive.at(-1) + (k.hold || 0));
+  }
+  for (let i = 0; i < n; i++) if (now >= arrive[i] && now <= leave[i]) return poseBetween(keys[i], keys[Math.min(i + 1, n - 1)], 0);
+  let seg = n - 2;
+  for (let i = 0; i < n - 1; i++)
+    if (now <= arrive[i + 1]) {
+      seg = i;
+      break;
+    }
+  let a = seg,
+    b = seg;
+  while (a > 0 && !(keys[a].hold > 0)) a--;
+  while (b < n - 2 && !(keys[b + 1].hold > 0)) b++;
+  const start = leave[a],
+    end = arrive[b + 1];
+  const u = end > start ? (now - start) / (end - start) : 1;
+  const at = start + glideEase(u) * (end - start);
+  let j = b;
+  for (let i = a; i <= b; i++)
+    if (at <= arrive[i + 1]) {
+      j = i;
+      break;
+    }
+  const span = arrive[j + 1] - leave[j];
+  return poseBetween(keys[j], keys[j + 1], span > 0 ? clamp((at - leave[j]) / span, 0, 1) : 1);
+}
+
+/**
+ * Auto timing: spaces the middle keyframes so the camera travels at an even
+ * speed through the whole clip — each segment gets time in proportion to how
+ * far the camera goes in it, the orbit's own curve included, plus how far
+ * its aim swings, so a pan on the spot is not given no time at all. The two
+ * ends stay pinned, holds are kept, the length is kept. With a glide this is
+ * the smooth, steady move a motion-control rig makes.
+ */
+export function autoTime(timeline) {
+  const tl = normalizeTimeline(timeline);
+  const lengths = [];
+  for (let i = 0; i < tl.keys.length - 1; i++) {
+    let length = 0;
+    let prev = poseBetween(tl.keys[i], tl.keys[i + 1], 0);
+    for (let s = 1; s <= 24; s++) {
+      const next = poseBetween(tl.keys[i], tl.keys[i + 1], s / 24);
+      length += Math.hypot(...sub(next.position, prev.position)) + 0.5 * Math.hypot(...sub(next.target, prev.target));
+      prev = next;
+    }
+    lengths.push(length);
+  }
+  const total = lengths.reduce((sum, l) => sum + l, 0);
+  if (!(total > 1e-6)) return tl;
+  let run = 0;
+  const keys = tl.keys.map((k, i) => {
+    const t = i === 0 ? 0 : (run += lengths[i - 1]) / total;
+    return { ...k, t };
+  });
+  return normalizeTimeline({ ...tl, keys });
 }
 
 /**
