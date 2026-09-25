@@ -16,7 +16,9 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-25, fourth round — icons on the keyframe arrows,
+- **Last deploy: 2026-09-25, fifth round — the show floor, phase 1 of the
+  trade-show / art-fair layout mode** (the bullet below). Before it, the
+  fourth round — icons on the keyframe arrows,
   Export MP4 at the top of the timeline, and the right framing on screen
   while a file renders; after the third round the same day — a keyframed
   frame, sliding end keys, previous / next keyframe and a batch of clips and
@@ -50,6 +52,97 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-25, fifth round: the show floor, phase 1. Merged to `main` and
+  deployed.** The owner asked for a trade-show / art-fair layout mode "beyond
+  what we have": type how many booths and a standard size, then customise
+  sizes, drag booths, standard spacing that can be broken, walkways, tents or
+  none, simple or complex halls, Lucid-floor-plan-style drag-and-drop; then
+  walk the show in perspective, edit single booths and record a walkthrough
+  as MP4; fast, small, desktop and phone; and room for AI rendering later.
+  **The owner's answers (2026-09-25), which set the plan:**
+  - *Booths are light, with "open one":* every booth on the floor carries its
+    size, how it is built (pipe and drape, hard wall, canopy tent, open
+    floor), a number and its sale; any one of them can later be opened as a
+    full Booth Studio design linked to it. Not every booth a full design —
+    that would make files huge and the walk slow.
+  - *The 2D editor fills the viewport,* not the Hall tab's small SVG map.
+  - *Venues:* indoor hall, outdoor fair, and a pavilion tent over a group.
+  - *Pro, and it absorbs the Hall tab* — one tool, not two.
+  **The phases, one per session:** (1) the model and the 2D editor — built
+  here; (2) the show in 3D, walking it and recording the walk to MP4;
+  (3) opening one booth as a full design, and saved floor templates; (4) the
+  AI-render hook. See Next.
+  **What phase 1 built:**
+  1. **A third mode, Show floor**, beside 3D booth and Photo (toolbar, and
+     **Open the show floor** at the top of the Hall tab, now labelled **Show
+     floor**). Pro, through the existing `hall` feature. Entering it with no
+     plan starts the usual 16-booth plan; entering it with a grid plan turns
+     the grid into pieces in place (one undo step). While it is open the
+     booth's own tools, the other inspector tabs, the Export button and the
+     frame guide are hidden, and **the booth's 3D scene is not rebuilt on
+     each edit** — a floor edit is not a booth edit, and rebuilding it was
+     going to be the whole cost of every drag. `showFloor` is view state:
+     a reload opens the booth, as before.
+  2. **The drawing board** (`src/show-editor.js`) is an SVG in real inches,
+     panned and zoomed through its `viewBox`. Chosen over drawing the plan
+     in the WebGL scene because the browser hit-tests a thousand SVG groups
+     for free, the booth numbers stay crisp at any zoom, and it is ~450
+     lines. During a gesture only the moving groups' `transform`s change;
+     the plan is written once, on release, through `mutate()` — one undo
+     step per drag. Gestures: drag a piece to move the selection (snapping
+     to the other pieces' edges and centres within 8 px on screen, then to
+     the grid, with a pink line showing what it snapped to; Alt places
+     freely); eight handles on a lone piece resize it in its own turned
+     frame, the opposite side staying put; a mouse drag on empty floor draws
+     a selection box (Shift adds); a finger drag on empty floor pans; two
+     fingers pinch; the wheel zooms about the pointer (a trackpad's
+     sideways scroll pans); Space, the middle or the right button pans.
+  3. **The library** replaces the artwork list in the left sidebar (and sits
+     in the panel under 950 px, where the sidebar is hidden): 10 × 10,
+     10 × 20, 8 × 10, 20 × 20 island, 10 × 10 canopy tent; walkway,
+     pavilion tent, wall, entrance, column; stage, table, info desk, food and
+     drink, restrooms, text. Drag one onto the floor and it lands where it is
+     let go, top-left on the grid; tap one and it lands mid-view. `SHAPES`
+     and `KINDS` in `src/show.js` are the one list to add to.
+  4. **The panel:** a lone piece's width, depth, position, turn and — for a
+     booth — its number (unique; its sale follows it) and how it is built,
+     or a piece's text, then the booth's sale (status, exhibitor, price,
+     note, "This is my booth"), exactly the hall planner's. Several pieces:
+     turn 90°, duplicate, delete, line up tops or lefts, **Space them
+     evenly** at a typed gap (along the way they run; the first stays put —
+     "standard spacing that can be broken" is this plus a single drag), and
+     renumber. **Add booths:** how many, per row, width, depth, the gap in a
+     row, the aisle, back-to-back pairs and how they are built — placed an
+     aisle below everything already on the floor (so a block never lands on
+     booths already sold), numbered on from the highest, selected. **Floor:**
+     venue (indoor hall / outdoor fair — grass-green on the map), width and
+     depth in feet, the snap grid (off, 1″, 6″, 1′, 2′, 5′; 1′ by default),
+     and **Renumber every booth** row by row from the back, left to right.
+     The totals, the default price, the printable hall map and the CSV are
+     the hall planner's and now read the floor's pieces.
+  5. **Keys:** Delete, Ctrl+D duplicate (laid right beside the selection),
+     Ctrl+C / Ctrl+V, Ctrl+A, R turns 90° (Shift the other way), arrows
+     nudge by the grid (Shift 10×), Esc lets go, 0 fits, +/− zoom, Ctrl+Z.
+     The booth's own shortcuts are off while the floor is open.
+  6. **Schema 1:** `p.hall` gains two optional keys. `items` — every piece,
+     `{ id, kind, x, y, w, d, rot?, number? (booths, unique), style?
+     (booths: tent / hardwall / open; pipe and drape is the default),
+     text? }`, centred, inches, `rot` clockwise degrees — and `venue` —
+     `{ kind: "indoor" | "outdoor", width, depth }`. `validShow` checks both
+     and `validHall` calls it. The grid keys stay required and keep their
+     meaning: on a floor they are the defaults the old Hall layout typed,
+     no longer read for positions. Sales stay in `p.hall.booths` keyed by
+     number, which is why a renumber, a number typed and a delete all go
+     through `renumberBooths` / `showDelete` so a sale never lands on the
+     wrong booth. A plan without `items` still draws, counts and prints
+     exactly as before (`showBooths`, `hallHTML`).
+  7. Tests: `tests/show.test.js` (8 — pieces, validation, snapping, blocks,
+     spacing, renumbering, map/CSV) and `tests/view-show.mjs` (the whole
+     editor in a real browser, desktop and a 390 px phone).
+  **Not built yet — phases 2–4 are in Next.** Nothing of the floor is in 3D
+  yet: the pavilion tent is a translucent zone on the map, and "how a booth
+  is built" only changes how it is drawn (a tent gets a cross) until phase 2
+  stands it up.
 - **2026-09-25, fourth round: the owner's first look at the third. Merged to
   `main` and deployed.**
   1. **Blank buttons fixed.** The previous / next keyframe arrows (and the
@@ -1156,6 +1249,40 @@ Extend it; do not rebuild it.
 
 ## Next
 
+1. **The show floor, phases 2–4 — the next build, in this order.** Phase 1
+   (the 2D editor) is on `main`; see Now for the owner's answers that set
+   the plan.
+   - **Phase 2 — the show in 3D, walked, recorded.** From Show floor, a
+     Perspective / Walk view of the whole floor built from `p.hall.items`:
+     one `InstancedMesh` per kind of wall panel, drape and tent part (the
+     scene has none yet; a thousand booths as separate meshes will
+     stutter), the venue's floor (indoor white hall, outdoor grass or
+     paving), aisles as floor strips, labels as sprites only near the
+     camera. "Your" booth drawn as the real booth from `p.booth`, the rest
+     light. Walk mode's rules (`src/views.js`) and the camera timeline and
+     MP4 export (`src/timeline.js`, `recordMp4`) reused, not copied —
+     a walkthrough is a timeline whose keys stand in aisles. Likely a small
+     `src/show-scene.js` that the existing renderer draws instead of the
+     booth group, so export, quality and the frame guide keep working.
+   - **Phase 3 — open one booth.** "Open this booth" on a selected booth:
+     links it to a full Booth Studio design (today's `p.booth` is the one
+     for "your" booth; others would need a small list of linked designs,
+     stored as optional records — decide the storage shape before
+     building), sized from the piece. Saved floor templates (a 10 × 10 art
+     fair street, a convention hall with perimeter booths).
+   - **Phase 4 — the AI-render hook.** Local-first forbids live AI calls, so
+     the hook only: an export of a frame's depth pass, a per-surface mask
+     and a plain description of the scene, and one adapter file with a
+     `render(frame) → image` shape that does nothing until a provider is
+     chosen. The owner decides the provider and how keys are held.
+   - **Phase 1, by eye, on the real machine:** does the drag feel like Lucid's?
+     Is 8 px the right snap pull and 1′ the right default grid? Does a block
+     of booths belong below the rest, or where the view is? Is Space them
+     evenly the right answer to "standard spacing that can be broken", or is
+     a per-aisle spacing setting wanted? Do promoters want corner and
+     end-cap booths to show their open sides (today a booth's open front is
+     only the side it faces)? On a phone, is the library in the panel
+     reachable enough, or does it want a floating "+" over the floor?
 1. **The 2026-09-25 third and fourth rounds, on the real machine.** Check
    the arrows draw and that an export now shows the picture inside the
    frame while it renders. Keyframe the frame, give Start and End different frames, and
@@ -1560,9 +1687,9 @@ the picker became one list.
 
 ```sh
 npm ci
-npm test                 # 359 Node tests
+npm test                 # 378 Node tests
 npm run build
-npm run test:view        # 26 suites: city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame
+npm run test:view        # 28 suites: city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
 npm run test:browser     # 25 end-to-end checks
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
@@ -1991,6 +2118,9 @@ anything else in a browser until it is done.
 - `src/tier.js` — Lite and Pro: the one table of Pro features and `can()`.
   `gated` / `proLock` and the action gate in `src/main.js` use it.
 - `src/hall.js` — the hall planner (layout, totals, map, CSV);
+  `src/show.js` — the show floor's pieces: kinds, the library, validation,
+  snapping, blocks of booths, spacing, renumbering, the map's SVG;
+  `src/show-editor.js` — the show floor's drawing board (gestures only);
   `src/power.js` — the power and rentals sheet.
 - `src/clearance.js` — clearance geometry; `src/elevations.js` — the
   to-scale drawings. `buildUnderlay`, `buildModels`, `exportGLB` and the Box
