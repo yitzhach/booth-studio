@@ -118,15 +118,17 @@ export function setOpen(h, number) {
 }
 
 /**
- * "This is my booth" is about the sale, not the design. Moving it must not
- * move the live design to another booth, which an absent `open` would: pin
- * the live design to the booth it belongs to first, then change `mine`.
+ * "This is my booth". A live design already on a floor booth stays on it —
+ * moving the sale must not carry the design to another booth, which an
+ * absent `open` would. A live design on no booth yet is the one this means:
+ * it moves in, unless that booth already has a parked design of its own.
  */
 export function setMine(h, number) {
-  const live = liveNumber(h) ?? OWN;
+  const live = liveNumber(h);
   if (number === undefined) delete h.mine;
   else h.mine = number;
-  setOpen(h, live);
+  const joins = live === undefined && number !== undefined && !h.designs?.[number];
+  setOpen(h, live ?? (joins ? number : OWN));
 }
 
 /**

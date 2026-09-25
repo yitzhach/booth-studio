@@ -63,6 +63,17 @@ test("with a booth marked mine, the live design is mine's, and moving mine does 
   assert.equal(liveNumber(p.hall), 101);
   setMine(p.hall, 101);
   assert.equal(p.hall.open, undefined);
+  // A design on no booth moves into the booth marked mine…
+  const q = project();
+  setMine(q.hall, 107);
+  assert.equal(liveNumber(q.hall), 107);
+  assert.equal(q.hall.open, undefined);
+  // …unless that booth already has a design of its own.
+  const r = project();
+  openBooth(r, 108);
+  openBooth(r, OWN);
+  setMine(r.hall, 108);
+  assert.equal(r.hall.open, OWN, "your own booth stays yours; 108 keeps its design");
 });
 
 test("a renumber carries designs and the open booth with their numbers", () => {

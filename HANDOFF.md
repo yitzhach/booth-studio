@@ -133,8 +133,11 @@ Extend it; do not rebuild it.
      with its booth. The editor opens on it; the title reads "· Booth N".
      **Open my own booth** (Floor → Booth designs) brings back key `0`.
      One undo step each.
-  3. **"This is my booth" no longer moves the live design** (`setMine`): it
-     is a sale fact. Deleting a booth takes its parked design with it (undo
+  3. **"This is my booth" never moves a design off a booth** (`setMine`): a
+     live design already on a floor booth stays there when mine moves or is
+     cleared. A live design on no booth yet *does* move into the booth
+     marked mine — that is how "see my booth on the floor" works — unless
+     that booth has a parked design of its own. Deleting a booth takes its parked design with it (undo
      brings both back); deleting the open booth makes its design your own
      booth's — refused only when your own is already parked.
   4. **The 3D show draws whichever booth is open in full.** Parked designs
@@ -1820,6 +1823,10 @@ BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what
 npm run test:browser     # 25 end-to-end checks
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
 ```
+
+**`tests/wall-assets.mjs` fails at line 120 (sideways scroll at 820 px on
+the Artwork tab), and did before the sixth round** — checked on `2f84454`,
+the commit before it. Not caused by the show floor; not yet looked into.
 
 The sandbox has WebGL via swiftshader, but the pinned Playwright expects a
 newer Chromium than is installed, so pass the browser explicitly:

@@ -156,21 +156,28 @@ try {
   assert.equal(s.hasShow, false, 'the booth is itself again');
   assert.deepEqual(await page.evaluate(() => window.__booth.videoTimeline), boothTimeline, "the booth's timeline is the one it had");
 
-  // ---- No booth of mine: the whole floor is light -----------------------------
+  // ---- "Not my booth" is a sale fact: the design stays where it stands --------
   await page.click('[data-action="mode-show"]');
   await page.locator('#show-floor [data-hall-booth="101"]').click();
   await page.click('[data-action="hall-mine"]');
+  assert.equal(await page.evaluate(() => window.__booth.project.hall.open), 101);
   await page.click('[data-action="show-3d"]');
-  s = await state();
-  assert.equal(s.boothOnStage, false, 'with no booth of mine, the booth is offstage');
-  assert.ok((await variety()) > 20);
+  assert.equal((await state()).boothOnStage, true, 'un-marking mine leaves the design on booth 101');
 
-  // ---- An undo in 3D stands up the plan it gives back ----------------------------
-  const before = (await state()).instances;
-  await page.keyboard.press('Control+z');
-  await page.waitForFunction(() => window.__booth.project.hall.mine === 101);
+  // ---- Undo in 3D stands up the plan it gives back: before any booth was mine,
+  // the whole floor is light --------------------------------------------------
+  // Back past the mark, however many steps the walk left above it.
+  for (let i = 0; i < 8 && (await page.evaluate(() => window.__booth.project.hall.mine)) !== undefined; i++) await page.keyboard.press('Control+z');
+  assert.equal(await page.evaluate(() => window.__booth.project.hall.open), undefined);
   s = await state();
-  assert.ok(s.boothOnStage && s.instances < before, 'undo brings my booth back into the 3D floor');
+  assert.equal(s.boothOnStage, false, 'with the design on no booth, the booth is offstage');
+  assert.ok((await variety()) > 20);
+  const before = s.instances;
+  await page.keyboard.press('Control+Shift+z');
+  await page.waitForFunction(() => window.__booth.project.hall.mine === 101);
+  assert.equal(await page.evaluate(() => window.__booth.project.hall.open), undefined, 'redo marks 101 mine, design and all');
+  s = await state();
+  assert.ok(s.boothOnStage && s.instances < before, 'redo brings my booth back into the 3D floor');
 
   // ---- A phone ----------------------------------------------------------------------
   await page.setViewportSize({ width: 390, height: 844 });
