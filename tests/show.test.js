@@ -104,3 +104,20 @@ test("the map, the CSV and the printed page follow the floor", () => {
   assert.match(showSVG(h), /Ada Pottery/);
   assert.match(hallHTML(h, "Fair"), /data-id="b101"/);
 });
+
+test("mirroring a selection flips it about its own middle and turns each piece with it", async () => {
+  const { mirrorPieces } = await import("../src/show.js");
+  const a = { id: "a", kind: "booth", x: 60, y: 60, w: 120, d: 120, rot: 90 };
+  const b = { id: "b", kind: "booth", x: 300, y: 60, w: 120, d: 120 };
+  const flat = mirrorPieces([a, b], "x");
+  assert.deepEqual(flat, [
+    { id: "a", x: 300, y: 60, rot: 270 },
+    { id: "b", x: 60, y: 60, rot: 0 },
+  ]);
+  const down = mirrorPieces([a, { ...b, y: 300 }], "y");
+  assert.deepEqual(down.map((m) => [m.y, m.rot]), [[300, 90], [60, 180]]);
+  assert.deepEqual(mirrorPieces([], "x"), []);
+  // Twice is where it started.
+  const back = mirrorPieces(flat.map((m, i) => ({ ...[a, b][i], ...m })), "x");
+  assert.deepEqual(back.map((m) => [m.x, m.rot]), [[60, 90], [300, 0]]);
+});

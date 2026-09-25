@@ -11,9 +11,11 @@
 //   drawn while it happens;
 // - a lone selection has eight handles to resize it (in its own turned frame)
 //   and the grid snaps its size;
-// - an empty drag with a mouse draws a selection box; with a finger it pans;
-//   two fingers pinch; the wheel zooms about the pointer; Space, the middle or
-//   the right button pans;
+// - an empty drag with a mouse draws a selection box, and so does a right-
+//   drag anywhere, over pieces or not — the box drawn as it goes; with a
+//   finger an empty drag pans; two fingers pinch; the wheel zooms about the
+//   pointer; Space, the middle button, ⌘/Ctrl with the right button, or the
+//   Pan tool (`panTool()`) pans;
 // - a shape pressed in the library and dragged onto the floor lands where it
 //   is let go, and a shape tapped lands in the middle of the view.
 //
@@ -33,11 +35,15 @@ const r1 = (n) => Math.round(n * 10) / 10;
  * step, `onSelect(ids)` hears every change of selection, `grid()` is the snap
  * grid in inches (0 for none).
  */
-export function createShowEditor(host, { hall, edit, onSelect = () => {}, grid = () => 12 }) {
-  host.innerHTML = `<svg class="show-svg" xmlns="${NS}" tabindex="0" aria-label="Show floor plan"><g class="sf-floor"></g><g class="sf-pieces"></g><g class="sf-guides"></g><rect class="sf-marquee" hidden fill="rgba(47,125,225,0.08)" stroke="#2f7de1" vector-effect="non-scaling-stroke"/><g class="sf-handles"></g></svg><div class="sf-ghost" hidden></div>`;
+export function createShowEditor(host, { hall, edit, onSelect = () => {}, grid = () => 12, panTool = () => false }) {
+  host.innerHTML = `<svg class="show-svg" xmlns="${NS}" tabindex="0" aria-label="Show floor plan"><g class="sf-floor"></g><g class="sf-pieces"></g><g class="sf-guides"></g><rect class="sf-marquee" hidden fill="rgba(47,125,225,0.10)" stroke="#2f7de1" stroke-width="1.5" stroke-dasharray="6 4" vector-effect="non-scaling-stroke"/><g class="sf-handles"></g></svg><div class="sf-ghost" hidden></div>`;
   const svg = host.querySelector("svg");
   const layers = { floor: svg.querySelector(".sf-floor"), pieces: svg.querySelector(".sf-pieces"), guides: svg.querySelector(".sf-guides"), handles: svg.querySelector(".sf-handles") };
   const marquee = svg.querySelector(".sf-marquee");
+  // An SVG element has no `hidden` property — setting one is a plain
+  // expando and the attribute stays, which the page's [hidden] rule obeys —
+  // so the box is shown and hidden by its attribute.
+  const showMarquee = (on) => marquee.toggleAttribute("hidden", !on);
   const ghost = host.querySelector(".sf-ghost");
   let view = null; // { x, y, s }: the top-left corner in inches and pixels per inch
   let selection = new Set();
@@ -160,8 +166,14 @@ export function createShowEditor(host, { hall, edit, onSelect = () => {}, grid =
     if (pointers.size > 2) return;
     const at = toWorld(ev.clientX, ev.clientY);
     const start = { cx: ev.clientX, cy: ev.clientY, at };
-    if (ev.button === 1 || ev.button === 2 || spaceDown) {
-      gesture = { type: "pan", ...start, view: { ...view } };
+    // Right-drag draws the selection box, over pieces or not; with ⌘ or
+    // Ctrl held it pans instead.
+    if (ev.button === 1 || (ev.button === 2 && (ev.metaKey || ev.ctrlKey)) || spaceDown || (ev.button === 0 && panTool())) {
+      gesture = { type: "pan", ...start, view: { ...view }, tap: ev.button === 0 };
+      return;
+    }
+    if (ev.button === 2) {
+      gesture = { type: "marquee", ...start, add: ev.shiftKey ? new Set(selection) : null, right: true };
       return;
     }
     const handle = ev.target.closest?.("[data-handle]");
@@ -248,7 +260,7 @@ export function createShowEditor(host, { hall, edit, onSelect = () => {}, grid =
       const l = Math.min(at.x, gesture.at.x);
       const t = Math.min(at.y, gesture.at.y);
       gesture.box = { l, t, r: Math.max(at.x, gesture.at.x), b: Math.max(at.y, gesture.at.y) };
-      marquee.hidden = false;
+      showMarquee(true);
       marquee.setAttribute("x", l);
       marquee.setAttribute("y", t);
       marquee.setAttribute("width", gesture.box.r - l);
@@ -265,7 +277,7 @@ export function createShowEditor(host, { hall, edit, onSelect = () => {}, grid =
     }
     gesture = null;
     layers.guides.innerHTML = "";
-    marquee.hidden = true;
+    showMarquee(false);
     if (g.type === "move") {
       if (!g.moved) {
         // A click on one of several selected pieces picks just that one.
@@ -289,7 +301,12 @@ export function createShowEditor(host, { hall, edit, onSelect = () => {}, grid =
       return;
     }
     if (g.type === "marquee") {
+      // A right-click that drew nothing leaves the selection alone.
+      const tiny = !g.box || ((g.box.r - g.box.l) * view.s < 3 && (g.box.b - g.box.t) * view.s < 3);
+      if (tiny && g.right) return;
       if (!g.box) return select(g.add ? [...g.add] : []);
+      // A box too small to see is a click on the floor.
+      if (tiny) return select(g.add ? [...g.add] : []);
       const hit = items().filter((it) => {
         const b = boxOf(it);
         return b.l >= g.box.l && b.r <= g.box.r && b.t >= g.box.t && b.b <= g.box.b;
@@ -303,7 +320,7 @@ export function createShowEditor(host, { hall, edit, onSelect = () => {}, grid =
     if (gesture && (gesture.type === "move" || gesture.type === "resize")) render();
     gesture = null;
     layers.guides.innerHTML = "";
-    marquee.hidden = true;
+    showMarquee(false);
   }
   function wheel(ev) {
     if (!view) return;

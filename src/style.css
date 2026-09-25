@@ -2180,3 +2180,18 @@ body:has(.timeline-dialog[open]) .find-tool {display:none;}
 .ai-legend {display:flex;flex-wrap:wrap;gap:4px 10px;margin:6px 0 10px;font-size:12px;color:var(--muted, #9aa3ad);}
 .ai-swatch {display:inline-flex;align-items:center;gap:5px;}
 .ai-swatch i {display:inline-block;width:11px;height:11px;border-radius:2px;border:1px solid rgba(255,255,255,0.25);}
+/* The Pan tool: the hand, over the 3D view and the show floor. */
+#scene.pan-tool canvas, #show-floor.pan-tool .show-svg {cursor:grab;}
+#scene.pan-tool canvas:active, #show-floor.pan-tool .show-svg:active {cursor:grabbing;}
+/* Keep every tape: over the viewport's top while the tape is out. */
+.measure-bar {position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:3;display:flex;gap:10px;align-items:center;padding:6px 10px;border-radius:8px;background:#20252aee;color:#e8ecf0;font-size:13px;}
+.measure-bar[hidden] {display:none;}
+.measure-bar label {display:flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap;}
+.measure-bar button {min-height:28px;padding:2px 10px;font-size:12px;}
+/* Sub-tabs: one chip per section of a long panel; the chosen one is shown. */
+.section-tabs {position:sticky;top:-22px;z-index:2;display:flex;flex-wrap:wrap;gap:6px;padding:10px 0;margin:0 0 12px;background:var(--surface);border-bottom:1px solid var(--line);}
+.section-tabs button {min-height:28px;max-width:100%;padding:3px 11px;border-radius:14px;font-size:12px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;}
+.section-tabs button.active {background:var(--blue);border-color:var(--blue);color:#10161d;}
+section.sub-hidden {display:none;}
+.toolbar .floor-tools {display:none;}
+.show-floor-on .toolbar .floor-tools {display:flex;}

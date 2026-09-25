@@ -51,6 +51,8 @@ export const frameKey = (a) =>
 // low, looking-up perspective. It is stopped by the ground, not by a fixed
 // angle: MIN_CAMERA_Y keeps the eye just above the floor plane, and
 // MAX_POLAR avoids the up-vector flip OrbitControls suffers near 180 degrees.
+// How many kept tapes the tape measure shows at once (Keep every tape).
+export const MAX_TAPES = 24;
 // One soft disc, drawn once into a canvas and shared by every ghost. A flare is
 // the only thing in this app that wants a texture nothing else can supply, and
 // a 128px gradient is cheaper to make here than to ship as a file.
@@ -379,6 +381,12 @@ export class BoothScene {
     // `setShow` and read by `update`.
     this.show = null;
     this.move = false;
+    // The Pan tool (SketchUp's hand): a left-drag slides the view across the
+    // screen instead of orbiting, and a click picks nothing. See setPanTool.
+    this.panTool = false;
+    // Where each walk was left — the booth's and the show's — so walking
+    // again takes up where the last walk stopped. See startWalk.
+    this.lastWalk = {};
     // On by default, matching the toolbar button's own initial state: this is a
     // measured planning tool, and a drag that lands at 23.59 inches is not a
     // measurement. The button turns it off for fine placement.
@@ -457,7 +465,9 @@ export class BoothScene {
     this.labelLayer.className = "scene-labels";
     host.append(this.labelLayer);
     this.annotations = [];
-    this.measure = { on: false, points: [] };
+    // `points` is the tape being laid; with `keep` on, each finished tape is
+    // kept in `kept` when the next one starts, so several can be read at once.
+    this.measure = { on: false, points: [], kept: [], keep: false };
     this.onMeasure = () => {};
     this.watchForChanges();
     this.startLoop();
@@ -2131,9 +2141,9 @@ export class BoothScene {
       segments.push(m0.clone().add(new T.Vector3(-s, 0, 0)), m0.clone().add(new T.Vector3(s, 0, 0)),
         m0.clone().add(new T.Vector3(0, 0, -s)), m0.clone().add(new T.Vector3(0, 0, s)));
     }
-    if (m0 && m1) {
-      segments.push(m0, m1);
-      this.annotations.push({ at: m0.clone().lerp(m1, 0.5), text: formatLength(distanceInches(m0, m1, IN)), kind: "tape" });
+    for (const [a, b] of [...this.measure.kept, ...(m0 && m1 ? [[m0, m1]] : [])]) {
+      segments.push(a, b);
+      this.annotations.push({ at: a.clone().lerp(b, 0.5), text: formatLength(distanceInches(a, b, IN)), kind: "tape" });
     }
     if (tight.length) {
       const red = new T.LineSegments(
@@ -2337,13 +2347,38 @@ export class BoothScene {
    * visitor walks rather than zooms. `walk(forward, right, inches)` steps.
    * Leaving puts the controls and the view back.
    */
+  /**
+   * The Pan tool on or off. On, one mouse button or one finger slides the
+   * view across the screen the way SketchUp's hand does; the right button
+   * and two fingers keep doing what they did. A walk looks round with the
+   * left button whatever the tool, so walking puts orbit back for its
+   * duration and stopping puts the tool back.
+   */
+  setPanTool(on) {
+    this.panTool = !!on;
+    const pan = this.panTool && !this.walking;
+    this.controls.mouseButtons.LEFT = pan ? T.MOUSE.PAN : T.MOUSE.ROTATE;
+    this.controls.touches.ONE = pan ? T.TOUCH.PAN : T.TOUCH.ROTATE;
+  }
+  /**
+   * The key a walk is remembered under: the show floor's walk and the
+   * booth's are different places, and a floor's walk means nothing in a
+   * booth.
+   */
+  walkKey() {
+    return this.show ? "show" : "booth";
+  }
   startWalk() {
     if (this.walking) return;
+    // The orbit view walked away from, so Done comes back to it rather than
+    // to the default view.
+    const before = this.view === "perspective" && !this.walking ? this.pose() : null;
     this.setView("perspective");
     this.walking = {
       minDistance: this.controls.minDistance,
       maxDistance: this.controls.maxDistance,
       maxPolar: this.controls.maxPolarAngle,
+      before,
     };
     this.controls.minDistance = 0.001;
     this.controls.maxDistance = 0.05;
@@ -2352,7 +2387,11 @@ export class BoothScene {
     this.controls.enablePan = false;
     this.controls.enableDamping = false;
     this.controls.rotateSpeed = -0.35;
-    this.applyPose(this.show ? showWalkStart(this.show) : walkStart(this.p.booth));
+    this.setPanTool(this.panTool);
+    // Walking again takes up where the last walk stopped; the first walk
+    // starts where a visitor would.
+    const last = this.lastWalk[this.walkKey()];
+    this.applyPose(last || (this.show ? showWalkStart(this.show) : walkStart(this.p.booth)));
   }
   walk(forward, right, inches) {
     if (!this.walking) return;
@@ -2361,6 +2400,7 @@ export class BoothScene {
   stopWalk() {
     if (!this.walking) return;
     const w = this.walking;
+    this.lastWalk[this.walkKey()] = this.pose();
     this.walking = null;
     this.controls.minDistance = w.minDistance;
     this.controls.maxDistance = w.maxDistance;
@@ -2369,7 +2409,9 @@ export class BoothScene {
     this.controls.enablePan = true;
     this.controls.enableDamping = true;
     this.controls.rotateSpeed = 1;
+    this.setPanTool(this.panTool);
     this.setView("perspective");
+    if (w.before) this.applyPose(w.before);
   }
   /**
    * The smart guides of the drag in progress: pink lines on the wall the
@@ -2440,8 +2482,36 @@ export class BoothScene {
    */
   setMeasuring(on) {
     this.measure.on = !!on;
-    if (!on) this.measure.points = [];
+    if (!on) {
+      // Kept tapes stay on screen after the tape is put away, to be read;
+      // the one half laid does not.
+      if (this.measure.keep && this.measure.points.length === 2) this.keepTape();
+      this.measure.points = [];
+    }
     this.refreshGuides();
+  }
+  /**
+   * Keep every tape: each finished tape stays on screen, with its reading,
+   * when the next is started — several distances read at once. Off clears
+   * them. At most MAX_TAPES; the oldest goes first.
+   */
+  setKeepTapes(on) {
+    this.measure.keep = !!on;
+    if (!on) this.measure.kept = [];
+    this.refreshGuides();
+  }
+  keepTape() {
+    const [a, b] = this.measure.points;
+    if (!a || !b) return;
+    this.measure.kept.push([a, b]);
+    if (this.measure.kept.length > MAX_TAPES) this.measure.kept.shift();
+  }
+  /** Every tape off the screen, kept or being laid. */
+  clearTapes() {
+    this.measure.kept = [];
+    this.measure.points = [];
+    this.refreshGuides();
+    this.onMeasure(null);
   }
   measurePoint(e) {
     this.point(e);
@@ -2454,6 +2524,7 @@ export class BoothScene {
     // Snap is a measurement tool's friend: 1″ on, left raw when snap is off.
     if (this.snap) at = new T.Vector3(...at.toArray().map((m) => Math.round(m / IN) * IN));
     const pts = this.measure.points;
+    if (pts.length === 2 && this.measure.keep) this.keepTape();
     this.measure.points = pts.length === 1 ? [pts[0], at] : [at];
     this.refreshGuides();
     const [a, b] = this.measure.points;
@@ -2608,7 +2679,7 @@ export class BoothScene {
       activateTransform(hit.object.userData.artId);
     });
     c.addEventListener("pointerdown", e => {
-      if (e.button !== 0 || this.drag || this.show) return;
+      if (e.button !== 0 || this.drag || this.show || (this.panTool && !this.walking)) return;
       if (this.drawingBox) {
         this.point(e);
         const at = this.ray.ray.intersectPlane(FLOOR, new T.Vector3());

@@ -127,6 +127,9 @@ import {
   Route,
   DoorOpen,
   LayoutTemplate,
+  FlipHorizontal2,
+  FlipVertical2,
+  Hand,
   Sparkles,
 } from "lucide";
 import {
@@ -198,7 +201,7 @@ import { MAX_VIEWS, STEP, STRIDE, TAGS, newView } from "./views.js";
 import { ACCESSIBLE, checkClearance } from "./clearance.js";
 import { elevationsHTML } from "./elevations.js";
 import { HALL_LIMITS, MAX_HALL_BOOTHS, STATUSES, boothOf, hallCSV, hallHTML, hallLayout, hallSVG, hallTotals, newHall } from "./hall.js";
-import { BOOTH_STYLES, FLOOR_TEMPLATES, KINDS, SHAPES, VENUES as SHOW_VENUES, boothBlock, boundsOf, copyPieces, feet, floorOf, renumber, showItems, showSVG, spacePieces, toFloor } from "./show.js";
+import { BOOTH_STYLES, FLOOR_TEMPLATES, KINDS, SHAPES, VENUES as SHOW_VENUES, boothBlock, boundsOf, copyPieces, feet, floorOf, mirrorPieces, renumber, showItems, showSVG, spacePieces, toFloor } from "./show.js";
 import { createShowEditor } from "./show-editor.js";
 import { showWalkthrough } from "./show-scene.js";
 import { PACK_LONG, PACK_SIZES, SURFACES, describeScene, protectPass, provider as aiProvider, render as aiRender, renderPack } from "./ai-render.js";
@@ -212,6 +215,9 @@ import { SHORTCUTS, dedupe, fold, rankTools, shortcutOf } from "./toolsearch.js"
 import { PRO_FEATURES, TIERS, actionFeature, can, readTier, resolveTier, writeTier } from "./tier.js";
 async function boot() {
   const icons = {
+    FlipHorizontal2,
+    FlipVertical2,
+    Hand,
     Grid2x2: Grid2X2,
     SkipBack,
     SkipForward,
@@ -475,7 +481,7 @@ async function boot() {
   selected = p.art[0]?.id;
   document.querySelector("#app").innerHTML =
     `<header><a class="brand" href="#" aria-label="Booth Studio">${icon("box")}<span>Artist OS</span></a><span class="app-badge">Booth Studio</span><div class="tool-search"><span aria-hidden="true">⌕</span><input id="tool-search" type="search" placeholder="Find a tool…" aria-label="Find a tool" title="Find a tool by name or shortcut · press / or Ctrl/⌘ K to jump here" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-controls="tool-results" aria-expanded="false"/><ul id="tool-results" role="listbox" aria-label="Matching tools" hidden></ul></div><div class="project"><input id="project-name" aria-label="Project name" maxlength="120" value="${e(p.name)}"/>${icon("chevron-down")}</div><div class="save-status" id="save-status" role="status">Opening…</div>${btn("help", "Help", "help-circle", "icon-only")}<div class="avatar">IA</div></header>
-<div class="workspace"><aside class="library" id="library"></aside><main class="editor"><div class="toolbar"><div class="toolgroup">${btn("select", "Select", "mouse-pointer-2", "active")}${btn("move", "Move", "move")}${btn("snap", "Snap 1″", "grid-2x2", "active")}${btn("measure", "Measure", "ruler")}${btn("walk", "Walk", "footprints")}${btn("draw-box", "Box", "square")}${btn("draft", "Fast edit", "zap")}${btn("draft-lock", "Fast edit: follows the gesture", "lock", "draft-lock")}</div><div class="toolgroup">${btn("undo", "Undo", "undo-2", "icon-only")}${btn("redo", "Redo", "redo-2", "icon-only")}</div><div class="mode-switch"><button data-action="mode-3d">3D booth</button><button data-action="mode-photo">Photo</button><button data-action="mode-show">Show floor</button></div>${btn("export-tab", "Export", "download", "export-top")}</div><div class="viewport"><div id="scene"></div><div class="frame-guide" hidden><div class="frame-guide-box"><button class="fg-move" data-fg="move" title="Drag to move the frame" aria-label="Move the export frame"><span class="fg-label"></span></button>${["nw", "ne", "sw", "se"].map((c) => `<i class="fg-h fg-corner" data-fg="${c}" title="Drag to resize the frame"></i>`).join("")}${["n", "s", "e", "w"].map((c) => `<i class="fg-h fg-edge" data-fg="${c}" title="Drag to change the frame\'s shape"></i>`).join("")}</div></div><div id="photo" hidden></div><div id="show-floor" hidden></div><div class="scene-label"><span class="eyebrow" id="mode-label">MEASURED WORKSPACE</span><strong id="scene-title"></strong><span id="scene-subtitle"></span><small class="mobile-stamp" title="Built ${BUILD.time} · commit ${BUILD.commit}">${BUILD.stamp} · ${BUILD.commit}</small></div><div id="photo-empty" hidden><div>${icon("image-plus")}<h2>Start with your booth shot</h2><p>Add artwork and adjust its four corners to match the wall perspective.</p>${btn("upload-photo", "Upload booth photo", "plus", "primary")}</div></div><button class="find-tool" data-action="find-tool" aria-label="Find a tool" title="Find a tool">${icon("search")}</button><div class="walk-pad" hidden><button data-walk="forward" aria-label="Step forward">▲</button><button data-walk="left" aria-label="Step left">◀</button><button data-walk="back" aria-label="Step back">▼</button><button data-walk="right" aria-label="Step right">▶</button><button data-action="walk" class="walk-exit" aria-label="Stop walking">Done</button></div><div class="viewport-bottom"><div class="view-switch" id="view-switch"><button data-view="perspective" class="active">Perspective</button><button data-view="back">Back</button><button data-view="left">Left</button><button data-view="right">Right</button><button data-view="plan">Plan</button></div><label class="saved-view-pick" hidden><span>View</span><select id="saved-view" aria-label="Go to a saved view"></select></label><div class="zoom-controls"><span class="zoom-label">Zoom</span>${btn("zoom-out", "Zoom out", "minus", "icon-only")}${btn("zoom-in", "Zoom in", "plus", "icon-only")}${btn("reset-view", "Reset view", "rotate-ccw", "icon-only")}</div></div></div><div class="statusbar"><span id="gesture-hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</span><label class="preview-quality" title="Preview quality: how many pixels the viewport draws for each one on screen. Exports are never affected."><span>Preview</span><select id="quality-quick" aria-label="Preview quality"></select><output id="quality-now"></output></label><span id="selection-status"></span></div></main><aside class="inspector"><button class="sheet-toggle" data-action="sheet-toggle" aria-label="Fold the panel away" title="Fold the panel away"><span>Fold</span></button><div class="inspector-tabs">${["art", "layout", "show", "walls", "lighting", "video", "hall", "export"].map((t, i) => `<button data-tab="${t}">${icon(["image", "layout-panel-left", "building-2", "columns-2", "lightbulb", "video", "map", "download"][i])}<span>${["Artwork", "Layout", "Art show", "Walls", "Lighting", "Video", "Show floor", "Export"][i]}</span></button>`).join("")}</div><div id="inspector-content"></div></aside></div><footer><span class="footer-brand">${icon("box")} BOOTH STUDIO <small>Prototype 01</small><small id="build-stamp" title="Version ${BUILD.version} · built ${BUILD.time} · commit ${BUILD.commit}">v${BUILD.version} · ${BUILD.stamp} · ${BUILD.commit}</small></span><span>Your images. Your space. Your arrangement.</span><span id="network">Local workspace</span></footer><input type="file" id="art-input" accept="image/jpeg,image/png" multiple hidden/><input type="file" id="replace-input" accept="image/jpeg,image/png" hidden/><input type="file" id="photo-input" accept="image/jpeg,image/png" hidden/><input type="file" id="surround-input" accept="image/jpeg,image/png" hidden/><input type="file" id="ground-input" accept="image/jpeg,image/png" hidden/><input type="file" id="underlay-input" accept="image/jpeg,image/png" hidden/><input type="file" id="model-input" accept=".glb,model/gltf-binary" hidden/><input type="file" id="backup-input" accept=".json,.booth" hidden/><div id="toast" role="status"></div><dialog id="dialog"><div id="dialog-content"></div></dialog><dialog id="image-editor"><div id="image-editor-content"></div></dialog><dialog id="timeline-dialog" class="timeline-dialog"><div id="timeline-content"></div></dialog>`;
+<div class="workspace"><aside class="library" id="library"></aside><main class="editor"><div class="toolbar"><div class="toolgroup">${btn("select", "Select", "mouse-pointer-2", "active")}${btn("move", "Move", "move")}${btn("pan", "Pan", "hand")}${btn("snap", "Snap 1″", "grid-2x2", "active")}${btn("measure", "Measure", "ruler")}${btn("walk", "Walk", "footprints")}${btn("draw-box", "Box", "square")}${btn("draft", "Fast edit", "zap")}${btn("draft-lock", "Fast edit: follows the gesture", "lock", "draft-lock")}</div><div class="toolgroup floor-tools">${btn("pan", "Pan", "hand")}</div><div class="toolgroup">${btn("undo", "Undo", "undo-2", "icon-only")}${btn("redo", "Redo", "redo-2", "icon-only")}</div><div class="mode-switch"><button data-action="mode-3d">3D booth</button><button data-action="mode-photo">Photo</button><button data-action="mode-show">Show floor</button></div>${btn("export-tab", "Export", "download", "export-top")}</div><div class="viewport"><div id="scene"></div><div class="frame-guide" hidden><div class="frame-guide-box"><button class="fg-move" data-fg="move" title="Drag to move the frame" aria-label="Move the export frame"><span class="fg-label"></span></button>${["nw", "ne", "sw", "se"].map((c) => `<i class="fg-h fg-corner" data-fg="${c}" title="Drag to resize the frame"></i>`).join("")}${["n", "s", "e", "w"].map((c) => `<i class="fg-h fg-edge" data-fg="${c}" title="Drag to change the frame\'s shape"></i>`).join("")}</div></div><div id="photo" hidden></div><div id="show-floor" hidden></div><div class="scene-label"><span class="eyebrow" id="mode-label">MEASURED WORKSPACE</span><strong id="scene-title"></strong><span id="scene-subtitle"></span><small class="mobile-stamp" title="Built ${BUILD.time} · commit ${BUILD.commit}">${BUILD.stamp} · ${BUILD.commit}</small></div><div id="photo-empty" hidden><div>${icon("image-plus")}<h2>Start with your booth shot</h2><p>Add artwork and adjust its four corners to match the wall perspective.</p>${btn("upload-photo", "Upload booth photo", "plus", "primary")}</div></div><button class="find-tool" data-action="find-tool" aria-label="Find a tool" title="Find a tool">${icon("search")}</button><div class="walk-pad" hidden><button data-walk="forward" aria-label="Step forward">▲</button><button data-walk="left" aria-label="Step left">◀</button><button data-walk="back" aria-label="Step back">▼</button><button data-walk="right" aria-label="Step right">▶</button><button data-action="walk" class="walk-exit" aria-label="Stop walking">Done</button></div><div class="measure-bar" hidden><label><input type="checkbox" id="keep-tapes"/> Keep every tape</label><button data-action="clear-tapes">Clear tapes</button></div><div class="viewport-bottom"><div class="view-switch" id="view-switch"><button data-view="perspective" class="active">Perspective</button><button data-view="back">Back</button><button data-view="left">Left</button><button data-view="right">Right</button><button data-view="plan">Plan</button></div><label class="saved-view-pick" hidden><span>View</span><select id="saved-view" aria-label="Go to a saved view"></select></label><div class="zoom-controls"><span class="zoom-label">Zoom</span>${btn("zoom-out", "Zoom out", "minus", "icon-only")}${btn("zoom-in", "Zoom in", "plus", "icon-only")}${btn("reset-view", "Reset view", "rotate-ccw", "icon-only")}</div></div></div><div class="statusbar"><span id="gesture-hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</span><label class="preview-quality" title="Preview quality: how many pixels the viewport draws for each one on screen. Exports are never affected."><span>Preview</span><select id="quality-quick" aria-label="Preview quality"></select><output id="quality-now"></output></label><span id="selection-status"></span></div></main><aside class="inspector"><button class="sheet-toggle" data-action="sheet-toggle" aria-label="Fold the panel away" title="Fold the panel away"><span>Fold</span></button><div class="inspector-tabs">${["art", "layout", "show", "walls", "lighting", "video", "hall", "export"].map((t, i) => `<button data-tab="${t}">${icon(["image", "layout-panel-left", "building-2", "columns-2", "lightbulb", "video", "map", "download"][i])}<span>${["Artwork", "Layout", "Art show", "Walls", "Lighting", "Video", "Show floor", "Export"][i]}</span></button>`).join("")}</div><div id="inspector-content"></div></aside></div><footer><span class="footer-brand">${icon("box")} BOOTH STUDIO <small>Prototype 01</small><small id="build-stamp" title="Version ${BUILD.version} · built ${BUILD.time} · commit ${BUILD.commit}">v${BUILD.version} · ${BUILD.stamp} · ${BUILD.commit}</small></span><span>Your images. Your space. Your arrangement.</span><span id="network">Local workspace</span></footer><input type="file" id="art-input" accept="image/jpeg,image/png" multiple hidden/><input type="file" id="replace-input" accept="image/jpeg,image/png" hidden/><input type="file" id="photo-input" accept="image/jpeg,image/png" hidden/><input type="file" id="surround-input" accept="image/jpeg,image/png" hidden/><input type="file" id="ground-input" accept="image/jpeg,image/png" hidden/><input type="file" id="underlay-input" accept="image/jpeg,image/png" hidden/><input type="file" id="model-input" accept=".glb,model/gltf-binary" hidden/><input type="file" id="backup-input" accept=".json,.booth" hidden/><div id="toast" role="status"></div><dialog id="dialog"><div id="dialog-content"></div></dialog><dialog id="image-editor"><div id="image-editor-content"></div></dialog><dialog id="timeline-dialog" class="timeline-dialog"><div id="timeline-content"></div></dialog>`;
   let scene;
   try {
     scene = new BoothScene(
@@ -884,11 +890,31 @@ async function boot() {
    */
   const MEASURE_HINT = "Measure: click where the tape starts, then where it ends · Esc to stop";
   const DEFAULT_HINT = "Drag to orbit · scroll or +/− to zoom · right-drag to pan";
+  // The key that turns a right-drag on the show floor into a pan: ⌘ on a
+  // Mac, Ctrl elsewhere. Said by name in the status bar, as asked.
+  const PAN_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘" : "Ctrl";
+  const PAN_HINT = "Pan: drag to slide the view · scroll to zoom · V or Select to stop";
+  // The Pan tool (the toolbar's hand): a left-drag pans the 3D view and the
+  // show floor instead of orbiting or selecting.
+  let panTool = false;
+  function setPanTool(on) {
+    panTool = !!on;
+    if (panTool && scene?.measure.on) setMeasuring(false);
+    scene?.setPanTool(panTool);
+    document.querySelector("#scene")?.classList.toggle("pan-tool", panTool);
+    document.querySelector("#show-floor")?.classList.toggle("pan-tool", panTool);
+    renderStatus();
+    syncTools();
+  }
   let measureHint = MEASURE_HINT;
   function setMeasuring(on) {
     if (!scene) return;
+    // The tape takes the left button; the hand would swallow its clicks.
+    if (on && panTool) setPanTool(false);
     scene.setMeasuring(on);
     measureHint = MEASURE_HINT;
+    const bar = document.querySelector(".measure-bar");
+    if (bar) bar.hidden = !on;
     document.querySelector("#scene").classList.toggle("measuring", !!on);
     renderStatus();
     syncTools();
@@ -993,6 +1019,9 @@ async function boot() {
     syncQuality();
     const draft = !!scene?.draft;
     document.querySelector('[data-action="measure"]')?.classList.toggle("active", !!scene?.measure.on);
+    for (const el of document.querySelectorAll('.toolbar [data-action="pan"]')) el.classList.toggle("active", panTool);
+    const keep = document.querySelector("#keep-tapes");
+    if (keep) keep.checked = !!scene?.measure.keep;
     document.querySelector('.toolbar [data-action="walk"]')?.classList.toggle("active", walking);
     document.querySelector('.toolbar [data-action="draw-box"]')?.classList.toggle("active", !!scene?.drawingBox);
     document
@@ -1975,6 +2004,26 @@ async function boot() {
       }
     });
   }
+  /**
+   * Flip the selection as a mirror would: left for right ("x") or front for
+   * back ("y"), about the middle of the selection, each piece's turn
+   * mirrored with it (`mirrorPieces`). One undo step; the selection stays.
+   */
+  function showMirror(axis) {
+    const moved = mirrorPieces(showPieces(), axis);
+    if (!moved.length) return;
+    const by = new Map(moved.map((m) => [m.id, m]));
+    mutate(() => {
+      for (const it of p.hall.items) {
+        const m = by.get(it.id);
+        if (!m) continue;
+        it.x = m.x;
+        it.y = m.y;
+        if (m.rot) it.rot = m.rot;
+        else delete it.rot;
+      }
+    });
+  }
   /** Copies of the selection laid right beside it, selected. */
   function showDuplicate() {
     const pieces = showPieces();
@@ -2061,6 +2110,7 @@ async function boot() {
       return false;
     }
     if (k === "w") return setWalking(true), true;
+    if (k === "h") return setPanTool(!panTool), true;
     if (k === "Escape") return setShow3d(false), true;
     return false;
   }
@@ -2088,6 +2138,7 @@ async function boot() {
     if (key === "Delete" || key === "Backspace") return showDelete(), true;
     if (key === "Escape") return showEditor.select([]), true;
     if (key === "r") return showRotate(ev.shiftKey ? 270 : 90), true;
+    if (key === "h") return setPanTool(!panTool), true;
     if (key === "0") return showEditor.fit(), true;
     if (key === "+" || key === "=") return showEditor.zoom(1.25), true;
     if (key === "-") return showEditor.zoom(1 / 1.25), true;
@@ -2230,14 +2281,14 @@ async function boot() {
     const t = hallTotals(h);
     const num = (label, key, value, min, max, step, unit, attr) => `<label class="field"><span>${label}</span><div><input type="number" ${attr}="${key}" aria-label="${e(label)}" value="${Number(Number(value).toFixed(2))}" min="${min}" max="${max}" step="${step}"/><small>${unit}</small></div></label>`;
     const pf = (label, key, value, min, max, step = 1, unit = "in") => num(label, key, value, min, max, step, unit, "data-show-field");
-    let selectedHTML = `<p class="muted">Tap a piece to select it; drag it to move it. Shift-click or drag a box round several. Drag on empty floor with a finger, Space, or the right button to pan; scroll or pinch to zoom.</p>`;
+    let selectedHTML = `<p class="muted">Tap a piece to select it; drag it to move it. Shift-click, drag a box round several on empty floor, or right-drag a box anywhere. ${PAN_KEY} right-drag, Space-drag, the Pan tool (H) or a finger on empty floor pans; scroll or pinch to zoom.</p>`;
     if (pieces.length === 1) {
       const it = pieces[0];
       const k = KINDS[it.kind];
       const rec = it.kind === "booth" ? boothOf(h, it.number) : null;
-      selectedHTML = `<section class="show-piece"><h3>${it.kind === "booth" ? `Booth ${it.number}${h.mine === it.number ? ' <span class="badge">Yours</span>' : ""}` : e(k.label)} <span>${feet(it.w)} × ${feet(it.d)}</span></h3><div class="field-pair">${pf("Width", "w", it.w, 6, 12000)}${pf("Depth", "d", it.d, 6, 12000)}</div><div class="field-pair">${pf("Across", "x", it.x, -24000, 48000)}${pf("From back", "y", it.y, -24000, 48000)}</div>${pf("Turn", "rot", it.rot || 0, 0, 359, 15, "°")}${it.kind === "booth" ? `${pf("Booth number", "number", it.number, 1, 99999, 1, "#")}<label class="setting-label">Built as<select data-show-field="style" aria-label="Booth built as">${Object.entries(BOOTH_STYLES).map(([key, v]) => `<option value="${key}" ${(it.style || "pipe") === key ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label>` : `<label class="setting-label">Text<input type="text" data-show-field="text" aria-label="Piece text" maxlength="120" value="${e(it.text || "")}" placeholder="${e(k.label)}"/></label>`}<div class="button-row">${btn("show-rotate", "Turn 90°", "rotate-cw")}${btn("show-duplicate", "Duplicate", "copy")}${btn("show-delete", "Delete", "trash-2")}</div></section>${rec ? `<section class="hall-booth"><h3>Sale</h3><label class="setting-label">Status<select data-field="status" data-scope="hallbooth" aria-label="Booth status">${Object.entries(STATUSES).map(([key, v]) => `<option value="${key}" ${rec.status === key ? "selected" : ""}>${e(v.label)}</option>`).join("")}</select></label><label class="setting-label">Exhibitor<input type="text" data-field="name" data-scope="hallbooth" aria-label="Exhibitor" maxlength="120" value="${e(rec.name)}"/></label>${field("Price", "price", rec.price || 0, ...HALL_LIMITS.price, 1, "$", "hallbooth", "Booth price")}<label class="setting-label">Note<input type="text" data-field="note" data-scope="hallbooth" aria-label="Booth note" maxlength="300" value="${e(rec.note)}"/></label>${btn("hall-mine", h.mine === it.number ? "Not my booth" : "This is my booth", "box", "wide")}</section>${designHTML(it)}` : ""}`;
+      selectedHTML = `<section class="show-piece"><h3>${it.kind === "booth" ? `Booth ${it.number}${h.mine === it.number ? ' <span class="badge">Yours</span>' : ""}` : e(k.label)} <span>${feet(it.w)} × ${feet(it.d)}</span></h3><div class="field-pair">${pf("Width", "w", it.w, 6, 12000)}${pf("Depth", "d", it.d, 6, 12000)}</div><div class="field-pair">${pf("Across", "x", it.x, -24000, 48000)}${pf("From back", "y", it.y, -24000, 48000)}</div>${pf("Turn", "rot", it.rot || 0, 0, 359, 15, "°")}${it.kind === "booth" ? `${pf("Booth number", "number", it.number, 1, 99999, 1, "#")}<label class="setting-label">Built as<select data-show-field="style" aria-label="Booth built as">${Object.entries(BOOTH_STYLES).map(([key, v]) => `<option value="${key}" ${(it.style || "pipe") === key ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label>` : `<label class="setting-label">Text<input type="text" data-show-field="text" aria-label="Piece text" maxlength="120" value="${e(it.text || "")}" placeholder="${e(k.label)}"/></label>`}<div class="button-row">${btn("show-rotate", "Turn 90°", "rotate-cw")}${btn("show-duplicate", "Duplicate", "copy")}${btn("show-delete", "Delete", "trash-2")}</div><div class="button-row">${btn("show-flip-x", "Flip horizontal", "flip-horizontal-2")}${btn("show-flip-y", "Flip vertical", "flip-vertical-2")}</div></section>${rec ? `<section class="hall-booth"><h3>Sale</h3><label class="setting-label">Status<select data-field="status" data-scope="hallbooth" aria-label="Booth status">${Object.entries(STATUSES).map(([key, v]) => `<option value="${key}" ${rec.status === key ? "selected" : ""}>${e(v.label)}</option>`).join("")}</select></label><label class="setting-label">Exhibitor<input type="text" data-field="name" data-scope="hallbooth" aria-label="Exhibitor" maxlength="120" value="${e(rec.name)}"/></label>${field("Price", "price", rec.price || 0, ...HALL_LIMITS.price, 1, "$", "hallbooth", "Booth price")}<label class="setting-label">Note<input type="text" data-field="note" data-scope="hallbooth" aria-label="Booth note" maxlength="300" value="${e(rec.note)}"/></label>${btn("hall-mine", h.mine === it.number ? "Not my booth" : "This is my booth", "box", "wide")}</section>${designHTML(it)}` : ""}`;
     } else if (pieces.length > 1) {
-      selectedHTML = `<section class="show-piece"><h3>${pieces.length} selected <span>${pieces.filter((i) => i.kind === "booth").length} booths</span></h3><div class="button-row">${btn("show-rotate", "Turn 90°", "rotate-cw")}${btn("show-duplicate", "Duplicate", "copy")}${btn("show-delete", "Delete", "trash-2")}</div><div class="button-row">${btn("show-align-top", "Line up tops", "align-start-horizontal")}${btn("show-align-left", "Line up lefts", "align-start-vertical")}</div>${num("Gap between", "show-gap", showGap, 0, 2400, 1, "in", "id")}${btn("show-space", "Space them evenly", "columns-2", "wide")}<p class="muted">Lays them side by side along the way they run, this far apart, the first staying put. A gap of 0 butts them together; a single booth can then be dragged to break the rhythm.</p>${btn("show-renumber", "Renumber these", "list-ordered", "wide")}${btn("show-deselect", "Done", "check", "wide")}</section>`;
+      selectedHTML = `<section class="show-piece"><h3>${pieces.length} selected <span>${pieces.filter((i) => i.kind === "booth").length} booths</span></h3><div class="button-row">${btn("show-rotate", "Turn 90°", "rotate-cw")}${btn("show-duplicate", "Duplicate", "copy")}${btn("show-delete", "Delete", "trash-2")}</div><div class="button-row">${btn("show-flip-x", "Flip horizontal", "flip-horizontal-2")}${btn("show-flip-y", "Flip vertical", "flip-vertical-2")}</div><div class="button-row">${btn("show-align-top", "Line up tops", "align-start-horizontal")}${btn("show-align-left", "Line up lefts", "align-start-vertical")}</div>${num("Gap between", "show-gap", showGap, 0, 2400, 1, "in", "id")}${btn("show-space", "Space them evenly", "columns-2", "wide")}<p class="muted">Lays them side by side along the way they run, this far apart, the first staying put. A gap of 0 butts them together; a single booth can then be dragged to break the rhythm.</p>${btn("show-renumber", "Renumber these", "list-ordered", "wide")}${btn("show-deselect", "Done", "check", "wide")}</section>`;
     }
     const b = showBlock;
     const bf = (label, key, min, max, step = 1, unit = "in") => num(label, key, b[key], min, max, step, unit, "data-show-block");
@@ -2384,6 +2435,7 @@ async function boot() {
     if (!scene || p.mode !== "3d") return;
     if (on && walking) setWalking(false);
     if (on && scene.measure.on) setMeasuring(false);
+    if (on && panTool) setPanTool(false);
     scene.setDrawingBox(!!on);
     document.querySelector("#scene").classList.toggle("placing", !!on);
     renderStatus();
@@ -3046,11 +3098,85 @@ async function boot() {
       return `<p class="warn-note">This browser has no H.264 encoder, so the clip will be <strong>VP9 in an MP4</strong>. It plays in Chrome, Edge and VLC, but <strong>QuickTime Player cannot open it</strong>. Record in Chrome or Safari for a QuickTime-ready file.</p>`;
     return `<p class="muted">This browser will encode <strong>${e(videoCodec.label)}</strong> — the codec QuickTime Player, phones and upload forms expect.</p>`;
   }
+  /**
+   * Sub-tabs. A panel of three or more sections gets a row of chips under
+   * its heading, one per section by its own heading, and shows the chosen
+   * section alone — asked for because the panels had grown so long that a
+   * tool was a long scroll away. "All" shows the panel as it always was.
+   * The choice is remembered per tab. A section that was not there on the
+   * last draw of the same tab — the piece just selected, the work just
+   * clicked — is chosen for you, so a selection is never hidden behind a
+   * chip. Tool search reaches every section whatever is chosen
+   * (`showSection`). Under automation (navigator.webdriver) the panels start
+   * on All, so the browser suites see every control; `booth.sectionTabs` in
+   * localStorage ("on" / "off") overrides either way.
+   */
+  const subTab = {};
+  const subSeen = {};
+  const SUB_ALL = "All";
+  function sectionTabsOn() {
+    let pref = null;
+    try {
+      pref = localStorage.getItem("booth.sectionTabs");
+    } catch {}
+    return pref ? pref !== "off" : !navigator.webdriver;
+  }
+  /** The panel's own top-level sections, each with the chip it belongs to. */
+  function panelSections(root) {
+    return [...root.querySelectorAll("section")]
+      .filter((sec) => !sec.parentElement.closest("section"))
+      .map((sec) => {
+        // Its own heading; a section without one is named by its first
+        // sub-heading or control, as Lighting's ambient section is.
+        const own = [...sec.querySelectorAll("h3, h4, label")].find((h) => h.closest("section") === sec);
+        const label = own ? findableName(own) : "";
+        return { sec, label: label || "More" };
+      });
+  }
+  function applySectionTabs(root) {
+    root.querySelector(".section-tabs")?.remove();
+    const list = panelSections(root);
+    const labels = [...new Set(list.map((x) => x.label))];
+    const seen = subSeen[tab];
+    subSeen[tab] = labels;
+    if (!sectionTabsOn() || labels.length < 3) return;
+    const fresh = seen ? labels.filter((l) => !seen.includes(l)) : [];
+    if (fresh.length && subTab[tab] !== SUB_ALL) subTab[tab] = fresh[0];
+    if (subTab[tab] !== SUB_ALL && !labels.includes(subTab[tab])) subTab[tab] = labels[0];
+    const chosen = subTab[tab];
+    for (const { sec, label } of list) sec.classList.toggle("sub-hidden", chosen !== SUB_ALL && label !== chosen);
+    const bar = document.createElement("div");
+    bar.className = "section-tabs";
+    bar.setAttribute("role", "tablist");
+    bar.setAttribute("aria-label", "Sections of this panel");
+    bar.innerHTML = [...labels, SUB_ALL].map((l) => `<button type="button" role="tab" data-subtab="${e(l)}" aria-selected="${l === chosen}" class="${l === chosen ? "active" : ""}" title="${e(l)}">${e(l)}</button>`).join("");
+    list[0].sec.before(bar);
+  }
+  /** Choose the chip a section belongs to, so it can be shown and focused. */
+  function showSection(el) {
+    const root = document.querySelector("#inspector-content");
+    const sec = el?.closest?.("section.sub-hidden");
+    if (!sec) return;
+    const hit = panelSections(root).find((x) => x.sec === sec || x.sec.contains(sec));
+    if (!hit) return;
+    subTab[tab] = hit.label;
+    applySectionTabs(root);
+  }
+  document.querySelector("#inspector-content").addEventListener("click", (ev) => {
+    const chip = ev.target.closest?.("[data-subtab]");
+    if (!chip) return;
+    subTab[tab] = chip.dataset.subtab;
+    const root = document.querySelector("#inspector-content");
+    applySectionTabs(root);
+    root.scrollTop = 0;
+  });
   function renderInspector() {
     document
       .querySelectorAll("[data-tab]")
       .forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
-    document.querySelector("#inspector-content").innerHTML = inspectorHTML();
+    const root = document.querySelector("#inspector-content");
+    root.innerHTML = inspectorHTML();
+    applySectionTabs(root);
     refreshIcons();
     updateFrameGuide();
   }
@@ -3145,9 +3271,13 @@ async function boot() {
     document.querySelector("#gesture-hint").textContent = show3d
       ? walking
         ? "Walking the show: WASD or arrows step · Shift strides · drag to look round · Esc stops"
+        : panTool
+        ? PAN_HINT
         : "Drag to orbit · scroll to zoom · right-drag to pan · W walks the show · Esc back to the plan"
       : showFloor
-      ? "Drag a piece to move it · drag empty floor to select · Space- or right-drag to pan · scroll to zoom"
+      ? panTool
+        ? PAN_HINT
+        : `Drag a piece to move it · drag or right-drag to box-select · ${PAN_KEY} right-drag to pan · Space-drag pans too · scroll to zoom`
       :
       scene?.drawingBox && p.mode !== "photo"
         ? "Box: press on the floor and drag out its footprint · Esc to stop"
@@ -3155,6 +3285,8 @@ async function boot() {
         ? "Walk: W/S or ↑/↓ forward and back · A/D or ←/→ sideways · Shift strides · drag to look round · Esc to stop"
         : scene?.measure.on && p.mode !== "photo"
         ? measureHint
+        : panTool && p.mode !== "photo"
+        ? PAN_HINT
         : p.mode === "photo"
         ? "Drag artwork to move · drag corners for perspective"
         : scene?.move
@@ -3218,6 +3350,7 @@ async function boot() {
         edit: (fn) => mutate(() => fn(toFloor(p.hall))),
         onSelect: showSelected,
         grid: () => showGrid,
+        panTool: () => panTool,
       });
       if (!show3d) showEditor.render();
     }
@@ -3610,13 +3743,17 @@ async function boot() {
     "upload-photo": () => document.querySelector("#photo-input").click(),
     import: () => document.querySelector("#backup-input").click(),
     backup,
+    pan: () => setPanTool(!panTool),
+    "clear-tapes": () => scene?.clearTapes(),
     select: () => {
+      if (panTool) setPanTool(false);
       scene.move = false;
       document.querySelector('[data-action="select"]').classList.add("active");
       document.querySelector('[data-action="move"]').classList.remove("active");
       render();
     },
     move: () => {
+      if (panTool) setPanTool(false);
       scene.move = true;
       document.querySelector('[data-action="move"]').classList.add("active");
       document
@@ -3693,6 +3830,8 @@ async function boot() {
     },
     "show-fit": () => showEditor?.fit(),
     "show-rotate": () => showRotate(90),
+    "show-flip-x": () => showMirror("x"),
+    "show-flip-y": () => showMirror("y"),
     "show-duplicate": () => showDuplicate(),
     "show-delete": () => showDelete(),
     "show-deselect": () => showEditor?.select([]),
@@ -5770,6 +5909,7 @@ async function boot() {
       target.click();
       return;
     }
+    showSection(target);
     const control = target.matches("label") ? target.querySelector("input, select, textarea") : target.matches("button, select, input") ? target : null;
     const shown = target.matches("h3, h4") ? target.closest("section") || target : target;
     shown.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -5785,6 +5925,14 @@ async function boot() {
     // Its own events stop here: the page's input and change handlers read
     // every field in the document as booth settings.
     for (const type of ["input", "change"]) box.addEventListener(type, (ev) => ev.stopPropagation());
+    // Keep every tape: a view setting on the scene, not a booth field, so its
+    // events stop here like the search box's.
+    const keep = document.querySelector("#keep-tapes");
+    keep.addEventListener("input", (ev) => ev.stopPropagation());
+    keep.addEventListener("change", (ev) => {
+      ev.stopPropagation();
+      scene?.setKeepTapes(keep.checked);
+    });
     box.addEventListener("input", () => {
       toolAt = 0;
       renderToolHits();
@@ -5912,6 +6060,7 @@ async function boot() {
       if (key === "r" && rotateSelection(ev.shiftKey ? -15 : 15)) return ev.preventDefault();
       if (key === "v") return actions.select();
       if (key === "m") return actions.move();
+      if (key === "h") return actions.pan();
       if (key === "t") return actions.measure();
       if (key === "w") return setWalking(true);
     }

@@ -16,10 +16,14 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-25, sixth round — the show floor, phases 2, 3 and
-  4: the show in 3D, walked and recorded; one booth opened as a full design,
-  and floor templates; the AI-render hook** (the first bullet below). Before
-  it, the fifth round — **the show floor, phase 1 of the trade-show /
+- **Last deploy: 2026-09-25, seventh round — the owner's first look at the
+  show floor: a right-drag selection box that is drawn, ⌘/Ctrl right-drag to
+  pan, Flip horizontal / vertical, the Pan tool, a walk that takes up where it
+  stopped, several tapes kept at once and sub-tabs in the panels** (the first
+  bullet below). Before it, the sixth round — **the show floor, phases 2, 3
+  and 4: the show in 3D, walked and recorded; one booth opened as a full
+  design, and floor templates; the AI-render hook** (the second bullet
+  below). Before that, the fifth round — **the show floor, phase 1 of the trade-show /
   art-fair layout mode** (the second bullet below). Before that, the
   fourth round — icons on the keyframe arrows,
   Export MP4 at the top of the timeline, and the right framing on screen
@@ -55,6 +59,89 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-25, seventh round: the owner's first look at the show floor.
+  Pushed to `main` and deployed.** Asked for in one message, after the
+  owner used the floor; one commit. Nothing below has been seen on the real
+  machine; all of it is tested in a real browser here (`tests/view-tools2.mjs`).
+  1. **The selection box is drawn now — it never was.** The floor's box
+     (`.sf-marquee` in `src/show-editor.js`) is an SVG `rect`, and the code
+     set `marquee.hidden = false` to show it. An SVG element has no `hidden`
+     property, so that only made a JavaScript expando; the `hidden`
+     attribute stayed and the page's `[hidden] {display:none}` rule kept the
+     box invisible through every drag since phase 1. The selection still
+     worked, which is why no test caught it: the tests read the selection,
+     not the box. It is now shown and hidden by its attribute
+     (`showMarquee`), dashed and a little stronger, and `view-tools2` checks
+     it is visible and the size of the drag. **Rule: never set `.hidden` on
+     an SVG element; toggle the attribute.**
+  2. **Right-drag draws the box, anywhere** — over booths or empty floor, so
+     a box can start on a booth, which a left-drag cannot (that moves the
+     booth). **⌘ right-drag (Ctrl on Windows) pans**, and the status bar says
+     so by name (`PAN_KEY` in `src/main.js`: ⌘ where the platform is a Mac,
+     iPhone or iPad, else Ctrl), as the owner asked; the Show floor panel's
+     help line says it too. Space-drag and the middle button still pan. A
+     right-click that draws nothing leaves the selection alone; Shift adds
+     to it as with the left button.
+  3. **Flip horizontal / Flip vertical** on the floor — the buttons under
+     Turn 90° for one piece or several (`mirrorPieces` in `src/show.js`,
+     pinned in `tests/show.test.js`). The selection is mirrored about its
+     own middle; each piece's centre is reflected and its turn with it
+     (r → −r across a vertical line, r → 180 − r across a horizontal one),
+     so a row facing right comes back facing left. One undo step. What the
+     owner meant by "mirror so people can flip horizontally" was read as
+     flipping a layout; flipping a single booth's design, or a cut-out
+     person, was not built — see Next.
+  4. **The Pan tool** — SketchUp's hand, from the owner's screenshot of
+     SketchUp's orbit and pan icons. In the toolbar beside Move (and alone
+     beside Undo on the show floor, where the booth's tools are hidden), key
+     **H**, as in SketchUp. On, a left-drag or one finger slides the view
+     across the screen instead of orbiting (`BoothScene.setPanTool`, which
+     sets OrbitControls' `mouseButtons.LEFT` / `touches.ONE` to pan) and a
+     click picks nothing; on the 2D floor a left-drag pans even over a booth
+     and moves nothing (`panTool` option of `createShowEditor`). Select (V),
+     Move, the tape, and Box each put the hand down. A walk looks round with
+     the left button whatever the tool, so walking puts orbit back for its
+     length and stopping puts the hand back. The orbit icon in the owner's
+     screenshot was not added as a tool: orbit is what a drag already does
+     with Select.
+  5. **A walk takes up where it stopped.** Walk used to jump to the fixed
+     start (`walkStart` / `showWalkStart`) every time. Now `stopWalk`
+     remembers the pose (`BoothScene.lastWalk`, one for the booth and one
+     for the show — `walkKey`) and `startWalk` goes back to it; only the
+     first walk of a session starts at the entrance. Done also comes back to
+     the orbit view the walk left, rather than the default view. Not saved
+     in the project — a view, not the booth — so a reload starts fresh, and
+     a booth made much smaller can leave a remembered walk outside it (press
+     Reset view, or walk back in).
+  6. **Keep every tape.** While the tape is out, a bar over the viewport
+     offers **Keep every tape** and **Clear tapes**. With Keep on, a
+     finished tape stays, reading and all, when the next is started — up to
+     `MAX_TAPES` (24), oldest dropped first — and kept tapes stay on screen
+     after the tape is put away (Esc), to be read. Clear tapes takes them
+     all off; turning Keep off does too. Off (the default) is the old one-
+     tape behaviour. Kept tapes are editor-only lines and DOM labels like
+     the single tape, so they never reach an export, and nothing is written
+     to the project. The underlay's Scale plan still reads the tape being
+     laid (`measure.points`).
+  7. **Sub-tabs in the panels** ("there are too many tools in the current
+     tabs — tabs run way too long"). A panel with three or more sections
+     gets a row of chips under its heading, one per section by its own
+     heading (a section with none is named by its first sub-heading or
+     label — Lighting's ambient section reads "Ambient illumination"), plus
+     **All**, and shows the chosen section alone. The choice is remembered
+     per tab for the session. **A section that was not there on the last
+     draw of the same tab is chosen for you** — select a booth and its
+     piece section opens; click a work and its properties do — so a
+     selection is never hidden behind a chip. Tool search opens the chip a
+     found control lives under (`showSection`). The chips are built after
+     the panel is drawn (`applySectionTabs` in `renderInspector`), from the
+     top-level `<section>`s, so no panel's HTML changed and a new section
+     gets a chip by existing. **Under automation (`navigator.webdriver`) the
+     panels start on All** so the 30-odd browser suites keep seeing every
+     control; `localStorage["booth.sectionTabs"]` = `"on"` / `"off"`
+     overrides that either way, and `view-tools2` sets it on to test the
+     chips as a person sees them. The inspector's eight top tabs are
+     unchanged — see Next for regrouping them.
 - **2026-09-25, sixth round: the show floor, phases 2–4. Merged to `main`
   and deployed.** Asked for as "build P2–P4 — test each, then move to the
   next phase", in one session, one commit per phase (`72407bd`, `62ef37f`,
@@ -1375,6 +1462,22 @@ Extend it; do not rebuild it.
 
 ## Next
 
+1. **The seventh round (2026-09-25), on the real machine.** Build `main`'s
+   tip first (`window.BOOTH_BUILD`). Does the right-drag box feel right, and
+   is ⌘ right-drag a comfortable pan on a Mac trackpad (two-finger click and
+   drag with ⌘ held)? On a trackpad a two-finger scroll already pans the
+   floor. Do the sub-tabs make the panels quicker to use, or should some
+   panels group several small sections under one chip (Layout has twelve
+   chips)? Is choosing the new section on a selection right, or does it jump
+   when you did not want it to? Should the eight top tabs themselves be
+   regrouped (say Design · Light & camera · Show floor · Export) — not done:
+   the owner's words were about the tabs running long, which the chips
+   answer without moving any tool. "Mirror so people can flip horizontally"
+   was built as Flip horizontal / vertical for pieces on the show floor; if
+   it meant flipping a booth's whole design left for right (walls, work,
+   pedestals), or a cut-out person, that is a separate build — say which.
+   Pan tool: is H the right key, and should the hand stay on after
+   switching mode?
 1. **The show floor, all four phases, by eye on the real machine.** Built
    2026-09-25 (see Now); none of it has been seen outside this sandbox.
    - **Phase 2, the 3D show:** does the overview frame the floor well, and
@@ -1864,6 +1967,14 @@ anything else in a browser until it is done.
 
 ## Rules that are easy to break
 
+- **Never set `.hidden` on an SVG element.** Only HTML elements have the
+  property; on SVG it is a silent expando and the attribute stays. Toggle
+  the attribute (`toggleAttribute("hidden", …)`). The show floor's selection
+  box was invisible for a whole round because of this.
+- **A test that clicks inside a panel sees every section only because
+  automation starts the sub-tabs on All** (`navigator.webdriver`). A test
+  that sets `booth.sectionTabs` to `"on"` must pick the chip before
+  clicking a control in another section.
 - **The live loop draws on demand.** Anything new that changes the picture
   must reach `invalidate()` — through a wrapped scene method, an input event,
   or a load `watchForChanges()` knows about. Otherwise it shows up late.

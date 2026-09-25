@@ -283,6 +283,28 @@ export function spacePieces(pieces, gap) {
 }
 
 /**
+ * Mirror pieces about the middle of the box they fill together: `"x"` flips
+ * them left for right (Flip horizontal), `"y"` front for back. Each piece's
+ * centre is reflected and its turn with it — a reflection across a vertical
+ * line takes a turn of r to −r, across a horizontal one to 180 − r — so a
+ * row of booths facing right comes back facing left, still in its row.
+ * Pieces are rectangles, so the reflection of one is itself turned. Returns
+ * the new `{ id, x, y, rot }` for each (`rot` 0 when unturned).
+ */
+export function mirrorPieces(pieces, axis = "x") {
+  if (!pieces.length) return [];
+  const b = boundsOf(pieces);
+  const cx = (b.l + b.r) / 2;
+  const cy = (b.t + b.b) / 2;
+  const round = (n) => Math.round(n * 10) / 10;
+  return pieces.map((it) => {
+    const r = it.rot || 0;
+    const rot = (((axis === "x" ? -r : 180 - r) % 360) + 360) % 360;
+    return axis === "x" ? { id: it.id, x: round(2 * cx - it.x), y: it.y, rot } : { id: it.id, x: it.x, y: round(2 * cy - it.y), rot };
+  });
+}
+
+/**
  * Number the booths afresh from `start`, the way a visitor reads the floor:
  * row by row from the back, left to right, a row being booths whose centres
  * lie within half a booth of each other. Returns `{ id, number }` pairs.
