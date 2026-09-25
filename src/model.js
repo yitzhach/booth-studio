@@ -581,7 +581,8 @@ export function selectGround(p, value) {
 export function removeGroundUpload(p, assetId) {
   if (p.assets?.[assetId]?.role !== "ground") return;
   // Shared with a placement — only the floor's claim on it is given up.
-  if (!p.art.some((a) => a.asset === assetId) && p.photo?.asset !== assetId)
+  // Nor while a booth design parked on the show floor (src/linked.js) names it.
+  if (!p.art.some((a) => a.asset === assetId) && p.photo?.asset !== assetId && !JSON.stringify(p.hall?.designs || {}).includes(JSON.stringify(assetId)))
     delete p.assets[assetId];
   if (p.booth.groundAsset === assetId) p.booth.groundAsset = null;
   if (uploadRef(p.booth.ground) === assetId)
@@ -780,6 +781,25 @@ export function validateProject(p) {
   if (!validKit(p.exportKit)) fail();
   // The hall planner's plan of the whole show. Optional, like the views.
   if (!validHall(p.hall)) fail();
+  // Parked designs of other floor booths (src/linked.js): each is a booth,
+  // its art and its lights, held to exactly the rules the live one is, with
+  // its images in this backup's assets.
+  for (const d of Object.values(p.hall?.designs || {})) {
+    if (!d || typeof d !== "object") fail();
+    validateProject({
+      schema: 1,
+      units: "inches",
+      name: "Linked design",
+      mode: "3d",
+      photo: { asset: null, layers: [], lights: [], exposure: 0 },
+      assets: p.assets,
+      booth: d.booth,
+      art: d.art,
+      lights: d.lights,
+      ambient: d.ambient,
+      ...(d.views !== undefined ? { views: d.views } : {}),
+    });
+  }
   // The floor plan underlay: an image of the venue's plan laid on the floor
   // at a real width. Optional; when present it must name an image in this
   // backup, or it would be a plan of nothing.

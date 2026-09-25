@@ -43,6 +43,9 @@ export function validHall(h) {
   if (h.rows * h.perRow > MAX_HALL_BOOTHS) return false;
   if (typeof h.backToBack !== "boolean") return false;
   if (h.mine !== undefined && !Number.isInteger(h.mine)) return false;
+  // Which floor booth the live design belongs to (src/linked.js); 0 is none.
+  if (h.open !== undefined && (!Number.isInteger(h.open) || h.open < 0 || h.open > 99999)) return false;
+  if (h.designs !== undefined && (!h.designs || typeof h.designs !== "object" || Array.isArray(h.designs) || Object.keys(h.designs).length > 60 || Object.keys(h.designs).some((k) => !/^\d{1,5}$/.test(k)))) return false;
   if (!h.booths || typeof h.booths !== "object" || Array.isArray(h.booths)) return false;
   const entries = Object.entries(h.booths);
   if (entries.length > MAX_HALL_BOOTHS) return false;

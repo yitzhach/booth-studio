@@ -198,9 +198,10 @@ import { MAX_VIEWS, STEP, STRIDE, TAGS, newView } from "./views.js";
 import { ACCESSIBLE, checkClearance } from "./clearance.js";
 import { elevationsHTML } from "./elevations.js";
 import { HALL_LIMITS, MAX_HALL_BOOTHS, STATUSES, boothOf, hallCSV, hallHTML, hallLayout, hallSVG, hallTotals, newHall } from "./hall.js";
-import { BOOTH_STYLES, KINDS, SHAPES, VENUES as SHOW_VENUES, boothBlock, boundsOf, copyPieces, feet, floorOf, renumber, showItems, showSVG, spacePieces, toFloor } from "./show.js";
+import { BOOTH_STYLES, FLOOR_TEMPLATES, KINDS, SHAPES, VENUES as SHOW_VENUES, boothBlock, boundsOf, copyPieces, feet, floorOf, renumber, showItems, showSVG, spacePieces, toFloor } from "./show.js";
 import { createShowEditor } from "./show-editor.js";
 import { showWalkthrough } from "./show-scene.js";
+import { MAX_DESIGNS, OWN, assetInDesigns, deleteEffect, hasDesign, liveNumber, openBooth, renumberDesigns, setMine, setOpen } from "./linked.js";
 import { CIRCUIT_WATTS, powerHTML, powerLines, powerTotals } from "./power.js";
 import { FOOTPRINTS, SHOWS, STARTERS, fromTemplate, quickStart, templateOf } from "./quickstart.js";
 import { PhotoEditor } from "./photo.js";
@@ -1946,6 +1947,7 @@ async function boot() {
     const moved = changes.filter((c) => byId.get(c.id)?.number !== c.number);
     const records = {};
     let mine = h.mine;
+    const moves = moved.map((c) => ({ from: byId.get(c.id).number, to: c.number }));
     for (const c of moved) {
       const it = byId.get(c.id);
       if (h.booths[it.number]) records[c.number] = h.booths[it.number];
@@ -1956,6 +1958,8 @@ async function boot() {
     Object.assign(h.booths, records);
     if (mine === undefined) delete h.mine;
     else h.mine = mine;
+    // A linked design is kept by number too, and follows its booth.
+    renumberDesigns(h, moves);
   }
   function showRotate(deg) {
     const ids = new Set(showEditor?.selection || []);
@@ -1985,16 +1989,47 @@ async function boot() {
     const pieces = showPieces();
     if (!pieces.length) return;
     const ids = new Set(pieces.map((i) => i.id));
+    const numbers = pieces.filter((i) => i.kind === "booth").map((i) => i.number);
+    const effect = deleteEffect(p.hall, numbers);
+    if (effect.refuse) return toast(`Booth ${liveNumber(p.hall)} holds the design you are editing, and your own booth's design is parked, so there is nowhere to keep this one. Open another booth first.`, true);
     mutate(() => {
+      const live = liveNumber(p.hall);
       for (const it of pieces) if (it.kind === "booth") {
         delete p.hall.booths[it.number];
         if (p.hall.mine === it.number) delete p.hall.mine;
+        if (p.hall.designs) delete p.hall.designs[it.number];
       }
+      if (p.hall.designs && !Object.keys(p.hall.designs).length) delete p.hall.designs;
+      // The design being edited loses its booth and becomes your own booth's.
+      if (effect.orphan) setOpen(p.hall, OWN);
+      else if (live !== undefined) setOpen(p.hall, live);
       p.hall.items = p.hall.items.filter((i) => !ids.has(i.id));
     });
+    if (effect.drop.length) toast(`The linked design${effect.drop.length === 1 ? "" : "s"} of booth ${effect.drop.join(", ")} went with ${effect.drop.length === 1 ? "it" : "them"}. Undo brings ${effect.drop.length === 1 ? "it" : "them"} back.`);
     hallSelected = null;
     showEditor.select([]);
     toast(`${pieces.length} piece${pieces.length === 1 ? "" : "s"} deleted. Undo brings ${pieces.length === 1 ? "it" : "them"} back.`);
+  }
+  /**
+   * Start the floor again from a saved template (show.js FLOOR_TEMPLATES):
+   * its size and pieces replace the floor's. Sales, "my booth" and linked
+   * designs are kept by booth number, so a booth that exists in both keeps
+   * everything; undo brings the old floor back whole.
+   */
+  function applyTemplate(key) {
+    const t = FLOOR_TEMPLATES[key];
+    if (!t || !p.hall) return;
+    confirmAction(`Start from “${t.label}”?`, "Every piece on the floor, and its size, is replaced by the template's. Sales, your booth and linked designs stay with their booth numbers. Undo brings this floor back.", () => {
+      const h = toFloor(p.hall);
+      const built = t.build(h.start);
+      mutate(() => {
+        h.items = built.items;
+        h.venue = built.venue;
+      });
+      showEditor?.select([]);
+      if (!show3d) showEditor?.fit();
+      toast(`“${t.label}”: ${built.items.filter((i) => i.kind === "booth").length} booths, numbered from ${h.start}.`);
+    });
   }
   /** Line the selection up on its top or left edge. */
   function showAlign(edge) {
@@ -2150,6 +2185,30 @@ async function boot() {
   }
   /** The inspector while the show floor is open. */
   /**
+   * A selected floor booth's own design: open it in the booth editor, as a
+   * new design sized from the piece or the one it already has.
+   */
+  /** The designs linked to floor booths, and the way back to your own. */
+  function linkedHTML() {
+    const h = p.hall;
+    const numbers = Object.keys(h.designs || {}).map(Number).filter((n) => n !== OWN).sort((a, b) => a - b);
+    const live = liveNumber(h);
+    if (!numbers.length && live === undefined && !h.designs?.[OWN]) return "";
+    return `<section><h3>Booth designs <span>${numbers.length + (live !== undefined ? 1 : 0)} linked</span></h3><p class="muted">${live !== undefined ? `Booth ${live} is open in the booth editor.` : "The booth editor holds your own booth, on no booth of this floor."}${numbers.length ? ` Also linked: ${numbers.map((n) => "booth " + n).join(", ")} — select one and open it.` : ""}</p>${h.designs?.[OWN] ? `${btn("show-open-own", "Open my own booth", "door-open", "wide")}<p class="muted">The design that was open before any floor booth was, kept on no booth.</p>` : ""}</section>`;
+  }
+  function designHTML(it) {
+    const h = p.hall;
+    const live = liveNumber(h) === it.number;
+    const parked = !!h.designs?.[it.number];
+    const count = Object.keys(h.designs || {}).length;
+    const note = live
+      ? "This booth's design is the one open in the booth editor."
+      : parked
+      ? "This booth has its own design, kept with it. Opening it parks the one open now with its booth."
+      : `Opens this booth in the booth editor as a new design, ${feet(Math.min(360, Math.max(48, it.w)))} × ${feet(Math.min(360, Math.max(48, it.d)))} and built as it is on the floor. The one open now is kept with its booth.`;
+    return `<section class="show-design"><h3>Design${live ? ' <span class="badge">Open</span>' : parked ? ' <span class="badge">Linked</span>' : ""}</h3>${btn("show-open-booth", live ? "Edit this booth" : parked ? "Open this booth's design" : "Open this booth", "door-open", "primary wide")}<p class="muted">${note}${!live && !parked && count >= MAX_DESIGNS ? ` ${MAX_DESIGNS} linked designs is the limit.` : ""}</p></section>`;
+  }
+  /**
    * The show in 3D: walk it, have a walkthrough made from its aisles, edit
    * that as a timeline and export it — the booth's own tools, pointed at the
    * floor.
@@ -2173,13 +2232,13 @@ async function boot() {
       const it = pieces[0];
       const k = KINDS[it.kind];
       const rec = it.kind === "booth" ? boothOf(h, it.number) : null;
-      selectedHTML = `<section class="show-piece"><h3>${it.kind === "booth" ? `Booth ${it.number}${h.mine === it.number ? ' <span class="badge">Yours</span>' : ""}` : e(k.label)} <span>${feet(it.w)} × ${feet(it.d)}</span></h3><div class="field-pair">${pf("Width", "w", it.w, 6, 12000)}${pf("Depth", "d", it.d, 6, 12000)}</div><div class="field-pair">${pf("Across", "x", it.x, -24000, 48000)}${pf("From back", "y", it.y, -24000, 48000)}</div>${pf("Turn", "rot", it.rot || 0, 0, 359, 15, "°")}${it.kind === "booth" ? `${pf("Booth number", "number", it.number, 1, 99999, 1, "#")}<label class="setting-label">Built as<select data-show-field="style" aria-label="Booth built as">${Object.entries(BOOTH_STYLES).map(([key, v]) => `<option value="${key}" ${(it.style || "pipe") === key ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label>` : `<label class="setting-label">Text<input type="text" data-show-field="text" aria-label="Piece text" maxlength="120" value="${e(it.text || "")}" placeholder="${e(k.label)}"/></label>`}<div class="button-row">${btn("show-rotate", "Turn 90°", "rotate-cw")}${btn("show-duplicate", "Duplicate", "copy")}${btn("show-delete", "Delete", "trash-2")}</div></section>${rec ? `<section class="hall-booth"><h3>Sale</h3><label class="setting-label">Status<select data-field="status" data-scope="hallbooth" aria-label="Booth status">${Object.entries(STATUSES).map(([key, v]) => `<option value="${key}" ${rec.status === key ? "selected" : ""}>${e(v.label)}</option>`).join("")}</select></label><label class="setting-label">Exhibitor<input type="text" data-field="name" data-scope="hallbooth" aria-label="Exhibitor" maxlength="120" value="${e(rec.name)}"/></label>${field("Price", "price", rec.price || 0, ...HALL_LIMITS.price, 1, "$", "hallbooth", "Booth price")}<label class="setting-label">Note<input type="text" data-field="note" data-scope="hallbooth" aria-label="Booth note" maxlength="300" value="${e(rec.note)}"/></label>${btn("hall-mine", h.mine === it.number ? "Not my booth" : "This is my booth", "box", "wide")}</section>` : ""}`;
+      selectedHTML = `<section class="show-piece"><h3>${it.kind === "booth" ? `Booth ${it.number}${h.mine === it.number ? ' <span class="badge">Yours</span>' : ""}` : e(k.label)} <span>${feet(it.w)} × ${feet(it.d)}</span></h3><div class="field-pair">${pf("Width", "w", it.w, 6, 12000)}${pf("Depth", "d", it.d, 6, 12000)}</div><div class="field-pair">${pf("Across", "x", it.x, -24000, 48000)}${pf("From back", "y", it.y, -24000, 48000)}</div>${pf("Turn", "rot", it.rot || 0, 0, 359, 15, "°")}${it.kind === "booth" ? `${pf("Booth number", "number", it.number, 1, 99999, 1, "#")}<label class="setting-label">Built as<select data-show-field="style" aria-label="Booth built as">${Object.entries(BOOTH_STYLES).map(([key, v]) => `<option value="${key}" ${(it.style || "pipe") === key ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label>` : `<label class="setting-label">Text<input type="text" data-show-field="text" aria-label="Piece text" maxlength="120" value="${e(it.text || "")}" placeholder="${e(k.label)}"/></label>`}<div class="button-row">${btn("show-rotate", "Turn 90°", "rotate-cw")}${btn("show-duplicate", "Duplicate", "copy")}${btn("show-delete", "Delete", "trash-2")}</div></section>${rec ? `<section class="hall-booth"><h3>Sale</h3><label class="setting-label">Status<select data-field="status" data-scope="hallbooth" aria-label="Booth status">${Object.entries(STATUSES).map(([key, v]) => `<option value="${key}" ${rec.status === key ? "selected" : ""}>${e(v.label)}</option>`).join("")}</select></label><label class="setting-label">Exhibitor<input type="text" data-field="name" data-scope="hallbooth" aria-label="Exhibitor" maxlength="120" value="${e(rec.name)}"/></label>${field("Price", "price", rec.price || 0, ...HALL_LIMITS.price, 1, "$", "hallbooth", "Booth price")}<label class="setting-label">Note<input type="text" data-field="note" data-scope="hallbooth" aria-label="Booth note" maxlength="300" value="${e(rec.note)}"/></label>${btn("hall-mine", h.mine === it.number ? "Not my booth" : "This is my booth", "box", "wide")}</section>${designHTML(it)}` : ""}`;
     } else if (pieces.length > 1) {
       selectedHTML = `<section class="show-piece"><h3>${pieces.length} selected <span>${pieces.filter((i) => i.kind === "booth").length} booths</span></h3><div class="button-row">${btn("show-rotate", "Turn 90°", "rotate-cw")}${btn("show-duplicate", "Duplicate", "copy")}${btn("show-delete", "Delete", "trash-2")}</div><div class="button-row">${btn("show-align-top", "Line up tops", "align-start-horizontal")}${btn("show-align-left", "Line up lefts", "align-start-vertical")}</div>${num("Gap between", "show-gap", showGap, 0, 2400, 1, "in", "id")}${btn("show-space", "Space them evenly", "columns-2", "wide")}<p class="muted">Lays them side by side along the way they run, this far apart, the first staying put. A gap of 0 butts them together; a single booth can then be dragged to break the rhythm.</p>${btn("show-renumber", "Renumber these", "list-ordered", "wide")}${btn("show-deselect", "Done", "check", "wide")}</section>`;
     }
     const b = showBlock;
     const bf = (label, key, min, max, step = 1, unit = "in") => num(label, key, b[key], min, max, step, unit, "data-show-block");
-    return `<div class="button-row">${btn("show-exit", "Back to my booth", "arrow-left")}${btn("show-fit", "Fit floor", "maximize")}</div>${btn("show-3d", "See it in 3D", "box", "primary wide")}${selectedHTML}<div class="mobile-library">${showLibraryHTML()}</div><section><h3>Add booths</h3><div class="field-pair">${bf("How many", "count", 1, 400, 1, "")}${bf("Per row", "perRow", 1, 60, 1, "")}</div><div class="field-pair">${bf("Booth width", "w", 48, 480)}${bf("Booth depth", "d", 48, 480)}</div><div class="field-pair">${bf("Gap in a row", "gap", 0, 480)}${bf("Aisle", "aisle", 36, 480)}</div><label class="check-field"><input type="checkbox" data-show-block="backToBack" ${b.backToBack ? "checked" : ""}/>Rows back to back, in pairs</label><label class="setting-label">Built as<select data-show-block="style" aria-label="New booths built as">${Object.entries(BOOTH_STYLES).map(([key, v]) => `<option value="${key}" ${b.style === key ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label>${btn("show-add-block", "Add booths", "plus", "primary wide")}<p class="muted">Numbered on from the highest booth on the floor, placed below everything already on the floor and selected, ready to drag.</p></section><section><h3>Floor</h3><label class="setting-label">Venue<select data-show-venue="kind" aria-label="Show venue">${Object.entries(SHOW_VENUES).map(([key, v]) => `<option value="${key}" ${f.kind === key ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label><div class="field-pair">${num("Floor width", "width", f.width / 12, 10, 2000, 1, "ft", "data-show-venue")}${num("Floor depth", "depth", f.depth / 12, 10, 2000, 1, "ft", "data-show-venue")}</div><label class="setting-label">Snap grid<select id="show-grid" aria-label="Snap grid">${[[0, "Off"], [1, "1″"], [6, "6″"], [12, "1′"], [24, "2′"], [60, "5′"]].map(([v, l]) => `<option value="${v}" ${showGrid === v ? "selected" : ""}>${l}</option>`).join("")}</select></label><p class="muted">Pieces snap to each other's edges first, then to this grid. Hold Alt while dragging to place freely.</p>${btn("show-renumber", "Renumber every booth", "list-ordered", "wide")}</section><section><h3>Sales <span>${t.booths} booths</span></h3><p class="hall-totals">${t.sold} sold · ${t.held} held · ${t.open} open${t.soldValue ? ` · sold $${Math.round(t.soldValue).toLocaleString("en-US")}` : ""}${t.heldValue ? ` · held $${Math.round(t.heldValue).toLocaleString("en-US")}` : ""}</p>${field("Default price", "price", h.price, ...HALL_LIMITS.price, 1, "$", "hallplan", "Hall Default price")}<div class="button-row">${btn("hall-map", "Download hall map", "download")}${btn("hall-csv", "Exhibitor list (CSV)", "download")}</div>${btn("hall-delete", "Delete the hall plan", "trash-2", "wide")}</section><section><h3>Keys</h3><p class="muted">Delete removes · Ctrl+D duplicates · R turns 90° · arrows nudge by the grid (Shift: 10×) · Ctrl+A selects all · Esc lets go · 0 fits the floor.</p></section>`;
+    return `<div class="button-row">${btn("show-exit", "Back to my booth", "arrow-left")}${btn("show-fit", "Fit floor", "maximize")}</div>${btn("show-3d", "See it in 3D", "box", "primary wide")}${selectedHTML}<div class="mobile-library">${showLibraryHTML()}</div><section><h3>Add booths</h3><div class="field-pair">${bf("How many", "count", 1, 400, 1, "")}${bf("Per row", "perRow", 1, 60, 1, "")}</div><div class="field-pair">${bf("Booth width", "w", 48, 480)}${bf("Booth depth", "d", 48, 480)}</div><div class="field-pair">${bf("Gap in a row", "gap", 0, 480)}${bf("Aisle", "aisle", 36, 480)}</div><label class="check-field"><input type="checkbox" data-show-block="backToBack" ${b.backToBack ? "checked" : ""}/>Rows back to back, in pairs</label><label class="setting-label">Built as<select data-show-block="style" aria-label="New booths built as">${Object.entries(BOOTH_STYLES).map(([key, v]) => `<option value="${key}" ${b.style === key ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label>${btn("show-add-block", "Add booths", "plus", "primary wide")}<p class="muted">Numbered on from the highest booth on the floor, placed below everything already on the floor and selected, ready to drag.</p></section><section><h3>Floor</h3><label class="setting-label">Venue<select data-show-venue="kind" aria-label="Show venue">${Object.entries(SHOW_VENUES).map(([key, v]) => `<option value="${key}" ${f.kind === key ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label><div class="field-pair">${num("Floor width", "width", f.width / 12, 10, 2000, 1, "ft", "data-show-venue")}${num("Floor depth", "depth", f.depth / 12, 10, 2000, 1, "ft", "data-show-venue")}</div><label class="setting-label">Snap grid<select id="show-grid" aria-label="Snap grid">${[[0, "Off"], [1, "1″"], [6, "6″"], [12, "1′"], [24, "2′"], [60, "5′"]].map(([v, l]) => `<option value="${v}" ${showGrid === v ? "selected" : ""}>${l}</option>`).join("")}</select></label><p class="muted">Pieces snap to each other's edges first, then to this grid. Hold Alt while dragging to place freely.</p>${btn("show-renumber", "Renumber every booth", "list-ordered", "wide")}</section><section><h3>Start from a template</h3>${Object.entries(FLOOR_TEMPLATES).map(([key, t]) => `${btn("show-template-" + key, t.label, "layout-template", "wide")}<p class="muted">${e(t.note)}</p>`).join("")}</section>${linkedHTML()}<section><h3>Sales <span>${t.booths} booths</span></h3><p class="hall-totals">${t.sold} sold · ${t.held} held · ${t.open} open${t.soldValue ? ` · sold $${Math.round(t.soldValue).toLocaleString("en-US")}` : ""}${t.heldValue ? ` · held $${Math.round(t.heldValue).toLocaleString("en-US")}` : ""}</p>${field("Default price", "price", h.price, ...HALL_LIMITS.price, 1, "$", "hallplan", "Hall Default price")}<div class="button-row">${btn("hall-map", "Download hall map", "download")}${btn("hall-csv", "Exhibitor list (CSV)", "download")}</div>${btn("hall-delete", "Delete the hall plan", "trash-2", "wide")}</section><section><h3>Keys</h3><p class="muted">Delete removes · Ctrl+D duplicates · R turns 90° · arrows nudge by the grid (Shift: 10×) · Ctrl+A selects all · Esc lets go · 0 fits the floor.</p></section>`;
   }
   /** Export → Power and rentals (Pro): the service desk's two forms. */
   function powerSection() {
@@ -3085,7 +3144,7 @@ async function boot() {
     document.querySelector("#scene-title").textContent =
       p.mode === "photo"
         ? "Your booth, reimagined"
-        : `${p.booth.width / 12} × ${p.booth.depth / 12} ft / ${p.booth.tent ? "Canopy" : "Open booth"}`;
+        : `${p.booth.width / 12} × ${p.booth.depth / 12} ft / ${p.booth.tent ? "Canopy" : "Open booth"}${liveNumber(p.hall) !== undefined ? ` · Booth ${liveNumber(p.hall)}` : ""}`;
     document.querySelector("#scene-subtitle").textContent =
       p.mode === "photo"
         ? "Original photo + editable overlays"
@@ -4267,7 +4326,7 @@ async function boot() {
       toast("Hall plan started: two back-to-back rows of eight 10 × 10s. Change the layout below; tap a booth to sell it.");
     },
     "hall-delete": () =>
-      confirmAction("Delete the hall plan?", "Every booth's exhibitor, status and price goes with it. Undo brings it back.", () => {
+      confirmAction("Delete the hall plan?", "Every booth's exhibitor, status and price goes with it, and every booth design opened from it except the one open now. Undo brings it back.", () => {
         mutate(() => delete p.hall);
         hallSelected = null;
       }),
@@ -4276,10 +4335,36 @@ async function boot() {
       renderInspector();
     },
     "hall-mine": () =>
+      mutate(() => setMine(p.hall, p.hall.mine === hallSelected ? undefined : hallSelected)),
+    "show-open-booth": () => {
+      const n = hallSelected;
+      if (!p.hall || !Number.isInteger(n)) return;
+      if (liveNumber(p.hall) === n) return actions["mode-3d"]();
+      let err = null;
+      const fresh = !hasDesign(p.hall, n);
+      if (show3d) setShow3d(false);
       mutate(() => {
-        if (p.hall.mine === hallSelected) delete p.hall.mine;
-        else p.hall.mine = hallSelected;
-      }),
+        err = openBooth(p, n);
+        if (err) return;
+        showFloor = false;
+        p.mode = "3d";
+        selected = null;
+        tab = "layout";
+      });
+      if (err) return toast(err, true);
+      toast(fresh ? `Booth ${n} opened as a new design, sized from the floor. The booth you had open is kept with its booth; Show floor → any booth opens it again.` : `Booth ${n}'s design is open. The one you had open is kept with its booth.`);
+    },
+    "show-open-own": () => {
+      if (!p.hall?.designs?.[OWN]) return;
+      let err = null;
+      if (show3d) setShow3d(false);
+      mutate(() => {
+        err = openBooth(p, OWN);
+        if (!err) (showFloor = false), (p.mode = "3d"), (selected = null);
+      });
+      if (err) toast(err, true);
+      else toast("Your own booth — the one on no booth of this floor — is open again.");
+    },
     "hall-map": () => {
       if (!p.hall) return;
       download(new Blob([hallHTML(p.hall, p.name)], { type: "text/html" }), safeName() + "-hall-map.html");
@@ -4316,7 +4401,7 @@ async function boot() {
         const id = p.booth.underlay?.asset;
         delete p.booth.underlay;
         // The image is only the plan's: nothing else can be using it.
-        if (id && !p.art.some((a) => a.asset === id)) delete p.assets[id];
+        if (id && !p.art.some((a) => a.asset === id) && !assetInDesigns(p, id)) delete p.assets[id];
       }),
     "underlay-scale": () => {
       const u = p.booth.underlay;
@@ -4464,7 +4549,7 @@ async function boot() {
             p.booth.models = (p.booth.models || []).filter((m) => m.id !== id);
             if (!p.booth.models.length) delete p.booth.models;
             // The file goes with its last placement.
-            if (gone && !(p.booth.models || []).some((m) => m.asset === gone.asset)) delete p.assets[gone.asset];
+            if (gone && !(p.booth.models || []).some((m) => m.asset === gone.asset) && !assetInDesigns(p, gone.asset)) delete p.assets[gone.asset];
           });
         }
         else if (action.startsWith("view-update-")) {
@@ -4482,6 +4567,7 @@ async function boot() {
         }
         else if (action.startsWith("delete-panel-")) deletePanel(action.slice(13));
         else if (action.startsWith("delete-pedestal-")) deletePedestal(action.slice(16));
+        else if (action.startsWith("show-template-")) applyTemplate(action.slice(14));
         else if (action.startsWith("qs-forget-")) {
           writeTemplates(readTemplates().filter((t) => t.id !== action.slice(10)));
           openQuickStart();
@@ -4682,7 +4768,7 @@ async function boot() {
       const asset = await readImage(file);
       mutate(() => {
         const old = p.booth.underlay?.asset;
-        if (old && !p.art.some((a) => a.asset === old)) delete p.assets[old];
+        if (old && !p.art.some((a) => a.asset === old) && !assetInDesigns(p, old)) delete p.assets[old];
         const id = uid();
         asset.role = "underlay";
         p.assets[id] = asset;

@@ -377,3 +377,65 @@ export function showSVG(h) {
 }
 
 export { feet };
+
+/**
+ * Saved floor templates: whole floors to start from, each a venue and its
+ * pieces. Asked for by name — "a 10 × 10 art fair street, a convention hall
+ * with perimeter booths" — and a third, a market under one pavilion tent,
+ * because the venue list has had a pavilion since phase 1 and nothing used
+ * it. `build(start)` numbers the booths from `start`, back to front and left
+ * to right, the way `renumber` reads a floor.
+ */
+export const FLOOR_TEMPLATES = {
+  street: {
+    label: "Art fair street",
+    note: "Outdoors: two rows of twelve 10 × 10 canopy tents facing each other across a 20′ street, 2′ apart, an entrance at each end.",
+    build(start = 101) {
+      const items = [];
+      const x0 = (1920 - (12 * 120 + 11 * 24)) / 2;
+      // The top row faces down the floor, into the street; the bottom row
+      // faces up it — the same street from both sides.
+      items.push(...boothBlock(items, { count: 12, perRow: 12, w: 120, d: 120, gap: 24, style: "tent", x: x0, y: 60, start }));
+      for (const it of boothBlock(items, { count: 12, perRow: 12, w: 120, d: 120, gap: 24, style: "tent", x: x0, y: 420, start })) items.push({ ...it, rot: 180 });
+      items.push({ id: newId(items), kind: "aisle", x: 960, y: 300, w: 1704 + 96, d: 240 });
+      items.push({ id: newId(items), kind: "door", x: 12, y: 300, w: 192, d: 12, rot: 90 });
+      items.push({ id: newId(items), kind: "door", x: 1908, y: 300, w: 192, d: 12, rot: 90 });
+      items.push({ id: newId(items), kind: "label", x: 960, y: 24, w: 480, d: 36, text: "Artists' street" });
+      return { venue: { kind: "outdoor", width: 1920, depth: 600 }, items };
+    },
+  },
+  convention: {
+    label: "Convention hall, perimeter booths",
+    note: "Indoors, 150′ × 100′: 10 × 10 booths round three walls facing in, four island rows back to back in the middle, 10′ aisles, an entrance, an info desk, food and restrooms.",
+    build(start = 101) {
+      const items = [];
+      const add = (it) => (items.push({ id: newId(items), ...it }), items.at(-1));
+      const booth = (x, y, rot) => add({ kind: "booth", number: nextNumber(items, start), x, y, w: 120, d: 120, ...(rot ? { rot } : {}) });
+      // Along the back wall, facing the entrance.
+      for (let x = 180; x <= 1620; x += 120) booth(x, 60);
+      // Down the left wall facing right (turned 270°), and down the right
+      // wall facing left (turned 90°), below the back row's corners.
+      for (let y = 240; y <= 960; y += 120) booth(60, y, 270);
+      for (let y = 240; y <= 960; y += 120) booth(1740, y, 90);
+      // Islands: two pairs of rows back to back, 10′ aisles all round.
+      items.push(...boothBlock(items, { count: 32, perRow: 8, w: 120, d: 120, aisle: 120, backToBack: true, x: 420, y: 300, start }));
+      add({ kind: "door", x: 900, y: 1194, w: 192, d: 12 });
+      add({ kind: "desk", x: 900, y: 1086, w: 96, d: 36 });
+      add({ kind: "food", x: 300, y: 1080, w: 240, d: 192 });
+      add({ kind: "restroom", x: 1560, y: 1110, w: 144, d: 120 });
+      return { venue: { kind: "indoor", width: 1800, depth: 1200 }, items };
+    },
+  },
+  pavilion: {
+    label: "Market under a pavilion",
+    note: "Outdoors, 80′ × 60′: a 60′ × 40′ pavilion tent over two back-to-back rows of six 8 × 10 booths, food trucks' pad and an entrance.",
+    build(start = 101) {
+      const items = [];
+      items.push({ id: newId(items), kind: "pavilion", x: 480, y: 300, w: 720, d: 480 });
+      items.push(...boothBlock(items, { count: 12, perRow: 6, w: 96, d: 120, backToBack: true, x: 192, y: 180, start }));
+      items.push({ id: newId(items), kind: "food", x: 480, y: 636, w: 480, d: 144, text: "Food trucks" });
+      items.push({ id: newId(items), kind: "door", x: 480, y: 714, w: 144, d: 12 });
+      return { venue: { kind: "outdoor", width: 960, depth: 720 }, items };
+    },
+  },
+};
