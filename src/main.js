@@ -207,7 +207,7 @@ import { createShowEditor } from "./show-editor.js";
 import { showWalkthrough } from "./show-scene.js";
 import { PACK_LONG, PACK_SIZES, SURFACES, describeScene, protectPass, provider as aiProvider, render as aiRender, renderPack } from "./ai-render.js";
 import { designFile, importDesign, readDesignFile } from "./booth-file.js";
-import { SHARE_PARAM, downloadShare, shareLink, uploadShare } from "./share.js";
+import { SHARE_DAYS_SHOWN, SHARE_PARAM, deleteShare, downloadShare, forgetLink, rememberLink, sentLinks, shareLink, updateShare, uploadShare } from "./share.js";
 import { putDesign } from "./linked.js";
 import { MAX_DESIGNS, OWN, assetInDesigns, deleteEffect, hasDesign, liveNumber, openBooth, renumberDesigns, setMine, setOpen } from "./linked.js";
 import { CIRCUIT_WATTS, powerHTML, powerLines, powerTotals } from "./power.js";
@@ -2270,7 +2270,7 @@ async function boot() {
       : parked
       ? "This booth has its own design, kept with it. Opening it parks the one open now with its booth."
       : `Opens this booth in the booth editor as a new design, ${feet(Math.min(360, Math.max(48, it.w)))} × ${feet(Math.min(360, Math.max(48, it.d)))} and built as it is on the floor. The one open now is kept with its booth.`;
-    return `<section class="show-design"><h3>Design${live ? ' <span class="badge">Open</span>' : parked ? ' <span class="badge">Linked</span>' : ""}</h3>${btn("show-open-booth", live ? "Edit this booth" : parked ? "Open this booth's design" : "Open this booth", "door-open", "primary wide")}<p class="muted">${note}${!live && !parked && count >= MAX_DESIGNS ? ` ${MAX_DESIGNS} linked designs is the limit.` : ""}</p>${btn("import-design", "Import a booth design", "upload", "wide")}<p class="muted">An exhibitor's own design, from the file their Export tab downloads (Send to the show → Download it as a file instead). A link they send opens straight onto the floor. It lands on this booth${live || parked ? ", replacing the design it has" : ""}.</p></section>`;
+    return `<section class="show-design"><h3>Design${live ? ' <span class="badge">Open</span>' : parked ? ' <span class="badge">Linked</span>' : ""}</h3>${btn("show-open-booth", live ? "Edit this booth" : parked ? "Open this booth's design" : "Open this booth", "door-open", "primary wide")}<p class="muted">${note}${!live && !parked && count >= MAX_DESIGNS ? ` ${MAX_DESIGNS} linked designs is the limit.` : ""}</p>${btn("import-design", "Import a booth design", "upload", "wide")}<p class="muted">An exhibitor's own design, from the file their Export tab downloads (Send to the show → Download it as a file instead) — or drop that file straight on a booth on the floor. A link they send opens straight onto the floor. It lands on this booth${live || parked ? ", replacing the design it has" : ""}.</p></section>`;
   }
   /**
    * The show in 3D: walk it, have a walkthrough made from its aisles, edit
@@ -3271,7 +3271,7 @@ async function boot() {
     }
     if (tab === "hall") html = `<div class="panel-heading"><h2>${showFloor ? "Show floor" : "Hall planner"}</h2>${icon("map")}</div>${hallPanel()}`;
     if (tab === "export") {
-      html = `<div class="panel-heading"><h2>Export your booth</h2>${icon("download")}</div><p class="muted">A clean image of the current ${p.mode === "photo" ? "photo composition" : "camera view"}, without controls or selection outlines.</p><section><h3>Image size</h3>${p.mode === "photo" ? "" : frameFields("export")}<label class="setting-label">Detail<select id="export-size" aria-label="Export image size">${STILL_SIZES.map((n) => `<option value="${n}" ${exportLong === n ? "selected" : ""}>${n} px on the long side${n <= 1440 ? " · Fast" : n >= 4096 ? " · High resolution" : ""}</option>`).join("")}</select></label><p class="muted">PNG · ${p.mode === "photo" ? "The photograph's own shape. Enlarging a small source cannot restore missing detail." : e(frameNote("export")) + " Preview textures are capped at 2048 px per artwork; originals remain in the backup."}</p>${btn("export-image", "Export PNG", "download", "primary wide")}</section>${p.mode === "photo" ? "" : gated("video", videoSection())}${gated("showPack", `<section><h3>Show pack</h3><p class="muted">For the van: a measured floor plan with every piece numbered and its clearances, the inventory of work with sizes, media and prices, and a packing and load-in checklist worked out from this booth. Open the downloaded HTML to print or save as PDF.</p>${btn("show-pack", "Download show pack", "layers", "wide")}</section>`)}${p.mode === "photo" ? "" : gated("power", powerSection())}${p.mode === "photo" ? "" : gated("glb", `<section><h3>3D model</h3><p class="muted">The booth as a .glb — walls, work, furniture, figures and any models you brought in, in metres — for SketchUp, Blender or an AR viewer. Surroundings, lights and the drawn shadows stay behind.</p>${btn("export-glb", "Download booth as .glb", "box", "wide")}</section>`)}${p.mode === "photo" ? "" : aiSection()}${p.mode === "photo" ? "" : gated("elevations", `<section><h3>Elevations to scale</h3><p class="muted">A floor plan and every wall with work on it, drawn at a real architectural scale with its dimension chain and centre lines — the drawing a carpenter or installer works from. Print at 100%.</p>${btn("elevations", "Download elevations", "ruler", "wide")}</section>`)}${gated("guide", `<section><h3>Installation guide</h3><p class="muted">Measured wall elevations, panel sizes, and left/bottom placement references. Open the downloaded HTML to print or save as PDF. Photo overlays are excluded.</p>${btn("guide", "Download hanging guide", "layout-panel-left", "wide")}</section>`)}<section><h3>Keep your work</h3>${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Includes original artwork and photo files, booth layout, and lighting.</p></section>${p.mode === "photo" ? "" : `<section><h3>Send to the show</h3>${btn("share-design", "Send my booth to the promoter", "send", "primary wide")}<p class="muted">Uploads this booth's design and the images on it — not the rest of your project — and gives you a link to send. The promoter opens it in Booth Studio and puts your booth on their show floor.</p>${btn("send-design", "Download it as a file instead", "download", "wide")}</section>`}<section><h3>Preview quality</h3><select id="quality" aria-label="Preview quality (Export)">${qualityOptions()}</select><p class="muted">Auto starts sharp and lowers the detail while it measures this computer drawing slower than it should. The light bar's shadows are drawn live at High detail only; exports always include them. The same menu is under the viewport, beside what it is drawing at now.</p></section>`;
+      html = `<div class="panel-heading"><h2>Export your booth</h2>${icon("download")}</div><p class="muted">A clean image of the current ${p.mode === "photo" ? "photo composition" : "camera view"}, without controls or selection outlines.</p><section><h3>Image size</h3>${p.mode === "photo" ? "" : frameFields("export")}<label class="setting-label">Detail<select id="export-size" aria-label="Export image size">${STILL_SIZES.map((n) => `<option value="${n}" ${exportLong === n ? "selected" : ""}>${n} px on the long side${n <= 1440 ? " · Fast" : n >= 4096 ? " · High resolution" : ""}</option>`).join("")}</select></label><p class="muted">PNG · ${p.mode === "photo" ? "The photograph's own shape. Enlarging a small source cannot restore missing detail." : e(frameNote("export")) + " Preview textures are capped at 2048 px per artwork; originals remain in the backup."}</p>${btn("export-image", "Export PNG", "download", "primary wide")}</section>${p.mode === "photo" ? "" : gated("video", videoSection())}${gated("showPack", `<section><h3>Show pack</h3><p class="muted">For the van: a measured floor plan with every piece numbered and its clearances, the inventory of work with sizes, media and prices, and a packing and load-in checklist worked out from this booth. Open the downloaded HTML to print or save as PDF.</p>${btn("show-pack", "Download show pack", "layers", "wide")}</section>`)}${p.mode === "photo" ? "" : gated("power", powerSection())}${p.mode === "photo" ? "" : gated("glb", `<section><h3>3D model</h3><p class="muted">The booth as a .glb — walls, work, furniture, figures and any models you brought in, in metres — for SketchUp, Blender or an AR viewer. Surroundings, lights and the drawn shadows stay behind.</p>${btn("export-glb", "Download booth as .glb", "box", "wide")}</section>`)}${p.mode === "photo" ? "" : aiSection()}${p.mode === "photo" ? "" : gated("elevations", `<section><h3>Elevations to scale</h3><p class="muted">A floor plan and every wall with work on it, drawn at a real architectural scale with its dimension chain and centre lines — the drawing a carpenter or installer works from. Print at 100%.</p>${btn("elevations", "Download elevations", "ruler", "wide")}</section>`)}${gated("guide", `<section><h3>Installation guide</h3><p class="muted">Measured wall elevations, panel sizes, and left/bottom placement references. Open the downloaded HTML to print or save as PDF. Photo overlays are excluded.</p>${btn("guide", "Download hanging guide", "layout-panel-left", "wide")}</section>`)}<section><h3>Keep your work</h3>${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Includes original artwork and photo files, booth layout, and lighting.</p></section>${p.mode === "photo" ? "" : `<section><h3>Send to the show</h3>${btn("share-design", "Send my booth to the promoter", "send", "primary wide")}<p class="muted">Uploads this booth's design and the images on it — not the rest of your project — and gives you a link to send. The promoter opens it in Booth Studio and puts your booth on their show floor.</p>${btn("send-design", "Download it as a file instead", "download", "wide")}${sentLinksHTML()}</section>`}<section><h3>Preview quality</h3><select id="quality" aria-label="Preview quality (Export)">${qualityOptions()}</select><p class="muted">Auto starts sharp and lowers the detail while it measures this computer drawing slower than it should. The light bar's shadows are drawn live at High detail only; exports always include them. The same menu is under the viewport, beside what it is drawing at now.</p></section>`;
     }
     return html;
   }
@@ -3392,21 +3392,84 @@ async function boot() {
       });
     }
   }
+  /**
+   * The live design as a file to share: every image the booth shows gets its
+   * small preview first, so a Lite browser opening the link sees the booth
+   * through them.
+   */
+  async function shareFile() {
+    const file = designFile(p);
+    for (const [id, asset] of Object.entries(file.assets)) {
+      if (asset.thumb || asset.role === "model") continue;
+      try {
+        const source = await decodeAt(asset.data, asset.width, asset.height, THUMB_MAX);
+        file.assets[id] = { ...asset, thumb: thumbnailOf(source, source.width, source.height) };
+        source.close?.();
+      } catch {}
+    }
+    return file;
+  }
+  /** The links this browser has sent, each to copy, send the booth to again, or delete. */
+  function sentLinksHTML() {
+    const links = sentLinks();
+    if (!links.length) return "";
+    const day = (iso) => {
+      const t = Date.parse(iso || "");
+      return Number.isFinite(t) ? new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "";
+    };
+    return `<h4>Links you have sent</h4><ul class="sent-links">${links
+      .map(
+        (l) =>
+          `<li data-sent-link="${e(l.id)}"><div><strong>${e(l.name || "A booth")}</strong><small>${l.sent ? `Sent ${e(day(l.sent))}` : ""}</small></div><div class="button-row">${btn("link-copy-" + l.id, "Copy link", "copy")}${btn("link-update-" + l.id, "Send this booth to it", "send")}${btn("link-delete-" + l.id, "Delete link", "trash-2")}</div></li>`,
+      )
+      .join("")}</ul><p class="muted">Send this booth to it replaces what the link opens with the booth open now, under the same address, and starts its ${SHARE_DAYS_SHOWN} days again. Delete takes it off the server: the link stops opening. Only this browser can do either.</p>`;
+  }
+  async function copyLink(link) {
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch {
+      document.execCommand?.("copy");
+    }
+    toast("Link copied.");
+  }
+  async function sendToLink(l) {
+    if (sharing) return;
+    sharing = true;
+    try {
+      const file = await shareFile();
+      toast("Updating the link…");
+      await updateShare(l.id, l.key, file, (done, total) => total && toast(`Updating the link… ${done} of ${total} new images`));
+      rememberLink({ id: l.id, key: l.key, name: p.name });
+      renderInspector();
+      toast(`The link now opens ${p.name ? `“${p.name}”` : "this booth"}. Whoever has it sees the change the next time they open it.`);
+    } catch (err) {
+      toast(`The link could not be updated: ${err.message}`, true);
+    } finally {
+      sharing = false;
+    }
+  }
+  function removeLink(l) {
+    confirmAction("Delete this link?", `The link to ${l.name ? `“${l.name}”` : "this booth"} stops opening, for anyone who has it. A booth already put on a show floor stays there.`, async () => {
+      try {
+        await deleteShare(l.id, l.key);
+      } catch (err) {
+        // Already lapsed or deleted: nothing left to delete, so forget it.
+        if (!/expired|never existed/.test(err.message)) return toast(`The link could not be deleted: ${err.message}`, true);
+      }
+      forgetLink(l.id);
+      renderInspector();
+      toast("Link deleted.");
+    });
+  }
   /** The link a share made, to copy and send. */
   function showShareLink(link) {
     const d = document.querySelector("#dialog");
     document.querySelector("#dialog-content").innerHTML =
-      `<h2>Your booth's link</h2><p>Send this to the show's promoter. It opens your booth in Booth Studio; the link lasts 180 days.</p><input id="share-link" readonly value="${e(link)}" aria-label="Booth link"/><div class="button-row"><button id="share-close">Close</button><button class="primary" id="share-copy">Copy link</button></div>`;
+      `<h2>Your booth's link</h2><p>Send this to the show's promoter. It opens your booth in Booth Studio; the link lasts ${SHARE_DAYS_SHOWN} days. Export → Send to the show keeps it, to send a changed booth to the same link or to delete it.</p><input id="share-link" readonly value="${e(link)}" aria-label="Booth link"/><div class="button-row"><button id="share-close">Close</button><button class="primary" id="share-copy">Copy link</button></div>`;
     document.querySelector("#share-close").onclick = () => d.close();
-    document.querySelector("#share-copy").onclick = async () => {
-      const input = document.querySelector("#share-link");
-      input.select();
-      try {
-        await navigator.clipboard.writeText(link);
-      } catch {
-        document.execCommand?.("copy");
-      }
-      toast("Link copied.");
+    document.querySelector("#share-copy").onclick = () => {
+      document.querySelector("#share-link").select();
+      copyLink(link);
     };
     d.showModal();
   }
@@ -4663,19 +4726,11 @@ async function boot() {
       if (sharing) return;
       sharing = true;
       try {
-        // Every image the booth shows gets its small preview first: a Lite
-        // browser opening the link sees the booth through them.
-        const file = designFile(p);
-        for (const [id, asset] of Object.entries(file.assets)) {
-          if (asset.thumb || asset.role === "model") continue;
-          try {
-            const source = await decodeAt(asset.data, asset.width, asset.height, THUMB_MAX);
-            file.assets[id] = { ...asset, thumb: thumbnailOf(source, source.width, source.height) };
-            source.close?.();
-          } catch {}
-        }
+        const file = await shareFile();
         toast("Uploading your booth…");
-        const id = await uploadShare(file, (done, total) => total && toast(`Uploading your booth… ${done} of ${total} images`));
+        const { id, key } = await uploadShare(file, (done, total) => total && toast(`Uploading your booth… ${done} of ${total} images`));
+        rememberLink({ id, key, name: p.name });
+        renderInspector();
         showShareLink(shareLink(id));
       } catch (err) {
         toast(`The booth could not be shared: ${err.message}`, true);
@@ -4878,6 +4933,14 @@ async function boot() {
           return;
         }
         if (action.startsWith("row-remove-")) removeRowSlot(action.slice(11));
+        else if (/^link-(copy|update|delete)-/.test(action)) {
+          const [, what, id] = action.match(/^link-(\w+)-(.+)$/);
+          const l = sentLinks().find((x) => x.id === id);
+          if (!l) renderInspector();
+          else if (what === "copy") copyLink(shareLink(l.id));
+          else if (what === "update") sendToLink(l);
+          else removeLink(l);
+        }
         else if (action.startsWith("view-go-")) goToView(action.slice(8));
         else if (action.startsWith("clearance-show-")) showClearance(Number(action.slice(15)));
         else if (action.startsWith("delete-model-")) {
@@ -5868,12 +5931,46 @@ async function boot() {
       ev.target.value = "";
     };
   // An exhibitor's booth design file, onto the floor booth chosen when Import
-  // was pressed (src/booth-file.js).
+  // was pressed (src/booth-file.js), or the one it was dropped on.
   document.querySelector("#design-input").onchange = async (ev) => {
     const f = ev.target.files[0];
     ev.target.value = "";
     const n = designTarget;
     designTarget = null;
+    await importDesignFile(f, n);
+  };
+  // A file dragged over the 2D floor: the booth under the pointer is where it
+  // will land, and is outlined while it is held there.
+  const floorHost = document.querySelector("#show-floor");
+  const boothUnder = (ev) => document.elementsFromPoint(ev.clientX, ev.clientY).map((el) => el.closest?.("#show-floor [data-hall-booth]")).find(Boolean) || null;
+  const markDrop = (g) => {
+    for (const x of floorHost.querySelectorAll(".sf-drop")) if (x !== g) x.classList.remove("sf-drop");
+    g?.classList.add("sf-drop");
+  };
+  floorHost.addEventListener("dragover", (ev) => {
+    if (!showFloor || show3d || !p.hall || ![...ev.dataTransfer.types].includes("Files")) return;
+    ev.preventDefault();
+    const g = boothUnder(ev);
+    ev.dataTransfer.dropEffect = g ? "copy" : "none";
+    markDrop(g);
+  });
+  floorHost.addEventListener("dragleave", (ev) => {
+    if (!floorHost.contains(ev.relatedTarget)) markDrop(null);
+  });
+  floorHost.addEventListener("drop", async (ev) => {
+    if (!showFloor || show3d || !p.hall || ![...ev.dataTransfer.types].includes("Files")) return;
+    ev.preventDefault();
+    const g = boothUnder(ev);
+    markDrop(null);
+    const f = ev.dataTransfer.files[0];
+    if (!f) return;
+    if (!g) return toast("Drop a booth design file on a booth.", true);
+    const n = Number(g.dataset.hallBooth);
+    hallSelected = n;
+    showEditor?.select([g.dataset.id]);
+    await importDesignFile(f, n);
+  });
+  async function importDesignFile(f, n) {
     if (!f || !p.hall || !Number.isInteger(n)) return;
     let file;
     try {
@@ -5895,7 +5992,7 @@ async function boot() {
     };
     if (hasDesign(p.hall, n)) confirmAction(`Replace booth ${n}'s design?`, `${from} replaces the design booth ${n} has now. Undo brings it back.`, go);
     else go();
-  };
+  }
   document.querySelector("#backup-input").onchange = async (ev) => {
     const f = ev.target.files[0];
     ev.target.value = "";

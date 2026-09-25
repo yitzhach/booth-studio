@@ -16,9 +16,13 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-25, ninth round — Show Hub phase 1: a booth
+- **Last deploy: 2026-09-25, tenth round — Next items 1 and 2: the share
+  links hardened (rate limits, an upload window, a per-link ceiling, a daily
+  sweep of lapsed links), a sent link updated or deleted by the browser that
+  sent it, and a design file dropped straight on a floor booth** (the first
+  bullet below). Before it, the ninth round — **Show Hub phase 1: a booth
   sent as a link, not a file. The app's first backend** — a Worker on
-  `/api/*` and an R2 bucket (the first bullet below). Before it, the eighth
+  `/api/*` and an R2 bucket (the second bullet below). Before it, the eighth
   round — Show Hub v0: a booth design
   sent as a file from an exhibitor and imported onto a floor booth by the
   promoter, plus the Pro pitch deck at `/pitchdeck/`** (the first bullet
@@ -65,6 +69,87 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-25, tenth round: Next items 1 and 2. Pushed to `main` and
+  deployed.** Asked for as "continue in order — start with 1 and 2". Both
+  items were mostly looking on the real machine, which no session can do;
+  this round did the parts that are code and left the rest in Next.
+  1. **The ninth round's deploy is confirmed.** Through the Cloudflare
+     connector: the live Worker `booth-studio` is exactly `worker/index.js`
+     as the ninth round left it, and the bucket `booth-studio-shares` exists
+     (created 2026-09-25, ENAM). Not checked: a real share between two real
+     browsers, and `/pitchdeck/` by eye.
+  2. **The bucket is no longer open-ended public-write** (Next 1(b)). All in
+     `worker/index.js` and `wrangler.jsonc`, not dashboard settings, so they
+     are in the repo and reviewable. This is hardening of the one approved
+     backend — the same Worker and bucket, nothing new server-side — but it
+     is the owner's to undo if unwanted:
+     - **Rate limits per address, per minute** — Workers Rate Limiting
+       bindings `LINK_RATE` (6 links made or updated) and `IMAGE_RATE` (120
+       images). Over it: 429, "Too many uploads from here just now". Both
+       are skipped when the binding is absent (Node tests, `vite dev`). The
+       period can only be 10 or 60 seconds; a per-day cap would need KV or a
+       Durable Object.
+     - **An upload window.** A link's images may be uploaded only within
+       `UPLOAD_HOURS` (24) of its manifest being sent or updated — a link is
+       no longer a place to keep adding files to for 180 days.
+     - **A ceiling per link**: `MAX_SHARE_BYTES`, 200 MB of originals in
+       all — the same ceiling the app puts on a backup it opens. Before it,
+       one link could hold 250 × 40 MB. The browser checks first
+       (`checkSize` in `src/share.js`) and says so before sending anything;
+       the Worker checks again on each image (summing the link's objects).
+     - **The daily sweep** (`sweep`, the Worker's `scheduled` handler, cron
+       `17 4 * * *` UTC): every link past `SHARE_DAYS` and anything left
+       under a link with no manifest is deleted, so a lapsed link stops
+       costing storage as well as stops opening. It lists every link before
+       deleting any — deleting while paging skipped links in the tests. This
+       replaces the R2 lifecycle rule Next suggested; that rule can still be
+       added in the dashboard as a backstop (prefix `shares/`, 190 days).
+     `npx wrangler deploy --dry-run` lists the four bindings (SHARES,
+     LINK_RATE, IMAGE_RATE, ASSETS). **If Cloudflare refuses a binding on
+     the owner's plan, the build fails and the ninth round stays live** —
+     the build log says which.
+  3. **A sent link can be updated or deleted by the browser that sent it**
+     (Next 1(c); the owner had not answered, and both are additive — a link
+     nobody touches behaves exactly as before). Making a link now also makes
+     a **key**: 48 random characters returned once, kept in this browser's
+     `localStorage["booth.sentLinks"]` with the link's id and the booth's
+     name — deliberately not in the project, so a backup handed to someone
+     does not hand them the link. The bucket stores only its SHA-256
+     (`keyHash` in the manifest's custom metadata). Routes, both needing the
+     key in `x-share-key` (403 otherwise):
+     - `PUT /api/share/<id>` — a new manifest under the same link →
+       `{ have }`. Images the new manifest still names stay (an image's data
+       never changes under its id — a new picture is a new id, which
+       `importDesign` relies on too) and are not sent again; images it no
+       longer names are deleted. The link's 180 days and its upload window
+       start again.
+     - `DELETE /api/share/<id>` — the link and every object under it.
+     Export → Send to the show lists **Links you have sent** (name, date),
+     each with **Copy link**, **Send this booth to it** (the booth open now
+     replaces what the link opens) and **Delete link** (confirm first; a link
+     already lapsed is just forgotten). A promoter who already put the booth
+     on their floor keeps what they put there — an update reaches only the
+     next open. Clearing site data loses the keys: the links still open
+     until they lapse, but can no longer be changed.
+  4. **Drop a design file on a floor booth** (Next 2: "should the floor
+     take a design file dropped on a booth?"). Dragging a
+     `.booth-design.json` over the 2D floor outlines the booth under the
+     pointer in pink (`.sf-drop`); letting go imports it there exactly as
+     Import a booth design does (`importDesignFile` in `src/main.js`, shared
+     by both — confirm on replace, one undo step). Dropped on empty floor, it
+     says to drop it on a booth. Import a booth design stays.
+  5. **Not done from Next 2:** the lighter file (previews instead of
+     originals). The link answers the "too big to email" problem it was
+     for, so it waits on the owner saying the file is still used.
+  **Tests:** `tests/share.test.js` (12, from 5: update keeps / drops /
+  uploads the right images and restarts the days; only the key updates or
+  deletes; the upload window; the per-link ceiling, client and Worker; the
+  rate limiter; the sweep across pages; the remembered links, including a
+  blocked `localStorage`); `tests/helpers/fake-r2.js` gains `list` (paging
+  two at a time, so paging is exercised) and `delete`. In a real browser:
+  `view-share` updates the link from the Export list and checks the bucket,
+  deletes it and sees it dead; `view-hub` drops the file on booth 106 and on
+  empty floor.
 - **2026-09-25, ninth round: Show Hub phase 1 — a booth as a link. Pushed
   to `main` and deployed. The local-first rule is lifted for this one thing,
   at the owner's word** ("can they just send the promoter a link … we do it
@@ -1554,31 +1639,31 @@ Extend it; do not rebuild it.
 
 ## Next
 
-1. **Show Hub links (2026-09-25, ninth round), live.** First check the
-   deploy took: the build log should show the Worker with `env.SHARES
-   (booth-studio-shares)`, and `/pitchdeck/` still loads. Then share a booth
-   from one browser and open the link in another. Open questions, the
-   owner's: (a) **real Pro gating** needs accounts — until then a Lite user
-   is only *shown* previews; (b) the bucket is **public-write**: anyone who
-   finds the API can store up to 40 MB per image for 180 days. Rate
-   limiting (a Cloudflare rule on `/api/share` POST) and an R2 lifecycle rule
-   deleting `shares/` after 180 days are the next two cheap guards — both
-   are dashboard settings, not code; (c) should the sender be able to
-   update a shared booth under the same link, or delete it? Today a link is
-   frozen and lapses on its own.
-1. **Show Hub v0 (2026-09-25, eighth round), on the real machine — and
-   with a real promoter.** Send a booth from one browser, import it in
-   another (or a private window) onto a floor booth. Is Export → Send to
-   the show where an exhibitor would look? Is a booth's Design section the
-   right place for Import, or should the floor take a design file dropped
-   on a booth? Files carry original images, so a booth with twenty
-   full-size photographs can be 100 MB+ — too big to email; if that bites,
-   the file could carry the 2048 px preview instead of the original
-   (a choice the owner makes: the promoter then has a lighter, softer
-   booth). The real question is demand: do promoters want exhibitors'
-   designs on their floor? If yes, the hosted Show Hub in `FUTURE_BUILD.md`
-   is the next step, and it needs the local-first rule lifted — the owner's
-   decision. Also open: the pitch deck at `/pitchdeck/`, by eye.
+1. **Show Hub links (ninth and tenth rounds), live.** The deploy was
+   confirmed through the Cloudflare connector (see Now). First check the
+   tenth round's build took: its log should list `env.LINK_RATE` and
+   `env.IMAGE_RATE` beside `env.SHARES`, and the Worker's Triggers tab the
+   cron `17 4 * * *`. Then, by hand: share a booth from one browser and
+   open the link in another; change the booth and **Send this booth to it**;
+   reopen the link; **Delete link**; reopen it (it should say it could not
+   be opened). Still the owner's:
+   (a) **real Pro gating** needs accounts — until then a Lite user is only
+   *shown* previews, and anyone can fetch an original by its URL;
+   (b) the limits chosen (6 links and 120 images a minute per address, 200
+   MB a link, 24 h to upload, 180 days) — each is one constant in
+   `worker/index.js` or `wrangler.jsonc`;
+   (c) whether the keys should live somewhere that survives clearing site
+   data — that needs accounts too.
+1. **Show Hub v0 (eighth round), on the real machine — and with a real
+   promoter.** Send a booth from one browser, import it in another (or a
+   private window) onto a floor booth — by Import and by dropping the file on
+   a booth. Is Export → Send to the show where an exhibitor would look? Is
+   the file still wanted now that there is the link? If it is, and a booth
+   with twenty full-size photographs (100 MB+) bites, the file could carry
+   the 2048 px preview instead of the original — the owner's choice: the
+   promoter then has a lighter, softer booth. The real question is demand:
+   do promoters want exhibitors' designs on their floor? Also open: the
+   pitch deck at `/pitchdeck/`, by eye.
 1. **The seventh round (2026-09-25), on the real machine.** Build `main`'s
    tip first (`window.BOOTH_BUILD`). Does the right-drag box feel right, and
    is ⌘ right-drag a comfortable pan on a Mac trackpad (two-finger click and

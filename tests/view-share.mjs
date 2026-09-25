@@ -45,6 +45,8 @@ try {
   }), 'with exactly the images the booth names');
   await page.click('#share-copy');
   await page.click('#share-close');
+  const id = link.split('=').pop();
+  assert.equal(await page.locator(`[data-sent-link="${id}"]`).count(), 1, 'Export lists the link just sent');
 
   // ---- The promoter: a floor of their own, then the link -------------------
   await page.evaluate(() => window.__booth.mutate(() => (window.__booth.project.booth.color = '#111111')));
@@ -74,12 +76,26 @@ try {
   assert.equal(await page.evaluate(() => window.__booth.project.booth.color), '#335577');
   assert.match(await page.evaluate(() => window.__booth.project.name), /shared/);
 
+  // ---- The sender sends a changed booth to the same link, then deletes it ---
+  await page.evaluate(() => window.__booth.mutate(() => (window.__booth.project.booth.color = '#00aa00')));
+  await page.click('[data-tab="export"]');
+  await page.click(`[data-action="link-update-${id}"]`);
+  await page.waitForFunction(() => /The link now opens/.test(document.querySelector('#toast')?.textContent || ''));
+  assert.equal(JSON.parse(env.SHARES.store.get(`shares/${id}/manifest.json`).text).design.booth.color, '#00aa00', 'the same link opens the changed booth');
+  await page.click(`[data-action="link-delete-${id}"]`);
+  await page.click('#confirm-go');
+  await page.waitForFunction(() => /Link deleted/.test(document.querySelector('#toast')?.textContent || ''));
+  assert.ok(![...env.SHARES.store.keys()].some((k) => k.includes(id)), 'nothing of it is left on the server');
+  assert.equal(await page.locator(`[data-sent-link="${id}"]`).count(), 0, 'and it is off the list');
+  await page.goto(link.replace(/^https?:\/\/[^/]+/, 'http://127.0.0.1:5234'));
+  await page.waitForFunction(() => /could not be opened/.test(document.querySelector('#toast')?.textContent || ''));
+
   // ---- A dead link says so --------------------------------------------------
   await page.goto('http://127.0.0.1:5234/?booth=aaaaaaaaaaaaaaaaaaaaaaaa');
   await page.waitForFunction(() => /could not be opened/.test(document.querySelector('#toast')?.textContent || ''));
 
   assert.deepEqual(errors, [], 'no page errors');
-  console.log('PASS a booth is shared as a link with exactly its images, the link puts it on a promoter\'s floor booth with its originals or opens it to look at, comes off the address, and a dead link says so.');
+  console.log('PASS a booth is shared as a link with exactly its images, the link puts it on a promoter\'s floor booth with its originals or opens it to look at, comes off the address, is updated in place and deleted by the browser that sent it, and a dead link says so.');
 } finally {
   await browser.close();
   await server.close();

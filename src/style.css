@@ -2166,6 +2166,7 @@ body:has(.timeline-dialog[open]) .find-tool {display:none;}
 #show-floor text {pointer-events:none;}
 #show-floor .sf-guides line {stroke:#ff5fa2;stroke-width:1.5px;vector-effect:non-scaling-stroke;stroke-dasharray:6 4;}
 #show-floor .sf-handle {fill:#fff;stroke:#2f7de1;stroke-width:1.5px;vector-effect:non-scaling-stroke;cursor:nwse-resize;}
+#show-floor .sf-drop > :first-child {stroke:#ff5fa2;stroke-width:4px;vector-effect:non-scaling-stroke;}
 #show-floor .sf-ghost {position:absolute;border:2px dashed #2f7de1;background:rgba(47,125,225,0.12);pointer-events:none;border-radius:2px;}
 .show-floor-on .inspector-tabs button:not([data-tab="hall"]) {display:none;}
 .show-floor-on .toolbar .toolgroup:first-child,.show-floor-on .toolbar .export-top,.show-floor-on .find-tool,.show-floor-on .preview-quality,.show-floor-on:not(.show-3d-on) .frame-guide {display:none !important;}
@@ -2195,3 +2196,27 @@ body:has(.timeline-dialog[open]) .find-tool {display:none;}
 section.sub-hidden {display:none;}
 .toolbar .floor-tools {display:none;}
 .show-floor-on .toolbar .floor-tools {display:flex;}
+
+/* Export → Send to the show: the links this browser has sent. */
+.sent-links {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+}
+.sent-links li {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 8px 0;
+}
+.sent-links li > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sent-links small {
+  opacity: 0.7;
+}
+.sent-links .button-row {
+  margin-top: 6px;
+}

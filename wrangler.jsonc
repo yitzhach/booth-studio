@@ -11,4 +11,12 @@
     "run_worker_first": ["/api/*"],
   },
   "r2_buckets": [{ "binding": "SHARES", "bucket_name": "booth-studio-shares" }],
+  // Per address, per minute: links made or updated, and images uploaded. An
+  // honest sender makes one link and uploads its images one at a time.
+  "ratelimits": [
+    { "name": "LINK_RATE", "namespace_id": "4101", "simple": { "limit": 6, "period": 60 } },
+    { "name": "IMAGE_RATE", "namespace_id": "4102", "simple": { "limit": 120, "period": 60 } },
+  ],
+  // The daily sweep of lapsed links (`scheduled` in worker/index.js).
+  "triggers": { "crons": ["17 4 * * *"] },
 }
