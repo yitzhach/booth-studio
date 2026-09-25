@@ -46,6 +46,12 @@ export const BOOTH_STYLES = {
 
 /** The floor a show stands on. */
 export const VENUES = { indoor: "Indoor hall", outdoor: "Outdoor fair" };
+/**
+ * Pipe-and-drape colours a show can order, for `venue.drape` (optional; the
+ * first is what every floor had before it could be chosen).
+ */
+export const DRAPES = { "#465469": "Slate blue", "#1f2226": "Black", "#f1efea": "White", "#6b1f2a": "Burgundy", "#2f4a3a": "Forest green", "#8a8f96": "Grey" };
+export const DEFAULT_DRAPE = "#465469";
 
 /**
  * The shape library: what the palette offers, each a kind with its own size
@@ -81,6 +87,7 @@ export function validShow(h) {
     const v = h.venue;
     if (!v || typeof v !== "object" || !VENUES[v.kind]) return false;
     if (!inRange(v.width, SHOW_LIMITS.floor) || !inRange(v.depth, SHOW_LIMITS.floor)) return false;
+    if (v.drape !== undefined && (typeof v.drape !== "string" || !/^#[0-9a-f]{6}$/i.test(v.drape))) return false;
   }
   if (h.items === undefined) return true;
   if (!Array.isArray(h.items) || h.items.length > MAX_ITEMS) return false;
@@ -461,3 +468,46 @@ export const FLOOR_TEMPLATES = {
     },
   },
 };
+
+/** The pieces lying wholly or partly off the floor. */
+export function offFloor(h) {
+  const f = floorOf(h);
+  return showItems(h).filter((it) => {
+    const b = boundsOf([it]);
+    return b.l < 0 || b.t < 0 || b.r > f.width || b.b > f.depth;
+  });
+}
+
+/**
+ * Grow the floor so every piece is on it with `margin` to spare: pieces laid
+ * above or left of the floor move down or right, all together, so nothing
+ * changes place against anything else. Never shrinks. Mutates `h` (turned
+ * into a floor first); returns whether anything changed.
+ */
+export function growToFit(h, margin = 60) {
+  toFloor(h);
+  const box = boundsOf(h.items);
+  if (!box || !offFloor(h).length) return false;
+  const [, most] = SHOW_LIMITS.floor;
+  const dx = box.l < 0 ? Math.ceil(margin - box.l) : 0;
+  const dy = box.t < 0 ? Math.ceil(margin - box.t) : 0;
+  if (dx || dy) for (const it of h.items) (it.x += dx), (it.y += dy);
+  h.venue.width = Math.min(most, Math.max(h.venue.width, Math.ceil(box.r + dx + margin)));
+  h.venue.depth = Math.min(most, Math.max(h.venue.depth, Math.ceil(box.b + dy + margin)));
+  return true;
+}
+
+/**
+ * A floor saved to start other floors from: its venue and a copy of its
+ * pieces, booth numbers and all — not its sales, its booth or its designs,
+ * which belong to this show. `{ id, label, venue, items }`, kept per browser.
+ */
+export function floorTemplateOf(h, label) {
+  toFloor(h);
+  return { id: "ft" + Date.now().toString(36), label: String(label).slice(0, 80), venue: { ...h.venue }, items: h.items.map((it) => ({ ...it })) };
+}
+
+/** Whether a stored floor template can be applied. */
+export function validFloorTemplate(t) {
+  return !!t && typeof t === "object" && typeof t.id === "string" && typeof t.label === "string" && !!t.venue && Array.isArray(t.items) && validShow({ venue: t.venue, items: t.items });
+}

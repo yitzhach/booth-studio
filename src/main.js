@@ -202,7 +202,7 @@ import { MAX_VIEWS, STEP, STRIDE, TAGS, newView } from "./views.js";
 import { ACCESSIBLE, checkClearance } from "./clearance.js";
 import { elevationsHTML } from "./elevations.js";
 import { HALL_LIMITS, MAX_HALL_BOOTHS, STATUSES, boothOf, hallCSV, hallHTML, hallLayout, hallSVG, hallTotals, newHall } from "./hall.js";
-import { BOOTH_STYLES, FLOOR_TEMPLATES, KINDS, SHAPES, VENUES as SHOW_VENUES, boothBlock, boundsOf, copyPieces, feet, floorOf, mirrorPieces, renumber, showItems, showSVG, spacePieces, toFloor } from "./show.js";
+import { BOOTH_STYLES, DEFAULT_DRAPE, DRAPES, FLOOR_TEMPLATES, KINDS, floorTemplateOf, growToFit, offFloor, validFloorTemplate, SHAPES, VENUES as SHOW_VENUES, boothBlock, boundsOf, copyPieces, feet, floorOf, mirrorPieces, renumber, showItems, showSVG, spacePieces, toFloor } from "./show.js";
 import { createShowEditor } from "./show-editor.js";
 import { showWalkthrough } from "./show-scene.js";
 import { PACK_LONG, PACK_SIZES, SURFACES, describeScene, protectPass, provider as aiProvider, render as aiRender, renderPack } from "./ai-render.js";
@@ -2081,16 +2081,21 @@ async function boot() {
   function applyTemplate(key) {
     const t = FLOOR_TEMPLATES[key];
     if (!t || !p.hall) return;
+    startFrom(t.label, (h) => t.build(h.start));
+  }
+  function startFrom(label, build) {
+    const t = { label };
     confirmAction(`Start from “${t.label}”?`, "Every piece on the floor, and its size, is replaced by the template's. Sales, your booth and linked designs stay with their booth numbers. Undo brings this floor back.", () => {
       const h = toFloor(p.hall);
-      const built = t.build(h.start);
+      const built = build(h);
       mutate(() => {
         h.items = built.items;
         h.venue = built.venue;
       });
       showEditor?.select([]);
       if (!show3d) showEditor?.fit();
-      toast(`“${t.label}”: ${built.items.filter((i) => i.kind === "booth").length} booths, numbered from ${h.start}.`);
+      const booths = built.items.filter((i) => i.kind === "booth");
+      toast(`“${t.label}”: ${booths.length} booths${booths.length ? `, numbered from ${Math.min(...booths.map((b) => b.number))}` : ""}.`);
     });
   }
   /** Line the selection up on its top or left edge. */
@@ -2193,6 +2198,9 @@ async function boot() {
       mutate(() => {
         const h = toFloor(p.hall);
         if (ds.showVenue === "kind") h.venue.kind = el.value;
+        else if (ds.showVenue === "drape") {
+          if (DRAPES[el.value]) h.venue.drape = el.value;
+        }
         else if (Number.isFinite(n)) h.venue[ds.showVenue] = Math.round(clamp(n) * 12);
       });
       return true;
@@ -2302,7 +2310,10 @@ async function boot() {
     }
     const b = showBlock;
     const bf = (label, key, min, max, step = 1, unit = "in") => num(label, key, b[key], min, max, step, unit, "data-show-block");
-    return `<div class="button-row">${btn("show-exit", "Back to my booth", "arrow-left")}${btn("show-fit", "Fit floor", "maximize")}</div>${btn("show-3d", "See it in 3D", "box", "primary wide")}${selectedHTML}<div class="mobile-library">${showLibraryHTML()}</div><section><h3>Add booths</h3><div class="field-pair">${bf("How many", "count", 1, 400, 1, "")}${bf("Per row", "perRow", 1, 60, 1, "")}</div><div class="field-pair">${bf("Booth width", "w", 48, 480)}${bf("Booth depth", "d", 48, 480)}</div><div class="field-pair">${bf("Gap in a row", "gap", 0, 480)}${bf("Aisle", "aisle", 36, 480)}</div><label class="check-field"><input type="checkbox" data-show-block="backToBack" ${b.backToBack ? "checked" : ""}/>Rows back to back, in pairs</label><label class="setting-label">Built as<select data-show-block="style" aria-label="New booths built as">${Object.entries(BOOTH_STYLES).map(([key, v]) => `<option value="${key}" ${b.style === key ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label>${btn("show-add-block", "Add booths", "plus", "primary wide")}<p class="muted">Numbered on from the highest booth on the floor, placed below everything already on the floor and selected, ready to drag.</p></section><section><h3>Floor</h3><label class="setting-label">Venue<select data-show-venue="kind" aria-label="Show venue">${Object.entries(SHOW_VENUES).map(([key, v]) => `<option value="${key}" ${f.kind === key ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label><div class="field-pair">${num("Floor width", "width", f.width / 12, 10, 2000, 1, "ft", "data-show-venue")}${num("Floor depth", "depth", f.depth / 12, 10, 2000, 1, "ft", "data-show-venue")}</div><label class="setting-label">Snap grid<select id="show-grid" aria-label="Snap grid">${[[0, "Off"], [1, "1″"], [6, "6″"], [12, "1′"], [24, "2′"], [60, "5′"]].map(([v, l]) => `<option value="${v}" ${showGrid === v ? "selected" : ""}>${l}</option>`).join("")}</select></label><p class="muted">Pieces snap to each other's edges first, then to this grid. Hold Alt while dragging to place freely.</p>${btn("show-renumber", "Renumber every booth", "list-ordered", "wide")}</section><section><h3>Start from a template</h3>${Object.entries(FLOOR_TEMPLATES).map(([key, t]) => `${btn("show-template-" + key, t.label, "layout-template", "wide")}<p class="muted">${e(t.note)}</p>`).join("")}</section>${linkedHTML()}<section><h3>Sales <span>${t.booths} booths</span></h3><p class="hall-totals">${t.sold} sold · ${t.held} held · ${t.open} open${t.soldValue ? ` · sold $${Math.round(t.soldValue).toLocaleString("en-US")}` : ""}${t.heldValue ? ` · held $${Math.round(t.heldValue).toLocaleString("en-US")}` : ""}</p>${field("Default price", "price", h.price, ...HALL_LIMITS.price, 1, "$", "hallplan", "Hall Default price")}<div class="button-row">${btn("hall-map", "Download hall map", "download")}${btn("hall-csv", "Exhibitor list (CSV)", "download")}</div>${btn("hall-delete", "Delete the hall plan", "trash-2", "wide")}</section><section><h3>Keys</h3><p class="muted">Delete removes · Ctrl+D duplicates · R turns 90° · arrows nudge by the grid (Shift: 10×) · Ctrl+A selects all · Esc lets go · 0 fits the floor.</p></section>`;
+    return `<div class="button-row">${btn("show-exit", "Back to my booth", "arrow-left")}${btn("show-fit", "Fit floor", "maximize")}</div>${btn("show-3d", "See it in 3D", "box", "primary wide")}${selectedHTML}<div class="mobile-library">${showLibraryHTML()}</div><section><h3>Add booths</h3><div class="field-pair">${bf("How many", "count", 1, 400, 1, "")}${bf("Per row", "perRow", 1, 60, 1, "")}</div><div class="field-pair">${bf("Booth width", "w", 48, 480)}${bf("Booth depth", "d", 48, 480)}</div><div class="field-pair">${bf("Gap in a row", "gap", 0, 480)}${bf("Aisle", "aisle", 36, 480)}</div><label class="check-field"><input type="checkbox" data-show-block="backToBack" ${b.backToBack ? "checked" : ""}/>Rows back to back, in pairs</label><label class="setting-label">Built as<select data-show-block="style" aria-label="New booths built as">${Object.entries(BOOTH_STYLES).map(([key, v]) => `<option value="${key}" ${b.style === key ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label>${btn("show-add-block", "Add booths", "plus", "primary wide")}<p class="muted">Numbered on from the highest booth on the floor, placed below everything already on the floor and selected, ready to drag.</p></section><section><h3>Floor</h3><label class="setting-label">Venue<select data-show-venue="kind" aria-label="Show venue">${Object.entries(SHOW_VENUES).map(([key, v]) => `<option value="${key}" ${f.kind === key ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label><label class="setting-label">Drape colour<select data-show-venue="drape" aria-label="Drape colour">${Object.entries(DRAPES).map(([c, v]) => `<option value="${c}" ${(h.venue?.drape || DEFAULT_DRAPE) === c ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label><div class="field-pair">${num("Floor width", "width", f.width / 12, 10, 2000, 1, "ft", "data-show-venue")}${num("Floor depth", "depth", f.depth / 12, 10, 2000, 1, "ft", "data-show-venue")}</div><label class="setting-label">Snap grid<select id="show-grid" aria-label="Snap grid">${[[0, "Off"], [1, "1″"], [6, "6″"], [12, "1′"], [24, "2′"], [60, "5′"]].map(([v, l]) => `<option value="${v}" ${showGrid === v ? "selected" : ""}>${l}</option>`).join("")}</select></label><p class="muted">Pieces snap to each other's edges first, then to this grid. Hold Alt while dragging to place freely. Drape colour is the pipe and drape's in See it in 3D.</p>${(() => {
+      const off = offFloor(h).length;
+      return off ? `<div class="warning">${off} piece${off === 1 ? " lies" : "s lie"} off the floor's edge, and stand${off === 1 ? "s" : ""} outside the hall in 3D.${btn("show-grow", "Grow the floor to fit", "maximize", "wide")}</div>` : "";
+    })()}${btn("show-renumber", "Renumber every booth", "list-ordered", "wide")}</section><section><h3>Start from a template</h3>${Object.entries(FLOOR_TEMPLATES).map(([key, t]) => `${btn("show-template-" + key, t.label, "layout-template", "wide")}<p class="muted">${e(t.note)}</p>`).join("")}${readFloorTemplates().map((t) => `<div class="button-row">${btn("show-mytemplate-" + t.id, "Mine · " + t.label, "layout-template")}${btn("show-forget-template-" + t.id, "Remove", "trash-2")}</div><p class="muted">${t.items.filter((i) => i.kind === "booth").length} booths, ${Math.round(t.venue.width / 12)}′ × ${Math.round(t.venue.depth / 12)}′, saved on this browser.</p>`).join("")}${btn("show-save-template", "Save this floor as a template", "save", "wide")}<p class="muted">Its size and every piece, booth numbers and all — not the sales, your booth or its designs. Kept on this browser, up to ${MAX_FLOOR_TEMPLATES}.</p></section>${linkedHTML()}<section><h3>Sales <span>${t.booths} booths</span></h3><p class="hall-totals">${t.sold} sold · ${t.held} held · ${t.open} open${t.soldValue ? ` · sold $${Math.round(t.soldValue).toLocaleString("en-US")}` : ""}${t.heldValue ? ` · held $${Math.round(t.heldValue).toLocaleString("en-US")}` : ""}</p>${field("Default price", "price", h.price, ...HALL_LIMITS.price, 1, "$", "hallplan", "Hall Default price")}<div class="button-row">${btn("hall-map", "Download hall map", "download")}${btn("hall-csv", "Exhibitor list (CSV)", "download")}</div>${btn("hall-delete", "Delete the hall plan", "trash-2", "wide")}</section><section><h3>Keys</h3><p class="muted">Delete removes · Ctrl+D duplicates · R turns 90° · arrows nudge by the grid (Shift: 10×) · Ctrl+A selects all · Esc lets go · 0 fits the floor.</p></section>`;
   }
   /**
    * Export → AI render (the hook, src/ai-render.js): the frame, its depth
@@ -3544,6 +3555,24 @@ async function boot() {
     };
     d.showModal();
   }
+  // The user's own floor templates (show.js floorTemplateOf), per browser.
+  const FLOOR_TEMPLATE_KEY = "booth.floorTemplates", MAX_FLOOR_TEMPLATES = 12;
+  function readFloorTemplates() {
+    try {
+      const list = JSON.parse(localStorage.getItem(FLOOR_TEMPLATE_KEY) || "[]");
+      return Array.isArray(list) ? list.filter(validFloorTemplate) : [];
+    } catch {
+      return [];
+    }
+  }
+  function writeFloorTemplates(list) {
+    try {
+      localStorage.setItem(FLOOR_TEMPLATE_KEY, JSON.stringify(list.slice(0, MAX_FLOOR_TEMPLATES)));
+      return true;
+    } catch {
+      return false;
+    }
+  }
   // The user's own booth templates: the booth without its work, per browser.
   const TEMPLATE_KEY = "booth.templates", MAX_TEMPLATES = 12;
   function readTemplates() {
@@ -3980,6 +4009,22 @@ async function boot() {
       toast(`A ${videoTimeline.seconds}-second walk through the aisles, ${videoTimeline.keys.length} keyframes. Play it, change any keyframe, then Export MP4.`);
     },
     "show-fit": () => showEditor?.fit(),
+    "show-grow": () => {
+      let grew = false;
+      mutate(() => (grew = growToFit(p.hall)));
+      if (!show3d) showEditor?.fit();
+      const f = floorOf(p.hall);
+      toast(grew ? `The floor is ${Math.round(f.width / 12)}′ × ${Math.round(f.depth / 12)}′ now, with every piece on it. Undo puts it back.` : "Every piece is already on the floor.");
+    },
+    "show-save-template": () => {
+      const t = floorTemplateOf(JSON.parse(JSON.stringify(p.hall)), p.name || "My floor");
+      const list = readFloorTemplates();
+      const next = [t, ...list.filter((x) => x.label !== t.label)];
+      if (writeFloorTemplates(next)) {
+        renderInspector();
+        toast(`Saved “${t.label}” as a floor template${next.length > MAX_FLOOR_TEMPLATES ? `; the oldest of ${MAX_FLOOR_TEMPLATES} was dropped` : ""}. Start from a template offers it on any floor.`);
+      } else toast("This browser would not store the floor template. It may be too big; download a project backup instead.", true);
+    },
     "show-rotate": () => showRotate(90),
     "show-flip-x": () => showMirror("x"),
     "show-flip-y": () => showMirror("y"),
@@ -4969,6 +5014,13 @@ async function boot() {
         else if (action.startsWith("delete-panel-")) deletePanel(action.slice(13));
         else if (action.startsWith("delete-pedestal-")) deletePedestal(action.slice(16));
         else if (action.startsWith("show-template-")) applyTemplate(action.slice(14));
+        else if (action.startsWith("show-mytemplate-")) {
+          const t = readFloorTemplates().find((x) => x.id === action.slice(16));
+          if (t && p.hall) startFrom(t.label, () => ({ venue: { ...t.venue }, items: t.items.map((it) => ({ ...it })) }));
+        } else if (action.startsWith("show-forget-template-")) {
+          writeFloorTemplates(readFloorTemplates().filter((x) => x.id !== action.slice(21)));
+          renderInspector();
+        }
         else if (action.startsWith("qs-forget-")) {
           writeTemplates(readTemplates().filter((t) => t.id !== action.slice(10)));
           openQuickStart();

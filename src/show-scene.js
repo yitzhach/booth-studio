@@ -133,6 +133,7 @@ function at(it, lx, lz) {
  * meshes; Node counts it.
  */
 export function showParts(h, { skip = null } = {}) {
+  const drape = h.venue?.drape || COLOURS.drape;
   const H = SHOW_HEIGHTS;
   const out = [];
   const part = (it, shape, finish, lx, lz, w, hgt, d, color, base = 0) => {
@@ -148,9 +149,9 @@ export function showParts(h, { skip = null } = {}) {
         part(it, "box", "matte", 0, 0, w, 0.6, d, STATUSES[rec.status].color);
         const style = it.style || "pipe";
         if (style === "pipe") {
-          part(it, "box", "fabric", 0, -d / 2 + 0.5, w, H.drape, 1, COLOURS.drape);
-          part(it, "box", "fabric", -w / 2 + 0.5, 0, 1, H.rail, d - 1, COLOURS.drape);
-          part(it, "box", "fabric", w / 2 - 0.5, 0, 1, H.rail, d - 1, COLOURS.drape);
+          part(it, "box", "fabric", 0, -d / 2 + 0.5, w, H.drape, 1, drape);
+          part(it, "box", "fabric", -w / 2 + 0.5, 0, 1, H.rail, d - 1, drape);
+          part(it, "box", "fabric", w / 2 - 0.5, 0, 1, H.rail, d - 1, drape);
         } else if (style === "hardwall") {
           part(it, "box", "matte", 0, -d / 2 + 1, w, H.hardwall, 2, COLOURS.hardwall);
           part(it, "box", "matte", -w / 2 + 1, 0, 2, H.hardwall, d - 2, COLOURS.hardwall);

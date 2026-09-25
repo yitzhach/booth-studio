@@ -16,13 +16,17 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-25, tenth round — Next items 1 and 2: the share
+- **Last deploy: 2026-09-25, eleventh round — Next items 3 and 4: the show
+  floor grows to fit pieces laid off its edge, a floor is saved as a
+  template, and the drape colour is a floor setting** (the first bullet
+  below). Item 3 had nothing to build without the owner's answers. Before
+  it, the tenth round — Next items 1 and 2: the share
   links hardened (rate limits, an upload window, a per-link ceiling, a daily
   sweep of lapsed links), a sent link updated or deleted by the browser that
-  sent it, and a design file dropped straight on a floor booth** (the first
+  sent it, and a design file dropped straight on a floor booth** (the second
   bullet below). Before it, the ninth round — **Show Hub phase 1: a booth
   sent as a link, not a file. The app's first backend** — a Worker on
-  `/api/*` and an R2 bucket (the second bullet below). Before it, the eighth
+  `/api/*` and an R2 bucket (the third bullet below). Before it, the eighth
   round — Show Hub v0: a booth design
   sent as a file from an exhibitor and imported onto a floor booth by the
   promoter, plus the Pro pitch deck at `/pitchdeck/`** (the first bullet
@@ -69,6 +73,51 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-25, eleventh round: Next items 3 and 4. Pushed to `main` and
+  deployed.** Asked for as "continue with 3 and 4". Both items are mostly
+  looking on the real machine and questions for the owner; this round built
+  the parts that answer a question by adding an option, and changed nothing
+  anyone was already using. Not seen on the real machine.
+  1. **Item 3 (the seventh round's feel) — nothing built.** Every point in
+     it is either a feel check (the right-drag box, ⌘ right-drag on a
+     trackpad, the chips, H for the hand) or a choice that is the owner's:
+     whether "mirror" meant flipping a booth's whole design or a cut-out
+     person, whether the eight top tabs should be regrouped, whether Layout's
+     twelve chips should be fewer, whether the hand stays on across modes.
+     Building any of them would be guessing. They stay in Next, asked
+     plainly.
+  2. **Grow the floor to fit** (item 4, phase 1: "a block added below the
+     rest can land outside the floor's size … should the floor grow to
+     fit?"). Answered as an offer, not an automatic resize: when any piece
+     lies off the floor, the Floor section says how many and offers **Grow
+     the floor to fit** (`offFloor` / `growToFit` in `src/show.js`). It
+     never shrinks; pieces above or left of the floor move down or right all
+     together, so nothing changes place against anything else; 5′ to spare;
+     one undo step. Add booths still lands a block below the rest.
+  3. **Save this floor as a template** (item 4, phase 3). Under Start from a
+     template: the floor's size and every piece, booth numbers and all — not
+     its sales, "my booth" or linked designs, which belong to that show
+     (`floorTemplateOf`). Kept on this browser, up to 12, in
+     `localStorage["booth.floorTemplates"]`, like Quick start's booth
+     templates; each checked by `validFloorTemplate` (the floor's own
+     `validShow`) when read. Offered as **Mine · <name>** beside the built-in
+     three with a Remove; applying one goes through the built-ins' confirm
+     and is one undo step (`startFrom` in `src/main.js`, which the built-ins
+     now use too). Not answered: whether applying a template should drop
+     the sales of numbers no longer on the floor — still kept, as before.
+  4. **Drape colour is a floor setting** (item 4, phase 2: "should drape
+     colour be a floor setting?"). Floor → Drape colour: slate blue (the
+     `#465469` every floor had, and still the default), black, white,
+     burgundy, forest green, grey (`DRAPES`). Stored as optional
+     `p.hall.venue.drape`, a hex colour checked by `validShow`; every older
+     plan has none and draws as before. It colours the 8′ back drape and 3′
+     side rails in See it in 3D (`showParts`); the 2D plan is unchanged.
+  **Tests:** `tests/floor-extras.test.js` (4: off-floor found and grown,
+  pieces moved together, a template's copy and its checks, the drape
+  optional, checked and drawn); `tests/view-floor2.mjs`, a new browser suite
+  in `test:view` (warning, grow, undo, drape chosen, a floor saved, a
+  built-in applied over it, mine applied back exactly, removed, the drape
+  surviving a reload).
 - **2026-09-25, tenth round: Next items 1 and 2. Pushed to `main` and
   deployed.** Asked for as "continue in order — start with 1 and 2". Both
   items were mostly looking on the real machine, which no session can do;
@@ -1665,7 +1714,9 @@ Extend it; do not rebuild it.
    promoter then has a lighter, softer booth. The real question is demand:
    do promoters want exhibitors' designs on their floor? Also open: the
    pitch deck at `/pitchdeck/`, by eye.
-1. **The seventh round (2026-09-25), on the real machine.** Build `main`'s
+1. **The seventh round (2026-09-25), on the real machine.** *Looked at
+   2026-09-25 (eleventh round): nothing here can be built without the
+   owner's answers — the choices below are the questions.* Build `main`'s
    tip first (`window.BOOTH_BUILD`). Does the right-drag box feel right, and
    is ⌘ right-drag a comfortable pan on a Mac trackpad (two-finger click and
    drag with ⌘ held)? On a trackpad a two-finger scroll already pans the
@@ -1685,8 +1736,8 @@ Extend it; do not rebuild it.
    2026-09-25 (see Now); none of it has been seen outside this sandbox.
    - **Phase 2, the 3D show:** does the overview frame the floor well, and
      is the dollhouse cut-away (near hall walls vanishing from outside) the
-     right read? Are 8′ drapes and 3′ rails in `#465469` the right default
-     look, or should drape colour be a floor setting? Is the walk's start
+     right read? Drape colour is now a floor setting (eleventh round): are
+     the six colours in `DRAPES` the ones shows actually offer? Is the walk's start
      (the aisle nearest the entrance) right, and does a walkthrough on a
      real plan go where a visitor would? 1.1 m/s — too slow? Labels: 40
      nearest, 22″ tall — right? And the frame rate on a big floor (a 1,000-
@@ -1696,9 +1747,9 @@ Extend it; do not rebuild it.
    - **Phase 3:** is "Open this booth" in the right place (the selected
      booth's Design section), and should the 3D show draw every *parked*
      design in full too, not only the open one? It would cost a booth build
-     per linked design; today they are drawn light. Should templates also
-     be savable from a floor ("Save this floor as a template", kept on the
-     device like Quick start's templates)? Should applying a template drop
+     per linked design; today they are drawn light. Floors can now be saved
+     as templates (eleventh round) — should they also travel in a backup,
+     rather than living on one browser? Should applying a template drop
      the sales of numbers that are no longer on the floor?
    - **Phase 4:** the owner decides the provider (AI_EXPORT_PHASE.md weighs
      FLUX.2 pro) and how its key is held — which, by that document, means a
@@ -1715,9 +1766,9 @@ Extend it; do not rebuild it.
      end-cap booths to show their open sides (today a booth's open front is
      only the side it faces)? On a phone, is the library in the panel
      reachable enough, or does it want a floating "+" over the floor?
-     A block added below the rest can land outside the floor's size; the
-     3D view shows it standing outside the hall. Should the floor grow to
-     fit?
+     A block added below the rest can still land outside the floor's size;
+     the panel now says so and offers Grow the floor to fit (eleventh
+     round). Should Add booths grow it by itself instead?
 1. **The 2026-09-25 third and fourth rounds, on the real machine.** Check
    the arrows draw and that an export now shows the picture inside the
    frame while it renders. Keyframe the frame, give Start and End different frames, and
