@@ -16,7 +16,10 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-25, seventh round — the owner's first look at the
+- **Last deploy: 2026-09-25, eighth round — Show Hub v0: a booth design
+  sent as a file from an exhibitor and imported onto a floor booth by the
+  promoter, plus the Pro pitch deck at `/pitchdeck/`** (the first bullet
+  below). Before it, the seventh round — the owner's first look at the
   show floor: a right-drag selection box that is drawn, ⌘/Ctrl right-drag to
   pan, Flip horizontal / vertical, the Pan tool, a walk that takes up where it
   stopped, several tapes kept at once and sub-tabs in the panels** (the first
@@ -59,6 +62,44 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-25, eighth round: Show Hub v0, and the pitch deck. Pushed to
+  `main` and deployed.** The owner asked for original ideas that could carry
+  a Pro monthly fee; five were proposed and are recorded in
+  `FUTURE_BUILD.md` (Show Hub, attention map, "take it home" AR labels, a
+  sales-by-position log, AI renders on credits), and presented as a deck at
+  **`/pitchdeck/`** (`public/pitchdeck/index.html` — a static page Vite
+  copies into the build; it touches nothing in the app). The owner then chose
+  the lightest of them to build: **Show Hub v0**, the version of "the show
+  assembles itself" that needs no server. Nothing below has been seen on the
+  real machine; it is tested in a real browser here (`tests/view-hub.mjs`).
+  1. **Send my booth to the promoter** (Export → Send to the show; not in
+     Photo mode, not gated — it is for exhibitors, who may well be Lite).
+     Downloads `<name>.booth-design.json`: `{ kind:
+     "booth-studio/booth-design", version: 1, name, number?, design, assets
+     }`, where `design` is the live design exactly as `takeDesign` lifts it
+     (`booth`, `art`, `lights`, `ambient`, `views`) and `assets` holds only
+     the images that design names (`namedAssets`, the same string search
+     `assetInDesigns` uses). Not the photo composition, the export kit, the
+     show floor or unused library images. It is **not a backup** and is
+     not schema 1's to describe: the file has its own `kind`.
+  2. **Import a booth design** on a selected floor booth (its Design
+     section, under Open this booth). The file is validated by exactly the
+     rules a backup's live design is (`readDesignFile` calls
+     `validateProject`), and a whole backup handed in by mistake is named as
+     one. The design is **parked on that booth number in `p.hall.designs`**
+     — phase 3's storage, unchanged — so Open this booth, the 3D show,
+     renumbering and deleting all work on it with no new code. On the booth
+     open in the editor it replaces the live design instead. A booth that
+     already has a design asks first (Replace booth N's design?). One undo
+     step. Refused past `MAX_DESIGNS` (60) and past 250 assets.
+  3. **Image ids.** Asset ids are UUIDs, so a clash is unlikely, but a
+     promoter importing the same exhibitor twice is not: an id already in
+     the project **with the same data** is shared; one with *different* data
+     is given a new id and the design's references are rewritten to match,
+     so the promoter's own image is never overwritten (`importDesign` in
+     `src/booth-file.js`).
+  **Tests:** `tests/booth-file.test.js` (5), `tests/view-hub.mjs` (send,
+  import with images, confirm on replace, open, undo, a backup refused).
 - **2026-09-25, seventh round: the owner's first look at the show floor.
   Pushed to `main` and deployed.** Asked for in one message, after the
   owner used the floor; one commit. Nothing below has been seen on the real
@@ -1462,6 +1503,19 @@ Extend it; do not rebuild it.
 
 ## Next
 
+1. **Show Hub v0 (2026-09-25, eighth round), on the real machine — and
+   with a real promoter.** Send a booth from one browser, import it in
+   another (or a private window) onto a floor booth. Is Export → Send to
+   the show where an exhibitor would look? Is a booth's Design section the
+   right place for Import, or should the floor take a design file dropped
+   on a booth? Files carry original images, so a booth with twenty
+   full-size photographs can be 100 MB+ — too big to email; if that bites,
+   the file could carry the 2048 px preview instead of the original
+   (a choice the owner makes: the promoter then has a lighter, softer
+   booth). The real question is demand: do promoters want exhibitors'
+   designs on their floor? If yes, the hosted Show Hub in `FUTURE_BUILD.md`
+   is the next step, and it needs the local-first rule lifted — the owner's
+   decision. Also open: the pitch deck at `/pitchdeck/`, by eye.
 1. **The seventh round (2026-09-25), on the real machine.** Build `main`'s
    tip first (`window.BOOTH_BUILD`). Does the right-drag box feel right, and
    is ⌘ right-drag a comfortable pan on a Mac trackpad (two-finger click and
@@ -1919,9 +1973,9 @@ the picker became one list.
 
 ```sh
 npm ci
-npm test                 # 402 Node tests
+npm test                 # 408 Node tests
 npm run build
-npm run test:view        # 31 suites: city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render
+npm run test:view        # 33 suites (tools2 and hub included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
 npm run test:browser     # 25 end-to-end checks
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
@@ -2383,6 +2437,10 @@ anything else in a browser until it is done.
   (`setShow` / `stageShow` / `setShowView` in `src/scene.js` draw it);
   `src/linked.js` — opening one floor booth as a full design, and why the
   storage is shaped as it is; `FLOOR_TEMPLATES` in `src/show.js`;
+  `src/booth-file.js` — Show Hub v0: one booth design as a file, sent by
+  an exhibitor and imported onto a floor booth by the promoter;
+  `public/pitchdeck/index.html` — the Pro pitch deck, served at
+  `/pitchdeck/`;
   `src/ai-render.js` — the AI-render hook: the scene in words, the pack,
   the mask's legend, the protected pass and the provider-less adapter
   (`renderPasses` / `applyPass` in `src/scene.js` render the passes);

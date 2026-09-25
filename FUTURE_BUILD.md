@@ -29,6 +29,8 @@ Every idea marked *server* needs the owner to lift the local-first rule.
    **The v0 needs no server:** "Send my booth to the promoter" writes one
    booth design as a file, and "Import into booth #N" on the floor parks it
    on that number — a test of demand that breaks no rule.
+   **v0 is built (2026-09-25, eighth round — see `HANDOFF.md` → Now);**
+   the hosted Hub is what is left here.
 2. **Attention map** (*device*). Simulate passersby walking the aisle both
    ways; render every work in its own flat ID colour from each eye point (an
    extension of the AI pack's mask pass, `applyPass` in `src/scene.js`);
