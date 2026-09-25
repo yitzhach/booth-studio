@@ -13,7 +13,10 @@ test("a new plan is two back-to-back rows of eight, numbered from 101", () => {
   assert.equal(layout[8].number, 109);
   // Back to back: row 2 starts where row 1 ends, with no aisle between.
   assert.equal(layout[8].y, layout[0].y + h.boothDepth);
-  assert.equal(layout[8].faces, "back");
+  // …and back to back means backs meeting: row 1 faces the aisle behind it,
+  // row 2 the one in front.
+  assert.equal(layout[0].faces, "back");
+  assert.equal(layout[8].faces, "front");
   const size = hallSize(h);
   assert.equal(size.width, h.aisle * 2 + 8 * h.boothWidth);
   assert.equal(size.depth, h.aisle * 2 + 2 * h.boothDepth);

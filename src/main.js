@@ -124,6 +124,10 @@ import {
   Images,
   Crop,
   ArrowUp,
+  Route,
+  DoorOpen,
+  LayoutTemplate,
+  Sparkles,
 } from "lucide";
 import {
   demoProject,
@@ -196,6 +200,7 @@ import { elevationsHTML } from "./elevations.js";
 import { HALL_LIMITS, MAX_HALL_BOOTHS, STATUSES, boothOf, hallCSV, hallHTML, hallLayout, hallSVG, hallTotals, newHall } from "./hall.js";
 import { BOOTH_STYLES, KINDS, SHAPES, VENUES as SHOW_VENUES, boothBlock, boundsOf, copyPieces, feet, floorOf, renumber, showItems, showSVG, spacePieces, toFloor } from "./show.js";
 import { createShowEditor } from "./show-editor.js";
+import { showWalkthrough } from "./show-scene.js";
 import { CIRCUIT_WATTS, powerHTML, powerLines, powerTotals } from "./power.js";
 import { FOOTPRINTS, SHOWS, STARTERS, fromTemplate, quickStart, templateOf } from "./quickstart.js";
 import { PhotoEditor } from "./photo.js";
@@ -271,6 +276,10 @@ async function boot() {
     AlignStartHorizontal,
     ListOrdered,
     ArrowLeft,
+    Route,
+    DoorOpen,
+    LayoutTemplate,
+    Sparkles,
   };
   // An icon is written into the HTML as its finished SVG. lucide's
   // createIcons scans the whole document for placeholders and builds each
@@ -310,6 +319,14 @@ async function boot() {
     // drawing board once made, the snap grid, and the "Add booths" settings.
     // All view state: the plan itself is `p.hall`.
     showFloor = false,
+    // The show floor stood up in 3D (src/show-scene.js), walked and recorded
+    // in the booth's own viewport. View state, like `showFloor`; a reload
+    // opens the booth.
+    show3d = false,
+    // The camera timeline of the space not being looked at. A booth's keys
+    // are poses round the booth and a floor's are poses in its aisles, so
+    // each keeps its own and they swap when the 3D show is entered or left.
+    otherTimeline = null,
     showEditor = null,
     showGrid = 12,
     showBlock = { count: 10, perRow: 10, w: 120, d: 120, gap: 0, aisle: 120, backToBack: false, style: "pipe" },
@@ -798,6 +815,9 @@ async function boot() {
     if (scene) scene.also = picked;
     if (selectedPanel && !findPanel(p, selectedPanel)) selectedPanel = null;
     if (selectedPedestal && !findPedestal(p, selectedPedestal)) selectedPedestal = null;
+    // Read here, not only when the 3D show is entered: an undo hands back a
+    // new `p.hall`, and the scene must stand up the plan that is current.
+    scene?.setShow(showFloor && show3d && p.hall ? p.hall : null);
     scene?.update(p, selected, selectedPanel, selectedPedestal);
     syncClearance();
     photo.update(p, photoSelected);
@@ -1990,6 +2010,22 @@ async function boot() {
     });
   }
   /** A key on the show floor: true when it did something. */
+  /** Keys while the show is in 3D: walk (W, then WASD / arrows), Esc, undo. */
+  function show3dKey(ev) {
+    const mod = ev.ctrlKey || ev.metaKey;
+    const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
+    if (mod && k === "z") return actions[ev.shiftKey ? "redo" : "undo"](), true;
+    if (mod || ev.altKey) return false;
+    if (walking) {
+      const move = { w: [1, 0], ArrowUp: [1, 0], s: [-1, 0], ArrowDown: [-1, 0], a: [0, -1], ArrowLeft: [0, -1], d: [0, 1], ArrowRight: [0, 1] }[k];
+      if (move) return scene.walk(move[0], move[1], ev.shiftKey ? STRIDE : STEP), true;
+      if (k === "Escape") return setWalking(false), true;
+      return false;
+    }
+    if (k === "w") return setWalking(true), true;
+    if (k === "Escape") return setShow3d(false), true;
+    return false;
+  }
   function showFloorKey(ev) {
     const mod = ev.ctrlKey || ev.metaKey;
     const key = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
@@ -2113,7 +2149,19 @@ async function boot() {
     return `<div class="panel-heading"><h2>Shapes</h2>${icon("shapes")}</div><p class="muted show-lib-note">Drag a shape onto the floor, or tap it to drop it in the middle.</p>${groups.map(([name, list]) => `<section class="show-lib"><h3>${name}</h3><div class="show-shapes">${list.map((sh) => `<button class="show-shape" data-show-shape="${sh.key}" title="${e(sh.label || KINDS[sh.kind].label)}">${swatch(sh)}<span>${e(sh.label || KINDS[sh.kind].label)}</span></button>`).join("")}</div></section>`).join("")}`;
   }
   /** The inspector while the show floor is open. */
+  /**
+   * The show in 3D: walk it, have a walkthrough made from its aisles, edit
+   * that as a timeline and export it — the booth's own tools, pointed at the
+   * floor.
+   */
+  function show3dPanel() {
+    const h = p.hall;
+    const booths = showItems(h).filter((i) => i.kind === "booth").length;
+    const home = h.open ?? h.mine;
+    return `<div class="button-row">${btn("show-3d", "Back to the plan", "map")}${btn("show-exit", "Back to my booth", "arrow-left")}</div><section class="show-3d"><h3>The show in 3D <span>${booths} booths</span></h3><p class="muted">${Number.isInteger(home) && showItems(h).some((i) => i.number === home) ? `Booth ${home} is drawn as your full design; every other booth is its floor, its drape, walls or tent, and its number.` : "Every booth is drawn light — its floor, its drape, walls or tent, and its number. Mark one “This is my booth” in the plan to see your own design standing in it."} Numbers show for the booths nearest the camera.</p>${btn("show-walk", walking ? "Stop walking" : "Walk the show", "footprints", walking ? "primary wide" : "wide")}<p class="muted">From the entrance, at eye height: WASD or the arrows step, Shift strides, drag to look round.</p></section>${gated("video", `<section><h3>Walkthrough video</h3>${btn("show-walkthrough", "Make a walkthrough", "route", "primary wide")}<p class="muted">Lays a camera path down the aisles from the entrance — walkway pieces if the floor has them, otherwise the gaps between rows — as keyframes in the timeline, at a visitor's pace. Play it, move any keyframe, then Export MP4.</p>${btn("edit-timeline", "Edit timeline…", "sliders-horizontal", "wide")}</section>`, "Walkthrough videos of the show are made with the camera timeline. Part of Booth Studio Pro.")}<section><h3>Stills</h3>${btn("export-image", "Export PNG", "download", "wide")}<p class="muted">The view as it is, at the size set in Export.</p></section>`;
+  }
   function showFloorPanel() {
+    if (show3d) return show3dPanel();
     const h = p.hall;
     const f = floorOf(h);
     const pieces = showPieces();
@@ -2131,7 +2179,7 @@ async function boot() {
     }
     const b = showBlock;
     const bf = (label, key, min, max, step = 1, unit = "in") => num(label, key, b[key], min, max, step, unit, "data-show-block");
-    return `<div class="button-row">${btn("show-exit", "Back to my booth", "arrow-left")}${btn("show-fit", "Fit floor", "maximize")}</div>${selectedHTML}<div class="mobile-library">${showLibraryHTML()}</div><section><h3>Add booths</h3><div class="field-pair">${bf("How many", "count", 1, 400, 1, "")}${bf("Per row", "perRow", 1, 60, 1, "")}</div><div class="field-pair">${bf("Booth width", "w", 48, 480)}${bf("Booth depth", "d", 48, 480)}</div><div class="field-pair">${bf("Gap in a row", "gap", 0, 480)}${bf("Aisle", "aisle", 36, 480)}</div><label class="check-field"><input type="checkbox" data-show-block="backToBack" ${b.backToBack ? "checked" : ""}/>Rows back to back, in pairs</label><label class="setting-label">Built as<select data-show-block="style" aria-label="New booths built as">${Object.entries(BOOTH_STYLES).map(([key, v]) => `<option value="${key}" ${b.style === key ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label>${btn("show-add-block", "Add booths", "plus", "primary wide")}<p class="muted">Numbered on from the highest booth on the floor, placed below everything already on the floor and selected, ready to drag.</p></section><section><h3>Floor</h3><label class="setting-label">Venue<select data-show-venue="kind" aria-label="Show venue">${Object.entries(SHOW_VENUES).map(([key, v]) => `<option value="${key}" ${f.kind === key ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label><div class="field-pair">${num("Floor width", "width", f.width / 12, 10, 2000, 1, "ft", "data-show-venue")}${num("Floor depth", "depth", f.depth / 12, 10, 2000, 1, "ft", "data-show-venue")}</div><label class="setting-label">Snap grid<select id="show-grid" aria-label="Snap grid">${[[0, "Off"], [1, "1″"], [6, "6″"], [12, "1′"], [24, "2′"], [60, "5′"]].map(([v, l]) => `<option value="${v}" ${showGrid === v ? "selected" : ""}>${l}</option>`).join("")}</select></label><p class="muted">Pieces snap to each other's edges first, then to this grid. Hold Alt while dragging to place freely.</p>${btn("show-renumber", "Renumber every booth", "list-ordered", "wide")}</section><section><h3>Sales <span>${t.booths} booths</span></h3><p class="hall-totals">${t.sold} sold · ${t.held} held · ${t.open} open${t.soldValue ? ` · sold $${Math.round(t.soldValue).toLocaleString("en-US")}` : ""}${t.heldValue ? ` · held $${Math.round(t.heldValue).toLocaleString("en-US")}` : ""}</p>${field("Default price", "price", h.price, ...HALL_LIMITS.price, 1, "$", "hallplan", "Hall Default price")}<div class="button-row">${btn("hall-map", "Download hall map", "download")}${btn("hall-csv", "Exhibitor list (CSV)", "download")}</div>${btn("hall-delete", "Delete the hall plan", "trash-2", "wide")}</section><section><h3>Keys</h3><p class="muted">Delete removes · Ctrl+D duplicates · R turns 90° · arrows nudge by the grid (Shift: 10×) · Ctrl+A selects all · Esc lets go · 0 fits the floor.</p></section>`;
+    return `<div class="button-row">${btn("show-exit", "Back to my booth", "arrow-left")}${btn("show-fit", "Fit floor", "maximize")}</div>${btn("show-3d", "See it in 3D", "box", "primary wide")}${selectedHTML}<div class="mobile-library">${showLibraryHTML()}</div><section><h3>Add booths</h3><div class="field-pair">${bf("How many", "count", 1, 400, 1, "")}${bf("Per row", "perRow", 1, 60, 1, "")}</div><div class="field-pair">${bf("Booth width", "w", 48, 480)}${bf("Booth depth", "d", 48, 480)}</div><div class="field-pair">${bf("Gap in a row", "gap", 0, 480)}${bf("Aisle", "aisle", 36, 480)}</div><label class="check-field"><input type="checkbox" data-show-block="backToBack" ${b.backToBack ? "checked" : ""}/>Rows back to back, in pairs</label><label class="setting-label">Built as<select data-show-block="style" aria-label="New booths built as">${Object.entries(BOOTH_STYLES).map(([key, v]) => `<option value="${key}" ${b.style === key ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label>${btn("show-add-block", "Add booths", "plus", "primary wide")}<p class="muted">Numbered on from the highest booth on the floor, placed below everything already on the floor and selected, ready to drag.</p></section><section><h3>Floor</h3><label class="setting-label">Venue<select data-show-venue="kind" aria-label="Show venue">${Object.entries(SHOW_VENUES).map(([key, v]) => `<option value="${key}" ${f.kind === key ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label><div class="field-pair">${num("Floor width", "width", f.width / 12, 10, 2000, 1, "ft", "data-show-venue")}${num("Floor depth", "depth", f.depth / 12, 10, 2000, 1, "ft", "data-show-venue")}</div><label class="setting-label">Snap grid<select id="show-grid" aria-label="Snap grid">${[[0, "Off"], [1, "1″"], [6, "6″"], [12, "1′"], [24, "2′"], [60, "5′"]].map(([v, l]) => `<option value="${v}" ${showGrid === v ? "selected" : ""}>${l}</option>`).join("")}</select></label><p class="muted">Pieces snap to each other's edges first, then to this grid. Hold Alt while dragging to place freely.</p>${btn("show-renumber", "Renumber every booth", "list-ordered", "wide")}</section><section><h3>Sales <span>${t.booths} booths</span></h3><p class="hall-totals">${t.sold} sold · ${t.held} held · ${t.open} open${t.soldValue ? ` · sold $${Math.round(t.soldValue).toLocaleString("en-US")}` : ""}${t.heldValue ? ` · held $${Math.round(t.heldValue).toLocaleString("en-US")}` : ""}</p>${field("Default price", "price", h.price, ...HALL_LIMITS.price, 1, "$", "hallplan", "Hall Default price")}<div class="button-row">${btn("hall-map", "Download hall map", "download")}${btn("hall-csv", "Exhibitor list (CSV)", "download")}</div>${btn("hall-delete", "Delete the hall plan", "trash-2", "wide")}</section><section><h3>Keys</h3><p class="muted">Delete removes · Ctrl+D duplicates · R turns 90° · arrows nudge by the grid (Shift: 10×) · Ctrl+A selects all · Esc lets go · 0 fits the floor.</p></section>`;
   }
   /** Export → Power and rentals (Pro): the service desk's two forms. */
   function powerSection() {
@@ -2231,6 +2279,30 @@ async function boot() {
     document.querySelector("#scene").classList.toggle("placing", !!on);
     renderStatus();
     syncTools();
+  }
+  /**
+   * The show floor in 3D, or back to its plan. The booth's viewport draws the
+   * floor (scene.js `setShow`); walk mode, the timeline and both exports then
+   * work on it as they do on a booth. The timeline is swapped for the one
+   * this space had, and a timeline dialog left open is closed, because its
+   * keys are poses in the other space.
+   */
+  function setShow3d(on) {
+    on = !!on;
+    if (on === show3d) return;
+    if (on && (!scene || !p.hall)) return toast("3D is not available on this device, so the show cannot be walked. The plan still works.", true);
+    if (walking) setWalking(false);
+    if (document.querySelector("#timeline-dialog")?.open) actions["close-timeline"]();
+    [videoTimeline, otherTimeline] = [otherTimeline, videoTimeline];
+    tlSelected = null;
+    tlPlayhead = 0;
+    tlBeforeAuto = null;
+    show3d = on;
+    // The 3D show is drawn by the 3D booth's viewport, so a floor opened from
+    // Photo mode switches it over. Not an edit: nothing about the booth moved.
+    if (on && p.mode !== "3d") p.mode = "3d";
+    render();
+    document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === "perspective"));
   }
   /** Walk mode on or off, with its pad on screen and its hint in the status bar. */
   let walking = false;
@@ -2961,7 +3033,11 @@ async function boot() {
   // The two lines under the viewport. Split out of render() because a
   // selection changes both of them and nothing else on the page.
   function renderStatus() {
-    document.querySelector("#gesture-hint").textContent = showFloor
+    document.querySelector("#gesture-hint").textContent = show3d
+      ? walking
+        ? "Walking the show: WASD or arrows step · Shift strides · drag to look round · Esc stops"
+        : "Drag to orbit · scroll to zoom · right-drag to pan · W walks the show · Esc back to the plan"
+      : showFloor
       ? "Drag a piece to move it · drag empty floor to select · Space- or right-drag to pan · scroll to zoom"
       :
       scene?.drawingBox && p.mode !== "photo"
@@ -2989,14 +3065,20 @@ async function boot() {
   }
   function render() {
     if (showFloor && !p.hall) showFloor = false;
+    if (show3d && (!showFloor || !scene)) {
+      show3d = false;
+      [videoTimeline, otherTimeline] = [otherTimeline, videoTimeline];
+    }
+    const flat = showFloor && !show3d;
     document.querySelector("#project-name").value = p.name;
     document.body.classList.toggle("show-floor-on", showFloor);
-    document.querySelector("#show-floor").hidden = !showFloor;
-    document.querySelector("#scene").hidden = p.mode !== "3d" || showFloor;
+    document.body.classList.toggle("show-3d-on", show3d);
+    document.querySelector("#show-floor").hidden = !flat;
+    document.querySelector("#scene").hidden = p.mode !== "3d" || flat;
     document.querySelector("#photo").hidden = p.mode !== "photo" || showFloor;
     document.querySelector("#photo-empty").hidden =
       p.mode !== "photo" || !!p.photo.asset || showFloor;
-    document.querySelector("#view-switch").hidden = p.mode === "photo" || showFloor;
+    document.querySelector("#view-switch").hidden = p.mode === "photo" || flat;
     document.querySelector(".zoom-controls").hidden = p.mode === "photo";
     document.querySelector("#mode-label").textContent =
       p.mode === "photo" ? "PHOTO COMPOSITION" : "MEASURED WORKSPACE";
@@ -3017,8 +3099,8 @@ async function boot() {
       .classList.toggle("active", p.mode === "photo" && !showFloor);
     document.querySelector('[data-action="mode-show"]').classList.toggle("active", showFloor);
     if (showFloor) {
-      if (walking) setWalking(false);
-      document.querySelector("#mode-label").textContent = "SHOW FLOOR";
+      if (walking && !show3d) setWalking(false);
+      document.querySelector("#mode-label").textContent = show3d ? "SHOW FLOOR · 3D" : "SHOW FLOOR";
       const f = floorOf(p.hall);
       document.querySelector("#scene-title").textContent = `${feet(f.width)} × ${feet(f.depth)} · ${SHOW_VENUES[f.kind]}`;
       document.querySelector("#scene-subtitle").textContent = `${showItems(p.hall).filter((i) => i.kind === "booth").length} booths · ${showItems(p.hall).length} pieces`;
@@ -3028,7 +3110,7 @@ async function boot() {
         onSelect: showSelected,
         grid: () => showGrid,
       });
-      showEditor.render();
+      if (!show3d) showEditor.render();
     }
     document.querySelector('[data-action="undo"]').disabled = !history.length;
     document.querySelector('[data-action="redo"]').disabled = !future.length;
@@ -3042,7 +3124,7 @@ async function boot() {
     // The booth's scene is hidden behind the show floor; an edit to the floor
     // is not an edit to it, and rebuilding it for one would be the whole cost
     // of every drag.
-    if (!showFloor) refreshScene();
+    if (!showFloor || show3d) refreshScene();
     syncTools();
     syncSavedViews();
     // On the next frame rather than now: reading the viewport's size straight
@@ -3467,6 +3549,7 @@ async function boot() {
       scheduleSave();
     },
     "mode-3d": () => {
+      if (show3d) setShow3d(false);
       showFloor = false;
       mutate(() => (p.mode = "3d"));
     },
@@ -3487,6 +3570,18 @@ async function boot() {
       showEditor?.fit();
     },
     "show-exit": () => actions["mode-3d"](),
+    "show-3d": () => setShow3d(!show3d),
+    "show-walk": () => setWalking(!walking),
+    "show-walkthrough": () => {
+      if (!show3d) setShow3d(true);
+      if (!scene || !show3d) return;
+      videoTimeline = normalizeTimeline(showWalkthrough(p.hall, { maxKeys: MAX_KEYS, minSeconds: MIN_SECONDS, maxSeconds: MAX_SECONDS }));
+      tlSelected = null;
+      tlPlayhead = 0;
+      tlBeforeAuto = null;
+      actions["edit-timeline"]();
+      toast(`A ${videoTimeline.seconds}-second walk through the aisles, ${videoTimeline.keys.length} keyframes. Play it, change any keyframe, then Export MP4.`);
+    },
     "show-fit": () => showEditor?.fit(),
     "show-rotate": () => showRotate(90),
     "show-duplicate": () => showDuplicate(),
@@ -3538,19 +3633,19 @@ async function boot() {
       toast(`${ids.length} booths added below the rest and selected — drag them into place.`);
     },
     "mode-photo": () =>
-      mutate(() => {
+      (show3d && setShow3d(false), mutate(() => {
         showFloor = false;
         p.mode = "photo";
         tab = p.photo.asset ? "art" : "layout";
-      }),
+      })),
     "export-tab": () => {
       tab = "export";
       renderInspector();
     },
-    "zoom-in": () => (showFloor ? showEditor?.zoom(1.25) : p.mode === "3d" && scene?.zoom(1.2)),
-    "zoom-out": () => (showFloor ? showEditor?.zoom(1 / 1.25) : p.mode === "3d" && scene?.zoom(1/1.2)),
+    "zoom-in": () => (showFloor && !show3d ? showEditor?.zoom(1.25) : p.mode === "3d" && scene?.zoom(1.2)),
+    "zoom-out": () => (showFloor && !show3d ? showEditor?.zoom(1 / 1.25) : p.mode === "3d" && scene?.zoom(1/1.2)),
     "reset-view": () => {
-      if (showFloor) return showEditor?.fit();
+      if (showFloor && !show3d) return showEditor?.fit();
       scene?.setView("perspective");
       document
         .querySelectorAll("[data-view]")
@@ -5590,6 +5685,11 @@ async function boot() {
       document.querySelector("#dialog").open
     )
       return;
+    // The show in 3D: walking, and the way back to the plan.
+    if (showFloor && show3d) {
+      if (show3dKey(ev)) ev.preventDefault();
+      return;
+    }
     // The show floor has keys of its own, and none of the booth's apply.
     if (showFloor && showEditor) {
       if (showFloorKey(ev)) ev.preventDefault();
@@ -5760,6 +5860,9 @@ async function boot() {
       },
       get showEditor() {
         return showEditor;
+      },
+      get show3d() {
+        return show3d;
       },
       // What the light bar would hang, computed from the booth. The view test
       // reads it against the lights the scene actually built.

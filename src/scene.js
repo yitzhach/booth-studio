@@ -15,6 +15,8 @@ import { PEOPLE, makePerson, placePerson, resolvePerson } from "./people.js";
 import { rowLayout } from "./row.js";
 import { smartSnap } from "./guides.js";
 import { tagShown, walkStart, walkStep } from "./views.js";
+import { buildShow, homeBooth, showOverview, showReach, showWalkStart } from "./show-scene.js";
+import { floorOf } from "./show.js";
 import { sameWall } from "./arrange.js";
 /**
  * The longest edge a preview texture is decoded to. An original stays whole
@@ -321,6 +323,7 @@ function disposeTree(group) {
       );
     }
     if (o.isLight) o.shadow?.dispose();
+    o.userData.dispose?.();
   });
 }
 export class BoothScene {
@@ -370,6 +373,10 @@ export class BoothScene {
     // and for good when the file is missing, which leaves the mannequin.
     this.cutouts = {};
     this.view = "perspective";
+    // The show floor in 3D (src/show-scene.js): the hall plan being walked,
+    // or null for the booth alone. View state, set by main.js through
+    // `setShow` and read by `update`.
+    this.show = null;
     this.move = false;
     // On by default, matching the toolbar button's own initial state: this is a
     // measured planning tool, and a drag that lands at 23.59 inches is not a
@@ -786,6 +793,8 @@ export class BoothScene {
   // — a flat colour, the procedural sky, the orthographic plan view — has
   // nothing to reframe and takes the single pass it always did.
   renderFrame() {
+    // The show's booth numbers follow the camera: only the nearest are drawn.
+    if (this.show) this.showGroup?.userData.placeLabels?.(this.camera);
     const background = this.scene.background;
     if (
       !this.camera.isPerspectiveCamera ||
@@ -989,8 +998,10 @@ export class BoothScene {
       const W = this.p?.booth.width * IN || 3,
         D = this.p?.booth.depth * IN || 3,
         H = this.p?.booth.height * IN || 2.4;
-      const span =
-        this.view === "plan"
+      const reach = this.show ? showReach(this.show) * 1.1 : 0;
+      const span = this.show
+        ? Math.max(reach * 2, ((reach * 2 * h) / w))
+        : this.view === "plan"
           ? Math.max(D * 1.3, ((W * h) / w) * 1.3)
           : Math.max(
               H * 1.25,
@@ -1215,7 +1226,7 @@ export class BoothScene {
     // procedural horizon above stays in place when its assets are missing.
     this.lighting
       .apply(this.scene, p.booth.envPreset, {
-        background: !p.booth.surroundAsset,
+        background: !p.booth.surroundAsset && !this.show,
         rotation: p.booth.surroundRotation || 0,
       })
       .then(() => {
@@ -1225,7 +1236,7 @@ export class BoothScene {
         this.renderer.shadowMap.needsUpdate = true;
       })
       .catch(() => {});
-    if (p.booth.surroundAsset) this.texture(p.booth.surroundAsset).then(t => {
+    if (p.booth.surroundAsset && !this.show) this.texture(p.booth.surroundAsset).then(t => {
       if (this.revision !== rev) return;
       t.mapping = T.EquirectangularReflectionMapping;
       this.scene.background = t;
@@ -1260,8 +1271,10 @@ export class BoothScene {
     this.buildUnderlay(p, rev);
     this.buildModels(p, rev);
     const ambient = new T.HemisphereLight("#e9f1ff", "#858079", p.ambient);
+    ambient.name = "booth-ambient";
     this.group.add(ambient);
     const fill = new T.DirectionalLight("#fff4df", 0.6);
+    fill.name = "booth-fill";
     fill.position.set(-3, 6, 5);
     fill.castShadow = true;
     fill.shadow.mapSize.set(1024, 1024);
@@ -1553,13 +1566,55 @@ export class BoothScene {
         }) || applied;
       if (applied) this.renderer.shadowMap.needsUpdate = true;
     }).catch(() => {});
+    if (this.show) this.stageShow(p);
     this.applyTags();
     this.applySelection();
     this.refreshGuides();
-    if (!this.initialized) {
+    if (!this.initialized || this.showChanged) {
       this.initialized = true;
+      this.showChanged = false;
       this.setView("perspective");
     }
+  }
+  /**
+   * The show floor in 3D, or back to the booth. `hall` is `p.hall` — the plan
+   * to stand up — or null. Takes effect on the next `update`, which main.js
+   * makes straight after; the view is reframed then, because a camera placed
+   * for a 10′ booth sees nothing of a 200′ hall.
+   */
+  setShow(hall) {
+    if (!!hall !== !!this.show) this.showChanged = true;
+    this.show = hall || null;
+  }
+  /**
+   * Turn the booth just built into the show: its surroundings, its own
+   * ground and any row neighbours go offstage (an invisible group, so they
+   * are still disposed with the booth), the floor of `src/show-scene.js` is
+   * added round it, and — when no booth on the floor is the one whose design
+   * is open — the booth itself goes offstage too, leaving only its two
+   * general lights to light the hall.
+   */
+  stageShow(p) {
+    const h = this.show;
+    const home = homeBooth(h);
+    const offstage = new T.Group();
+    offstage.name = "offstage";
+    offstage.visible = false;
+    const keep = (o) => o.name === "booth-ambient" || o.name === "booth-fill";
+    for (const o of [...this.group.children]) {
+      const surroundings = o.userData?.tag === "surroundings" || o.name === "environment-ground" || o.name.startsWith("row-booth-") || o.name === "underlay";
+      if (surroundings || (!home && !keep(o))) offstage.add(o);
+    }
+    this.group.add(offstage);
+    const show = buildShow(h);
+    this.group.add(show);
+    this.showGroup = show;
+    const f = floorOf(h);
+    this.scene.background = new T.Color(f.kind === "outdoor" ? "#bcd3e6" : "#dcd9d3");
+    this.scene.fog = null;
+    // Every other booth is drawn without shadows, and the booth's own fill
+    // light is fitted to the booth: a floor that big would blur it to nothing.
+    this.renderer.shadowMap.needsUpdate = true;
   }
   /**
    * Selection visuals, and nothing else: the blue outline on a work, its eight
@@ -1947,6 +2002,8 @@ export class BoothScene {
   setView(view) {
     // Any fixed view ends a walk; stopWalk itself comes back through here.
     if (this.walking) this.stopWalk();
+    if (this.show) return this.setShowView(view);
+    this.controls.maxDistance = 18;
     this.view = view;
     const W = this.p.booth.width * IN,
       D = this.p.booth.depth * IN,
@@ -1986,6 +2043,41 @@ export class BoothScene {
         this.camera.position.set(-W / 2 + 0.05, H / 2, 0);
         this.controls.target.set(W / 2, H / 2, 0);
       }
+    }
+    this.controls.update();
+    this.resize();
+    this.refreshGuides();
+  }
+  /**
+   * The show's two views: the whole floor from above the entrance, in
+   * perspective, and the plan from straight overhead. Back, left and right
+   * are about one booth's walls and mean nothing on a floor, so they are the
+   * perspective view here. The far plane and the orbit's reach grow with
+   * the floor.
+   */
+  setShowView(view) {
+    const reach = showReach(this.show);
+    this.view = view === "plan" ? "plan" : "perspective";
+    const far = Math.max(100, reach * 4);
+    if (this.view === "perspective") {
+      this.camera = new T.PerspectiveCamera(FOV, 1, 0.02, far);
+      this.fitAspectFactor = 1;
+    } else {
+      this.camera = new T.OrthographicCamera(-3, 3, 3, -3, 0.01, far);
+      this.orthoSpan = reach * 2;
+    }
+    this.controls.object = this.camera;
+    this.controls.enableRotate = this.view === "perspective";
+    this.controls.maxDistance = reach * 2.5;
+    this.camera.up.set(0, 1, 0);
+    const pose = showOverview(this.show);
+    if (this.view === "perspective") {
+      this.camera.position.set(...pose.position);
+      this.controls.target.set(...pose.target);
+    } else {
+      this.camera.position.set(pose.target[0], reach * 2, pose.target[2]);
+      this.camera.up.set(0, 0, -1);
+      this.controls.target.set(pose.target[0], 0, pose.target[2]);
     }
     this.controls.update();
     this.resize();
@@ -2071,7 +2163,8 @@ export class BoothScene {
   buildUnderlay(p, rev) {
     const u = p.booth.underlay;
     const asset = u && p.assets[u.asset];
-    if (!asset || u.on === false) return;
+    // The booth's venue plan means nothing laid under a whole show floor.
+    if (!asset || u.on === false || this.show) return;
     this.texture(u.asset).then((t) => {
       if (this.revision !== rev) return;
       const aspect = (asset.height || 1) / (asset.width || 1);
@@ -2134,7 +2227,8 @@ export class BoothScene {
         g.add(model);
         g.position.set(m.x * IN, 0, m.z * IN);
         g.rotation.y = ((m.rotation || 0) * Math.PI) / 180;
-        this.group.add(g);
+        // On a show floor with no booth of its own, the booth is offstage.
+        (this.show && !homeBooth(this.show) ? this.group.getObjectByName("offstage") || this.group : this.group).add(g);
         this.modelFrames[m.id] = g;
         this.applyTags(g);
       }).catch(() => {});
@@ -2257,7 +2351,7 @@ export class BoothScene {
     this.controls.enablePan = false;
     this.controls.enableDamping = false;
     this.controls.rotateSpeed = -0.35;
-    this.applyPose(walkStart(this.p.booth));
+    this.applyPose(this.show ? showWalkStart(this.show) : walkStart(this.p.booth));
   }
   walk(forward, right, inches) {
     if (!this.walking) return;
@@ -2482,6 +2576,8 @@ export class BoothScene {
       this.onSelect(id);
     };
     c.addEventListener("dblclick", e => {
+      // The show floor is looked at and walked, never edited, in 3D.
+      if (this.show) return;
       this.point(e);
       // Double-clicking a pedestal selects it, so one gesture both picks it
       // up and arms the drag — the single click that selects is the same
@@ -2511,7 +2607,7 @@ export class BoothScene {
       activateTransform(hit.object.userData.artId);
     });
     c.addEventListener("pointerdown", e => {
-      if (e.button !== 0 || this.drag) return;
+      if (e.button !== 0 || this.drag || this.show) return;
       if (this.drawingBox) {
         this.point(e);
         const at = this.ray.ray.intersectPlane(FLOOR, new T.Vector3());

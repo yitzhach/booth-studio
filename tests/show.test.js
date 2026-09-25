@@ -10,7 +10,8 @@ test("a grid plan reads as pieces, and turning it into a floor keeps every booth
   const pieces = showItems(h);
   assert.equal(pieces.length, 16);
   assert.deepEqual([pieces[0].number, pieces[0].x, pieces[0].y], [101, 120 + 60, 120 + 60]);
-  assert.equal(pieces[8].rot, 180, "the second of a back-to-back pair faces the other aisle");
+  assert.equal(pieces[0].rot, 180, "the first of a back-to-back pair faces the aisle behind it");
+  assert.equal(pieces[8].rot, undefined, "and the second the aisle in front, so their backs meet");
   assert.equal(h.items, undefined, "reading does not change the plan");
   toFloor(h);
   assert.equal(h.items.length, 16);
@@ -78,7 +79,8 @@ test("a block of booths: rows, gaps, back-to-back pairs and numbering on", () =>
   assert.equal(block[5].y - block[0].y, 240, "the next row an aisle away");
   const pairs = boothBlock([], { count: 12, perRow: 4, w: 120, d: 120, aisle: 120, backToBack: true, x: 0, y: 0, start: 1 });
   assert.deepEqual([pairs[4].y - pairs[0].y, pairs[8].y - pairs[0].y], [120, 360]);
-  assert.equal(pairs[4].rot, 180);
+  assert.equal(pairs[0].rot, 180, "a pair's first row faces up the floor");
+  assert.equal(pairs[4].rot, undefined, "its second down it: back to back");
 });
 
 test("spacing lays pieces out a set gap apart; renumbering reads rows from the back", () => {

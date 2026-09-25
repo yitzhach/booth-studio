@@ -247,9 +247,12 @@ export function boothBlock(items, { count, perRow, w, d, gap = 0, aisle = 120, b
     const row = Math.floor(i / perRow);
     const col = i % perRow;
     const second = backToBack && row % 2 === 1;
+    // Back to back, the first row of a pair faces up the floor, the second
+    // down it, so the pair shares a back line with an aisle on each side.
+    const first = backToBack && !second;
     const top = backToBack ? y + Math.floor(row / 2) * (2 * d + aisle) + (second ? d : 0) : y + row * (d + aisle);
     const it = { id: newId(all), kind: "booth", number: nextNumber(all, start), x: x + col * (w + gap) + w / 2, y: top + d / 2, w, d };
-    if (second) it.rot = 180;
+    if (first) it.rot = 180;
     if (style && style !== "pipe") it.style = style;
     all.push(it);
     out.push(it);

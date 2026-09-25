@@ -80,7 +80,14 @@ export function hallLayout(h) {
         y,
         w: h.boothWidth,
         d: h.boothDepth,
-        faces: second ? "back" : "front",
+        // A booth's open front is the side toward the entrance ("front") or
+        // toward the back of the hall ("back"). A lone row faces the aisle
+        // in front of it; in a back-to-back pair the first row faces the
+        // aisle behind it and the second the one in front, so the pair
+        // shares its back line. (Until 2026-09-25 the pair was the other way
+        // round — fronts meeting at the shared line — which only showed once
+        // the floor stood up in 3D.)
+        faces: h.backToBack && !second ? "back" : "front",
       });
     y += h.boothDepth;
   }
