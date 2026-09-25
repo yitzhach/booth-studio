@@ -37,7 +37,7 @@ export const SHORTCUTS = {
   wl: { label: "Walls", where: "Inspector tab", group: "Tabs" },
   lt: { label: "Lighting", where: "Inspector tab", group: "Tabs" },
   vid: { label: "Video", where: "Inspector tab", group: "Tabs" },
-  hall: { label: "Hall", where: "Inspector tab", group: "Tabs" },
+  hall: { label: "Show floor", where: "Inspector tab", group: "Tabs" },
   ex: { label: "Export", where: "Inspector tab", group: "Tabs" },
   // Toolbar and view.
   sel: { label: "Select", where: "Toolbar", group: "Toolbar and view" },
