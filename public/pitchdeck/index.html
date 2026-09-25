@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Booth Studio Pro — Pitch</title>
+<meta name="robots" content="noindex">
+<style>
+  :root { --bg:#0f1115; --card:#171a21; --ink:#eef0f4; --mute:#9aa3b2; --accent:#e8b04a; --good:#5cc08a; --warn:#e07a5f; --line:#2a2f3a; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--ink); font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  .deck { height:100%; overflow:hidden; position:relative; }
+  .slide { position:absolute; inset:0; padding:clamp(20px,5vw,72px); display:none; flex-direction:column; justify-content:center; max-width:1200px; margin:0 auto; overflow-y:auto; }
+  .slide.on { display:flex; }
+  .kicker { color:var(--accent); font-weight:700; letter-spacing:.12em; text-transform:uppercase; font-size:.8rem; margin-bottom:10px; }
+  h1 { font-size:clamp(2rem,6vw,4.2rem); line-height:1.05; margin:0 0 16px; }
+  h2 { font-size:clamp(1.5rem,3.6vw,2.6rem); line-height:1.1; margin:0 0 20px; }
+  p.lead { font-size:clamp(1.05rem,2vw,1.4rem); color:var(--mute); max-width:820px; margin:0 0 18px; }
+  .grid { display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 20px; }
+  .card h3 { margin:0 0 8px; font-size:1.1rem; }
+  .card p, .card li { color:var(--mute); margin:0; }
+  .card ul { margin:6px 0 0; padding-left:18px; }
+  .tag { display:inline-block; font-size:.72rem; font-weight:700; padding:3px 8px; border-radius:99px; margin:0 6px 8px 0; }
+  .t-month { background:#3a2e14; color:var(--accent); }
+  .t-local { background:#16301f; color:var(--good); }
+  .t-server { background:#3a1f19; color:var(--warn); }
+  .star { border-color:var(--accent); }
+  .big { font-size:clamp(2.2rem,5vw,3.6rem); font-weight:800; color:var(--accent); }
+  table { border-collapse:collapse; width:100%; font-size:.95rem; }
+  th,td { text-align:left; padding:10px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--mute); font-weight:600; }
+  .dots { position:fixed; bottom:14px; left:0; right:0; text-align:center; }
+  .dots button { width:9px; height:9px; border-radius:50%; border:0; margin:0 4px; background:var(--line); cursor:pointer; padding:0; }
+  .dots button.on { background:var(--accent); }
+  .nav { position:fixed; bottom:8px; right:12px; }
+  .nav button { background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:6px 12px; font-size:1rem; cursor:pointer; }
+  .count { position:fixed; top:12px; right:16px; color:var(--mute); font-size:.8rem; }
+  .steps { display:flex; gap:10px; flex-wrap:wrap; align-items:stretch; }
+  .steps .card { flex:1 1 180px; }
+  .arrow { align-self:center; color:var(--accent); font-size:1.6rem; }
+  svg text { font-family:inherit; }
+  @media print { .slide { display:flex !important; position:relative; page-break-after:always; height:100vh; } .dots,.nav,.count { display:none; } }
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+<section class="slide">
+  <div class="kicker">Artist OS · Booth Studio</div>
+  <h1>Booth Studio Pro</h1>
+  <p class="lead">From planning one booth to running the whole show — five ways a monthly Pro plan earns its keep for artists and the promoters who host them.</p>
+  <p class="lead" style="font-size:1rem">← → or swipe to move · P to print</p>
+</section>
+
+<section class="slide">
+  <div class="kicker">Where we are</div>
+  <h2>The product already does the hard part</h2>
+  <div class="grid">
+    <div class="card"><h3>Measured 3D booth</h3><p>Walls, artwork to the inch, lights, pedestals, people for scale.</p></div>
+    <div class="card"><h3>Photo &amp; video</h3><p>PNG stills, keyframed MP4 walkthroughs, batch export.</p></div>
+    <div class="card"><h3>Show floor</h3><p>Promoter layout: hundreds of booths, sales, walk it in 3D, open any booth as a full design.</p></div>
+    <div class="card"><h3>Pro tools</h3><p>Show pack, hanging guide, elevations, clearance checks, power sheet, .glb.</p></div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="kicker">The honest constraint</div>
+  <h2>A monthly fee needs a monthly service</h2>
+  <p class="lead">Today the app is local-first: no accounts, no server, no payments. Features that run on your device suit a one-time Pro unlock. A subscription is justified by something that keeps running — hosting, sync, compute, a network of people.</p>
+  <div class="grid">
+    <div class="card"><span class="tag t-local">Runs on device</span><p>Great Pro features. Hard to charge monthly for.</p></div>
+    <div class="card"><span class="tag t-server">Needs a server</span><p>Justifies monthly. Needs the local-first rule lifted — owner's decision.</p></div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="kicker">The five ideas</div>
+  <h2>At a glance</h2>
+  <table>
+    <tr><th>#</th><th>Idea</th><th>Who pays</th><th>Monthly?</th><th>Already built</th></tr>
+    <tr><td>1</td><td><b>Show Hub</b></td><td>Promoters</td><td>Yes — B2B, multi-show</td><td>~70%</td></tr>
+    <tr><td>2</td><td><b>Attention map</b></td><td>Artists + promoters</td><td>Pro feature</td><td>Render passes</td></tr>
+    <tr><td>3</td><td><b>“Take it home” AR labels</b></td><td>Artists</td><td>Yes — hosting + stats</td><td>Measured art, .glb</td></tr>
+    <tr><td>4</td><td><b>Sales-by-position log + sync</b></td><td>Artists</td><td>Yes — sync</td><td>Placement data</td></tr>
+    <tr><td>5</td><td><b>AI photoreal renders</b></td><td>Artists</td><td>Yes — credits</td><td>Render pack ready</td></tr>
+  </table>
+</section>
+
+<section class="slide">
+  <div class="kicker">Idea 1 · recommended</div>
+  <h2>Show Hub — the show assembles itself</h2>
+  <div class="steps">
+    <div class="card star"><h3>Promoter</h3><p>Lays out the floor and publishes it as a link.</p></div>
+    <div class="arrow">→</div>
+    <div class="card"><h3>Exhibitors</h3><p>Claim a booth, design it in 3D. It lands on their booth number.</p></div>
+    <div class="arrow">→</div>
+    <div class="card"><h3>Whole show</h3><p>Promoter walks the real show, auto rule-checks each booth, exports the walkthrough.</p></div>
+  </div>
+  <div class="grid" style="margin-top:16px">
+    <div class="card"><span class="tag t-month">Monthly</span><p>Promoters run several shows a year and replace spreadsheets with it. Exhibitors join free → funnel to artist Pro.</p></div>
+    <div class="card"><span class="tag t-local">No-server v0</span><p>“Send my booth to the promoter” file ↔ “Import into booth #N”. Tests demand without breaking local-first.</p></div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Idea 2 · most original</div>
+  <h2>Attention map — where the eye actually lands</h2>
+  <div class="grid">
+    <div class="card">
+      <svg viewBox="0 0 300 160" width="100%" role="img" aria-label="Booth walls shaded by attention, aisle below">
+        <rect x="40" y="10" width="220" height="14" fill="#e8b04a"/>
+        <rect x="40" y="10" width="14" height="110" fill="#8a6a2e"/>
+        <rect x="246" y="10" width="14" height="110" fill="#e07a5f"/>
+        <rect x="0" y="135" width="300" height="20" fill="#2a2f3a"/>
+        <text x="150" y="149" fill="#9aa3b2" font-size="11" text-anchor="middle">aisle → visitors both ways</text>
+        <text x="150" y="42" fill="#eef0f4" font-size="11" text-anchor="middle">back wall: 6.2 s</text>
+        <text x="70" y="75" fill="#eef0f4" font-size="11">left: 1.8 s</text>
+        <text x="190" y="75" fill="#eef0f4" font-size="11">right: 4.1 s</text>
+      </svg>
+    </div>
+    <div class="card"><span class="tag t-local">Runs on device</span><p>Simulate passersby walking the aisle, score each work by seconds visible × size. <br><br>“Your $4k piece is seen for 1.8 s — swap it with #6.”<br><br>On the show floor: footfall per booth, so promoters price corners by data.</p></div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Idea 3</div>
+  <h2>“Take it home” AR labels</h2>
+  <div class="steps">
+    <div class="card"><h3>Wall label</h3><p>Show pack prints a QR per work.</p></div>
+    <div class="arrow">→</div>
+    <div class="card"><h3>Scan at the booth</h3><p>Buyer's phone opens AR.</p></div>
+    <div class="arrow">→</div>
+    <div class="card star"><h3>On their wall</h3><p>The work at true size, at home. “Will it fit?” answered.</p></div>
+  </div>
+  <div class="grid" style="margin-top:16px">
+    <div class="card"><span class="tag t-month">Monthly</span><p>Hosted all season, plus scan stats per show. One sale pays for the year.</p></div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Ideas 4 &amp; 5</div>
+  <h2>Learn what sells · render it for real</h2>
+  <div class="grid">
+    <div class="card"><h3>4 · Sales-by-position log</h3><span class="tag t-month">Monthly · sync</span><p>Tap a work “sold” on your phone at the show. The app knows its wall, height, light and aisle-facing — after a few shows: “eye-level on the aisle wall sells 3× the back corner.”</p></div>
+    <div class="card"><h3>5 · AI photoreal renders</h3><span class="tag t-month">Monthly · credits</span><p>The render pack is built; artwork is protected so AI never repaints it. Label renders as renders — juried shows want real photos.</p></div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Recommendation</div>
+  <h2>The path</h2>
+  <div class="steps">
+    <div class="card star"><h3>Now</h3><p>Show Hub v0: booth design file exchange. No server.</p></div>
+    <div class="arrow">→</div>
+    <div class="card"><h3>Next</h3><p>Attention map — the wow feature, also prices booths.</p></div>
+    <div class="arrow">→</div>
+    <div class="card"><h3>Then</h3><p>Decide on a server → hosted Hub, AR labels, sync, AI credits.</p></div>
+  </div>
+  <p class="lead" style="margin-top:20px">Also on the list: a sun-path study for outdoor fairs — which wall takes the 3 pm sun.</p>
+</section>
+
+</div>
+<div class="count" id="count"></div>
+<div class="dots" id="dots"></div>
+<div class="nav"><button id="prev" aria-label="Previous">←</button> <button id="next" aria-label="Next">→</button></div>
+<script>
+  const slides = [...document.querySelectorAll(".slide")];
+  const dots = document.getElementById("dots");
+  let i = Math.max(0, Math.min(slides.length - 1, (parseInt(location.hash.slice(1)) || 1) - 1));
+  slides.forEach((_, n) => { const b = document.createElement("button"); b.setAttribute("aria-label", "Slide " + (n + 1)); b.onclick = () => go(n); dots.appendChild(b); });
+  function go(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, k) => s.classList.toggle("on", k === i));
+    [...dots.children].forEach((d, k) => d.classList.toggle("on", k === i));
+    document.getElementById("count").textContent = (i + 1) + " / " + slides.length;
+    history.replaceState(null, "", "#" + (i + 1));
+  }
+  document.getElementById("prev").onclick = () => go(i - 1);
+  document.getElementById("next").onclick = () => go(i + 1);
+  addEventListener("keydown", (e) => {
+    if (["ArrowRight", "PageDown", " "].includes(e.key)) go(i + 1);
+    else if (["ArrowLeft", "PageUp"].includes(e.key)) go(i - 1);
+    else if (e.key === "p" || e.key === "P") print();
+  });
+  let x0 = null;
+  addEventListener("touchstart", (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+  addEventListener("touchend", (e) => { if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 50) go(i + (dx < 0 ? 1 : -1)); x0 = null; });
+  go(i);
+</script>
+</body>
+</html>
