@@ -105,9 +105,9 @@ Extend it; do not rebuild it.
        replaces the R2 lifecycle rule Next suggested; that rule can still be
        added in the dashboard as a backstop (prefix `shares/`, 190 days).
      `npx wrangler deploy --dry-run` lists the four bindings (SHARES,
-     LINK_RATE, IMAGE_RATE, ASSETS). **If Cloudflare refuses a binding on
-     the owner's plan, the build fails and the ninth round stays live** —
-     the build log says which.
+     LINK_RATE, IMAGE_RATE, ASSETS), and the live Worker's code, read back
+     through the Cloudflare connector after the push, is this round's — so
+     Cloudflare took the bindings.
   3. **A sent link can be updated or deleted by the browser that sent it**
      (Next 1(c); the owner had not answered, and both are additive — a link
      nobody touches behaves exactly as before). Making a link now also makes
@@ -1639,11 +1639,12 @@ Extend it; do not rebuild it.
 
 ## Next
 
-1. **Show Hub links (ninth and tenth rounds), live.** The deploy was
-   confirmed through the Cloudflare connector (see Now). First check the
-   tenth round's build took: its log should list `env.LINK_RATE` and
-   `env.IMAGE_RATE` beside `env.SHARES`, and the Worker's Triggers tab the
-   cron `17 4 * * *`. Then, by hand: share a booth from one browser and
+1. **Show Hub links (ninth and tenth rounds), live.** Both deploys were
+   confirmed through the Cloudflare connector: the live Worker's code is the
+   tenth round's `worker/index.js` (`sweep`, the key routes), so the build
+   with the two rate-limit bindings and the cron went through. Not seen: the
+   Worker's Triggers tab showing `17 4 * * *`, and the first sweep's run
+   (Workers → booth-studio → Logs, 04:17 UTC). Then, by hand: share a booth from one browser and
    open the link in another; change the booth and **Send this booth to it**;
    reopen the link; **Delete link**; reopen it (it should say it could not
    be opened). Still the owner's:
