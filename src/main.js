@@ -201,7 +201,7 @@ import { HALL_LIMITS, MAX_HALL_BOOTHS, STATUSES, boothOf, hallCSV, hallHTML, hal
 import { BOOTH_STYLES, FLOOR_TEMPLATES, KINDS, SHAPES, VENUES as SHOW_VENUES, boothBlock, boundsOf, copyPieces, feet, floorOf, renumber, showItems, showSVG, spacePieces, toFloor } from "./show.js";
 import { createShowEditor } from "./show-editor.js";
 import { showWalkthrough } from "./show-scene.js";
-import { PACK_LONG, SURFACES, describeScene, provider as aiProvider, render as aiRender, renderPack } from "./ai-render.js";
+import { PACK_LONG, PACK_SIZES, SURFACES, describeScene, protectPass, provider as aiProvider, render as aiRender, renderPack } from "./ai-render.js";
 import { MAX_DESIGNS, OWN, assetInDesigns, deleteEffect, hasDesign, liveNumber, openBooth, renumberDesigns, setMine, setOpen } from "./linked.js";
 import { CIRCUIT_WATTS, powerHTML, powerLines, powerTotals } from "./power.js";
 import { FOOTPRINTS, SHOWS, STARTERS, fromTemplate, quickStart, templateOf } from "./quickstart.js";
@@ -420,6 +420,8 @@ async function boot() {
     videoSettle = true,
     exportFrame = DEFAULT_FRAME,
     exportLong = 4096,
+    // The AI render pack's long side (src/ai-render.js PACK_SIZES). View state.
+    aiLong = PACK_LONG,
     customFrame = { ...CUSTOM_FRAME },
     // Up to seven saved colours and the colour each control held before the
     // one it holds now. Per browser, never in a backup: see src/swatches.js.
@@ -2249,12 +2251,28 @@ async function boot() {
    */
   function aiSection() {
     const legend = Object.values(SURFACES).map((x) => `<span class="ai-swatch"><i style="background:${x.color}"></i>${e(x.label)}</span>`).join("");
-    return `<section class="ai-render"><h3>AI render</h3><p class="muted">For repainting this view with an image model: the frame as rendered, its depth (near white, far black) and a mask with every surface one flat colour, all ${PACK_LONG} px on the long side and lined up pixel for pixel, with the scene described in words — one .json file. The frame is the one set above.</p><div class="ai-legend">${legend}</div>${btn("ai-pack", "Download AI render pack", "sparkles", "wide")}${btn("ai-render", aiProvider ? `Render with ${aiProvider.name}` : "Render with AI", "sparkles", "wide")}<p class="muted">${aiProvider ? "" : "No AI provider is set up yet — nothing leaves this device. The pack works with any model that takes an image, a depth map or a mask."}</p></section>`;
+    return `<section class="ai-render"><h3>AI render</h3><p class="muted">For repainting this view with an image model: the frame as rendered, its depth (near white, far black), a mask with every surface one flat colour, and the artwork and signs alone on transparent — laid back over whatever a model returns, so it never repaints the work. All lined up pixel for pixel, with the scene described in words, in one .json file. The frame is the one set above.</p><div class="ai-legend">${legend}</div><label class="setting-label">Size<select id="ai-size" aria-label="AI render pack size">${PACK_SIZES.map((n) => `<option value="${n}" ${aiLong === n ? "selected" : ""}>${n} px on the long side</option>`).join("")}</select></label>${btn("ai-pack", "Download AI render pack", "sparkles", "wide")}${btn("ai-render", aiProvider ? `Render with ${aiProvider.name}` : "Render with AI", "sparkles", "wide")}<p class="muted">${aiProvider ? "" : "No AI provider is set up yet — nothing leaves this device. The pack works with any model that takes an image, a depth map or a mask."}</p></section>`;
   }
   /** The three passes of this view and the pack made from them. */
   async function makeAiPack() {
     if (!scene) throw new Error("3D is not available, so there is no view to render.");
-    const passes = await scene.renderPasses(PACK_LONG, { frame: exportFrame, custom: customFrame, place: framePlace.export });
+    aiLong = Number(document.querySelector("#ai-size")?.value) || aiLong;
+    const passes = await scene.renderPasses(aiLong, { frame: exportFrame, custom: customFrame, place: framePlace.export });
+    // The protected pass: the frame's own pixels where the mask says artwork
+    // or a sign, transparent elsewhere (AI_EXPORT_PHASE.md).
+    const read = async (blob) => {
+      const bmp = await createImageBitmap(blob);
+      const c = document.createElement("canvas");
+      c.width = bmp.width;
+      c.height = bmp.height;
+      const g = c.getContext("2d");
+      g.drawImage(bmp, 0, 0);
+      return { c, g, data: g.getImageData(0, 0, c.width, c.height).data };
+    };
+    const beautyPx = await read(passes.beauty),
+      maskPx = await read(passes.mask);
+    beautyPx.g.putImageData(new ImageData(protectPass(beautyPx.data, maskPx.data), beautyPx.c.width, beautyPx.c.height), 0, 0);
+    const protect = beautyPx.c.toDataURL("image/png");
     const url = (blob) => new Promise((res, rej) => {
       const r = new FileReader();
       r.onload = () => res(r.result);
@@ -2264,7 +2282,7 @@ async function boot() {
     const size = await createImageBitmap(passes.beauty);
     const pose = scene.pose();
     return renderPack({
-      images: { beauty: await url(passes.beauty), depth: await url(passes.depth), mask: await url(passes.mask) },
+      images: { beauty: await url(passes.beauty), depth: await url(passes.depth), mask: await url(passes.mask), protect },
       width: size.width,
       height: size.height,
       camera: { ...pose, fov: scene.camera.fov ?? null, projection: scene.camera.isPerspectiveCamera ? "perspective" : "orthographic", near: passes.depthRange?.near ?? null, far: passes.depthRange?.far ?? null },

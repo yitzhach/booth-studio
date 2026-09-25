@@ -12,6 +12,11 @@
 // - `mask`   — the same frame with every surface painted one flat colour by
 //              what it is (`SURFACES`), so a model can be told "keep the
 //              artwork, restyle the walls";
+// - `protect` — the frame's artwork, signs and booth numbers alone, every
+//              other pixel transparent, cut by the mask so whatever stands in
+//              front of a work cuts it too. AI_EXPORT_PHASE.md's rule is that
+//              a model must never repaint the visible artwork: `render()`
+//              lays this pass back over whatever the provider returns.
 // - `description` — the scene in plain words, from the project itself, for
 //              the prompt.
 //
@@ -28,8 +33,15 @@ import { isShown } from "./model.js";
 import { lightBarRail } from "./lightbar.js";
 
 export const PACK_VERSION = 1;
-/** The long side of a pack's images: about 2 megapixels, what image models take. */
+/**
+ * The long side of a pack's images. 1536 is about 1.3 megapixels at 16:9;
+ * the image-editing models AI_EXPORT_PHASE.md weighs take up to 4, which
+ * 2048 stays inside for every frame shape.
+ */
 export const PACK_LONG = 1536;
+export const PACK_SIZES = [1024, 1536, 2048];
+/** The surfaces a model may never repaint. */
+export const PROTECTED = ["artwork", "label"];
 
 /**
  * What each flat colour of the mask means. The colours are far apart in
@@ -137,6 +149,42 @@ export function renderPack({ images, width, height, camera, description, project
   };
 }
 
+const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+
+/**
+ * The protected pass from the frame and its mask, as RGBA pixel arrays of
+ * one size: the frame's own pixel wherever the mask says artwork or a sign,
+ * transparent everywhere else. A mask pixel counts when it is within `tol`
+ * of a protected colour in every channel — the mask is drawn with the
+ * viewport's antialiasing, so an edge pixel is a blend, and a work's edge
+ * is better kept than repainted.
+ */
+export function protectPass(beauty, mask, tol = 48) {
+  const keep = PROTECTED.map((k) => hex(SURFACES[k].color));
+  const out = new Uint8ClampedArray(beauty.length);
+  for (let i = 0; i < beauty.length; i += 4) {
+    const hit = keep.some((c) => Math.abs(mask[i] - c[0]) <= tol && Math.abs(mask[i + 1] - c[1]) <= tol && Math.abs(mask[i + 2] - c[2]) <= tol);
+    if (!hit) continue;
+    out[i] = beauty[i];
+    out[i + 1] = beauty[i + 1];
+    out[i + 2] = beauty[i + 2];
+    out[i + 3] = 255;
+  }
+  return out;
+}
+
+/** `over` laid on `under` (both RGBA of one size): the protected pass back on a repaint. */
+export function overlay(under, over) {
+  const out = new Uint8ClampedArray(under);
+  for (let i = 0; i < over.length; i += 4) {
+    const a = over[i + 3] / 255;
+    if (!a) continue;
+    for (let k = 0; k < 3; k++) out[i + k] = Math.round(over[i + k] * a + under[i + k] * (1 - a));
+    out[i + 3] = Math.max(under[i + 3], over[i + 3]);
+  }
+  return out;
+}
+
 /** Whether a value is a pack this version made. */
 export const isPack = (x) => !!x && x.kind === "booth-studio/ai-render-pack" && x.version === PACK_VERSION && !!x.images?.beauty;
 
@@ -148,11 +196,36 @@ export const isPack = (x) => !!x && x.kind === "booth-studio/ai-render-pack" && 
 export const provider = null;
 
 /**
- * Repaint a frame. `frame` is a render pack. Resolves to an image Blob from
- * the provider — or, with none chosen, rejects with a message that says so.
+ * Repaint a frame. `frame` is a render pack. Resolves to the provider's
+ * image with the protected pass laid back over it — or, with no provider
+ * chosen, rejects with a message that says so. `restore(image, frame)` does
+ * that laying-back (in the browser, `restoreArtwork`); a provider whose
+ * image is not the frame's size is refused, since the artwork would no
+ * longer line up.
  */
-export async function render(frame, chosen = provider) {
+export async function render(frame, chosen = provider, restore = restoreArtwork) {
   if (!chosen) throw new Error("No AI provider is set up. The render pack has everything one needs; the provider and how its key is kept are still to be chosen.");
   if (!isPack(frame)) throw new Error("That is not an AI render pack from this version of Booth Studio.");
-  return chosen.render(frame);
+  const image = await chosen.render(frame);
+  return frame.images.protect && restore ? restore(image, frame) : image;
+}
+
+/** Browser: a Blob or data URL to RGBA pixels at its own size. */
+async function pixels(src) {
+  const blob = typeof src === "string" ? await (await fetch(src)).blob() : src;
+  const bmp = await createImageBitmap(blob);
+  const c = new OffscreenCanvas(bmp.width, bmp.height);
+  const g = c.getContext("2d");
+  g.drawImage(bmp, 0, 0);
+  return { c, g, width: bmp.width, height: bmp.height, data: g.getImageData(0, 0, bmp.width, bmp.height).data };
+}
+
+/** Browser: the provider's image with the frame's own artwork laid back on it, as a PNG Blob. */
+export async function restoreArtwork(image, frame) {
+  const out = await pixels(image);
+  if (out.width !== frame.width || out.height !== frame.height)
+    throw new Error(`The provider returned ${out.width} × ${out.height}, not the frame's ${frame.width} × ${frame.height}, so the original artwork cannot be laid back exactly. Nothing was saved.`);
+  const keep = await pixels(frame.images.protect);
+  out.g.putImageData(new ImageData(overlay(out.data, keep.data), out.width, out.height), 0, 0);
+  return out.c.convertToBlob({ type: "image/png" });
 }

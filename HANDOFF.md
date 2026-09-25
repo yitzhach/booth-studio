@@ -16,8 +16,11 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-25, fifth round — the show floor, phase 1 of the
-  trade-show / art-fair layout mode** (the bullet below). Before it, the
+- **Last deploy: 2026-09-25, sixth round — the show floor, phases 2, 3 and
+  4: the show in 3D, walked and recorded; one booth opened as a full design,
+  and floor templates; the AI-render hook** (the first bullet below). Before
+  it, the fifth round — **the show floor, phase 1 of the trade-show /
+  art-fair layout mode** (the second bullet below). Before that, the
   fourth round — icons on the keyframe arrows,
   Export MP4 at the top of the timeline, and the right framing on screen
   while a file renders; after the third round the same day — a keyframed
@@ -52,6 +55,129 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-25, sixth round: the show floor, phases 2–4. Merged to `main`
+  and deployed.** Asked for as "build P2–P4 — test each, then move to the
+  next phase", in one session, one commit per phase (`72407bd`, `62ef37f`,
+  `caff211`, then the protected-artwork pass). Nothing below has been seen
+  on the real machine; every piece is tested in a real browser here.
+  **Phase 2 — the show in 3D, walked, recorded.**
+  1. **See it in 3D** at the top of the Show floor panel stands the plan up
+     in the booth's own viewport (Back to the plan, or Esc, returns). The
+     plan's pieces become parts (`src/show-scene.js` `showParts`: a booth's
+     carpet tile in its sale colour and its 8′ back drape and 3′ side rails,
+     or hard walls, or a canopy tent's legs, roof and back wall; open floor
+     is the tile alone; walkways, pavilion tents with poles every 20′, walls,
+     columns, entrances, stages, tables, desks, food counters and restrooms)
+     drawn as **one InstancedMesh per shape and finish** — a thousand booths
+     is under a dozen draw calls, pinned in Node. Indoors the hall's four
+     walls are inward-facing planes, a dollhouse cut-away: from outside the
+     near walls vanish, walking inside all four are there. Booth numbers
+     (and exhibitors) are a pool of 40 sprites handed to the booths nearest
+     the camera, moved only when the camera has moved half a metre.
+  2. **The open booth is drawn in full** — the real booth, by the code that
+     always drew it — and the show is placed round it (`worldFrame`,
+     `planToWorld`): its piece's centre is the world origin and its turn is
+     undone, so the booth's lights, shadow cameras and pickers see the
+     coordinates they always saw. The booth's surroundings, its own ground,
+     its row neighbours and its underlay go into an invisible `offstage`
+     group (disposed with the booth); with no booth open on the floor the
+     whole booth goes offstage except its hemisphere and fill lights, which
+     light the hall. `BoothScene.setShow(hall)` / `stageShow` /
+     `setShowView`: Perspective looks down from over the entrance side at
+     everything on the floor (including pieces laid past its edge), Plan
+     from straight above; Back, Left and Right are hidden. The far plane and
+     the orbit's reach grow with the floor. In 3D the booth is not picked,
+     dragged or edited.
+  3. **Walk the show** (or W): walk mode's own rules and pad, starting in
+     the aisle nearest the way in (the first Entrance piece, else the middle
+     of the front edge), looking down it. Esc stops walking; Esc again goes
+     back to the plan.
+  4. **Make a walkthrough** lays a camera timeline down the aisles
+     (`showWalkthrough`): walkway pieces if the floor has them, otherwise
+     the gaps of 3′ or more between rows of booths, plus the front and back
+     walkways; from the entrance, nearest aisle first, each key at eye
+     height looking where the walk goes next, a glide at 1.1 m/s, at most
+     12 keys, faded in and out. It opens in the ordinary timeline dialog, so
+     Play, keys, Export MP4 and the batch all work on it. **The booth and
+     the floor each keep their own timeline** (`otherTimeline`, swapped by
+     `setShow3d`), because a booth's keys are poses round a booth. PNG
+     export works from the same panel.
+  5. **Fixed on the way — a phase-1 bug the 3D view made obvious:**
+     back-to-back pairs faced *each other*, fronts meeting at the shared
+     line and backs to the aisles, in both the grid's conversion
+     (`hallLayout` `faces`) and Add booths (`boothBlock`). Both now put the
+     backs together. Plans already turned into pieces keep the turns they
+     were saved with — select a row and Turn 90° twice to flip it.
+  **Phase 3 — open one booth, and floor templates.** The storage shape was
+  decided here (`src/linked.js` says why at length):
+  1. **The live design stays where it always was** — `p.booth`, `p.art`,
+     `p.lights`, `p.ambient`, `p.views` — and the whole editor goes on
+     reading only those. Opening a booth swaps which design is live.
+     **`p.hall.open`** (optional integer) is the floor booth the live design
+     belongs to; absent, it is `p.hall.mine`'s, which is what every older
+     plan meant; `0` is "your own booth, on no floor booth".
+     **`p.hall.designs`** (optional, at most 60) holds the parked designs
+     keyed by booth number exactly as sales are, so a renumber, a typed
+     number and a delete carry a design the way they carry a sale; key `0`
+     is your own booth, parked when the first floor booth was opened. A
+     parked design is validated by exactly the live one's rules
+     (`validateProject` calls itself), its images stay in `p.assets`, and
+     **nothing may delete an asset a parked design names**
+     (`assetInDesigns`; the four delete sites and `removeGroundUpload`
+     check it).
+  2. **Open this booth** on a selected floor booth (its Design section):
+     a booth with no design opens as a new one sized from its piece (4′–30′,
+     the booth's own limits) and built as the floor says — canopy tent is the
+     outdoor booth with its tent up, open floor has no walls, pipe and drape
+     and hard wall are the art-show booth. The one open before is parked
+     with its booth. The editor opens on it; the title reads "· Booth N".
+     **Open my own booth** (Floor → Booth designs) brings back key `0`.
+     One undo step each.
+  3. **"This is my booth" no longer moves the live design** (`setMine`): it
+     is a sale fact. Deleting a booth takes its parked design with it (undo
+     brings both back); deleting the open booth makes its design your own
+     booth's — refused only when your own is already parked.
+  4. **The 3D show draws whichever booth is open in full.** Parked designs
+     are drawn light, like every other booth.
+  5. **Start from a template** (`FLOOR_TEMPLATES` in `src/show.js`): Art
+     fair street (outdoors, two rows of twelve 10 × 10 tents across a 20′
+     street), Convention hall, perimeter booths (indoors 150′ × 100′,
+     booths round three walls facing in, four island rows, entrance, info
+     desk, food, restrooms), Market under a pavilion (outdoors, a 60′ × 40′
+     tent over twelve 8 × 10s). Replaces the floor's pieces and size in one
+     undoable step after a confirm; sales, mine and designs stay with their
+     numbers. Built-in only — see Next.
+  **Phase 4 — the AI-render hook** (`src/ai-render.js`; read with
+  `AI_EXPORT_PHASE.md`, whose client-side half this is).
+  1. **Export → AI render → Download AI render pack** (and the same button
+     in the 3D show's panel): one .json with four PNGs of one frame, one
+     camera, one size (1024 / 1536 / 2048 px long side): `beauty` (the
+     frame as rendered), `depth` (linear between the nearest and farthest
+     thing in view, near white — the grounds are left out of that range or
+     a booth would be the first few greys), `mask` (every mesh one flat
+     colour by what it is, `SURFACES` — artwork, walls, floor, booth
+     structure, drape, tent canvas, other booths, furniture, people,
+     fixtures, surroundings, signs; black is nothing) and `protect` (the
+     artwork and signs alone, cut by the mask so what stands in front of a
+     work cuts it, transparent elsewhere); plus the camera, the depth range,
+     the legend and **the scene in plain words** (`describeScene`: the
+     booth, its walls and every work by title and size; on the show, the
+     floor, its booths by how they are built, and which is drawn in full).
+  2. **`render(frame) → image`** takes exactly a pack. `provider` is `null`
+     on purpose: with none, it rejects saying so (Render with AI shows
+     that message). With one — `{ name, render: async (pack) => Blob }` set
+     in that file — the provider's image comes back with `protect` laid
+     over it (`restoreArtwork`), per AI_EXPORT_PHASE.md's rule that a model
+     never repaints the visible artwork, and an image of the wrong size is
+     refused rather than misaligned.
+  3. `BoothScene.renderPasses` renders the passes through `export()`, which
+     gains a `pass` option; `applyPass` swaps in the depth shader or the
+     flat materials (instance colours off) for that one render and puts
+     everything back — view-ai checks the materials and background after.
+  **Tests:** `tests/show-scene.test.js` (9), `tests/linked.test.js` (8),
+  `tests/ai-render.test.js` (7); `tests/view-show3d.mjs`,
+  `tests/view-linked.mjs`, `tests/view-ai.mjs` in a real browser, the
+  walkthrough recorded to MP4 where the sandbox encodes.
 - **2026-09-25, fifth round: the show floor, phase 1. Merged to `main` and
   deployed.** The owner asked for a trade-show / art-fair layout mode "beyond
   what we have": type how many booths and a standard size, then customise
@@ -139,10 +265,7 @@ Extend it; do not rebuild it.
   7. Tests: `tests/show.test.js` (8 — pieces, validation, snapping, blocks,
      spacing, renumbering, map/CSV) and `tests/view-show.mjs` (the whole
      editor in a real browser, desktop and a 390 px phone).
-  **Not built yet — phases 2–4 are in Next.** Nothing of the floor is in 3D
-  yet: the pavilion tent is a translucent zone on the map, and "how a booth
-  is built" only changes how it is drawn (a tent gets a cross) until phase 2
-  stands it up.
+  **Phases 2–4 were built the same day** — see the sixth round above.
 - **2026-09-25, fourth round: the owner's first look at the third. Merged to
   `main` and deployed.**
   1. **Blank buttons fixed.** The previous / next keyframe arrows (and the
@@ -1249,32 +1372,32 @@ Extend it; do not rebuild it.
 
 ## Next
 
-1. **The show floor, phases 2–4 — the next build, in this order.** Phase 1
-   (the 2D editor) is on `main`; see Now for the owner's answers that set
-   the plan.
-   - **Phase 2 — the show in 3D, walked, recorded.** From Show floor, a
-     Perspective / Walk view of the whole floor built from `p.hall.items`:
-     one `InstancedMesh` per kind of wall panel, drape and tent part (the
-     scene has none yet; a thousand booths as separate meshes will
-     stutter), the venue's floor (indoor white hall, outdoor grass or
-     paving), aisles as floor strips, labels as sprites only near the
-     camera. "Your" booth drawn as the real booth from `p.booth`, the rest
-     light. Walk mode's rules (`src/views.js`) and the camera timeline and
-     MP4 export (`src/timeline.js`, `recordMp4`) reused, not copied —
-     a walkthrough is a timeline whose keys stand in aisles. Likely a small
-     `src/show-scene.js` that the existing renderer draws instead of the
-     booth group, so export, quality and the frame guide keep working.
-   - **Phase 3 — open one booth.** "Open this booth" on a selected booth:
-     links it to a full Booth Studio design (today's `p.booth` is the one
-     for "your" booth; others would need a small list of linked designs,
-     stored as optional records — decide the storage shape before
-     building), sized from the piece. Saved floor templates (a 10 × 10 art
-     fair street, a convention hall with perimeter booths).
-   - **Phase 4 — the AI-render hook.** Local-first forbids live AI calls, so
-     the hook only: an export of a frame's depth pass, a per-surface mask
-     and a plain description of the scene, and one adapter file with a
-     `render(frame) → image` shape that does nothing until a provider is
-     chosen. The owner decides the provider and how keys are held.
+1. **The show floor, all four phases, by eye on the real machine.** Built
+   2026-09-25 (see Now); none of it has been seen outside this sandbox.
+   - **Phase 2, the 3D show:** does the overview frame the floor well, and
+     is the dollhouse cut-away (near hall walls vanishing from outside) the
+     right read? Are 8′ drapes and 3′ rails in `#465469` the right default
+     look, or should drape colour be a floor setting? Is the walk's start
+     (the aisle nearest the entrance) right, and does a walkthrough on a
+     real plan go where a visitor would? 1.1 m/s — too slow? Labels: 40
+     nearest, 22″ tall — right? And the frame rate on a big floor (a 1,000-
+     booth block is under a dozen draw calls here, but swiftshader is not a
+     laptop): if it stutters, the sprite pool and the booth's own shadow
+     maps are the first suspects.
+   - **Phase 3:** is "Open this booth" in the right place (the selected
+     booth's Design section), and should the 3D show draw every *parked*
+     design in full too, not only the open one? It would cost a booth build
+     per linked design; today they are drawn light. Should templates also
+     be savable from a floor ("Save this floor as a template", kept on the
+     device like Quick start's templates)? Should applying a template drop
+     the sales of numbers that are no longer on the floor?
+   - **Phase 4:** the owner decides the provider (AI_EXPORT_PHASE.md weighs
+     FLUX.2 pro) and how its key is held — which, by that document, means a
+     Worker, identity and credits first; none of that is started. The pack
+     is ready for it: `provider` in `src/ai-render.js` is the one line to
+     set, and the protected pass is already laid back over what it returns.
+     By eye: are the mask's classes the right ones for the model chosen,
+     and is linear depth what it wants (some want inverse depth)?
    - **Phase 1, by eye, on the real machine:** does the drag feel like Lucid's?
      Is 8 px the right snap pull and 1′ the right default grid? Does a block
      of booths belong below the rest, or where the view is? Is Space them
@@ -1283,6 +1406,9 @@ Extend it; do not rebuild it.
      end-cap booths to show their open sides (today a booth's open front is
      only the side it faces)? On a phone, is the library in the panel
      reachable enough, or does it want a floating "+" over the floor?
+     A block added below the rest can land outside the floor's size; the
+     3D view shows it standing outside the hall. Should the floor grow to
+     fit?
 1. **The 2026-09-25 third and fourth rounds, on the real machine.** Check
    the arrows draw and that an export now shows the picture inside the
    frame while it renders. Keyframe the frame, give Start and End different frames, and
@@ -1687,9 +1813,9 @@ the picker became one list.
 
 ```sh
 npm ci
-npm test                 # 378 Node tests
+npm test                 # 402 Node tests
 npm run build
-npm run test:view        # 28 suites: city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor
+npm run test:view        # 31 suites: city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
 npm run test:browser     # 25 end-to-end checks
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
@@ -1756,6 +1882,19 @@ anything else in a browser until it is done.
   moves that are allowed. `booth.groundAsset` still opens and still shows its
   floor; `adoptGroundAsset()` reads it as the first library entry rather than
   dropping it.
+- **An asset may belong to a design that is not open.** Since phase 3 of
+  the show floor, `p.hall.designs` holds whole booth designs that name
+  images in `p.assets`. Anything that deletes an asset because "nothing
+  uses it any more" must also ask `assetInDesigns(p, id)` (src/linked.js);
+  the five places that do so today already do. And nothing may copy a
+  design's keys (`DESIGN_KEYS`) out of `p` without putting them back: the
+  live design is simply whichever one is in `p.booth` / `p.art` / …
+- **The 3D show is placed round the open booth, not the other way round.**
+  The booth is built at the world origin exactly as always and the show's
+  group is turned and moved so the open booth's piece lands there
+  (`worldFrame`). Moving the booth into the show instead would move its
+  lights, its shadow cameras (fitted to ±5 m) and every picker's
+  coordinates.
 - **Never narrow a stored range; widen the slider instead.** The schema is a
   promise to backups already on disk, so `finite(l.power, 0, 300)` stays 0..300
   even though the Fixture brightness slider now offers 0..70. A value past what
@@ -2121,6 +2260,14 @@ anything else in a browser until it is done.
   `src/show.js` — the show floor's pieces: kinds, the library, validation,
   snapping, blocks of booths, spacing, renumbering, the map's SVG;
   `src/show-editor.js` — the show floor's drawing board (gestures only);
+  `src/show-scene.js` — the show in 3D: the plan as instanced parts, the
+  world placed round the open booth, the walk's start and the walkthrough
+  (`setShow` / `stageShow` / `setShowView` in `src/scene.js` draw it);
+  `src/linked.js` — opening one floor booth as a full design, and why the
+  storage is shaped as it is; `FLOOR_TEMPLATES` in `src/show.js`;
+  `src/ai-render.js` — the AI-render hook: the scene in words, the pack,
+  the mask's legend, the protected pass and the provider-less adapter
+  (`renderPasses` / `applyPass` in `src/scene.js` render the passes);
   `src/power.js` — the power and rentals sheet.
 - `src/clearance.js` — clearance geometry; `src/elevations.js` — the
   to-scale drawings. `buildUnderlay`, `buildModels`, `exportGLB` and the Box
@@ -2131,6 +2278,8 @@ anything else in a browser until it is done.
   `src/scene.js` draws it. `src/align.js` — align and distribute.
 - `FUTURE_BUILD.md` — requested, deliberately not started. Currently empty.
 - `docs/HDRI-ASSETS.md`, `docs/TEXTURE-ASSETS.md` — adding asset files.
-- `AI_EXPORT_PHASE.md` — only for AI-export implementation.
+- `AI_EXPORT_PHASE.md` — the paid AI export's server side, still design
+  only; its client half (the passes, the protected artwork) is
+  `src/ai-render.js`. Read both before choosing a provider.
 - `docs/ORIGINAL-HANDOFF.md` — historical; ignore unless you need old
   requirements.

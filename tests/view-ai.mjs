@@ -92,8 +92,20 @@ try {
   const [download] = await Promise.all([page.waitForEvent('download', { timeout: 120000 }), page.click('[data-action="ai-pack"]')]);
   const pack = JSON.parse(await readFile(await download.path(), 'utf8'));
   assert.equal(pack.kind, 'booth-studio/ai-render-pack');
-  for (const k of ['beauty', 'depth', 'mask']) assert.match(pack.images[k], /^data:image\/png;base64,/, k);
-  assert.equal(Math.max(pack.width, pack.height), 1536);
+  for (const k of ['beauty', 'depth', 'mask', 'protect']) assert.match(pack.images[k], /^data:image\/png;base64,/, k);
+  // The protected pass: the artwork opaque, the rest see-through.
+  const kept = await page.evaluate(async (src) => {
+    const bmp = await createImageBitmap(await (await fetch(src)).blob());
+    const c = new OffscreenCanvas(bmp.width, bmp.height);
+    const g = c.getContext('2d');
+    g.drawImage(bmp, 0, 0);
+    const d = g.getImageData(0, 0, bmp.width, bmp.height).data;
+    let opaque = 0;
+    for (let i = 3; i < d.length; i += 4) if (d[i] > 0) opaque++;
+    return opaque / (d.length / 4);
+  }, pack.images.protect);
+  assert.ok(kept > 0.01 && kept < 0.5, `the protected pass is the artwork alone (${(kept * 100).toFixed(1)}% opaque)`);
+  assert.equal(Math.max(pack.width, pack.height), 1536, 'the default size');
   assert.match(pack.description, /^A 10 ft × 10 ft/);
   assert.ok(pack.camera.position.length === 3 && pack.camera.far > pack.camera.near);
   await page.click('[data-action="ai-render"]');

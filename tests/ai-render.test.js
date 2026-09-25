@@ -73,3 +73,23 @@ test("the adapter does nothing without a provider, and hands a provider the pack
   assert.equal(seen, pack);
   await assert.rejects(render({ nope: 1 }, fake), /not an AI render pack/);
 });
+
+test("the protected pass keeps only artwork and signs, and goes back over a repaint exactly", async () => {
+  const { protectPass, overlay } = await import("../src/ai-render.js");
+  // Four pixels: artwork, a sign, a wall, an antialiased artwork edge.
+  const mask = new Uint8ClampedArray([255, 45, 45, 255, 255, 95, 210, 255, 240, 240, 240, 255, 230, 60, 60, 255]);
+  const beauty = new Uint8ClampedArray([10, 20, 30, 255, 40, 50, 60, 255, 70, 80, 90, 255, 100, 110, 120, 255]);
+  const keep = protectPass(beauty, mask);
+  assert.deepEqual([...keep], [10, 20, 30, 255, 40, 50, 60, 255, 0, 0, 0, 0, 100, 110, 120, 255]);
+  // A model repainted everything; the artwork comes back pixel for pixel.
+  const repaint = new Uint8ClampedArray(16).fill(200);
+  const out = overlay(repaint, keep);
+  assert.deepEqual([...out.slice(0, 8)], [10, 20, 30, 255, 40, 50, 60, 255]);
+  assert.deepEqual([...out.slice(8, 12)], [200, 200, 200, 200], "the wall is the model's");
+});
+
+test("render lays the protected pass back over the provider's image", async () => {
+  const pack = renderPack({ images: { beauty: "a", depth: "b", mask: "c", protect: "d" }, width: 2, height: 1, camera: {}, description: "" });
+  const restored = await render(pack, { name: "T", render: async () => "raw" }, async (img, f) => `${img}+${f.images.protect}`);
+  assert.equal(restored, "raw+d");
+});
