@@ -8,6 +8,9 @@
 //
 // Pure. Inches, like everything else; the map draws each row left to right,
 // row 1 at the back of the hall and the entrance along the bottom edge.
+// A plan laid out piece by piece on the show floor (src/show.js) keeps these
+// same records; its booths are counted, listed and printed from its pieces.
+import { showBooths, showSVG, validShow } from "./show.js";
 
 export const STATUSES = {
   open: { label: "Open", color: "#e9eef3" },
@@ -50,7 +53,7 @@ export function validHall(h) {
     if (b.status !== undefined && !STATUSES[b.status]) return false;
     if (b.price !== undefined && !inRange(b.price, HALL_LIMITS.price)) return false;
   }
-  return true;
+  return validShow(h);
 }
 
 /**
@@ -96,7 +99,7 @@ export const boothOf = (h, number) => ({ status: "open", name: "", note: "", pri
 
 /** Counts, square footage and money, for the panel and the printed map. */
 export function hallTotals(h) {
-  const layout = hallLayout(h);
+  const layout = showBooths(h);
   const t = { booths: layout.length, open: 0, held: 0, sold: 0, soldValue: 0, heldValue: 0, sqft: 0 };
   for (const b of layout) {
     const rec = boothOf(h, b.number);
@@ -115,7 +118,7 @@ export function hallCSV(h) {
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const lines = [["Booth", "Row", "Size (ft)", "Status", "Exhibitor", "Price", "Note"].join(",")];
-  for (const b of hallLayout(h)) {
+  for (const b of showBooths(h)) {
     const rec = boothOf(h, b.number);
     lines.push([b.number, b.row, `${b.w / 12} x ${b.d / 12}`, STATUSES[rec.status].label, rec.name, rec.price || "", rec.note].map(q).join(","));
   }
@@ -149,11 +152,11 @@ export function hallSVG(h, { selected = null, interactive = false } = {}) {
 /** A printable page: the map, the legend, the totals and the exhibitor list. */
 export function hallHTML(h, name = "Show") {
   const totals = hallTotals(h);
-  const rows = hallLayout(h)
+  const rows = showBooths(h)
     .map((b) => {
       const rec = boothOf(h, b.number);
       return `<tr><td>${b.number}</td><td>${b.row}</td><td>${b.w / 12}′ × ${b.d / 12}′</td><td><span class="dot" style="background:${STATUSES[rec.status].color}"></span>${STATUSES[rec.status].label}</td><td>${esc(rec.name)}</td><td>${rec.price ? money(rec.price) : ""}</td><td>${esc(rec.note)}</td></tr>`;
     })
     .join("");
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(name)} — Hall map</title><style>body{font:13px system-ui,sans-serif;margin:24px;color:#1d232b}h1{font-size:22px}svg{width:100%;max-height:70vh;display:block;margin:12px 0}.legend span{display:inline-flex;align-items:center;gap:6px;margin-right:16px}.dot{display:inline-block;width:12px;height:12px;border:1px solid #6b7580;border-radius:2px;margin-right:6px;vertical-align:middle}table{border-collapse:collapse;width:100%;font-size:12px}td,th{text-align:left;padding:5px 8px;border-bottom:1px solid #ddd}.totals{margin:8px 0 18px}@media print{button{display:none}}@page{size:letter landscape;margin:10mm}</style></head><body><button onclick="window.print()">Print / save PDF</button><h1>${esc(name)} · Hall map</h1><p class="legend">${Object.values(STATUSES).map((s) => `<span><span class="dot" style="background:${s.color}"></span>${s.label}</span>`).join("")}</p>${hallSVG(h)}<p class="totals"><strong>${totals.booths}</strong> booths · ${totals.sold} sold · ${totals.held} held · ${totals.open} open · ${Math.round(totals.sqft).toLocaleString("en-US")} sq ft of booth${totals.soldValue ? ` · sold ${money(totals.soldValue)}` : ""}${totals.heldValue ? ` · held ${money(totals.heldValue)}` : ""}</p><table><thead><tr><th>Booth</th><th>Row</th><th>Size</th><th>Status</th><th>Exhibitor</th><th>Price</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(name)} — Hall map</title><style>body{font:13px system-ui,sans-serif;margin:24px;color:#1d232b}h1{font-size:22px}svg{width:100%;max-height:70vh;display:block;margin:12px 0}.legend span{display:inline-flex;align-items:center;gap:6px;margin-right:16px}.dot{display:inline-block;width:12px;height:12px;border:1px solid #6b7580;border-radius:2px;margin-right:6px;vertical-align:middle}table{border-collapse:collapse;width:100%;font-size:12px}td,th{text-align:left;padding:5px 8px;border-bottom:1px solid #ddd}.totals{margin:8px 0 18px}@media print{button{display:none}}@page{size:letter landscape;margin:10mm}</style></head><body><button onclick="window.print()">Print / save PDF</button><h1>${esc(name)} · Hall map</h1><p class="legend">${Object.values(STATUSES).map((s) => `<span><span class="dot" style="background:${s.color}"></span>${s.label}</span>`).join("")}</p>${h.items ? showSVG(h) : hallSVG(h)}<p class="totals"><strong>${totals.booths}</strong> booths · ${totals.sold} sold · ${totals.held} held · ${totals.open} open · ${Math.round(totals.sqft).toLocaleString("en-US")} sq ft of booth${totals.soldValue ? ` · sold ${money(totals.soldValue)}` : ""}${totals.heldValue ? ` · held ${money(totals.heldValue)}` : ""}</p><table><thead><tr><th>Booth</th><th>Row</th><th>Size</th><th>Status</th><th>Exhibitor</th><th>Price</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
 }

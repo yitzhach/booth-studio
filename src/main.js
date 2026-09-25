@@ -59,6 +59,11 @@ BUILD.stamp = (() => {
 window.BOOTH_BUILD = BUILD;
 import {
   createIcons,
+  Shapes,
+  RotateCw,
+  AlignStartHorizontal,
+  ListOrdered,
+  ArrowLeft,
   Box,
   ImagePlus,
   LayoutPanelLeft,
@@ -189,6 +194,8 @@ import { MAX_VIEWS, STEP, STRIDE, TAGS, newView } from "./views.js";
 import { ACCESSIBLE, checkClearance } from "./clearance.js";
 import { elevationsHTML } from "./elevations.js";
 import { HALL_LIMITS, MAX_HALL_BOOTHS, STATUSES, boothOf, hallCSV, hallHTML, hallLayout, hallSVG, hallTotals, newHall } from "./hall.js";
+import { BOOTH_STYLES, KINDS, SHAPES, VENUES as SHOW_VENUES, boothBlock, boundsOf, copyPieces, feet, floorOf, renumber, showItems, showSVG, spacePieces, toFloor } from "./show.js";
+import { createShowEditor } from "./show-editor.js";
 import { CIRCUIT_WATTS, powerHTML, powerLines, powerTotals } from "./power.js";
 import { FOOTPRINTS, SHOWS, STARTERS, fromTemplate, quickStart, templateOf } from "./quickstart.js";
 import { PhotoEditor } from "./photo.js";
@@ -259,6 +266,11 @@ async function boot() {
     Upload,
     AlignHorizontalDistributeCenter,
     AlignStartVertical,
+    Shapes,
+    RotateCw,
+    AlignStartHorizontal,
+    ListOrdered,
+    ArrowLeft,
   };
   // An icon is written into the HTML as its finished SVG. lucide's
   // createIcons scans the whole document for placeholders and builds each
@@ -294,6 +306,15 @@ async function boot() {
     hiddenTags = new Set(),
     // The hall planner's selected booth, by number: view state.
     hallSelected = null,
+    // The show floor (src/show.js): whether it fills the viewport, its
+    // drawing board once made, the snap grid, and the "Add booths" settings.
+    // All view state: the plan itself is `p.hall`.
+    showFloor = false,
+    showEditor = null,
+    showGrid = 12,
+    showBlock = { count: 10, perRow: 10, w: 120, d: 120, gap: 0, aisle: 120, backToBack: false, style: "pipe" },
+    showGap = 0,
+    showClipboard = null,
     // General-purpose outlets the power sheet counts — a phone, a card reader.
     powerOutlets = 1,
     // Which booth of the row new artwork is hung in, by its slot id; null is
@@ -433,7 +454,7 @@ async function boot() {
   selected = p.art[0]?.id;
   document.querySelector("#app").innerHTML =
     `<header><a class="brand" href="#" aria-label="Booth Studio">${icon("box")}<span>Artist OS</span></a><span class="app-badge">Booth Studio</span><div class="tool-search"><span aria-hidden="true">⌕</span><input id="tool-search" type="search" placeholder="Find a tool…" aria-label="Find a tool" title="Find a tool by name or shortcut · press / or Ctrl/⌘ K to jump here" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-controls="tool-results" aria-expanded="false"/><ul id="tool-results" role="listbox" aria-label="Matching tools" hidden></ul></div><div class="project"><input id="project-name" aria-label="Project name" maxlength="120" value="${e(p.name)}"/>${icon("chevron-down")}</div><div class="save-status" id="save-status" role="status">Opening…</div>${btn("help", "Help", "help-circle", "icon-only")}<div class="avatar">IA</div></header>
-<div class="workspace"><aside class="library" id="library"></aside><main class="editor"><div class="toolbar"><div class="toolgroup">${btn("select", "Select", "mouse-pointer-2", "active")}${btn("move", "Move", "move")}${btn("snap", "Snap 1″", "grid-2x2", "active")}${btn("measure", "Measure", "ruler")}${btn("walk", "Walk", "footprints")}${btn("draw-box", "Box", "square")}${btn("draft", "Fast edit", "zap")}${btn("draft-lock", "Fast edit: follows the gesture", "lock", "draft-lock")}</div><div class="toolgroup">${btn("undo", "Undo", "undo-2", "icon-only")}${btn("redo", "Redo", "redo-2", "icon-only")}</div><div class="mode-switch"><button data-action="mode-3d">3D booth</button><button data-action="mode-photo">Photo</button></div>${btn("export-tab", "Export", "download", "export-top")}</div><div class="viewport"><div id="scene"></div><div class="frame-guide" hidden><div class="frame-guide-box"><button class="fg-move" data-fg="move" title="Drag to move the frame" aria-label="Move the export frame"><span class="fg-label"></span></button>${["nw", "ne", "sw", "se"].map((c) => `<i class="fg-h fg-corner" data-fg="${c}" title="Drag to resize the frame"></i>`).join("")}${["n", "s", "e", "w"].map((c) => `<i class="fg-h fg-edge" data-fg="${c}" title="Drag to change the frame\'s shape"></i>`).join("")}</div></div><div id="photo" hidden></div><div class="scene-label"><span class="eyebrow" id="mode-label">MEASURED WORKSPACE</span><strong id="scene-title"></strong><span id="scene-subtitle"></span><small class="mobile-stamp" title="Built ${BUILD.time} · commit ${BUILD.commit}">${BUILD.stamp} · ${BUILD.commit}</small></div><div id="photo-empty" hidden><div>${icon("image-plus")}<h2>Start with your booth shot</h2><p>Add artwork and adjust its four corners to match the wall perspective.</p>${btn("upload-photo", "Upload booth photo", "plus", "primary")}</div></div><button class="find-tool" data-action="find-tool" aria-label="Find a tool" title="Find a tool">${icon("search")}</button><div class="walk-pad" hidden><button data-walk="forward" aria-label="Step forward">▲</button><button data-walk="left" aria-label="Step left">◀</button><button data-walk="back" aria-label="Step back">▼</button><button data-walk="right" aria-label="Step right">▶</button><button data-action="walk" class="walk-exit" aria-label="Stop walking">Done</button></div><div class="viewport-bottom"><div class="view-switch" id="view-switch"><button data-view="perspective" class="active">Perspective</button><button data-view="back">Back</button><button data-view="left">Left</button><button data-view="right">Right</button><button data-view="plan">Plan</button></div><label class="saved-view-pick" hidden><span>View</span><select id="saved-view" aria-label="Go to a saved view"></select></label><div class="zoom-controls"><span class="zoom-label">Zoom</span>${btn("zoom-out", "Zoom out", "minus", "icon-only")}${btn("zoom-in", "Zoom in", "plus", "icon-only")}${btn("reset-view", "Reset view", "rotate-ccw", "icon-only")}</div></div></div><div class="statusbar"><span id="gesture-hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</span><label class="preview-quality" title="Preview quality: how many pixels the viewport draws for each one on screen. Exports are never affected."><span>Preview</span><select id="quality-quick" aria-label="Preview quality"></select><output id="quality-now"></output></label><span id="selection-status"></span></div></main><aside class="inspector"><button class="sheet-toggle" data-action="sheet-toggle" aria-label="Fold the panel away" title="Fold the panel away"><span>Fold</span></button><div class="inspector-tabs">${["art", "layout", "show", "walls", "lighting", "video", "hall", "export"].map((t, i) => `<button data-tab="${t}">${icon(["image", "layout-panel-left", "building-2", "columns-2", "lightbulb", "video", "map", "download"][i])}<span>${["Artwork", "Layout", "Art show", "Walls", "Lighting", "Video", "Hall", "Export"][i]}</span></button>`).join("")}</div><div id="inspector-content"></div></aside></div><footer><span class="footer-brand">${icon("box")} BOOTH STUDIO <small>Prototype 01</small><small id="build-stamp" title="Version ${BUILD.version} · built ${BUILD.time} · commit ${BUILD.commit}">v${BUILD.version} · ${BUILD.stamp} · ${BUILD.commit}</small></span><span>Your images. Your space. Your arrangement.</span><span id="network">Local workspace</span></footer><input type="file" id="art-input" accept="image/jpeg,image/png" multiple hidden/><input type="file" id="replace-input" accept="image/jpeg,image/png" hidden/><input type="file" id="photo-input" accept="image/jpeg,image/png" hidden/><input type="file" id="surround-input" accept="image/jpeg,image/png" hidden/><input type="file" id="ground-input" accept="image/jpeg,image/png" hidden/><input type="file" id="underlay-input" accept="image/jpeg,image/png" hidden/><input type="file" id="model-input" accept=".glb,model/gltf-binary" hidden/><input type="file" id="backup-input" accept=".json,.booth" hidden/><div id="toast" role="status"></div><dialog id="dialog"><div id="dialog-content"></div></dialog><dialog id="image-editor"><div id="image-editor-content"></div></dialog><dialog id="timeline-dialog" class="timeline-dialog"><div id="timeline-content"></div></dialog>`;
+<div class="workspace"><aside class="library" id="library"></aside><main class="editor"><div class="toolbar"><div class="toolgroup">${btn("select", "Select", "mouse-pointer-2", "active")}${btn("move", "Move", "move")}${btn("snap", "Snap 1″", "grid-2x2", "active")}${btn("measure", "Measure", "ruler")}${btn("walk", "Walk", "footprints")}${btn("draw-box", "Box", "square")}${btn("draft", "Fast edit", "zap")}${btn("draft-lock", "Fast edit: follows the gesture", "lock", "draft-lock")}</div><div class="toolgroup">${btn("undo", "Undo", "undo-2", "icon-only")}${btn("redo", "Redo", "redo-2", "icon-only")}</div><div class="mode-switch"><button data-action="mode-3d">3D booth</button><button data-action="mode-photo">Photo</button><button data-action="mode-show">Show floor</button></div>${btn("export-tab", "Export", "download", "export-top")}</div><div class="viewport"><div id="scene"></div><div class="frame-guide" hidden><div class="frame-guide-box"><button class="fg-move" data-fg="move" title="Drag to move the frame" aria-label="Move the export frame"><span class="fg-label"></span></button>${["nw", "ne", "sw", "se"].map((c) => `<i class="fg-h fg-corner" data-fg="${c}" title="Drag to resize the frame"></i>`).join("")}${["n", "s", "e", "w"].map((c) => `<i class="fg-h fg-edge" data-fg="${c}" title="Drag to change the frame\'s shape"></i>`).join("")}</div></div><div id="photo" hidden></div><div id="show-floor" hidden></div><div class="scene-label"><span class="eyebrow" id="mode-label">MEASURED WORKSPACE</span><strong id="scene-title"></strong><span id="scene-subtitle"></span><small class="mobile-stamp" title="Built ${BUILD.time} · commit ${BUILD.commit}">${BUILD.stamp} · ${BUILD.commit}</small></div><div id="photo-empty" hidden><div>${icon("image-plus")}<h2>Start with your booth shot</h2><p>Add artwork and adjust its four corners to match the wall perspective.</p>${btn("upload-photo", "Upload booth photo", "plus", "primary")}</div></div><button class="find-tool" data-action="find-tool" aria-label="Find a tool" title="Find a tool">${icon("search")}</button><div class="walk-pad" hidden><button data-walk="forward" aria-label="Step forward">▲</button><button data-walk="left" aria-label="Step left">◀</button><button data-walk="back" aria-label="Step back">▼</button><button data-walk="right" aria-label="Step right">▶</button><button data-action="walk" class="walk-exit" aria-label="Stop walking">Done</button></div><div class="viewport-bottom"><div class="view-switch" id="view-switch"><button data-view="perspective" class="active">Perspective</button><button data-view="back">Back</button><button data-view="left">Left</button><button data-view="right">Right</button><button data-view="plan">Plan</button></div><label class="saved-view-pick" hidden><span>View</span><select id="saved-view" aria-label="Go to a saved view"></select></label><div class="zoom-controls"><span class="zoom-label">Zoom</span>${btn("zoom-out", "Zoom out", "minus", "icon-only")}${btn("zoom-in", "Zoom in", "plus", "icon-only")}${btn("reset-view", "Reset view", "rotate-ccw", "icon-only")}</div></div></div><div class="statusbar"><span id="gesture-hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</span><label class="preview-quality" title="Preview quality: how many pixels the viewport draws for each one on screen. Exports are never affected."><span>Preview</span><select id="quality-quick" aria-label="Preview quality"></select><output id="quality-now"></output></label><span id="selection-status"></span></div></main><aside class="inspector"><button class="sheet-toggle" data-action="sheet-toggle" aria-label="Fold the panel away" title="Fold the panel away"><span>Fold</span></button><div class="inspector-tabs">${["art", "layout", "show", "walls", "lighting", "video", "hall", "export"].map((t, i) => `<button data-tab="${t}">${icon(["image", "layout-panel-left", "building-2", "columns-2", "lightbulb", "video", "map", "download"][i])}<span>${["Artwork", "Layout", "Art show", "Walls", "Lighting", "Video", "Show floor", "Export"][i]}</span></button>`).join("")}</div><div id="inspector-content"></div></aside></div><footer><span class="footer-brand">${icon("box")} BOOTH STUDIO <small>Prototype 01</small><small id="build-stamp" title="Version ${BUILD.version} · built ${BUILD.time} · commit ${BUILD.commit}">v${BUILD.version} · ${BUILD.stamp} · ${BUILD.commit}</small></span><span>Your images. Your space. Your arrangement.</span><span id="network">Local workspace</span></footer><input type="file" id="art-input" accept="image/jpeg,image/png" multiple hidden/><input type="file" id="replace-input" accept="image/jpeg,image/png" hidden/><input type="file" id="photo-input" accept="image/jpeg,image/png" hidden/><input type="file" id="surround-input" accept="image/jpeg,image/png" hidden/><input type="file" id="ground-input" accept="image/jpeg,image/png" hidden/><input type="file" id="underlay-input" accept="image/jpeg,image/png" hidden/><input type="file" id="model-input" accept=".glb,model/gltf-binary" hidden/><input type="file" id="backup-input" accept=".json,.booth" hidden/><div id="toast" role="status"></div><dialog id="dialog"><div id="dialog-content"></div></dialog><dialog id="image-editor"><div id="image-editor-content"></div></dialog><dialog id="timeline-dialog" class="timeline-dialog"><div id="timeline-content"></div></dialog>`;
   let scene;
   try {
     scene = new BoothScene(
@@ -1649,7 +1670,7 @@ async function boot() {
     }</div><p class="library-drag-note">Tap an original to hang it on a wall — uploading only files it here. On a mouse you can also drag one onto the interior or exterior wall you want. Each one creates a new placement; the original stays here.</p>${p.mode === "3d" ? `<div class="asset-tools"><h3>Booth assets</h3><div class="button-row">${btn("add-sign", "Artist sign", "plus")}${btn("add-label", "Artwork label", "plus")}</div></div>` : ""}<div class="library-bottom">${btn("upload-art", "Upload originals", "image-plus", "wide")}${p.art.some((item) => !item.asset && !item.kind) ? btn("clear-samples", "Remove sample panels", null, "wide text-button") : ""}<p>Original files stay intact.<br>Saved only on this browser/device.</p></div>`;
   }
   function renderLibrary() {
-    document.querySelector("#library").innerHTML = libraryHTML();
+    document.querySelector("#library").innerHTML = showFloor ? showLibraryHTML() : libraryHTML();
   }
   function signFields(a) {
     const input = (label, key, value) => `<label class="setting-label">${label}<input type="text" data-field="${key}" data-scope="art" aria-label="${label}" maxlength="200" value="${e(value || "")}"/></label>`;
@@ -1868,6 +1889,7 @@ async function boot() {
    * print and a list to send. Kept in the project as `p.hall`.
    */
   function hallPanel() {
+    if (showFloor && p.hall && allowed("hall")) return showFloorPanel();
     const intro = "Plan a whole show: rows of numbered booths on aisles, each with an exhibitor, a status and a price. Print the map, send the exhibitor list.";
     if (!allowed("hall")) return proLock("hall", intro + " Part of Booth Studio Pro.");
     const h = p.hall;
@@ -1880,7 +1902,236 @@ async function boot() {
     const editor = chosen
       ? `<section class="hall-booth"><h3>Booth ${hallSelected}${h.mine === hallSelected ? ' <span class="badge">Yours</span>' : ""}</h3><label class="setting-label">Status<select data-field="status" data-scope="hallbooth" aria-label="Booth status">${Object.entries(STATUSES).map(([k, v]) => `<option value="${k}" ${chosen.status === k ? "selected" : ""}>${e(v.label)}</option>`).join("")}</select></label><label class="setting-label">Exhibitor<input type="text" data-field="name" data-scope="hallbooth" aria-label="Exhibitor" maxlength="120" value="${e(chosen.name)}"/></label>${field("Price", "price", chosen.price || 0, ...HALL_LIMITS.price, 1, "$", "hallbooth", "Booth price")}<label class="setting-label">Note<input type="text" data-field="note" data-scope="hallbooth" aria-label="Booth note" maxlength="300" value="${e(chosen.note)}"/></label><div class="button-row">${btn("hall-mine", h.mine === hallSelected ? "Not my booth" : "This is my booth", "box")}${btn("hall-deselect", "Done", "check")}</div></section>`
       : `<p class="muted">Tap a booth on the map to set its exhibitor, status and price.</p>`;
-    return `<section><h3>Map <span>${t.booths} booths</span></h3><div class="hall-map-wrap">${hallSVG(h, { selected: hallSelected, interactive: true })}</div><p class="hall-totals">${t.sold} sold · ${t.held} held · ${t.open} open${t.soldValue ? ` · sold $${Math.round(t.soldValue).toLocaleString("en-US")}` : ""}${t.heldValue ? ` · held $${Math.round(t.heldValue).toLocaleString("en-US")}` : ""}</p></section>${editor}<section><h3>Layout <span>inches</span></h3><div class="field-pair">${f("Rows", "rows")}${f("Booths per row", "perRow")}</div><div class="field-pair">${f("Booth width", "boothWidth", "in")}${f("Booth depth", "boothDepth", "in")}</div>${f("Aisle width", "aisle", "in")}<label class="check-field"><input type="checkbox" data-field="backToBack" data-scope="hallplan" ${h.backToBack ? "checked" : ""}/>Rows back to back, in pairs</label>${f("First booth number", "start")}${f("Default price", "price", "$")}<p class="muted">Up to ${MAX_HALL_BOOTHS} booths. Aisles under 10′ are tight for a crowd; many fire marshals ask for 10′ main aisles.</p></section><section><h3>Share it</h3><div class="button-row">${btn("hall-map", "Download hall map", "download")}${btn("hall-csv", "Exhibitor list (CSV)", "download")}</div>${btn("hall-delete", "Delete the hall plan", "trash-2", "wide")}</section>`;
+    return `${btn("mode-show", "Open the show floor", "map", "primary wide")}<p class="muted">The show floor fills the viewport with this plan: drag booths of any size, walkways, walls, doors, tents and stages from a library, snap them together and space them.</p><section><h3>Map <span>${t.booths} booths</span></h3><div class="hall-map-wrap">${h.items ? showSVG(h) : hallSVG(h, { selected: hallSelected, interactive: true })}</div><p class="hall-totals">${t.sold} sold · ${t.held} held · ${t.open} open${t.soldValue ? ` · sold $${Math.round(t.soldValue).toLocaleString("en-US")}` : ""}${t.heldValue ? ` · held $${Math.round(t.heldValue).toLocaleString("en-US")}` : ""}</p></section>${editor}${h.items ? `<section><h3>Layout</h3><p class="muted">This plan is laid out piece by piece on the show floor, so rows and aisles are no longer typed here. Open the show floor to change it.</p></section>` : `<section><h3>Layout <span>inches</span></h3><div class="field-pair">${f("Rows", "rows")}${f("Booths per row", "perRow")}</div><div class="field-pair">${f("Booth width", "boothWidth", "in")}${f("Booth depth", "boothDepth", "in")}</div>${f("Aisle width", "aisle", "in")}<label class="check-field"><input type="checkbox" data-field="backToBack" data-scope="hallplan" ${h.backToBack ? "checked" : ""}/>Rows back to back, in pairs</label>${f("First booth number", "start")}${f("Default price", "price", "$")}<p class="muted">Up to ${MAX_HALL_BOOTHS} booths. Aisles under 10′ are tight for a crowd; many fire marshals ask for 10′ main aisles.</p></section>`}<section><h3>Share it</h3><div class="button-row">${btn("hall-map", "Download hall map", "download")}${btn("hall-csv", "Exhibitor list (CSV)", "download")}</div>${btn("hall-delete", "Delete the hall plan", "trash-2", "wide")}</section>`;
+  }
+  // ---- The show floor ------------------------------------------------------
+  /** The selected pieces of the show floor, as stored. */
+  const showPieces = () => {
+    const ids = new Set(showEditor?.selection || []);
+    return p.hall?.items ? p.hall.items.filter((i) => ids.has(i.id)) : [];
+  };
+  /** The drawing board's selection changed: follow it with the panel. */
+  function showSelected(ids) {
+    const one = ids.length === 1 ? p.hall.items?.find((i) => i.id === ids[0]) : null;
+    hallSelected = one?.kind === "booth" ? one.number : null;
+    renderInspector();
+  }
+  /**
+   * Give booths new numbers, taking each one's exhibitor, status and price —
+   * which `p.hall.booths` keeps by number — and "your booth" with it.
+   */
+  function renumberBooths(changes) {
+    const h = p.hall;
+    const byId = new Map(h.items.map((i) => [i.id, i]));
+    const moved = changes.filter((c) => byId.get(c.id)?.number !== c.number);
+    const records = {};
+    let mine = h.mine;
+    for (const c of moved) {
+      const it = byId.get(c.id);
+      if (h.booths[it.number]) records[c.number] = h.booths[it.number];
+      if (h.mine === it.number) mine = c.number;
+    }
+    for (const c of moved) delete h.booths[byId.get(c.id).number];
+    for (const c of moved) byId.get(c.id).number = c.number;
+    Object.assign(h.booths, records);
+    if (mine === undefined) delete h.mine;
+    else h.mine = mine;
+  }
+  function showRotate(deg) {
+    const ids = new Set(showEditor?.selection || []);
+    if (!ids.size) return;
+    mutate(() => {
+      for (const it of p.hall.items) if (ids.has(it.id)) {
+        const r = ((it.rot || 0) + deg) % 360;
+        if (r) it.rot = r;
+        else delete it.rot;
+      }
+    });
+  }
+  /** Copies of the selection laid right beside it, selected. */
+  function showDuplicate() {
+    const pieces = showPieces();
+    if (!pieces.length) return;
+    const box = boundsOf(pieces);
+    let ids = [];
+    mutate(() => {
+      const copies = copyPieces(p.hall.items, pieces, box.r - box.l, 0, p.hall.start);
+      p.hall.items.push(...copies);
+      ids = copies.map((c) => c.id);
+    });
+    showEditor.select(ids);
+  }
+  function showDelete() {
+    const pieces = showPieces();
+    if (!pieces.length) return;
+    const ids = new Set(pieces.map((i) => i.id));
+    mutate(() => {
+      for (const it of pieces) if (it.kind === "booth") {
+        delete p.hall.booths[it.number];
+        if (p.hall.mine === it.number) delete p.hall.mine;
+      }
+      p.hall.items = p.hall.items.filter((i) => !ids.has(i.id));
+    });
+    hallSelected = null;
+    showEditor.select([]);
+    toast(`${pieces.length} piece${pieces.length === 1 ? "" : "s"} deleted. Undo brings ${pieces.length === 1 ? "it" : "them"} back.`);
+  }
+  /** Line the selection up on its top or left edge. */
+  function showAlign(edge) {
+    const pieces = showPieces();
+    if (pieces.length < 2) return toast("Select two or more pieces to line them up.");
+    const box = boundsOf(pieces);
+    mutate(() => {
+      for (const it of pieces) {
+        const b = boundsOf([it]);
+        if (edge === "t") it.y += box.t - b.t;
+        else it.x += box.l - b.l;
+      }
+    });
+  }
+  /** A key on the show floor: true when it did something. */
+  function showFloorKey(ev) {
+    const mod = ev.ctrlKey || ev.metaKey;
+    const key = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
+    if (mod && key === "z") return actions[ev.shiftKey ? "redo" : "undo"](), true;
+    if (mod && key === "y") return actions.redo(), true;
+    if (mod && key === "d") return showDuplicate(), true;
+    if (mod && key === "a") return showEditor.select(p.hall.items.map((i) => i.id)), true;
+    if (mod && key === "c") return (showClipboard = showPieces().map((i) => ({ ...i }))), true;
+    if (mod && key === "v") {
+      if (!showClipboard?.length) return false;
+      let ids = [];
+      mutate(() => {
+        const copies = copyPieces(p.hall.items, showClipboard, showGrid || 12, showGrid || 12, p.hall.start);
+        p.hall.items.push(...copies);
+        ids = copies.map((c) => c.id);
+      });
+      showClipboard = showClipboard.map((i) => ({ ...i, x: i.x + (showGrid || 12), y: i.y + (showGrid || 12) }));
+      showEditor.select(ids);
+      return true;
+    }
+    if (mod || ev.altKey) return false;
+    if (key === "Delete" || key === "Backspace") return showDelete(), true;
+    if (key === "Escape") return showEditor.select([]), true;
+    if (key === "r") return showRotate(ev.shiftKey ? 270 : 90), true;
+    if (key === "0") return showEditor.fit(), true;
+    if (key === "+" || key === "=") return showEditor.zoom(1.25), true;
+    if (key === "-") return showEditor.zoom(1 / 1.25), true;
+    const arrow = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[key];
+    if (arrow) {
+      const ids = new Set(showEditor.selection);
+      if (!ids.size) return false;
+      const step = (showGrid || 1) * (ev.shiftKey ? 10 : 1);
+      mutate(() => {
+        for (const it of p.hall.items) if (ids.has(it.id)) (it.x += arrow[0] * step), (it.y += arrow[1] * step);
+      });
+      return true;
+    }
+    return false;
+  }
+  /**
+   * A control of the show floor's panel changed: the selected piece, the
+   * floor, the snap grid, the gap or the "Add booths" settings. True when it
+   * was one of them.
+   */
+  function showChange(el) {
+    const ds = el.dataset || {};
+    const n = Number(el.value);
+    const clamp = (v) => Math.min(Number(el.max || Infinity), Math.max(Number(el.min || -Infinity), v));
+    if (el.id === "show-grid") {
+      showGrid = n;
+      return true;
+    }
+    if (el.id === "show-gap") {
+      showGap = Number.isFinite(n) ? clamp(n) : 0;
+      return true;
+    }
+    if (ds.showBlock) {
+      const k = ds.showBlock;
+      if (k === "backToBack") showBlock.backToBack = el.checked;
+      else if (k === "style") showBlock.style = el.value;
+      else if (Number.isFinite(n)) showBlock[k] = clamp(Math.round(n));
+      renderInspector();
+      return true;
+    }
+    if (ds.showVenue) {
+      mutate(() => {
+        const h = toFloor(p.hall);
+        if (ds.showVenue === "kind") h.venue.kind = el.value;
+        else if (Number.isFinite(n)) h.venue[ds.showVenue] = Math.round(clamp(n) * 12);
+      });
+      return true;
+    }
+    if (ds.showField) {
+      const it = showPieces()[0];
+      if (!it) return true;
+      const k = ds.showField;
+      if (k === "number") {
+        const v = Math.round(clamp(n));
+        if (!Number.isFinite(v) || v === it.number) return renderInspector(), true;
+        if (p.hall.items.some((i) => i.kind === "booth" && i.number === v)) {
+          toast(`Booth ${v} is already on the floor.`, true);
+          renderInspector();
+          return true;
+        }
+        mutate(() => renumberBooths([{ id: it.id, number: v }]));
+        hallSelected = v;
+        return true;
+      }
+      mutate(() => {
+        if (k === "style") {
+          if (el.value === "pipe") delete it.style;
+          else it.style = el.value;
+        } else if (k === "text") {
+          if (el.value.trim()) it.text = el.value.trim().slice(0, 120);
+          else delete it.text;
+        } else if (Number.isFinite(n)) {
+          const v = clamp(n);
+          if (k === "rot") {
+            const r = ((Math.round(v) % 360) + 360) % 360;
+            if (r) it.rot = r;
+            else delete it.rot;
+          } else it[k] = Math.round(v * 10) / 10;
+        }
+      });
+      return true;
+    }
+    return false;
+  }
+  /** The shape library, in the left sidebar while the show floor is open. */
+  function showLibraryHTML() {
+    const swatch = (sh) => {
+      const k = KINDS[sh.kind];
+      const w = sh.w ?? k.w;
+      const d = sh.d ?? k.d;
+      const s = 34 / Math.max(w, d);
+      const rw = Math.max(3, w * s);
+      const rd = Math.max(3, d * s);
+      return `<svg viewBox="0 0 40 40" aria-hidden="true"><rect x="${20 - rw / 2}" y="${20 - rd / 2}" width="${rw}" height="${rd}" rx="${sh.kind === "column" ? rw / 2 : 1}" fill="${k.fill === "none" ? "#fff" : k.fill}" stroke="${k.line === "none" ? "#9aa3ad" : k.line}"/>${sh.style === "tent" ? `<path d="M${20 - rw / 2} ${20 - rd / 2}L${20 + rw / 2} ${20 + rd / 2}M${20 + rw / 2} ${20 - rd / 2}L${20 - rw / 2} ${20 + rd / 2}" stroke="#aab3bd"/>` : ""}${sh.kind === "label" ? '<text x="20" y="25" font-size="13" text-anchor="middle" fill="#1d232b">Aa</text>' : ""}</svg>`;
+    };
+    const groups = [["Booths", SHAPES.filter((sh) => sh.kind === "booth")], ["Floor", SHAPES.filter((sh) => ["aisle", "pavilion", "wall", "door", "column"].includes(sh.kind))], ["Features", SHAPES.filter((sh) => ["stage", "table", "desk", "food", "restroom", "label"].includes(sh.kind))]];
+    return `<div class="panel-heading"><h2>Shapes</h2>${icon("shapes")}</div><p class="muted show-lib-note">Drag a shape onto the floor, or tap it to drop it in the middle.</p>${groups.map(([name, list]) => `<section class="show-lib"><h3>${name}</h3><div class="show-shapes">${list.map((sh) => `<button class="show-shape" data-show-shape="${sh.key}" title="${e(sh.label || KINDS[sh.kind].label)}">${swatch(sh)}<span>${e(sh.label || KINDS[sh.kind].label)}</span></button>`).join("")}</div></section>`).join("")}`;
+  }
+  /** The inspector while the show floor is open. */
+  function showFloorPanel() {
+    const h = p.hall;
+    const f = floorOf(h);
+    const pieces = showPieces();
+    const t = hallTotals(h);
+    const num = (label, key, value, min, max, step, unit, attr) => `<label class="field"><span>${label}</span><div><input type="number" ${attr}="${key}" aria-label="${e(label)}" value="${Number(Number(value).toFixed(2))}" min="${min}" max="${max}" step="${step}"/><small>${unit}</small></div></label>`;
+    const pf = (label, key, value, min, max, step = 1, unit = "in") => num(label, key, value, min, max, step, unit, "data-show-field");
+    let selectedHTML = `<p class="muted">Tap a piece to select it; drag it to move it. Shift-click or drag a box round several. Drag on empty floor with a finger, Space, or the right button to pan; scroll or pinch to zoom.</p>`;
+    if (pieces.length === 1) {
+      const it = pieces[0];
+      const k = KINDS[it.kind];
+      const rec = it.kind === "booth" ? boothOf(h, it.number) : null;
+      selectedHTML = `<section class="show-piece"><h3>${it.kind === "booth" ? `Booth ${it.number}${h.mine === it.number ? ' <span class="badge">Yours</span>' : ""}` : e(k.label)} <span>${feet(it.w)} × ${feet(it.d)}</span></h3><div class="field-pair">${pf("Width", "w", it.w, 6, 12000)}${pf("Depth", "d", it.d, 6, 12000)}</div><div class="field-pair">${pf("Across", "x", it.x, -24000, 48000)}${pf("From back", "y", it.y, -24000, 48000)}</div>${pf("Turn", "rot", it.rot || 0, 0, 359, 15, "°")}${it.kind === "booth" ? `${pf("Booth number", "number", it.number, 1, 99999, 1, "#")}<label class="setting-label">Built as<select data-show-field="style" aria-label="Booth built as">${Object.entries(BOOTH_STYLES).map(([key, v]) => `<option value="${key}" ${(it.style || "pipe") === key ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label>` : `<label class="setting-label">Text<input type="text" data-show-field="text" aria-label="Piece text" maxlength="120" value="${e(it.text || "")}" placeholder="${e(k.label)}"/></label>`}<div class="button-row">${btn("show-rotate", "Turn 90°", "rotate-cw")}${btn("show-duplicate", "Duplicate", "copy")}${btn("show-delete", "Delete", "trash-2")}</div></section>${rec ? `<section class="hall-booth"><h3>Sale</h3><label class="setting-label">Status<select data-field="status" data-scope="hallbooth" aria-label="Booth status">${Object.entries(STATUSES).map(([key, v]) => `<option value="${key}" ${rec.status === key ? "selected" : ""}>${e(v.label)}</option>`).join("")}</select></label><label class="setting-label">Exhibitor<input type="text" data-field="name" data-scope="hallbooth" aria-label="Exhibitor" maxlength="120" value="${e(rec.name)}"/></label>${field("Price", "price", rec.price || 0, ...HALL_LIMITS.price, 1, "$", "hallbooth", "Booth price")}<label class="setting-label">Note<input type="text" data-field="note" data-scope="hallbooth" aria-label="Booth note" maxlength="300" value="${e(rec.note)}"/></label>${btn("hall-mine", h.mine === it.number ? "Not my booth" : "This is my booth", "box", "wide")}</section>` : ""}`;
+    } else if (pieces.length > 1) {
+      selectedHTML = `<section class="show-piece"><h3>${pieces.length} selected <span>${pieces.filter((i) => i.kind === "booth").length} booths</span></h3><div class="button-row">${btn("show-rotate", "Turn 90°", "rotate-cw")}${btn("show-duplicate", "Duplicate", "copy")}${btn("show-delete", "Delete", "trash-2")}</div><div class="button-row">${btn("show-align-top", "Line up tops", "align-start-horizontal")}${btn("show-align-left", "Line up lefts", "align-start-vertical")}</div>${num("Gap between", "show-gap", showGap, 0, 2400, 1, "in", "id")}${btn("show-space", "Space them evenly", "columns-2", "wide")}<p class="muted">Lays them side by side along the way they run, this far apart, the first staying put. A gap of 0 butts them together; a single booth can then be dragged to break the rhythm.</p>${btn("show-renumber", "Renumber these", "list-ordered", "wide")}${btn("show-deselect", "Done", "check", "wide")}</section>`;
+    }
+    const b = showBlock;
+    const bf = (label, key, min, max, step = 1, unit = "in") => num(label, key, b[key], min, max, step, unit, "data-show-block");
+    return `<div class="button-row">${btn("show-exit", "Back to my booth", "arrow-left")}${btn("show-fit", "Fit floor", "maximize")}</div>${selectedHTML}<div class="mobile-library">${showLibraryHTML()}</div><section><h3>Add booths</h3><div class="field-pair">${bf("How many", "count", 1, 400, 1, "")}${bf("Per row", "perRow", 1, 60, 1, "")}</div><div class="field-pair">${bf("Booth width", "w", 48, 480)}${bf("Booth depth", "d", 48, 480)}</div><div class="field-pair">${bf("Gap in a row", "gap", 0, 480)}${bf("Aisle", "aisle", 36, 480)}</div><label class="check-field"><input type="checkbox" data-show-block="backToBack" ${b.backToBack ? "checked" : ""}/>Rows back to back, in pairs</label><label class="setting-label">Built as<select data-show-block="style" aria-label="New booths built as">${Object.entries(BOOTH_STYLES).map(([key, v]) => `<option value="${key}" ${b.style === key ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label>${btn("show-add-block", "Add booths", "plus", "primary wide")}<p class="muted">Numbered on from the highest booth on the floor, placed below everything already on the floor and selected, ready to drag.</p></section><section><h3>Floor</h3><label class="setting-label">Venue<select data-show-venue="kind" aria-label="Show venue">${Object.entries(SHOW_VENUES).map(([key, v]) => `<option value="${key}" ${f.kind === key ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label><div class="field-pair">${num("Floor width", "width", f.width / 12, 10, 2000, 1, "ft", "data-show-venue")}${num("Floor depth", "depth", f.depth / 12, 10, 2000, 1, "ft", "data-show-venue")}</div><label class="setting-label">Snap grid<select id="show-grid" aria-label="Snap grid">${[[0, "Off"], [1, "1″"], [6, "6″"], [12, "1′"], [24, "2′"], [60, "5′"]].map(([v, l]) => `<option value="${v}" ${showGrid === v ? "selected" : ""}>${l}</option>`).join("")}</select></label><p class="muted">Pieces snap to each other's edges first, then to this grid. Hold Alt while dragging to place freely.</p>${btn("show-renumber", "Renumber every booth", "list-ordered", "wide")}</section><section><h3>Sales <span>${t.booths} booths</span></h3><p class="hall-totals">${t.sold} sold · ${t.held} held · ${t.open} open${t.soldValue ? ` · sold $${Math.round(t.soldValue).toLocaleString("en-US")}` : ""}${t.heldValue ? ` · held $${Math.round(t.heldValue).toLocaleString("en-US")}` : ""}</p>${field("Default price", "price", h.price, ...HALL_LIMITS.price, 1, "$", "hallplan", "Hall Default price")}<div class="button-row">${btn("hall-map", "Download hall map", "download")}${btn("hall-csv", "Exhibitor list (CSV)", "download")}</div>${btn("hall-delete", "Delete the hall plan", "trash-2", "wide")}</section><section><h3>Keys</h3><p class="muted">Delete removes · Ctrl+D duplicates · R turns 90° · arrows nudge by the grid (Shift: 10×) · Ctrl+A selects all · Esc lets go · 0 fits the floor.</p></section>`;
   }
   /** Export → Power and rentals (Pro): the service desk's two forms. */
   function powerSection() {
@@ -2701,7 +2952,7 @@ async function boot() {
         ? `<div class="panel-heading"><h2>Video</h2>${icon("video")}</div><div class="empty-inspector"><p>Video records a camera move through the 3D booth. Photo mode has a single photograph and no camera to move, so there is nothing to record. Switch to the 3D booth.</p></div>`
         : `<div class="panel-heading"><h2>Video</h2>${icon("video")}</div><p class="muted">Everything about moving pictures in one place: the move, the clip, the timeline and a batch list. The Export tab keeps the same controls beside the PNG and the guide, and they are the same settings — this is not a second set.</p>${gated("video", videoSection() + batchSection(), "Camera moves, keyframed timelines and batch MP4 export. Part of Booth Studio Pro.")}<section><h3>Stills</h3><p class="muted">The frame you are looking at, as a PNG, without controls or outlines. The full image options are in Export.</p>${btn("export-image", "Export PNG · 4096 px", "download", "wide")}</section>`;
     }
-    if (tab === "hall") html = `<div class="panel-heading"><h2>Hall planner</h2>${icon("map")}</div>${hallPanel()}`;
+    if (tab === "hall") html = `<div class="panel-heading"><h2>${showFloor ? "Show floor" : "Hall planner"}</h2>${icon("map")}</div>${hallPanel()}`;
     if (tab === "export") {
       html = `<div class="panel-heading"><h2>Export your booth</h2>${icon("download")}</div><p class="muted">A clean image of the current ${p.mode === "photo" ? "photo composition" : "camera view"}, without controls or selection outlines.</p><section><h3>Image size</h3>${p.mode === "photo" ? "" : frameFields("export")}<label class="setting-label">Detail<select id="export-size" aria-label="Export image size">${STILL_SIZES.map((n) => `<option value="${n}" ${exportLong === n ? "selected" : ""}>${n} px on the long side${n <= 1440 ? " · Fast" : n >= 4096 ? " · High resolution" : ""}</option>`).join("")}</select></label><p class="muted">PNG · ${p.mode === "photo" ? "The photograph's own shape. Enlarging a small source cannot restore missing detail." : e(frameNote("export")) + " Preview textures are capped at 2048 px per artwork; originals remain in the backup."}</p>${btn("export-image", "Export PNG", "download", "primary wide")}</section>${p.mode === "photo" ? "" : gated("video", videoSection())}${gated("showPack", `<section><h3>Show pack</h3><p class="muted">For the van: a measured floor plan with every piece numbered and its clearances, the inventory of work with sizes, media and prices, and a packing and load-in checklist worked out from this booth. Open the downloaded HTML to print or save as PDF.</p>${btn("show-pack", "Download show pack", "layers", "wide")}</section>`)}${p.mode === "photo" ? "" : gated("power", powerSection())}${p.mode === "photo" ? "" : gated("glb", `<section><h3>3D model</h3><p class="muted">The booth as a .glb — walls, work, furniture, figures and any models you brought in, in metres — for SketchUp, Blender or an AR viewer. Surroundings, lights and the drawn shadows stay behind.</p>${btn("export-glb", "Download booth as .glb", "box", "wide")}</section>`)}${p.mode === "photo" ? "" : gated("elevations", `<section><h3>Elevations to scale</h3><p class="muted">A floor plan and every wall with work on it, drawn at a real architectural scale with its dimension chain and centre lines — the drawing a carpenter or installer works from. Print at 100%.</p>${btn("elevations", "Download elevations", "ruler", "wide")}</section>`)}${gated("guide", `<section><h3>Installation guide</h3><p class="muted">Measured wall elevations, panel sizes, and left/bottom placement references. Open the downloaded HTML to print or save as PDF. Photo overlays are excluded.</p>${btn("guide", "Download hanging guide", "layout-panel-left", "wide")}</section>`)}<section><h3>Keep your work</h3>${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Includes original artwork and photo files, booth layout, and lighting.</p></section><section><h3>Preview quality</h3><select id="quality" aria-label="Preview quality (Export)">${qualityOptions()}</select><p class="muted">Auto starts sharp and lowers the detail while it measures this computer drawing slower than it should. The light bar's shadows are drawn live at High detail only; exports always include them. The same menu is under the viewport, beside what it is drawing at now.</p></section>`;
     }
@@ -2710,7 +2961,9 @@ async function boot() {
   // The two lines under the viewport. Split out of render() because a
   // selection changes both of them and nothing else on the page.
   function renderStatus() {
-    document.querySelector("#gesture-hint").textContent =
+    document.querySelector("#gesture-hint").textContent = showFloor
+      ? "Drag a piece to move it · drag empty floor to select · Space- or right-drag to pan · scroll to zoom"
+      :
       scene?.drawingBox && p.mode !== "photo"
         ? "Box: press on the floor and drag out its footprint · Esc to stop"
         : walking && p.mode !== "photo"
@@ -2735,12 +2988,15 @@ async function boot() {
         : "";
   }
   function render() {
+    if (showFloor && !p.hall) showFloor = false;
     document.querySelector("#project-name").value = p.name;
-    document.querySelector("#scene").hidden = p.mode !== "3d";
-    document.querySelector("#photo").hidden = p.mode !== "photo";
+    document.body.classList.toggle("show-floor-on", showFloor);
+    document.querySelector("#show-floor").hidden = !showFloor;
+    document.querySelector("#scene").hidden = p.mode !== "3d" || showFloor;
+    document.querySelector("#photo").hidden = p.mode !== "photo" || showFloor;
     document.querySelector("#photo-empty").hidden =
-      p.mode !== "photo" || !!p.photo.asset;
-    document.querySelector("#view-switch").hidden = p.mode === "photo";
+      p.mode !== "photo" || !!p.photo.asset || showFloor;
+    document.querySelector("#view-switch").hidden = p.mode === "photo" || showFloor;
     document.querySelector(".zoom-controls").hidden = p.mode === "photo";
     document.querySelector("#mode-label").textContent =
       p.mode === "photo" ? "PHOTO COMPOSITION" : "MEASURED WORKSPACE";
@@ -2755,19 +3011,38 @@ async function boot() {
     renderStatus();
     document
       .querySelector('[data-action="mode-3d"]')
-      .classList.toggle("active", p.mode === "3d");
+      .classList.toggle("active", p.mode === "3d" && !showFloor);
     document
       .querySelector('[data-action="mode-photo"]')
-      .classList.toggle("active", p.mode === "photo");
+      .classList.toggle("active", p.mode === "photo" && !showFloor);
+    document.querySelector('[data-action="mode-show"]').classList.toggle("active", showFloor);
+    if (showFloor) {
+      if (walking) setWalking(false);
+      document.querySelector("#mode-label").textContent = "SHOW FLOOR";
+      const f = floorOf(p.hall);
+      document.querySelector("#scene-title").textContent = `${feet(f.width)} × ${feet(f.depth)} · ${SHOW_VENUES[f.kind]}`;
+      document.querySelector("#scene-subtitle").textContent = `${showItems(p.hall).filter((i) => i.kind === "booth").length} booths · ${showItems(p.hall).length} pieces`;
+      showEditor ||= createShowEditor(document.querySelector("#show-floor"), {
+        hall: () => p.hall,
+        edit: (fn) => mutate(() => fn(toFloor(p.hall))),
+        onSelect: showSelected,
+        grid: () => showGrid,
+      });
+      showEditor.render();
+    }
     document.querySelector('[data-action="undo"]').disabled = !history.length;
     document.querySelector('[data-action="redo"]').disabled = !future.length;
     if (p.mode !== "3d" && walking) setWalking(false);
     for (const name of ["move", "select", "snap", "walk"])
       document.querySelector(`[data-action="${name}"]`).disabled =
-        p.mode === "photo" || !scene;
+        p.mode === "photo" || !scene || showFloor;
+    if (showFloor) tab = "hall";
     renderLibrary();
     renderInspector();
-    refreshScene();
+    // The booth's scene is hidden behind the show floor; an edit to the floor
+    // is not an edit to it, and rebuilding it for one would be the whole cost
+    // of every drag.
+    if (!showFloor) refreshScene();
     syncTools();
     syncSavedViews();
     // On the next frame rather than now: reading the viewport's size straight
@@ -3191,9 +3466,80 @@ async function boot() {
       render();
       scheduleSave();
     },
-    "mode-3d": () => mutate(() => (p.mode = "3d")),
+    "mode-3d": () => {
+      showFloor = false;
+      mutate(() => (p.mode = "3d"));
+    },
+    "mode-show": () => {
+      if (!allowed("hall")) {
+        tab = "hall";
+        return render();
+      }
+      if (!p.hall || !p.hall.items) {
+        mutate(() => {
+          p.hall = toFloor(p.hall || newHall());
+        });
+      }
+      showFloor = true;
+      tab = "hall";
+      hallSelected = null;
+      render();
+      showEditor?.fit();
+    },
+    "show-exit": () => actions["mode-3d"](),
+    "show-fit": () => showEditor?.fit(),
+    "show-rotate": () => showRotate(90),
+    "show-duplicate": () => showDuplicate(),
+    "show-delete": () => showDelete(),
+    "show-deselect": () => showEditor?.select([]),
+    "show-space": () => {
+      const pieces = showPieces();
+      const moves = spacePieces(pieces, showGap);
+      if (!moves.length) return toast("Select two or more pieces to space them.");
+      mutate(() => {
+        for (const m of moves) Object.assign(p.hall.items.find((i) => i.id === m.id), { x: m.x, y: m.y });
+      });
+      toast(`${pieces.length} pieces spaced ${showGap}″ apart.`);
+    },
+    "show-align-top": () => showAlign("t"),
+    "show-align-left": () => showAlign("l"),
+    "show-renumber": () => {
+      const pieces = showPieces().length > 1 ? showPieces() : toFloor(p.hall).items;
+      const from = Math.min(...pieces.filter((i) => i.kind === "booth").map((i) => i.number));
+      const start = pieces === p.hall.items ? p.hall.start : from;
+      const next = renumber(pieces, start);
+      // A new number already taken by a booth outside the renumbered ones would
+      // be two booths with one number.
+      const moving = new Set(next.map((n) => n.id));
+      const clash = p.hall.items.some((i) => i.kind === "booth" && !moving.has(i.id) && next.some((n) => n.number === i.number));
+      if (clash) return toast("Those numbers are taken by other booths. Renumber the whole floor with nothing selected.", true);
+      mutate(() => renumberBooths(next));
+      toast(`${next.length} booths renumbered from ${start}, row by row from the back.`);
+    },
+    "show-add-block": () => {
+      const b = showBlock;
+      const c = showEditor?.center() || { x: 0, y: 0 };
+      const rows = Math.ceil(b.count / Math.max(1, b.perRow));
+      const width = Math.min(b.count, b.perRow) * (b.w + b.gap) - b.gap;
+      const depth = b.backToBack ? Math.ceil(rows / 2) * (2 * b.d + b.aisle) - b.aisle : rows * (b.d + b.aisle) - b.aisle;
+      let ids = [];
+      mutate(() => {
+        const h = toFloor(p.hall);
+        // Below everything already on the floor, an aisle away, so a new block
+        // never lands on top of booths already sold; an empty floor centres it.
+        const box = boundsOf(h.items);
+        const at = box ? { x: box.l, y: box.b + b.aisle } : { x: c.x - width / 2, y: c.y - depth / 2 };
+        const block = boothBlock(h.items, { ...b, x: Math.round(at.x / 12) * 12, y: Math.round(at.y / 12) * 12, start: h.start });
+        h.items.push(...block);
+        ids = block.map((i) => i.id);
+      });
+      showEditor?.fit();
+      showEditor?.select(ids);
+      toast(`${ids.length} booths added below the rest and selected — drag them into place.`);
+    },
     "mode-photo": () =>
       mutate(() => {
+        showFloor = false;
         p.mode = "photo";
         tab = p.photo.asset ? "art" : "layout";
       }),
@@ -3201,9 +3547,10 @@ async function boot() {
       tab = "export";
       renderInspector();
     },
-    "zoom-in": () => p.mode === "3d" && scene?.zoom(1.2),
-    "zoom-out": () => p.mode === "3d" && scene?.zoom(1/1.2),
+    "zoom-in": () => (showFloor ? showEditor?.zoom(1.25) : p.mode === "3d" && scene?.zoom(1.2)),
+    "zoom-out": () => (showFloor ? showEditor?.zoom(1 / 1.25) : p.mode === "3d" && scene?.zoom(1/1.2)),
     "reset-view": () => {
+      if (showFloor) return showEditor?.fit();
       scene?.setView("perspective");
       document
         .querySelectorAll("[data-view]")
@@ -3821,6 +4168,7 @@ async function boot() {
         p.hall = newHall();
         tab = "hall";
       });
+      if (showFloor) return actions["mode-show"]();
       toast("Hall plan started: two back-to-back rows of eight 10 × 10s. Change the layout below; tap a booth to sell it.");
     },
     "hall-delete": () =>
@@ -3986,7 +4334,7 @@ async function boot() {
   // A booth on the hall map is an SVG group, not a button.
   document.addEventListener("click", (ev) => {
     const cell = ev.target.closest?.("[data-hall-booth]");
-    if (!cell) return;
+    if (!cell || cell.closest("#show-floor")) return;
     hallSelected = Number(cell.dataset.hallBooth);
     renderInspector();
   });
@@ -4365,6 +4713,7 @@ async function boot() {
   }
   document.addEventListener("change", (ev) => {
     const el = ev.target;
+    if (showChange(el)) return;
     // The slider's own input handler has already made the move and taken the
     // one checkpoint the gesture gets; this only closes it out. Falling
     // through to the generic field handler would checkpoint the finished
@@ -5032,6 +5381,14 @@ async function boot() {
   };
   // Photoshop's angle dial: press anywhere on it and drag round. The angle
   // is where the light comes from, so the line points at the pointer.
+  // A shape in the show floor's library: pressed, it is dragged onto the
+  // floor or, tapped, dropped in the middle of the view.
+  document.addEventListener("pointerdown", (ev) => {
+    const b = ev.target.closest?.("[data-show-shape]");
+    if (!b || !showEditor || ev.button > 0) return;
+    const shape = SHAPES.find((sh) => sh.key === b.dataset.showShape);
+    if (shape) showEditor.libraryPress(ev, shape);
+  });
   document.addEventListener("pointerdown", (ev) => {
     const dial = ev.target.closest?.("[data-dial]");
     if (!dial || ev.button !== 0) return;
@@ -5060,7 +5417,7 @@ async function boot() {
   // added to a panel is findable without anyone adding it to a list, and a
   // control the current booth does not show (the light bar on a pop-up) is
   // not offered. It is built when the box is focused and dropped on blur.
-  const TAB_NAMES = { art: "Artwork", layout: "Layout", show: "Art show", walls: "Walls", lighting: "Lighting", video: "Video", hall: "Hall", export: "Export" };
+  const TAB_NAMES = { art: "Artwork", layout: "Layout", show: "Art show", walls: "Walls", lighting: "Lighting", video: "Video", hall: "Show floor", export: "Export" };
   const FINDABLE = "h3, h4, label, button[data-action]";
   let toolIndex = null,
     toolHits = [],
@@ -5233,6 +5590,11 @@ async function boot() {
       document.querySelector("#dialog").open
     )
       return;
+    // The show floor has keys of its own, and none of the booth's apply.
+    if (showFloor && showEditor) {
+      if (showFloorKey(ev)) ev.preventDefault();
+      return;
+    }
     // The shadow angle dial, focused: arrows turn it a degree, Shift fifteen,
     // counterclockwise for Up and Right the way the angle is measured.
     if (ev.target.dataset?.dial) {
@@ -5395,6 +5757,9 @@ async function boot() {
       },
       get hallSelected() {
         return hallSelected;
+      },
+      get showEditor() {
+        return showEditor;
       },
       // What the light bar would hang, computed from the booth. The view test
       // reads it against the lights the scene actually built.

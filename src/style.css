@@ -2157,3 +2157,20 @@ body:has(.timeline-dialog[open]) .find-tool {display:none;}
   .frame-guide .fg-h[data-fg="n"], .frame-guide .fg-h[data-fg="s"] { left: calc(50% - 12px); }
   .frame-guide .fg-h[data-fg="e"], .frame-guide .fg-h[data-fg="w"] { top: calc(50% - 12px); }
 }
+
+/* The show floor: the whole show's plan, full-screen in the viewport. */
+#show-floor {position:absolute;inset:0;background:#e9ecef;}
+#show-floor .show-svg {display:block;width:100%;height:100%;touch-action:none;user-select:none;-webkit-user-select:none;cursor:default;outline:none;}
+#show-floor .show-svg.panning {cursor:grab;}
+#show-floor [data-id] {cursor:move;}
+#show-floor text {pointer-events:none;}
+#show-floor .sf-guides line {stroke:#ff5fa2;stroke-width:1.5px;vector-effect:non-scaling-stroke;stroke-dasharray:6 4;}
+#show-floor .sf-handle {fill:#fff;stroke:#2f7de1;stroke-width:1.5px;vector-effect:non-scaling-stroke;cursor:nwse-resize;}
+#show-floor .sf-ghost {position:absolute;border:2px dashed #2f7de1;background:rgba(47,125,225,0.12);pointer-events:none;border-radius:2px;}
+.show-floor-on .inspector-tabs button:not([data-tab="hall"]) {display:none;}
+.show-floor-on .toolbar .toolgroup:first-child,.show-floor-on .toolbar .export-top,.show-floor-on .find-tool,.show-floor-on .preview-quality,.show-floor-on .frame-guide {display:none !important;}
+.show-shapes {display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.show-shape {display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;min-height:64px;font-size:10.5px;line-height:1.15;text-align:center;touch-action:none;cursor:grab;}
+.show-shape svg {width:34px;height:34px;flex:none;}
+.show-lib h3 {margin-bottom:6px;}
+.show-lib-note {margin-top:0;}
