@@ -16,7 +16,10 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-25, eighth round — Show Hub v0: a booth design
+- **Last deploy: 2026-09-25, ninth round — Show Hub phase 1: a booth
+  sent as a link, not a file. The app's first backend** — a Worker on
+  `/api/*` and an R2 bucket (the first bullet below). Before it, the eighth
+  round — Show Hub v0: a booth design
   sent as a file from an exhibitor and imported onto a floor booth by the
   promoter, plus the Pro pitch deck at `/pitchdeck/`** (the first bullet
   below). Before it, the seventh round — the owner's first look at the
@@ -62,6 +65,54 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-25, ninth round: Show Hub phase 1 — a booth as a link. Pushed
+  to `main` and deployed. The local-first rule is lifted for this one thing,
+  at the owner's word** ("can they just send the promoter a link … we do it
+  on the backend … assuming the promoter has the Pro account — otherwise it
+  will give them limited access to files"). Nothing below has been seen on
+  the real machine or against the real bucket; it is tested in a real
+  browser here with `/api/*` routed through the real Worker code over an
+  in-memory bucket (`tests/view-share.mjs`, `tests/helpers/fake-r2.js`).
+  1. **The backend** (`worker/index.js`, read its header first).
+     `wrangler.jsonc` now has `main` and `run_worker_first: ["/api/*"]`, so
+     the Worker sees only `/api/*`; every other path is the static app
+     exactly as before (`env.ASSETS`), `/pitchdeck/` included. Storage is the
+     **R2 bucket `booth-studio-shares`** (binding `SHARES`), created
+     2026-09-25 in the owner's Cloudflare account alongside `iaa-files`.
+     **If that bucket is ever deleted or renamed, the deploy fails** — the
+     binding must name a bucket that exists. Routes: `POST /api/share`
+     (manifest → `{ id }`), `PUT /api/share/<id>/assets/<asset>` (one
+     original, once), `GET` of either. A manifest is the booth design file
+     (src/booth-file.js) with every image's `data` lifted out — width,
+     height, role and the small `thumb` stay. Ids are 24 random base-36
+     characters; a manifest over 4 MB, an image over 40 MB, an image the
+     manifest does not name, anything that is not a PNG/JPEG data URL (or a
+     .glb for a model), and a second upload of the same image are refused;
+     a link lapses after `SHARE_DAYS` (180), checked on read.
+  2. **Send my booth to the promoter** (Export → Send to the show) now
+     uploads and shows the link in a dialog with **Copy link**:
+     `<site>/?booth=<id>`. Every image gets its thumbnail made first, so the
+     preview exists. **Download it as a file instead** is the v0 file, kept.
+  3. **Opening a link** (`openShareLink` in `src/main.js`; the browser half
+     is `src/share.js`). The `?booth=` is taken off the address at once, so
+     a reload does not offer it again. **Pro** (`allowed("hall")`) fetches
+     every original; with a show floor it offers **Put it on my show floor**
+     with a booth-number picker (the link's own number when that booth
+     exists), landing it exactly as an imported file does (confirm on
+     replace, one undo step). **Lite** gets the manifest only: each image is
+     its thumbnail, a 3D model (no thumbnail) drops out with what uses it,
+     and the dialog says Pro opens it in full. Either tier can **Look at
+     it**, which downloads the current project as a backup and opens the
+     booth as its own project, named "… · shared".
+  4. **What "Pro" means here is honour-system.** There are no accounts, so
+     the Worker cannot know who is Pro; the tier is the browser's own
+     (`src/tier.js`), and anyone can fetch an original by its URL. Real
+     gating needs identity — see Next.
+  5. **Found on the way:** `history` inside `main.js` is the undo history,
+     not the browser's — `window.history.replaceState` it must be.
+  **Tests:** `tests/share.test.js` (5: the Worker's routes and refusals,
+  Pro and Lite opens, a lapsed link, non-API paths reaching the assets);
+  `tests/view-share.mjs`.
 - **2026-09-25, eighth round: Show Hub v0, and the pitch deck. Pushed to
   `main` and deployed.** The owner asked for original ideas that could carry
   a Pro monthly fee; five were proposed and are recorded in
@@ -1503,6 +1554,18 @@ Extend it; do not rebuild it.
 
 ## Next
 
+1. **Show Hub links (2026-09-25, ninth round), live.** First check the
+   deploy took: the build log should show the Worker with `env.SHARES
+   (booth-studio-shares)`, and `/pitchdeck/` still loads. Then share a booth
+   from one browser and open the link in another. Open questions, the
+   owner's: (a) **real Pro gating** needs accounts — until then a Lite user
+   is only *shown* previews; (b) the bucket is **public-write**: anyone who
+   finds the API can store up to 40 MB per image for 180 days. Rate
+   limiting (a Cloudflare rule on `/api/share` POST) and an R2 lifecycle rule
+   deleting `shares/` after 180 days are the next two cheap guards — both
+   are dashboard settings, not code; (c) should the sender be able to
+   update a shared booth under the same link, or delete it? Today a link is
+   frozen and lapses on its own.
 1. **Show Hub v0 (2026-09-25, eighth round), on the real machine — and
    with a real promoter.** Send a booth from one browser, import it in
    another (or a private window) onto a floor booth. Is Export → Send to
@@ -1964,6 +2027,10 @@ the picker became one list.
   in a headless session. Needs `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`
   and `CI=true`. Merging is easier.
 - Account `8e38cda861b39784706d53545a0a435f`, worker `booth-studio`.
+- **Since 2026-09-25 the Worker has code** (`worker/index.js`, `/api/*` only)
+  and an **R2 binding to `booth-studio-shares`**, which must exist or the
+  deploy fails. `npx wrangler deploy --dry-run --outdir /tmp/wd` after a
+  build checks the config without credentials and lists both bindings.
 - The footer reads `v0.1.0 · <time> UTC · <commit>`, hidden under the mobile
   breakpoint — use `window.BOOTH_BUILD` on a phone. **Check it before
   believing a fix did not ship**: a merge was reported as not working twice,
@@ -1973,9 +2040,9 @@ the picker became one list.
 
 ```sh
 npm ci
-npm test                 # 408 Node tests
+npm test                 # 413 Node tests
 npm run build
-npm run test:view        # 33 suites (tools2 and hub included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub
+npm run test:view        # 34 suites (tools2, hub and share included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
 npm run test:browser     # 25 end-to-end checks
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
@@ -2437,6 +2504,8 @@ anything else in a browser until it is done.
   (`setShow` / `stageShow` / `setShowView` in `src/scene.js` draw it);
   `src/linked.js` — opening one floor booth as a full design, and why the
   storage is shaped as it is; `FLOOR_TEMPLATES` in `src/show.js`;
+  `worker/index.js` — the one backend: booth share links on `/api/*`, R2
+  `booth-studio-shares`; `src/share.js` — its browser half;
   `src/booth-file.js` — Show Hub v0: one booth design as a file, sent by
   an exhibitor and imported onto a floor booth by the promoter;
   `public/pitchdeck/index.html` — the Pro pitch deck, served at

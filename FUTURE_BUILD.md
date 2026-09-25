@@ -30,7 +30,9 @@ Every idea marked *server* needs the owner to lift the local-first rule.
    booth design as a file, and "Import into booth #N" on the floor parks it
    on that number — a test of demand that breaks no rule.
    **v0 is built (2026-09-25, eighth round — see `HANDOFF.md` → Now);**
-   the hosted Hub is what is left here.
+   the hosted Hub is what is left here. **Phase 1 is built too (ninth
+   round): a booth sent as a link**, stored by the Worker in R2; what is
+   left is accounts, real Pro gating and the promoter's published floor.
 2. **Attention map** (*device*). Simulate passersby walking the aisle both
    ways; render every work in its own flat ID colour from each eye point (an
    extension of the AI pack's mask pass, `applyPass` in `src/scene.js`);

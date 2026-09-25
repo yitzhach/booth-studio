@@ -34,7 +34,10 @@ enough on its own & is the record of what was decided & why.
 
 - `main` is prod (Cloudflare Git integration). Merging = deploying. No GH
   Actions workflow.
-- Local-first: no accounts, backend, payments, sync or live AI calls.
+- Local-first: no accounts, payments, sync or live AI calls. **One backend,
+  owner-approved 2026-09-25: booth share links** — `worker/index.js`, only
+  `/api/*`, R2 bucket `booth-studio-shares`. Anything more server-side is the
+  owner's call first.
 - Schema 1 is forever. Every new field optional; every older backup must load.
 - App must run w/ `public/assets` empty — everything falls back procedurally.
 - Don't touch the separate `yitzhach/commission` repo.
