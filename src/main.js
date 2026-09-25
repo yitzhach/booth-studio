@@ -201,6 +201,7 @@ import { HALL_LIMITS, MAX_HALL_BOOTHS, STATUSES, boothOf, hallCSV, hallHTML, hal
 import { BOOTH_STYLES, FLOOR_TEMPLATES, KINDS, SHAPES, VENUES as SHOW_VENUES, boothBlock, boundsOf, copyPieces, feet, floorOf, renumber, showItems, showSVG, spacePieces, toFloor } from "./show.js";
 import { createShowEditor } from "./show-editor.js";
 import { showWalkthrough } from "./show-scene.js";
+import { PACK_LONG, SURFACES, describeScene, provider as aiProvider, render as aiRender, renderPack } from "./ai-render.js";
 import { MAX_DESIGNS, OWN, assetInDesigns, deleteEffect, hasDesign, liveNumber, openBooth, renumberDesigns, setMine, setOpen } from "./linked.js";
 import { CIRCUIT_WATTS, powerHTML, powerLines, powerTotals } from "./power.js";
 import { FOOTPRINTS, SHOWS, STARTERS, fromTemplate, quickStart, templateOf } from "./quickstart.js";
@@ -2217,7 +2218,7 @@ async function boot() {
     const h = p.hall;
     const booths = showItems(h).filter((i) => i.kind === "booth").length;
     const home = h.open ?? h.mine;
-    return `<div class="button-row">${btn("show-3d", "Back to the plan", "map")}${btn("show-exit", "Back to my booth", "arrow-left")}</div><section class="show-3d"><h3>The show in 3D <span>${booths} booths</span></h3><p class="muted">${Number.isInteger(home) && showItems(h).some((i) => i.number === home) ? `Booth ${home} is drawn as your full design; every other booth is its floor, its drape, walls or tent, and its number.` : "Every booth is drawn light — its floor, its drape, walls or tent, and its number. Mark one “This is my booth” in the plan to see your own design standing in it."} Numbers show for the booths nearest the camera.</p>${btn("show-walk", walking ? "Stop walking" : "Walk the show", "footprints", walking ? "primary wide" : "wide")}<p class="muted">From the entrance, at eye height: WASD or the arrows step, Shift strides, drag to look round.</p></section>${gated("video", `<section><h3>Walkthrough video</h3>${btn("show-walkthrough", "Make a walkthrough", "route", "primary wide")}<p class="muted">Lays a camera path down the aisles from the entrance — walkway pieces if the floor has them, otherwise the gaps between rows — as keyframes in the timeline, at a visitor's pace. Play it, move any keyframe, then Export MP4.</p>${btn("edit-timeline", "Edit timeline…", "sliders-horizontal", "wide")}</section>`, "Walkthrough videos of the show are made with the camera timeline. Part of Booth Studio Pro.")}<section><h3>Stills</h3>${btn("export-image", "Export PNG", "download", "wide")}<p class="muted">The view as it is, at the size set in Export.</p></section>`;
+    return `<div class="button-row">${btn("show-3d", "Back to the plan", "map")}${btn("show-exit", "Back to my booth", "arrow-left")}</div><section class="show-3d"><h3>The show in 3D <span>${booths} booths</span></h3><p class="muted">${Number.isInteger(home) && showItems(h).some((i) => i.number === home) ? `Booth ${home} is drawn as your full design; every other booth is its floor, its drape, walls or tent, and its number.` : "Every booth is drawn light — its floor, its drape, walls or tent, and its number. Mark one “This is my booth” in the plan to see your own design standing in it."} Numbers show for the booths nearest the camera.</p>${btn("show-walk", walking ? "Stop walking" : "Walk the show", "footprints", walking ? "primary wide" : "wide")}<p class="muted">From the entrance, at eye height: WASD or the arrows step, Shift strides, drag to look round.</p></section>${gated("video", `<section><h3>Walkthrough video</h3>${btn("show-walkthrough", "Make a walkthrough", "route", "primary wide")}<p class="muted">Lays a camera path down the aisles from the entrance — walkway pieces if the floor has them, otherwise the gaps between rows — as keyframes in the timeline, at a visitor's pace. Play it, move any keyframe, then Export MP4.</p>${btn("edit-timeline", "Edit timeline…", "sliders-horizontal", "wide")}</section>`, "Walkthrough videos of the show are made with the camera timeline. Part of Booth Studio Pro.")}<section><h3>Stills</h3>${btn("export-image", "Export PNG", "download", "wide")}<p class="muted">The view as it is, at the size set in Export.</p>${btn("ai-pack", "Download AI render pack", "sparkles", "wide")}<p class="muted">This view, its depth, a mask of every surface and the show described in words — for repainting with an image model. No model is called.</p></section>`;
   }
   function showFloorPanel() {
     if (show3d) return show3dPanel();
@@ -2239,6 +2240,37 @@ async function boot() {
     const b = showBlock;
     const bf = (label, key, min, max, step = 1, unit = "in") => num(label, key, b[key], min, max, step, unit, "data-show-block");
     return `<div class="button-row">${btn("show-exit", "Back to my booth", "arrow-left")}${btn("show-fit", "Fit floor", "maximize")}</div>${btn("show-3d", "See it in 3D", "box", "primary wide")}${selectedHTML}<div class="mobile-library">${showLibraryHTML()}</div><section><h3>Add booths</h3><div class="field-pair">${bf("How many", "count", 1, 400, 1, "")}${bf("Per row", "perRow", 1, 60, 1, "")}</div><div class="field-pair">${bf("Booth width", "w", 48, 480)}${bf("Booth depth", "d", 48, 480)}</div><div class="field-pair">${bf("Gap in a row", "gap", 0, 480)}${bf("Aisle", "aisle", 36, 480)}</div><label class="check-field"><input type="checkbox" data-show-block="backToBack" ${b.backToBack ? "checked" : ""}/>Rows back to back, in pairs</label><label class="setting-label">Built as<select data-show-block="style" aria-label="New booths built as">${Object.entries(BOOTH_STYLES).map(([key, v]) => `<option value="${key}" ${b.style === key ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label>${btn("show-add-block", "Add booths", "plus", "primary wide")}<p class="muted">Numbered on from the highest booth on the floor, placed below everything already on the floor and selected, ready to drag.</p></section><section><h3>Floor</h3><label class="setting-label">Venue<select data-show-venue="kind" aria-label="Show venue">${Object.entries(SHOW_VENUES).map(([key, v]) => `<option value="${key}" ${f.kind === key ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label><div class="field-pair">${num("Floor width", "width", f.width / 12, 10, 2000, 1, "ft", "data-show-venue")}${num("Floor depth", "depth", f.depth / 12, 10, 2000, 1, "ft", "data-show-venue")}</div><label class="setting-label">Snap grid<select id="show-grid" aria-label="Snap grid">${[[0, "Off"], [1, "1″"], [6, "6″"], [12, "1′"], [24, "2′"], [60, "5′"]].map(([v, l]) => `<option value="${v}" ${showGrid === v ? "selected" : ""}>${l}</option>`).join("")}</select></label><p class="muted">Pieces snap to each other's edges first, then to this grid. Hold Alt while dragging to place freely.</p>${btn("show-renumber", "Renumber every booth", "list-ordered", "wide")}</section><section><h3>Start from a template</h3>${Object.entries(FLOOR_TEMPLATES).map(([key, t]) => `${btn("show-template-" + key, t.label, "layout-template", "wide")}<p class="muted">${e(t.note)}</p>`).join("")}</section>${linkedHTML()}<section><h3>Sales <span>${t.booths} booths</span></h3><p class="hall-totals">${t.sold} sold · ${t.held} held · ${t.open} open${t.soldValue ? ` · sold $${Math.round(t.soldValue).toLocaleString("en-US")}` : ""}${t.heldValue ? ` · held $${Math.round(t.heldValue).toLocaleString("en-US")}` : ""}</p>${field("Default price", "price", h.price, ...HALL_LIMITS.price, 1, "$", "hallplan", "Hall Default price")}<div class="button-row">${btn("hall-map", "Download hall map", "download")}${btn("hall-csv", "Exhibitor list (CSV)", "download")}</div>${btn("hall-delete", "Delete the hall plan", "trash-2", "wide")}</section><section><h3>Keys</h3><p class="muted">Delete removes · Ctrl+D duplicates · R turns 90° · arrows nudge by the grid (Shift: 10×) · Ctrl+A selects all · Esc lets go · 0 fits the floor.</p></section>`;
+  }
+  /**
+   * Export → AI render (the hook, src/ai-render.js): the frame, its depth
+   * pass, its surface mask and the scene in words, as one file for an image
+   * model to repaint. No model is called — local-first — until the owner
+   * chooses a provider.
+   */
+  function aiSection() {
+    const legend = Object.values(SURFACES).map((x) => `<span class="ai-swatch"><i style="background:${x.color}"></i>${e(x.label)}</span>`).join("");
+    return `<section class="ai-render"><h3>AI render</h3><p class="muted">For repainting this view with an image model: the frame as rendered, its depth (near white, far black) and a mask with every surface one flat colour, all ${PACK_LONG} px on the long side and lined up pixel for pixel, with the scene described in words — one .json file. The frame is the one set above.</p><div class="ai-legend">${legend}</div>${btn("ai-pack", "Download AI render pack", "sparkles", "wide")}${btn("ai-render", aiProvider ? `Render with ${aiProvider.name}` : "Render with AI", "sparkles", "wide")}<p class="muted">${aiProvider ? "" : "No AI provider is set up yet — nothing leaves this device. The pack works with any model that takes an image, a depth map or a mask."}</p></section>`;
+  }
+  /** The three passes of this view and the pack made from them. */
+  async function makeAiPack() {
+    if (!scene) throw new Error("3D is not available, so there is no view to render.");
+    const passes = await scene.renderPasses(PACK_LONG, { frame: exportFrame, custom: customFrame, place: framePlace.export });
+    const url = (blob) => new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.onerror = () => rej(new Error("Could not read the rendered image."));
+      r.readAsDataURL(blob);
+    });
+    const size = await createImageBitmap(passes.beauty);
+    const pose = scene.pose();
+    return renderPack({
+      images: { beauty: await url(passes.beauty), depth: await url(passes.depth), mask: await url(passes.mask) },
+      width: size.width,
+      height: size.height,
+      camera: { ...pose, fov: scene.camera.fov ?? null, projection: scene.camera.isPerspectiveCamera ? "perspective" : "orthographic", near: passes.depthRange?.near ?? null, far: passes.depthRange?.far ?? null },
+      description: describeScene(p, show3d ? { show: p.hall, openNumber: liveNumber(p.hall) } : {}),
+      project: p.name,
+    });
   }
   /** Export → Power and rentals (Pro): the service desk's two forms. */
   function powerSection() {
@@ -3085,7 +3117,7 @@ async function boot() {
     }
     if (tab === "hall") html = `<div class="panel-heading"><h2>${showFloor ? "Show floor" : "Hall planner"}</h2>${icon("map")}</div>${hallPanel()}`;
     if (tab === "export") {
-      html = `<div class="panel-heading"><h2>Export your booth</h2>${icon("download")}</div><p class="muted">A clean image of the current ${p.mode === "photo" ? "photo composition" : "camera view"}, without controls or selection outlines.</p><section><h3>Image size</h3>${p.mode === "photo" ? "" : frameFields("export")}<label class="setting-label">Detail<select id="export-size" aria-label="Export image size">${STILL_SIZES.map((n) => `<option value="${n}" ${exportLong === n ? "selected" : ""}>${n} px on the long side${n <= 1440 ? " · Fast" : n >= 4096 ? " · High resolution" : ""}</option>`).join("")}</select></label><p class="muted">PNG · ${p.mode === "photo" ? "The photograph's own shape. Enlarging a small source cannot restore missing detail." : e(frameNote("export")) + " Preview textures are capped at 2048 px per artwork; originals remain in the backup."}</p>${btn("export-image", "Export PNG", "download", "primary wide")}</section>${p.mode === "photo" ? "" : gated("video", videoSection())}${gated("showPack", `<section><h3>Show pack</h3><p class="muted">For the van: a measured floor plan with every piece numbered and its clearances, the inventory of work with sizes, media and prices, and a packing and load-in checklist worked out from this booth. Open the downloaded HTML to print or save as PDF.</p>${btn("show-pack", "Download show pack", "layers", "wide")}</section>`)}${p.mode === "photo" ? "" : gated("power", powerSection())}${p.mode === "photo" ? "" : gated("glb", `<section><h3>3D model</h3><p class="muted">The booth as a .glb — walls, work, furniture, figures and any models you brought in, in metres — for SketchUp, Blender or an AR viewer. Surroundings, lights and the drawn shadows stay behind.</p>${btn("export-glb", "Download booth as .glb", "box", "wide")}</section>`)}${p.mode === "photo" ? "" : gated("elevations", `<section><h3>Elevations to scale</h3><p class="muted">A floor plan and every wall with work on it, drawn at a real architectural scale with its dimension chain and centre lines — the drawing a carpenter or installer works from. Print at 100%.</p>${btn("elevations", "Download elevations", "ruler", "wide")}</section>`)}${gated("guide", `<section><h3>Installation guide</h3><p class="muted">Measured wall elevations, panel sizes, and left/bottom placement references. Open the downloaded HTML to print or save as PDF. Photo overlays are excluded.</p>${btn("guide", "Download hanging guide", "layout-panel-left", "wide")}</section>`)}<section><h3>Keep your work</h3>${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Includes original artwork and photo files, booth layout, and lighting.</p></section><section><h3>Preview quality</h3><select id="quality" aria-label="Preview quality (Export)">${qualityOptions()}</select><p class="muted">Auto starts sharp and lowers the detail while it measures this computer drawing slower than it should. The light bar's shadows are drawn live at High detail only; exports always include them. The same menu is under the viewport, beside what it is drawing at now.</p></section>`;
+      html = `<div class="panel-heading"><h2>Export your booth</h2>${icon("download")}</div><p class="muted">A clean image of the current ${p.mode === "photo" ? "photo composition" : "camera view"}, without controls or selection outlines.</p><section><h3>Image size</h3>${p.mode === "photo" ? "" : frameFields("export")}<label class="setting-label">Detail<select id="export-size" aria-label="Export image size">${STILL_SIZES.map((n) => `<option value="${n}" ${exportLong === n ? "selected" : ""}>${n} px on the long side${n <= 1440 ? " · Fast" : n >= 4096 ? " · High resolution" : ""}</option>`).join("")}</select></label><p class="muted">PNG · ${p.mode === "photo" ? "The photograph's own shape. Enlarging a small source cannot restore missing detail." : e(frameNote("export")) + " Preview textures are capped at 2048 px per artwork; originals remain in the backup."}</p>${btn("export-image", "Export PNG", "download", "primary wide")}</section>${p.mode === "photo" ? "" : gated("video", videoSection())}${gated("showPack", `<section><h3>Show pack</h3><p class="muted">For the van: a measured floor plan with every piece numbered and its clearances, the inventory of work with sizes, media and prices, and a packing and load-in checklist worked out from this booth. Open the downloaded HTML to print or save as PDF.</p>${btn("show-pack", "Download show pack", "layers", "wide")}</section>`)}${p.mode === "photo" ? "" : gated("power", powerSection())}${p.mode === "photo" ? "" : gated("glb", `<section><h3>3D model</h3><p class="muted">The booth as a .glb — walls, work, furniture, figures and any models you brought in, in metres — for SketchUp, Blender or an AR viewer. Surroundings, lights and the drawn shadows stay behind.</p>${btn("export-glb", "Download booth as .glb", "box", "wide")}</section>`)}${p.mode === "photo" ? "" : aiSection()}${p.mode === "photo" ? "" : gated("elevations", `<section><h3>Elevations to scale</h3><p class="muted">A floor plan and every wall with work on it, drawn at a real architectural scale with its dimension chain and centre lines — the drawing a carpenter or installer works from. Print at 100%.</p>${btn("elevations", "Download elevations", "ruler", "wide")}</section>`)}${gated("guide", `<section><h3>Installation guide</h3><p class="muted">Measured wall elevations, panel sizes, and left/bottom placement references. Open the downloaded HTML to print or save as PDF. Photo overlays are excluded.</p>${btn("guide", "Download hanging guide", "layout-panel-left", "wide")}</section>`)}<section><h3>Keep your work</h3>${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Includes original artwork and photo files, booth layout, and lighting.</p></section><section><h3>Preview quality</h3><select id="quality" aria-label="Preview quality (Export)">${qualityOptions()}</select><p class="muted">Auto starts sharp and lowers the detail while it measures this computer drawing slower than it should. The light bar's shadows are drawn live at High detail only; exports always include them. The same menu is under the viewport, beside what it is drawing at now.</p></section>`;
     }
     return html;
   }
@@ -3900,6 +3932,34 @@ async function boot() {
       } finally {
         busy = false;
         renderInspector();
+      }
+    },
+    "ai-pack": async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        const pack = await makeAiPack();
+        download(new Blob([JSON.stringify(pack)], { type: "application/json" }), safeName() + "-ai-render.json");
+        toast(`AI render pack downloaded: ${pack.width} × ${pack.height} frame, depth and mask, and the scene in words.`);
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        busy = false;
+      }
+    },
+    "ai-render": async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        // With no provider this is where it stops, and says why — before
+        // three passes are rendered for nothing; with one, its image comes
+        // back as a download.
+        const out = await aiRender(aiProvider ? await makeAiPack() : null);
+        download(out, safeName() + "-ai.png");
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        busy = false;
       }
     },
     "export-video": async () => {

@@ -17,6 +17,7 @@ import { smartSnap } from "./guides.js";
 import { tagShown, walkStart, walkStep } from "./views.js";
 import { buildShow, homeBooth, showOverview, showReach, showWalkStart } from "./show-scene.js";
 import { floorOf } from "./show.js";
+import { SURFACES, TAG_SURFACE } from "./ai-render.js";
 import { sameWall } from "./arrange.js";
 /**
  * The longest edge a preview texture is decoded to. An original stays whole
@@ -3188,6 +3189,118 @@ export class BoothScene {
     }
   }
   /**
+   * The AI-render hook's three pictures of one frame (src/ai-render.js):
+   * the frame as rendered, its depth pass and its surface mask, each a PNG
+   * Blob at the same size through the same camera and frame, so they line
+   * up pixel for pixel. Returns them with the depth range used.
+   */
+  async renderPasses(long, options = {}) {
+    const out = {};
+    for (const pass of ["beauty", "depth", "mask"]) out[pass] = await this.export(long, { ...options, pass });
+    return { ...out, depthRange: this.lastDepthRange };
+  }
+  /**
+   * What one mesh is, for the mask: the nearest `userData.surface` up its
+   * ancestry (the show floor sets them), else artwork by its art id, a tag's
+   * surface, a wall the pickers know, the ground, or tent canvas; anything
+   * else of the booth is its structure.
+   */
+  surfaceOf(o) {
+    const walls = new Set([...(this.wallObjects || []), ...(this.rowWallObjects || [])]);
+    for (let x = o; x && x !== this.group; x = x.parent) {
+      if (x.userData?.surface) return x.userData.surface === "hall" ? "wall" : x.userData.surface;
+      if (x.userData?.artId) return "artwork";
+      if (walls.has(x)) return "wall";
+      if (x.name === "environment-ground") return "floor";
+      if (x.userData?.fabric) return "tent";
+      if (x.userData?.tag && TAG_SURFACE[x.userData.tag]) return TAG_SURFACE[x.userData.tag];
+    }
+    return "booth";
+  }
+  /**
+   * Turn the scene into a depth pass or a surface mask for one render, and
+   * return what undoes it. Editor-only lines, sprites the mask has no class
+   * for and the fade overlay are out; the backdrop is black, which is
+   * "nothing" in both.
+   */
+  applyPass(pass) {
+    const restore = [];
+    const saved = { background: this.scene.background, fog: this.scene.fog, override: this.scene.overrideMaterial, overlay: this.overlay, env: this.scene.environment };
+    this.scene.background = new T.Color("#000000");
+    this.scene.fog = null;
+    this.overlay = { fade: 1, flare: null };
+    const made = [];
+    if (pass === "depth") {
+      // Linear depth between the nearest and farthest thing in view, near
+      // white: measured from the camera to the scene's bounding sphere, so a
+      // booth fills the whole grey range rather than the first centimetres.
+      this.group.updateMatrixWorld(true);
+      const box = new T.Box3();
+      this.group.traverse((o) => {
+        // The grounds run far past anything on them (the booth's is 180 m
+        // across) and would squeeze the booth into the first few greys;
+        // they are measured by what stands on them instead.
+        const ground = o.name === "environment-ground" || o.name === "show-ground" || o.userData?.tag === "surroundings";
+        if ((o.isMesh || o.isInstancedMesh) && !ground && o.visible && o.layers.test(this.camera.layers)) {
+          let shown = true;
+          for (let x = o; x; x = x.parent) if (!x.visible) shown = false;
+          if (shown) box.expandByObject(o);
+        }
+      });
+      const sphere = box.getBoundingSphere(new T.Sphere());
+      const d = this.camera.position.distanceTo(sphere.center);
+      const near = Math.max(0.05, d - sphere.radius),
+        far = Math.max(near + 0.5, d + sphere.radius);
+      this.lastDepthRange = { near, far };
+      const m = new T.ShaderMaterial({
+        uniforms: { uNear: { value: near }, uFar: { value: far } },
+        vertexShader: "varying float vDepth;\n#include <common>\nvoid main() {\n#include <begin_vertex>\n#include <project_vertex>\nvDepth = -mvPosition.z;\n}",
+        fragmentShader: "uniform float uNear;\nuniform float uFar;\nvarying float vDepth;\nvoid main() {\nfloat d = clamp((vDepth - uNear) / (uFar - uNear), 0.0, 1.0);\ngl_FragColor = vec4(vec3(1.0 - d), 1.0);\n}",
+        side: T.DoubleSide,
+        toneMapped: false,
+      });
+      made.push(m);
+      this.scene.overrideMaterial = m;
+      this.group.traverse((o) => {
+        if (o.isSprite && o.visible) (o.visible = false), restore.push(() => (o.visible = true));
+      });
+    } else {
+      const byClass = {};
+      const flat = (k) => (byClass[k] ||= (made.push(new T.MeshBasicMaterial({ color: SURFACES[k]?.color || SURFACES.booth.color, side: T.DoubleSide, toneMapped: false })), made.at(-1)));
+      this.scene.environment = null;
+      this.group.traverse((o) => {
+        if (o.isSprite) {
+          const m = o.material;
+          const k = o.userData.surface === "label" ? "label" : null;
+          if (!k) return;
+          const sm = new T.SpriteMaterial({ color: SURFACES.label.color, toneMapped: false, depthWrite: false });
+          made.push(sm);
+          o.material = sm;
+          restore.push(() => (o.material = m));
+          return;
+        }
+        if (!o.isMesh) return;
+        const m = o.material;
+        o.material = flat(this.surfaceOf(o));
+        restore.push(() => (o.material = m));
+        if (o.instanceColor) {
+          const c = o.instanceColor;
+          o.instanceColor = null;
+          restore.push(() => (o.instanceColor = c));
+        }
+      });
+    }
+    this.group.traverse((o) => {
+      if ((o.isLine || o.isLineSegments || o.isPoints) && o.visible) (o.visible = false), restore.push(() => (o.visible = true));
+    });
+    return () => {
+      for (const r of restore) r();
+      Object.assign(this.scene, { background: saved.background, fog: saved.fog, overrideMaterial: saved.override, environment: saved.env });
+      this.overlay = saved.overlay;
+      for (const m of made) m.dispose();
+    };
+  }
+  /**
    * A still.
    *
    * `long` is the longer side in pixels — the old "4096 px wide", generalised,
@@ -3198,7 +3311,7 @@ export class BoothScene {
    * the whole bug behind a stretched export, so it is set here and restored in
    * the finally beside everything else.
    */
-  async export(long, { frame = DEFAULT_FRAME, custom, place, pose } = {}) {
+  async export(long, { frame = DEFAULT_FRAME, custom, place, pose, pass = "beauty" } = {}) {
     await Promise.allSettled(this.textureCache.pending());
     const canvas = this.renderer.domElement,
       w = canvas.width,
@@ -3254,7 +3367,12 @@ export class BoothScene {
       // second draw at 4096 px costs as much again as the first and buys
       // nothing; it also took the export past the browser suite's timeout,
       // which is how this was found.
-      this.renderFrame();
+      const undoPass = pass === "beauty" ? null : this.applyPass(pass);
+      try {
+        this.renderFrame();
+      } finally {
+        undoPass?.();
+      }
       return await new Promise((res, rej) =>
         canvas.toBlob(
           (b) => (b ? res(b) : rej(new Error("Export failed. Try 2048 px."))),
