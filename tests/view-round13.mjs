@@ -46,6 +46,7 @@ try {
   assert.equal(await page.isVisible('.autopan-menu'), false);
   await page.click('.toolbar [data-action="autopan-menu"]');
   assert.equal(await page.isVisible('.autopan-menu'), true, 'the caret opens the menu');
+  assert.equal(await page.inputValue('#autopan-ease'), 'smooth', 'ease in and out by default');
   await page.fill('#autopan-dist', '4');
   await page.dispatchEvent('#autopan-dist', 'change');
   await page.fill('#autopan-time', '1');
@@ -87,8 +88,12 @@ try {
   assert.equal(job.kind, 'clip');
   assert.match(job.name, /^Auto pan · /);
   assert.equal(job.timeline.keys.length, 2);
-  assert.ok(job.timeline.keys.every((k) => k.ease === 'linear'), 'as the linear pan');
-  assert.equal(await queued(), n0 + 1);
+  assert.ok(job.timeline.keys.every((k) => k.ease === 'smooth'), 'eased in and out, the default motion');
+  await page.selectOption('#autopan-ease', 'linear');
+  await page.click('.autopan-menu [data-action="batch-add-autopan"]');
+  assert.ok((await page.evaluate(() => window.__booth.project.exportKit.queue.at(-1))).timeline.keys.every((k) => k.ease === 'linear'), 'or steady when chosen');
+  await page.selectOption('#autopan-ease', 'smooth');
+  assert.equal(await queued(), n0 + 2);
 
   // ---- Record the pan as an MP4 ---------------------------------------------------
   const codec = await page.evaluate(async () => {

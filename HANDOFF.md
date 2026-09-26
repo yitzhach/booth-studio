@@ -16,7 +16,7 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-26, fourteenth round — Auto pan recorded to MP4 and queued in the batch**
+- **Last deploy: 2026-09-26, fourteenth round — Auto pan recorded to MP4, queued in the batch, and eased in and out**
   (the bullet after the next). Before it, the thirteenth round the same
   day — **double-clicking a figure works from any side again, and Auto
   pan** (the bullet after that). Before it, the twelfth round the same day — **the owner's Q&A answers:
@@ -97,7 +97,14 @@ Extend it; do not rebuild it.
   settings (like "Clip · as set now"), named "Auto pan · <distance>
   <direction>". It is an ordinary custom-timeline job, so the batch's
   existing rules (rename, reorder, general settings, file names from the
-  job's name) all apply; no new batch field. In this
+  job's name) all apply; no new batch field.
+  **Ease in and out** (the owner's ask, same round): the menu's **Motion**
+  — Ease in and out (the default), Steady, Ease in, Ease out — the
+  timeline's own EASES, used by the live pan (`scene.autoPan`'s `ease`),
+  by Record it as MP4 and by the batch (both keys of the timeline carry
+  it). With an ease the speed field is the average speed; the distance
+  and the time are exact. Settings saved before this round load as
+  Steady, so nobody's pan changes under them. In this
   sandbox the encoder is VP9; the test accepts either codec.
 - **2026-09-26, thirteenth round: the owner's report after the twelfth.
   Merged to `main` and deployed.**
@@ -1773,7 +1780,8 @@ Extend it; do not rebuild it.
    you would look for it; are 10′ at 1 ft/s sensible defaults; should it
    also go back and forth (a loop) or pan up and down? Record it as MP4
    (fourteenth round): does the clip match what Start showed, and does a
-   linear start and stop look right, or should it ease in and out?
+   eased start and stop (now the default; Motion in the menu) feel
+   right, and is the default ease too slow to get going on a short pan?
 1. **Show Hub links (ninth and tenth rounds), live.** Both deploys were
    confirmed through the Cloudflare connector: the live Worker's code is the
    tenth round's `worker/index.js` (`sweep`, the key routes), so the build

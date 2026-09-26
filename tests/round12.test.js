@@ -58,3 +58,10 @@ test("Auto pan as a timeline: a level, linear slide of the set distance", async 
   assert.equal(autoPanTimeline(pose, [1, 0, 0], 3, 600).seconds, MAX_SECONDS, "kept inside a clip's limits");
   assert.equal(autoPanTimeline(pose, [1, 0, 0], 3, 0.5).seconds, MIN_SECONDS);
 });
+
+test("Auto pan eases when asked, and falls back to steady for an unknown ease", async () => {
+  const { autoPanTimeline } = await import("../src/timeline.js");
+  const pose = { position: [0, 1.6, 4], target: [0, 1.2, 0] };
+  assert.ok(autoPanTimeline(pose, [1, 0, 0], 3, 5, 1, "smooth").keys.every((k) => k.ease === "smooth"));
+  assert.ok(autoPanTimeline(pose, [1, 0, 0], 3, 5, 1, "wobble").keys.every((k) => k.ease === "linear"));
+});

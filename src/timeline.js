@@ -460,7 +460,7 @@ export function neighbourKey(timeline, seconds, dir) {
  * -1 slides the other way. The length is kept inside the timeline's limits;
  * the caller says so when it had to change it.
  */
-export function autoPanTimeline(pose, right, metres, seconds, dir = 1) {
+export function autoPanTimeline(pose, right, metres, seconds, dir = 1, ease = "linear") {
   const len = Math.hypot(right[0], right[2]) || 1;
   const d = (dir < 0 ? -1 : 1) * Math.max(0, metres);
   const shift = [(right[0] / len) * d, 0, (right[2] / len) * d];
@@ -468,6 +468,6 @@ export function autoPanTimeline(pose, right, metres, seconds, dir = 1) {
   const tl = emptyTimeline(pose.position, pose.target);
   tl.seconds = clamp(Math.round(seconds * 10) / 10, MIN_SECONDS, MAX_SECONDS);
   tl.keys[1] = keyFrom(moved(pose.position), moved(pose.target), 1);
-  for (const k of tl.keys) k.ease = "linear";
+  for (const k of tl.keys) k.ease = EASES[ease] ? ease : "linear";
   return tl;
 }

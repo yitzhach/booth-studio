@@ -2540,11 +2540,12 @@ export class BoothScene {
    * Auto pan: slide the camera and what it looks at sideways together, at a
    * steady speed, `inches` in `seconds` — to the right (`dir` 1, the view
    * travels left to right) or the left (-1). Sideways is the camera's own
-   * right, kept level, so the horizon never tilts. Any press, wheel or key
+   * right, kept level, so the horizon never tilts. `ease` maps time to
+   * distance (linear by default; timeline.js EASES for the others). Any press, wheel or key
    * in the viewport stops it where it is; `onDone(finished)` says whether it
    * ran its full distance. Returns a stop function.
    */
-  autoPan({ inches, seconds, dir = 1 }, onDone = () => {}) {
+  autoPan({ inches, seconds, dir = 1, ease = (t) => t }, onDone = () => {}) {
     this.stopAutoPan();
     const right = new T.Vector3(...this.panRight());
     const total = Math.max(0, inches) * IN * (dir < 0 ? -1 : 1);
@@ -2561,7 +2562,7 @@ export class BoothScene {
     const interrupt = () => stop(false);
     const step = (now) => {
       const t = Math.min(1, (now - start) / ms);
-      const move = total * t - done;
+      const move = total * ease(t) - done;
       done += move;
       this.camera.position.addScaledVector(right, move);
       this.controls.target.addScaledVector(right, move);
