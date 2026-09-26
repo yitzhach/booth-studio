@@ -78,6 +78,18 @@ try {
   await page.waitForFunction(() => /Start/.test(document.querySelector('.autopan-menu [data-action="autopan-go"]').textContent), null, { timeout: 3000 });
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('booth.autoPan')).dir), -1, 'the settings are remembered');
 
+  // ---- Queue the pan in the batch -------------------------------------------------
+  const queued = () => page.evaluate(() => (window.__booth.project.exportKit?.queue || []).length);
+  const n0 = await queued();
+  await page.click('.autopan-menu [data-action="batch-add-autopan"]');
+  const job = await page.evaluate(() => { const p = window.__booth.project; return (p.exportKit?.queue || []).at(-1); });
+  assert.ok(job, 'a job was queued');
+  assert.equal(job.kind, 'clip');
+  assert.match(job.name, /^Auto pan · /);
+  assert.equal(job.timeline.keys.length, 2);
+  assert.ok(job.timeline.keys.every((k) => k.ease === 'linear'), 'as the linear pan');
+  assert.equal(await queued(), n0 + 1);
+
   // ---- Record the pan as an MP4 ---------------------------------------------------
   const codec = await page.evaluate(async () => {
     const { pickCodec } = await import('/src/video.js');

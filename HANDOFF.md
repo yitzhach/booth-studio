@@ -16,7 +16,7 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-26, fourteenth round — Auto pan recorded to MP4**
+- **Last deploy: 2026-09-26, fourteenth round — Auto pan recorded to MP4 and queued in the batch**
   (the bullet after the next). Before it, the thirteenth round the same
   day — **double-clicking a figure works from any side again, and Auto
   pan** (the bullet after that). Before it, the twelfth round the same day — **the owner's Q&A answers:
@@ -90,8 +90,14 @@ Extend it; do not rebuild it.
   was. A clip is 2–60 s (`MIN_SECONDS`/`MAX_SECONDS`), so a pan set longer
   or shorter is rendered at the nearest limit — the same distance, faster
   or slower — and a toast says so. The file is `<project>-auto-pan.mp4`
-  (`fileTag` on the job; batch names are unchanged). Not added: queuing an
-  auto pan in the batch — load it by hand for now if wanted. In this
+  (`fileTag` on the job; batch names are unchanged). **Queued in the batch**
+  too (the owner's ask, same round): **Add to the batch** in the Auto pan
+  menu, and **Auto pan from this view** under Add to the batch in the
+  Video tab, queue the same timeline as a clip frozen at the panel's
+  settings (like "Clip · as set now"), named "Auto pan · <distance>
+  <direction>". It is an ordinary custom-timeline job, so the batch's
+  existing rules (rename, reorder, general settings, file names from the
+  job's name) all apply; no new batch field. In this
   sandbox the encoder is VP9; the test accepts either codec.
 - **2026-09-26, thirteenth round: the owner's report after the twelfth.
   Merged to `main` and deployed.**
