@@ -16,9 +16,11 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-26, twelfth round — the owner's Q&A answers:
+- **Last deploy: 2026-09-26, thirteenth round — double-clicking a figure
+  works from any side again, and Auto pan** (the bullet after the next).
+  Before it, the twelfth round the same day — **the owner's Q&A answers:
   Flip for a figure, Add booths growing the floor, floor templates in
-  backups, left-behind sales listed to move** (the bullet after the next).
+  backups, left-behind sales listed to move** (the bullet after that).
   Before it, **2026-09-25, eleventh round — Next items 3 and 4: the show
   floor grows to fit pieces laid off its edge, a floor is saved as a
   template, and the drape colour is a floor setting** (the first bullet
@@ -76,6 +78,30 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-26, thirteenth round: the owner's report after the twelfth.
+  Merged to `main` and deployed.**
+  - **"Can't double-click on people any more."** A cut-out figure is a flat
+    card that turns to the camera only as it is drawn (`onBeforeRender` in
+    `src/people.js`); the pick in `pickPerson` (`src/scene.js`) raycast the
+    card laid along the figure's own facing. Seen from the side — the Left
+    or Right view, or any orbit well round — a figure facing the aisle (the
+    default) or turned by the new Flip was a card edge-on, and the
+    double-click found nothing. Reproduced here (Left view, facing 180° and
+    0°: no pick; Perspective: picks). `pickPerson` now turns every cut-out
+    to the picking camera before the raycast. Mannequins were never
+    affected.
+  - **Auto pan.** A caret beside the toolbar's hand opens a small menu over
+    the viewport: Direction (left to right, right to left), Distance (ft),
+    Speed (ft/s) and Time (s). Time is distance over speed, so editing
+    speed or time works out the other. Start slides the camera and its
+    target together along the camera's own right, kept level, at a steady
+    speed (`scene.autoPan`); any press, wheel or key in the viewport stops
+    it. The settings are remembered per browser (`booth.autoPan` in
+    localStorage), never in a project. The 3D view only: the flat show
+    floor editor does not auto pan. Not wired into video export — the
+    timeline's keyframes remain the way to record a camera move; if the
+    owner wants Auto pan recorded to MP4, that is the next step.
+  Tests: `tests/view-round13.mjs` (in `test:view`).
 - **2026-09-26, twelfth round: the owner's answers (Q&A before the round).
   Merged to `main` and deployed.** Asked first,
   answered by the owner the same day:
@@ -1720,6 +1746,12 @@ Extend it; do not rebuild it.
 
 ## Next
 
+1. **The thirteenth round, on the real machine.** Double-click a figure
+   from the Left and Right views and from an orbit round the side: does
+   its card open every time? Auto pan: is the caret beside the hand where
+   you would look for it; are 10′ at 1 ft/s sensible defaults; should it
+   also go back and forth (a loop), pan up and down, or be recorded
+   straight to an MP4?
 1. **Show Hub links (ninth and tenth rounds), live.** Both deploys were
    confirmed through the Cloudflare connector: the live Worker's code is the
    tenth round's `worker/index.js` (`sweep`, the key routes), so the build

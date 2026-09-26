@@ -1970,6 +1970,12 @@ export class BoothScene {
     this.group.updateMatrixWorld(true);
     const figures = Object.values(this.personFrames).filter((f) => f.parent && f.visible);
     if (!figures.length) return null;
+    // A cut-out only turns to face the camera as it is drawn (people.js
+    // onBeforeRender); updateMatrixWorld above laid it back along the figure's
+    // own facing, which seen side-on is a card edge-on and unpickable. Turn
+    // each to this camera again first, so the pick sees what the eye does.
+    for (const f of figures)
+      for (const m of f.children) if (m.userData.cutout) m.onBeforeRender(this.renderer, this.scene, this.camera);
     const hits = this.ray.intersectObjects(
       [...this.artObjects, ...this.wallObjects, ...this.pedestalObjects, ...figures],
       true,
@@ -2529,6 +2535,51 @@ export class BoothScene {
     this.refreshGuides();
     const [a, b] = this.measure.points;
     this.onMeasure(b ? distanceInches(a, b, IN) : null);
+  }
+  /**
+   * Auto pan: slide the camera and what it looks at sideways together, at a
+   * steady speed, `inches` in `seconds` — to the right (`dir` 1, the view
+   * travels left to right) or the left (-1). Sideways is the camera's own
+   * right, kept level, so the horizon never tilts. Any press, wheel or key
+   * in the viewport stops it where it is; `onDone(finished)` says whether it
+   * ran its full distance. Returns a stop function.
+   */
+  autoPan({ inches, seconds, dir = 1 }, onDone = () => {}) {
+    this.stopAutoPan();
+    const right = new T.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
+    right.y = 0;
+    if (right.lengthSq() < 1e-9) right.set(1, 0, 0);
+    right.normalize();
+    const total = Math.max(0, inches) * IN * (dir < 0 ? -1 : 1);
+    const ms = Math.max(0.1, seconds) * 1000;
+    const start = performance.now();
+    let done = 0, raf = 0;
+    const c = this.renderer.domElement;
+    const stop = (finished = false) => {
+      cancelAnimationFrame(raf);
+      for (const type of ["pointerdown", "wheel", "keydown"]) c.removeEventListener(type, interrupt);
+      if (this.autoPanStop === stop) this.autoPanStop = null;
+      onDone(finished);
+    };
+    const interrupt = () => stop(false);
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / ms);
+      const move = total * t - done;
+      done += move;
+      this.camera.position.addScaledVector(right, move);
+      this.controls.target.addScaledVector(right, move);
+      this.controls.update();
+      this.invalidate();
+      if (t < 1) raf = requestAnimationFrame(step);
+      else stop(true);
+    };
+    for (const type of ["pointerdown", "wheel", "keydown"]) c.addEventListener(type, interrupt);
+    this.autoPanStop = stop;
+    raf = requestAnimationFrame(step);
+    return () => stop(false);
+  }
+  stopAutoPan() {
+    this.autoPanStop?.(false);
   }
   zoom(factor) {
     if (this.camera.isPerspectiveCamera) {

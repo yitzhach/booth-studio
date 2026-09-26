@@ -2220,3 +2220,10 @@ section.sub-hidden {display:none;}
 .sent-links .button-row {
   margin-top: 6px;
 }
+/* Auto pan: the caret beside the hand opens this, over the viewport. */
+.toolbar .autopan-caret {padding-left:4px;padding-right:4px;margin-left:-4px;}
+.autopan-menu {position:absolute;top:12px;left:12px;z-index:4;display:grid;gap:8px;width:min(260px,calc(100% - 24px));padding:12px;border-radius:10px;background:var(--surface);border:1px solid var(--line);box-shadow:0 8px 24px #0006;font-size:13px;}
+.autopan-menu[hidden] {display:none;}
+.autopan-menu label {display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.autopan-menu input {width:76px;}
+.autopan-menu p {margin:0;font-size:12px;}
