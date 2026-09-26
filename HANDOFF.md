@@ -16,11 +16,10 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Twelfth round (2026-09-26) is on its branch, not deployed** — the
-  owner's Q&A answers: Flip for a figure, Add booths growing the floor,
-  floor templates in backups, left-behind sales listed to move (the bullet
-  after the next).
-- **Last deploy: 2026-09-25, eleventh round — Next items 3 and 4: the show
+- **Last deploy: 2026-09-26, twelfth round — the owner's Q&A answers:
+  Flip for a figure, Add booths growing the floor, floor templates in
+  backups, left-behind sales listed to move** (the bullet after the next).
+  Before it, **2026-09-25, eleventh round — Next items 3 and 4: the show
   floor grows to fit pieces laid off its edge, a floor is saved as a
   template, and the drape colour is a floor setting** (the first bullet
   below). Item 3 had nothing to build without the owner's answers. Before
@@ -78,7 +77,7 @@ Extend it; do not rebuild it.
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
 - **2026-09-26, twelfth round: the owner's answers (Q&A before the round).
-  On branch `claude/bold-babbage-99a509`, not yet on `main`.** Asked first,
+  Merged to `main` and deployed.** Asked first,
   answered by the owner the same day:
   - **Flip for a cut-out person.** "Mirror" meant a one-click Flip so the
     Facing field need not be typed. Each figure's row in People for scale
