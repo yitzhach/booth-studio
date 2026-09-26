@@ -170,3 +170,32 @@ export function hallHTML(h, name = "Show") {
     .join("");
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(name)} — Hall map</title><style>body{font:13px system-ui,sans-serif;margin:24px;color:#1d232b}h1{font-size:22px}svg{width:100%;max-height:70vh;display:block;margin:12px 0}.legend span{display:inline-flex;align-items:center;gap:6px;margin-right:16px}.dot{display:inline-block;width:12px;height:12px;border:1px solid #6b7580;border-radius:2px;margin-right:6px;vertical-align:middle}table{border-collapse:collapse;width:100%;font-size:12px}td,th{text-align:left;padding:5px 8px;border-bottom:1px solid #ddd}.totals{margin:8px 0 18px}@media print{button{display:none}}@page{size:letter landscape;margin:10mm}</style></head><body><button onclick="window.print()">Print / save PDF</button><h1>${esc(name)} · Hall map</h1><p class="legend">${Object.values(STATUSES).map((s) => `<span><span class="dot" style="background:${s.color}"></span>${s.label}</span>`).join("")}</p>${h.items ? showSVG(h) : hallSVG(h)}<p class="totals"><strong>${totals.booths}</strong> booths · ${totals.sold} sold · ${totals.held} held · ${totals.open} open · ${Math.round(totals.sqft).toLocaleString("en-US")} sq ft of booth${totals.soldValue ? ` · sold ${money(totals.soldValue)}` : ""}${totals.heldValue ? ` · held ${money(totals.heldValue)}` : ""}</p><table><thead><tr><th>Booth</th><th>Row</th><th>Size</th><th>Status</th><th>Exhibitor</th><th>Price</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
 }
+
+/**
+ * Sales left behind: records kept for booth numbers no longer on the plan —
+ * after a floor template is applied, say, or a booth is renumbered away — that
+ * still hold something (a status other than open, an exhibitor or a note).
+ * They are kept, not dropped, so no money is lost; the panel lists them to be
+ * moved onto a booth that is on the plan. `[{ number, ...record }]`, by number.
+ */
+export function orphanSales(h) {
+  const onPlan = new Set(showBooths(h).map((b) => b.number));
+  return Object.entries(h.booths || {})
+    .filter(([n, r]) => !onPlan.has(Number(n)) && r && ((r.status && r.status !== "open") || r.name || r.note))
+    .map(([n, r]) => ({ number: Number(n), ...r }))
+    .sort((a, b) => a.number - b.number);
+}
+
+/**
+ * Move a left-behind sale onto booth `to` of the plan. Refuses (returns false)
+ * when `to` is not on the plan or already has a sale of its own, so nothing
+ * is overwritten. Mutates `h`.
+ */
+export function moveSale(h, from, to) {
+  if (!h.booths?.[from] || !showBooths(h).some((b) => b.number === to)) return false;
+  const there = h.booths[to];
+  if (there && ((there.status && there.status !== "open") || there.name || there.note)) return false;
+  h.booths[to] = h.booths[from];
+  delete h.booths[from];
+  return true;
+}

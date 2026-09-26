@@ -16,6 +16,10 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
+- **Twelfth round (2026-09-26) is on its branch, not deployed** — the
+  owner's Q&A answers: Flip for a figure, Add booths growing the floor,
+  floor templates in backups, left-behind sales listed to move (the bullet
+  after the next).
 - **Last deploy: 2026-09-25, eleventh round — Next items 3 and 4: the show
   floor grows to fit pieces laid off its edge, a floor is saved as a
   template, and the drape colour is a floor setting** (the first bullet
@@ -73,6 +77,35 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-26, twelfth round: the owner's answers (Q&A before the round).
+  On branch `claude/bold-babbage-99a509`, not yet on `main`.** Asked first,
+  answered by the owner the same day:
+  - **Flip for a cut-out person.** "Mirror" meant a one-click Flip so the
+    Facing field need not be typed. Each figure's row in People for scale
+    has **Flip**: it turns the figure round (`flipFacing` in
+    `src/people.js`, kept in Facing's -180…180 range). The picture mirrors
+    with its facing already, so no new field; schema unchanged.
+  - **Add booths grows the floor by itself.** A block laid below the rest
+    that runs past the floor's edge grows the floor (`growToFit`) in the
+    same `mutate`, so one Undo takes both back; the toast gives the new
+    size. The Grow the floor to fit warning stays for pieces dragged off.
+  - **Floor templates travel in a backup.** `backup()` adds the browser's
+    list as an optional top-level `floorTemplates`; opening a backup takes
+    the key off before `validateProject`, and `mergeFloorTemplates` adds the
+    valid ones whose id is new, up to 12. The key never enters the project,
+    so schema 1 is untouched and older backups load as before.
+  - **A template never drops a sale.** Sales were already kept by number;
+    now the ones left on numbers no longer on the floor (`orphanSales` in
+    `src/hall.js`) are listed under Sales with **Move to booth** (only
+    floor booths with no sale of their own; `moveSale` refuses to
+    overwrite) and **Forget**. Applying a template says how many were left.
+    Not moved with them: "your booth" (`h.mine`) and linked designs, which
+    stay on their number.
+  - **Kept as is, by the owner's answer:** the share-link limits; the Show
+    Hub file carrying originals; the 3D show drawing only the open booth in
+    full; the eight top tabs.
+  Tests: `tests/round12.test.js` (node) and `tests/view-round12.mjs`
+  (browser, in `test:view`).
 - **2026-09-25, eleventh round: Next items 3 and 4. Pushed to `main` and
   deployed.** Asked for as "continue with 3 and 4". Both items are mostly
   looking on the real machine and questions for the owner; this round built
@@ -1701,7 +1734,7 @@ Extend it; do not rebuild it.
    *shown* previews, and anyone can fetch an original by its URL;
    (b) the limits chosen (6 links and 120 images a minute per address, 200
    MB a link, 24 h to upload, 180 days) — each is one constant in
-   `worker/index.js` or `wrangler.jsonc`;
+   `worker/index.js` or `wrangler.jsonc` — *answered 2026-09-26: keep them*;
    (c) whether the keys should live somewhere that survives clearing site
    data — that needs accounts too.
 1. **Show Hub v0 (eighth round), on the real machine — and with a real
@@ -1711,7 +1744,7 @@ Extend it; do not rebuild it.
    the file still wanted now that there is the link? If it is, and a booth
    with twenty full-size photographs (100 MB+) bites, the file could carry
    the 2048 px preview instead of the original — the owner's choice: the
-   promoter then has a lighter, softer booth. The real question is demand:
+   promoter then has a lighter, softer booth. *Answered 2026-09-26: keep the originals.* The real question is demand:
    do promoters want exhibitors' designs on their floor? Also open: the
    pitch deck at `/pitchdeck/`, by eye.
 1. **The seventh round (2026-09-25), on the real machine.** *Looked at
@@ -1724,12 +1757,10 @@ Extend it; do not rebuild it.
    panels group several small sections under one chip (Layout has twelve
    chips)? Is choosing the new section on a selection right, or does it jump
    when you did not want it to? Should the eight top tabs themselves be
-   regrouped (say Design · Light & camera · Show floor · Export) — not done:
-   the owner's words were about the tabs running long, which the chips
-   answer without moving any tool. "Mirror so people can flip horizontally"
-   was built as Flip horizontal / vertical for pieces on the show floor; if
-   it meant flipping a booth's whole design left for right (walls, work,
-   pedestals), or a cut-out person, that is a separate build — say which.
+   regrouped (say Design · Light & camera · Show floor · Export)? *Answered
+   2026-09-26: leave them.* "Mirror so people can flip horizontally":
+   *answered 2026-09-26 — a one-click Flip for a cut-out person, built in
+   the twelfth round.*
    Pan tool: is H the right key, and should the hand stay on after
    switching mode?
 1. **The show floor, all four phases, by eye on the real machine.** Built
@@ -1747,10 +1778,9 @@ Extend it; do not rebuild it.
    - **Phase 3:** is "Open this booth" in the right place (the selected
      booth's Design section), and should the 3D show draw every *parked*
      design in full too, not only the open one? It would cost a booth build
-     per linked design; today they are drawn light. Floors can now be saved
-     as templates (eleventh round) — should they also travel in a backup,
-     rather than living on one browser? Should applying a template drop
-     the sales of numbers that are no longer on the floor?
+     per linked design; today they are drawn light. *Answered 2026-09-26:
+     only the open one.* Templates in a backup, and sales kept when a
+     template drops their number: *answered and built, twelfth round.*
    - **Phase 4:** the owner decides the provider (AI_EXPORT_PHASE.md weighs
      FLUX.2 pro) and how its key is held — which, by that document, means a
      Worker, identity and credits first; none of that is started. The pack
@@ -1766,9 +1796,8 @@ Extend it; do not rebuild it.
      end-cap booths to show their open sides (today a booth's open front is
      only the side it faces)? On a phone, is the library in the panel
      reachable enough, or does it want a floating "+" over the floor?
-     A block added below the rest can still land outside the floor's size;
-     the panel now says so and offers Grow the floor to fit (eleventh
-     round). Should Add booths grow it by itself instead?
+     Add booths now grows the floor by itself (twelfth round, the owner's
+     answer).
 1. **The 2026-09-25 third and fourth rounds, on the real machine.** Check
    the arrows draw and that an export now shows the picture inside the
    frame while it renders. Keyframe the frame, give Start and End different frames, and

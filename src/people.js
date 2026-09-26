@@ -342,3 +342,13 @@ export const newPerson = (kind = DEFAULT_PERSON, id = "") => ({
   // would be standing if you were photographing the booth from outside.
   rotation: 180,
 });
+
+/**
+ * A figure turned round to face the other way, kept in the Facing field's
+ * -180…180 range. The cut-out picture mirrors with its facing, so this is
+ * the one-click Flip in the People panel.
+ */
+export function flipFacing(rotation) {
+  const r = (((Number(rotation) || 0) + 180) % 360 + 360) % 360;
+  return r > 180 ? r - 360 : r;
+}
