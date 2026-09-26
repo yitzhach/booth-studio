@@ -2546,10 +2546,7 @@ export class BoothScene {
    */
   autoPan({ inches, seconds, dir = 1 }, onDone = () => {}) {
     this.stopAutoPan();
-    const right = new T.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
-    right.y = 0;
-    if (right.lengthSq() < 1e-9) right.set(1, 0, 0);
-    right.normalize();
+    const right = new T.Vector3(...this.panRight());
     const total = Math.max(0, inches) * IN * (dir < 0 ? -1 : 1);
     const ms = Math.max(0.1, seconds) * 1000;
     const start = performance.now();
@@ -2577,6 +2574,14 @@ export class BoothScene {
     this.autoPanStop = stop;
     raf = requestAnimationFrame(step);
     return () => stop(false);
+  }
+  /** The camera's own right, kept level: the way Auto pan slides. */
+  panRight() {
+    this.camera.updateMatrixWorld();
+    const right = new T.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
+    right.y = 0;
+    if (right.lengthSq() < 1e-9) right.set(1, 0, 0);
+    return right.normalize().toArray();
   }
   stopAutoPan() {
     this.autoPanStop?.(false);

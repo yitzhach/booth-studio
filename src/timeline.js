@@ -452,3 +452,22 @@ export function neighbourKey(timeline, seconds, dir) {
   }
   return sched.findIndex((x) => x.arrive > seconds + eps);
 }
+
+/**
+ * Auto pan as a timeline, so the MP4 export records it: two keys, the view
+ * now and the same view slid `metres` along `right` (level, the camera's own
+ * right), at a constant speed — both keys linear, no holds, no fades. `dir`
+ * -1 slides the other way. The length is kept inside the timeline's limits;
+ * the caller says so when it had to change it.
+ */
+export function autoPanTimeline(pose, right, metres, seconds, dir = 1) {
+  const len = Math.hypot(right[0], right[2]) || 1;
+  const d = (dir < 0 ? -1 : 1) * Math.max(0, metres);
+  const shift = [(right[0] / len) * d, 0, (right[2] / len) * d];
+  const moved = (v) => [v[0] + shift[0], v[1], v[2] + shift[2]];
+  const tl = emptyTimeline(pose.position, pose.target);
+  tl.seconds = clamp(Math.round(seconds * 10) / 10, MIN_SECONDS, MAX_SECONDS);
+  tl.keys[1] = keyFrom(moved(pose.position), moved(pose.target), 1);
+  for (const k of tl.keys) k.ease = "linear";
+  return tl;
+}

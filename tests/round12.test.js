@@ -43,3 +43,18 @@ test("a left-behind sale moves onto a free floor booth, never over a sale", () =
   assert.deepEqual(orphanSales(h).map((o) => o.number), [9003]);
   assert.ok(validHall(h));
 });
+
+test("Auto pan as a timeline: a level, linear slide of the set distance", async () => {
+  const { autoPanTimeline, MAX_SECONDS, MIN_SECONDS } = await import("../src/timeline.js");
+  const pose = { position: [1, 1.6, 4], target: [1, 1.2, 0] };
+  const tl = autoPanTimeline(pose, [2, 0.5, 0], 3, 5, 1);
+  assert.equal(tl.seconds, 5);
+  assert.deepEqual(tl.keys.map((k) => k.t), [0, 1]);
+  assert.ok(tl.keys.every((k) => k.ease === "linear" && !k.hold));
+  assert.deepEqual(tl.keys[1].position, [4, 1.6, 4], "3 m along the level right");
+  assert.deepEqual(tl.keys[1].target, [4, 1.2, 0], "the target moves with it");
+  const back = autoPanTimeline(pose, [1, 0, 0], 3, 5, -1);
+  assert.deepEqual(back.keys[1].position, [-2, 1.6, 4], "right to left goes the other way");
+  assert.equal(autoPanTimeline(pose, [1, 0, 0], 3, 600).seconds, MAX_SECONDS, "kept inside a clip's limits");
+  assert.equal(autoPanTimeline(pose, [1, 0, 0], 3, 0.5).seconds, MIN_SECONDS);
+});

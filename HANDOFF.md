@@ -16,9 +16,10 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-26, thirteenth round — double-clicking a figure
-  works from any side again, and Auto pan** (the bullet after the next).
-  Before it, the twelfth round the same day — **the owner's Q&A answers:
+- **Last deploy: 2026-09-26, fourteenth round — Auto pan recorded to MP4**
+  (the bullet after the next). Before it, the thirteenth round the same
+  day — **double-clicking a figure works from any side again, and Auto
+  pan** (the bullet after that). Before it, the twelfth round the same day — **the owner's Q&A answers:
   Flip for a figure, Add booths growing the floor, floor templates in
   backups, left-behind sales listed to move** (the bullet after that).
   Before it, **2026-09-25, eleventh round — Next items 3 and 4: the show
@@ -78,6 +79,20 @@ Extend it; do not rebuild it.
   branch. **Check `window.BOOTH_BUILD` against the commit before believing a
   fix did not ship** — a Cloudflare build takes a few minutes, and a merge has
   twice been reported as not working while the build was still running.
+- **2026-09-26, fourteenth round: Auto pan recorded to MP4 (the owner's
+  "yes"). Merged to `main` and deployed.** The Auto pan menu has **Record
+  it as MP4**. It does not film the viewport: `autoPanTimeline` in
+  `src/timeline.js` turns the pan into a two-key timeline — the view now,
+  and the same view slid the set distance along the camera's level right
+  (`scene.panRight`), both keys linear, no holds or fades — and hands it to
+  the same `runClips` → `recordVideo` path as every clip, at the Video tab's
+  size, frame rate, frame and Careful rendering. The view is left where it
+  was. A clip is 2–60 s (`MIN_SECONDS`/`MAX_SECONDS`), so a pan set longer
+  or shorter is rendered at the nearest limit — the same distance, faster
+  or slower — and a toast says so. The file is `<project>-auto-pan.mp4`
+  (`fileTag` on the job; batch names are unchanged). Not added: queuing an
+  auto pan in the batch — load it by hand for now if wanted. In this
+  sandbox the encoder is VP9; the test accepts either codec.
 - **2026-09-26, thirteenth round: the owner's report after the twelfth.
   Merged to `main` and deployed.**
   - **"Can't double-click on people any more."** A cut-out figure is a flat
@@ -1750,8 +1765,9 @@ Extend it; do not rebuild it.
    from the Left and Right views and from an orbit round the side: does
    its card open every time? Auto pan: is the caret beside the hand where
    you would look for it; are 10′ at 1 ft/s sensible defaults; should it
-   also go back and forth (a loop), pan up and down, or be recorded
-   straight to an MP4?
+   also go back and forth (a loop) or pan up and down? Record it as MP4
+   (fourteenth round): does the clip match what Start showed, and does a
+   linear start and stop look right, or should it ease in and out?
 1. **Show Hub links (ninth and tenth rounds), live.** Both deploys were
    confirmed through the Cloudflare connector: the live Worker's code is the
    tenth round's `worker/index.js` (`sweep`, the key routes), so the build

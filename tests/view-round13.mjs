@@ -78,8 +78,37 @@ try {
   await page.waitForFunction(() => /Start/.test(document.querySelector('.autopan-menu [data-action="autopan-go"]').textContent), null, { timeout: 3000 });
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('booth.autoPan')).dir), -1, 'the settings are remembered');
 
+  // ---- Record the pan as an MP4 ---------------------------------------------------
+  const codec = await page.evaluate(async () => {
+    const { pickCodec } = await import('/src/video.js');
+    return !!(await pickCodec({ width: 320, height: 240, framerate: 24, bitrate: 1e6 }));
+  });
+  if (!codec) console.log('SKIP no video codec encodes in this sandbox; Record it as MP4 not rendered.');
+  else {
+    await page.click('.autopan-menu [data-action="autopan-menu"]');
+    await page.click('[data-tab="video"]');
+    await page.selectOption('#video-size', '720');
+    await page.selectOption('#video-fps', '24');
+    await page.click('.toolbar [data-action="autopan-menu"]');
+    await page.selectOption('#autopan-dir', '1');
+    await page.dispatchEvent('#autopan-dir', 'change');
+    await page.fill('#autopan-dist', '2');
+    await page.dispatchEvent('#autopan-dist', 'change');
+    await page.fill('#autopan-time', '2');
+    await page.dispatchEvent('#autopan-time', 'change');
+    const still = await pose();
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 240000 }),
+      page.click('.autopan-menu [data-action="autopan-record"]'),
+    ]);
+    assert.match(download.suggestedFilename(), /auto-pan\.mp4$/, 'an MP4 named for the pan');
+    const after = await pose();
+    assert.deepEqual(after.c, still.c, 'recording leaves the view where it was');
+    assert.match(await page.textContent('#toast'), /2s MP4 exported · 48 frames at 24 fps|Exported as VP9/);
+  }
+
   assert.deepEqual(errors, [], 'no page errors');
-  console.log('PASS a figure is picked by double-click from the side, and Auto pan slides the view a set distance in a set time either way, stopping at a press.');
+  console.log('PASS a figure is picked by double-click from the side, and Auto pan slides the view a set distance in a set time either way, stopping at a press, and records it as an MP4.');
 } finally {
   await browser.close();
   await server.close();
