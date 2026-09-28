@@ -16,7 +16,22 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Last deploy: 2026-09-26, fourteenth round — Auto pan recorded to MP4, queued in the batch, and eased in and out**
+- **Last deploy: 2026-09-28, fifteenth round — a double-clicked figure's card is shown whichever section chip was open.**
+  The owner reported that double-clicking the man did not open his card.
+  The pick itself was fine, from every view and orbit (a sweep of 24 orbits
+  and 4 facings in the sandbox missed only where an opaque wall stood in
+  front, which is right). The card was the problem: on a real browser the
+  panels have section chips, and when Layout's open chip was not People for
+  scale the card was in a hidden section, and `scrollIntoView` on a hidden
+  element does nothing. The suites never saw it because they run with the
+  chips off (`navigator.webdriver`). Now `reveal()` in `src/main.js`
+  chooses the element's chip through `showSection` before scrolling, and
+  the same helper serves a double-clicked pedestal and a clicked
+  free-standing wall, which had the same gap. `tests/view-round13.mjs`
+  turns the chips on, opens another chip and double-clicks the man; it
+  fails without the fix. Plan view still cannot pick a figure: from
+  straight overhead a cut-out is edge-on (see Next, the cut-out people).
+  Before it, **2026-09-26, fourteenth round — Auto pan recorded to MP4, queued in the batch, and eased in and out**
   (the bullet after the next). Before it, the thirteenth round the same
   day — **double-clicking a figure works from any side again, and Auto
   pan** (the bullet after that). Before it, the twelfth round the same day — **the owner's Q&A answers:
@@ -1776,7 +1791,9 @@ Extend it; do not rebuild it.
 
 1. **The thirteenth round, on the real machine.** Double-click a figure
    from the Left and Right views and from an orbit round the side: does
-   its card open every time? Auto pan: is the caret beside the hand where
+   its card open every time? *Reported 2026-09-28: the man's did not —
+   fixed in the fifteenth round (the chip hid it). Check again, with
+   Layout left on some other chip.* Auto pan: is the caret beside the hand where
    you would look for it; are 10′ at 1 ft/s sensible defaults; should it
    also go back and forth (a loop) or pan up and down? Record it as MP4
    (fourteenth round): does the clip match what Start showed, and does a
@@ -2396,6 +2413,12 @@ anything else in a browser until it is done.
 
 ## Things learned the hard way
 
+- **The browser suites run with the section chips off** (`navigator.webdriver`
+  starts every panel on All). Anything that scrolls to or focuses a panel
+  control after a viewport pick must go through `reveal()` / `showSection`,
+  and its test must turn the chips on (`booth.sectionTabs` = `on` in
+  localStorage, then reload — a second page kills the `--single-process`
+  browser) or it will pass while the real app fails.
 - **The whole `npm run test:view` chain now runs past ten minutes in the
   sandbox**, longer than one shell call may take, so a timeout there is a
   timeout, not a failure. Run the chain with the longest timeout, see which

@@ -583,9 +583,7 @@ async function boot() {
       selectedPedestal = null;
       tab = "layout";
       renderSelection();
-      document
-        .querySelector(`.person-row[data-person="${CSS.escape(id)}"]`)
-        ?.scrollIntoView({ block: "nearest" });
+      reveal(document.querySelector(`.person-row[data-person="${CSS.escape(id)}"]`));
     };
   } catch (err) {
     document.querySelector("#scene").innerHTML =
@@ -1343,12 +1341,20 @@ async function boot() {
   }
   // Selecting a wall in the viewport is only useful if its controls are on
   // screen; the Layout panel is long enough that they usually are not.
+  /**
+   * Bring a control the viewport just picked into sight. With the panels'
+   * section chips on, it may sit in a section another chip hides, and
+   * scrolling to a hidden element does nothing — so its chip is chosen first.
+   */
+  function reveal(el) {
+    if (!el) return;
+    showSection(el);
+    el.scrollIntoView({ block: "nearest" });
+  }
   function revealPanelFields() {
     const id = panelIdOf(selectedPanel);
     if (!id) return;
-    document
-      .querySelector(`.wall-setting[data-panel="${CSS.escape(id)}"]`)
-      ?.scrollIntoView({ block: "nearest" });
+    reveal(document.querySelector(`.wall-setting[data-panel="${CSS.escape(id)}"]`));
   }
   /** One pedestal's X and Z, in both its number field and its slider. */
   function syncPedestalInputs(ped, except = null) {
@@ -1367,9 +1373,7 @@ async function boot() {
   }
   function revealPedestalFields() {
     if (!selectedPedestal) return;
-    document
-      .querySelector(`.wall-setting[data-pedestal="${CSS.escape(selectedPedestal)}"]`)
-      ?.scrollIntoView({ block: "nearest" });
+    reveal(document.querySelector(`.wall-setting[data-pedestal="${CSS.escape(selectedPedestal)}"]`));
   }
   /** A position slider for a pedestal. Same travel rule a free-standing wall's gets. */
   function pedestalSlider(ped, name, key, label) {

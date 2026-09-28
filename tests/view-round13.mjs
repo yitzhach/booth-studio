@@ -124,8 +124,38 @@ try {
     assert.match(await page.textContent('#toast'), /2s MP4 exported · 48 frames at 24 fps|Exported as VP9/);
   }
 
+  // ---- The card opens with the section chips on -----------------------------------
+  // The suites run with the chips off (navigator.webdriver), so the pick above
+  // never met a People section hidden behind another chip. A real browser
+  // does: the figure was picked and its card stayed out of sight.
+  {
+    const tabs = page;
+    await tabs.evaluate(() => localStorage.setItem('booth.sectionTabs', 'on'));
+    await tabs.reload();
+    await tabs.waitForFunction(() => !!window.__booth?.scene);
+    await tabs.click('[data-tab="layout"]');
+    await tabs.click('.section-tabs [data-subtab^="People"]');
+    await tabs.click('[data-action="add-man"]');
+    await tabs.waitForFunction(() => Object.values(window.__booth.scene.personFrames).some((g) => g.children.some((m) => m.userData.cutout)), null, { timeout: 15000 });
+    const chips = await tabs.$$eval('.section-tabs [data-subtab]', (b) => b.map((x) => x.dataset.subtab));
+    await tabs.click(`.section-tabs [data-subtab="${chips.find((c) => !c.startsWith('People') && c !== 'All')}"]`);
+    assert.equal(await tabs.isVisible('.person-row'), false, 'another chip hides the figure card');
+    await tabs.evaluate(() => window.__booth.scene.setView('left'));
+    await tabs.waitForTimeout(400);
+    const spot = await tabs.evaluate(() => {
+      const s = window.__booth.scene, r = s.renderer.domElement.getBoundingClientRect();
+      const g = Object.values(s.personFrames).at(-1), v = new g.position.constructor();
+      g.updateMatrixWorld(true); g.getWorldPosition(v); v.y += 0.8; v.project(s.camera);
+      return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };
+    });
+    await tabs.mouse.dblclick(spot.x, spot.y);
+    await tabs.waitForTimeout(250);
+    assert.equal(await tabs.isVisible('.person-row.selected'), true, 'double-clicking the man shows his card, chip and all');
+    await tabs.evaluate(() => localStorage.removeItem('booth.sectionTabs'));
+  }
+
   assert.deepEqual(errors, [], 'no page errors');
-  console.log('PASS a figure is picked by double-click from the side, and Auto pan slides the view a set distance in a set time either way, stopping at a press, and records it as an MP4.');
+  console.log('PASS a figure is picked by double-click from the side, and its card is shown whichever section chip was open, and Auto pan slides the view a set distance in a set time either way, stopping at a press, and records it as an MP4.');
 } finally {
   await browser.close();
   await server.close();
