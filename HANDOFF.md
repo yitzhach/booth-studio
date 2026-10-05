@@ -22,7 +22,29 @@ Extend it; do not rebuild it.
   needs the owner are in Art-Talk-Back `docs/phase-5-booth.md`; the decisions
   are its D-061…D-067. Read the section **Studio platform** below before
   touching sign-in, sync, `worker/index.js` or `wrangler.jsonc`.
-- **Last deploy: 2026-10-05, sixteenth round — studio sign-in and sync.**
+- **Last deploy: 2026-10-05, seventeenth round — booths and show floors by
+  name, for the studio assistant and agents.** The owner approved
+  scene-level actions (Art-Talk-Back D-070) with a wider aim: a booth or a
+  show floor made from words, a photo or a show's map, and the app driven by
+  asking. `src/scene-ops.js` is the scene logic (booth ops and show-floor
+  ops); `npm run bundle:scene` builds it and studio-api runs that build for
+  `placement.edit`, `placement.build` and `describe_booth`, so an agent's
+  change opens here like one made by hand. Nothing in the app's screens
+  changed. Also shipped that day: a rename made outside the app now reaches
+  the screen, and a booth deleted from the studio stays on the device
+  instead of looping (#11). Shipped as pairs: Art-Talk-Back#19 then #13;
+  Art-Talk-Back#20 then #14.
+  **The chat window (the owner asked where it is):** built in this round
+  (Art-Talk-Back `phase-5-booth.md` 9c) as "Ask the assistant", bottom
+  right, `src/studio-assistant.js`. It shows only while signed in to the
+  studio *and* where this copy of Booth Studio has an assistant connected:
+  staging (`studio-booth-studio-staging`) has one; production has none
+  until the owner's "Deploy production assistant" has run and the
+  `ASSISTANT` line is added to `wrangler.jsonc` (see Studio platform). The
+  Show Tracker's chat is likewise on its staging Worker only
+  (https://studio-show-tracker-staging.bobdylan2000.workers.dev, main page
+  and Expenses), never on its production address.
+  Before it, **2026-10-05, sixteenth round — studio sign-in and sync.**
   Booth Studio is an app on the studio platform: Studio account (the avatar,
   or Export → Keep your work) signs in with the studio's emailed code, and a
   signed-in browser keeps its booth projects and their images in the studio
@@ -1817,8 +1839,10 @@ Extend it; do not rebuild it.
    in stays here until you import it" read right? With a real booth of
    full-size photographs, how long does the import's upload take, and is
    "uploading images 3 of 40" in the footer enough to watch? The assistant
-   panel (stage 2 of the plan) waits on the first production deploy of
-   `studio-assistant`, which is the owner's.
+   panel (stage 2 of the plan, step 9c) waits on the first production
+   deploy of `studio-assistant`, which is the owner's. Without it, an agent
+   can already build and change booths and show floors through the studio
+   API (seventeenth round); the panel adds the chat.
 1. **The thirteenth round, on the real machine.** Double-click a figure
    from the Left and Right views and from an orbit round the side: does
    its card open every time? *Reported 2026-09-28: the man's did not —
@@ -2286,6 +2310,20 @@ nothing of this runs.
   helpers and validator. Change an op, or anything those modules export
   that it uses, and the platform's copy must be rebuilt on the branch of
   the same name: CI in both repos compares the two byte for byte.
+- `src/studio-assistant.js`: the assistant's chat panel (the Show
+  Tracker's, as an ES module), mounted with the studio bridge. It asks
+  `GET /assistant/status` (answered by `worker/index.js`
+  `forwardToAssistant`) whether an assistant is connected, sends the booth
+  on screen as the chat's `record`, shows confirm cards in the studio's own
+  lines, and calls the bridge's `sync()` after Confirm and Undo so the
+  change reaches the screen; a booth the assistant made gets "Open it".
+  `/assistant/*` goes to the `ASSISTANT` service binding: only
+  `env.staging` has one (`studio-assistant-staging`). **For production**,
+  once `studio-assistant` exists, add
+  `{ "binding": "ASSISTANT", "service": "studio-assistant" }` to the
+  top-level `services`; until then the panel never shows there.
+  `tests/view-assistant.mjs` proves it with the studio and the assistant
+  routed (no model runs).
 - main.js touches it in three places only: `studioHost` + `loadStudio`
   (near the end of `boot`), `studioBridge?.saved()` after each save, and
   the `studio-account` action.

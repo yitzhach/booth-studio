@@ -676,6 +676,8 @@ export function connect(host) {
     pendingCount: async () => (studio ? (await studio).pendingCount() : 0),
     placementId: currentId,
     importExisting,
+    // For the assistant panel's "Open it" on a booth it just made.
+    openBooth: (id) => openBooth(id),
     onStatus(fn) {
       listeners.add(fn);
       return () => listeners.delete(fn);

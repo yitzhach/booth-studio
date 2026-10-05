@@ -13,7 +13,7 @@
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/v1/*"],
+    "run_worker_first": ["/api/*", "/v1/*", "/assistant/*"],
   },
   "r2_buckets": [{ "binding": "SHARES", "bucket_name": "booth-studio-shares" }],
   // Per address, per minute: links made or updated, and images uploaded. An
@@ -35,7 +35,14 @@
     // answers 503 there, so staging can never write to the live bucket.
     "staging": {
       "name": "studio-booth-studio-staging",
-      "services": [{ "binding": "API", "service": "studio-api-staging" }],
+      // ASSISTANT: the chat panel's studio-assistant (src/studio-assistant.js).
+      // Production has none until "Deploy production assistant" has run
+      // (Art-Talk-Back D-068); then add the same line, with studio-assistant,
+      // to the top-level services. Without it the panel never shows.
+      "services": [
+        { "binding": "API", "service": "studio-api-staging" },
+        { "binding": "ASSISTANT", "service": "studio-assistant-staging" },
+      ],
       "r2_buckets": [],
       "ratelimits": [],
       "triggers": { "crons": [] },
