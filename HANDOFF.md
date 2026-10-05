@@ -16,13 +16,24 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
-- **Studio platform (started 2026-10-05, branch `claude/festive-curie-ohram8`).**
+- **Studio platform (on `main` since 2026-10-05).**
   The owner approved studio sign-in and sync through `studio-api` (the shared
   backend in `yitzhach/Art-Talk-Back`). The plan, its gate and what still
   needs the owner are in Art-Talk-Back `docs/phase-5-booth.md`; the decisions
   are its D-061…D-067. Read the section **Studio platform** below before
   touching sign-in, sync, `worker/index.js` or `wrangler.jsonc`.
-- **Last deploy: 2026-09-28, fifteenth round — a double-clicked figure's card is shown whichever section chip was open.**
+- **Last deploy: 2026-10-05, sixteenth round — studio sign-in and sync.**
+  Booth Studio is an app on the studio platform: Studio account (the avatar,
+  or Export → Keep your work) signs in with the studio's emailed code, and a
+  signed-in browser keeps its booth projects and their images in the studio
+  and opens them on other devices. Signed out, nothing changed. Shipped in
+  the order the platform needs: Art-Talk-Back#17 first (migration 0006 and
+  `/v1/placements` live in production `studio-api`), then
+  booth-studio#9 (`04d694f`). CI now runs on every pull request
+  (`.github/workflows/ci.yml`), the view suites included, on Chromium build
+  1194. Read **Studio platform** below; what the owner should try first is
+  Next item 1.
+  Before it, **2026-09-28, fifteenth round — a double-clicked figure's card is shown whichever section chip was open.**
   The owner reported that double-clicking the man did not open his card.
   The pick itself was fine, from every view and orbit (a sweep of 24 orbits
   and 4 facings in the sandbox missed only where an opaque wall stood in
