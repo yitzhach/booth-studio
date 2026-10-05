@@ -2297,6 +2297,17 @@ nothing of this runs.
   rename reaches the screen (until this was fixed, the next save sent the
   old name back over it). The size columns (`width`, `depth`, `height`) are
   still only read from the scene: a change to them alone is overwritten.
+- **A booth deleted from the studio stays on the device and is never sent
+  back.** The assistant or the API can delete a placement the app has open.
+  `reconcile()` knows it was there (`applied` holds a version the studio
+  gave), keeps the project, stops syncing it and the footer says "deleted
+  from the studio · kept on this device". An Alternative (a new project id)
+  goes up as a new booth. Any create the studio refuses (an id already used,
+  e.g. a backup from another studio's booth) is remembered in
+  `booth.studio.refused` and not resent until the project changes. Until
+  this was fixed, the device re-created the booth, the studio refused the
+  id, the SDK dropped it, and the two went round about three times a
+  second for as long as the booth was open.
 - **Merge order across the repos:** when this app needs a platform change,
   the platform merges and deploys first, because `main` here is production
   and talks to production `studio-api`. Each PR says its order.
@@ -2417,7 +2428,7 @@ npm run build
 npm run test:view        # 34 suites (tools2, hub and share included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
 npm run test:browser     # 25 end-to-end checks
-STUDIO_PLATFORM=../Art-Talk-Back BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/two-devices.mjs   # 40 checks; after npm run build (see Studio platform)
+STUDIO_PLATFORM=../Art-Talk-Back BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/two-devices.mjs   # 44 checks; after npm run build (see Studio platform)
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
 ```
 

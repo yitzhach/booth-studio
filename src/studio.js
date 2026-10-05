@@ -51,6 +51,11 @@ import { readSession, writeSession } from "./studio-session.js";
 const DB_NAME = "booth-studio.studio";
 const APPLIED_KEY = "booth.studio.applied";
 const IMPORT_KEY = "booth.studio.imported";
+// Placements this browser won't send again: { [id]: { why, hash } }. GONE
+// means deleted from the studio; anything else is the studio's answer to a
+// create it refused, retried only once the project has changed.
+const REFUSED_KEY = "booth.studio.refused";
+const GONE = "deleted from the studio";
 const INTERVAL_MS = 60_000;
 
 const e = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -116,6 +121,8 @@ export function connect(host) {
       case "waiting": return "Studio · waiting for images";
       case "local": return "Studio · this project is on this device only";
       case "too_big": return "Studio · too big to sync";
+      case "gone": return "Studio · deleted from the studio · kept on this device";
+      case "refused": return `Studio · the studio didn't take this booth${detail ? `: ${detail}` : ""}`;
       case "expired": return "Studio · sign in again";
       default: return "Studio · can't sync just now";
     }
@@ -138,7 +145,14 @@ export function connect(host) {
         if (ev.entityType === "placement") void currentId().then((id) => id === ev.entityId && showCard());
       });
       st.on("rejected", (ev) => {
-        if (ev.entityType === "placement") host.toast(`The studio didn't take a change to this booth: ${ev.message}`, true);
+        if (ev.entityType !== "placement") return;
+        // A refused create drops the device's copy, and reconcile would make it
+        // again at once: remember the refusal, so the same scene isn't resent.
+        if (ev.action === "placement.create") {
+          const a = readJSON(APPLIED_KEY);
+          refuse(ev.entityId, ev.message, a?.id === ev.entityId ? a.hash : null);
+        }
+        host.toast(`The studio didn't take a change to this booth: ${ev.message}`, true);
       });
       return st;
     });
@@ -158,6 +172,13 @@ export function connect(host) {
   function kick() {
     clearTimeout(kickTimer);
     kickTimer = setTimeout(() => void sync(), 400);
+  }
+
+  const refusedFor = (id) => (readJSON(REFUSED_KEY) || {})[id] || null;
+  function refuse(id, why, h = null) {
+    const all = readJSON(REFUSED_KEY) || {};
+    delete all[id];
+    writeJSON(REFUSED_KEY, Object.fromEntries([...Object.entries(all).slice(-19), [id, { why, hash: h }]]));
   }
 
   /** The placement id of the project on screen. */
@@ -188,6 +209,17 @@ export function connect(host) {
       // Not in the studio. The project from before signing in waits for the import.
       const s = session();
       if (s?.local === p.id) return setStatus("local");
+      // It was there (this browser agreed with a version the studio gave it)
+      // and now it isn't: deleted from the studio, by the assistant, the API
+      // or another app. The project stays here and is never sent back; an
+      // Alternative (a new id) would go up as a new booth.
+      const no = refusedFor(id);
+      if (no?.why === GONE) return setStatus("gone");
+      if (agreed && agreed.version > 0) {
+        refuse(id, GONE);
+        return setStatus("gone");
+      }
+      if (no && no.hash === hash(localText)) return setStatus("refused", no.why);
       const big = tooBig(fields.scene, fields.images);
       if (big) return setStatus("too_big", big);
       await st.create("placement", { id, ...fields, meta: { projectId: p.id } });
@@ -314,7 +346,7 @@ export function connect(host) {
         }
         const pending = await st.pendingCount();
         if (!st.online) setStatus("offline", pending ? `${plural(pending, "change")} waiting` : "");
-        // "local", "too_big", "waiting" and "error" were set by reconcile and stand.
+        // "local", "too_big", "waiting", "gone", "refused" and "error" were set by reconcile and stand.
         else if (status === "syncing" || status === "uploading") setStatus("synced");
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) return expire();
