@@ -32,18 +32,37 @@ enough on its own & is the record of what was decided & why.
 
 ## Rules that bite
 
-- `main` is prod (Cloudflare Git integration). Merging = deploying. No GH
-  Actions workflow.
-- Local-first: no accounts, payments, sync or live AI calls. **One backend,
-  owner-approved 2026-09-25: booth share links** — `worker/index.js`, only
-  `/api/*`, R2 bucket `booth-studio-shares`. Anything more server-side is the
-  owner's call first.
+- `main` is prod (Cloudflare Git integration). Merging = deploying. GH Actions
+  runs CI only (`.github/workflows/ci.yml`); it never deploys.
+- Local-first: signed out, the app works with no network, as it always has.
+  No payments, and no AI calls except through the studio platform.
+- **Two backends, both owner-approved:**
+  - **Booth share links (2026-09-25)** — `worker/index.js` `/api/*`, R2 bucket
+    `booth-studio-shares`. Stay exactly as they are.
+  - **Studio sign-in and sync through studio-api (2026-10-05)** — replaces the
+    old "no accounts, sync or AI calls" rule. `/v1/*` is forwarded to the
+    `studio-api` Worker by service binding (same origin). The API lives in
+    `yitzhach/Art-Talk-Back` (its D-059…D-065, `docs/phase-5-booth.md`). Keep
+    the Worker name `booth-studio`: the IndexedDB data people already saved
+    lives on its origin.
+  Anything more server-side is the owner's call first.
 - Schema 1 is forever. Every new field optional; every older backup must load.
 - App must run w/ `public/assets` empty — everything falls back procedurally.
 - Don't touch the separate `yitzhach/commission` repo.
 - **Never verify through a pipe.** `npm test | grep PASS` exits 0 on failure.
   Run each suite directly & read its exit status. Same trap: `> log; echo $?`
   reports the *last* command's status, not the suite's.
+
+## Shipping
+
+Copied from Art-Talk-Back's CLAUDE.md; applies here since 2026-10-05 (owner):
+
+Claude may merge its own pull requests once tests pass and let deploys run, app before platform. Still Isaac's: secrets, spending money, deleting data or Workers, a new Worker's first deploy.
+Flow, undo and per-repo setup: `docs/SHIPPING.md` (D-057) — in Art-Talk-Back.
+
+"App before platform" flips when the app needs a contract the platform doesn't
+have yet (new routes or tables): then the platform merges and deploys first,
+because this app's `main` talks to production `studio-api`. Each PR says its order.
 
 ## Testing
 
