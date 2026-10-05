@@ -75,9 +75,19 @@ try {
   // ---- Power and rentals ------------------------------------------------
   await page.click('[data-tab="export"]');
   assert.match(await page.textContent('#inspector-content'), /\d+ W · [\d.]+ A · \d+ circuit/, 'the Export tab says what to order');
-  await page.fill('#power-outlets', '3');
-  await page.press('#power-outlets', 'Enter');
-  await page.waitForTimeout(100);
+  // On a slow runner the panel can still redraw after the reload, and text
+  // typed into the field it replaces never lands. Type until the panel's own
+  // total shows it took: two more outlets than the one there add 300 W.
+  const ORDER = /(\d+) W · [\d.]+ A · \d+ circuit/;
+  const watts = async () => Number((await page.textContent('#inspector-content')).match(ORDER)[1]);
+  const before = await watts();
+  for (let i = 0; (await watts()) !== before + 300; i++) {
+    assert.ok(i < 5, 'the outlets field takes a typed count');
+    await page.fill('#power-outlets', '3');
+    await page.press('#power-outlets', 'Enter');
+    await page.waitForFunction(({ w, src }) => Number(document.querySelector('#inspector-content')?.textContent.match(new RegExp(src))?.[1]) !== w,
+      { w: before, src: ORDER.source }, { timeout: 5000 }).catch(() => {});
+  }
   const [sheet] = await Promise.all([page.waitForEvent('download'), page.click('[data-action="power-sheet"]')]);
   const sheetHTML = await fs.readFile(await sheet.path(), 'utf8');
   assert.match(sheetHTML, /Power and rentals/);
