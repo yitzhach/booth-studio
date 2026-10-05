@@ -2290,6 +2290,13 @@ nothing of this runs.
 - **Two devices, one booth:** the whole scene is one field, so edits on two
   devices at once don't merge: the studio keeps its copy and the second
   device gets a card with "Use this device's" (its D-064).
+- **The `name` column wins over the scene's name.** The app writes both
+  together, but anything else on the platform (the studio assistant, the
+  API) renames a booth by the column alone. `sceneFromRecord` puts the
+  column's name into the scene before comparing or opening it, so that
+  rename reaches the screen (until this was fixed, the next save sent the
+  old name back over it). The size columns (`width`, `depth`, `height`) are
+  still only read from the scene: a change to them alone is overwritten.
 - **Merge order across the repos:** when this app needs a platform change,
   the platform merges and deploys first, because `main` here is production
   and talks to production `studio-api`. Each PR says its order.
@@ -2410,7 +2417,7 @@ npm run build
 npm run test:view        # 34 suites (tools2, hub and share included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
 npm run test:browser     # 25 end-to-end checks
-STUDIO_PLATFORM=../Art-Talk-Back BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/two-devices.mjs   # 37 checks; after npm run build (see Studio platform)
+STUDIO_PLATFORM=../Art-Talk-Back BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/two-devices.mjs   # 40 checks; after npm run build (see Studio platform)
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
 ```
 

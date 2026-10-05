@@ -412,6 +412,31 @@ try {
   errorsSeen.push(...three.errors);
   await three.ctx.close();
 
+  /* ==== A RENAME MADE OUTSIDE THE APP ===================================== */
+  // The studio assistant (or anything else on the API) renames a booth by its
+  // name column alone. That rename reaches both screens and stays: the next
+  // save brings the scene up to it rather than sending the old name back.
+  console.log("\n-- a rename made through the studio API, not in the app");
+  await until(one, "device 1 settled", async () => (await pending(one)) === 0 && (await status(one)) === "synced");
+  await until(two, "device 2 settled", async () => (await pending(two)) === 0 && (await status(two)) === "synced");
+  const before = (await placements(one))[0];
+  const patched = await one.page.evaluate(async ({ id, version }) => {
+    const r = await fetch(`/v1/placements/${id}`, { method: "PATCH", headers: { "content-type": "application/json", "If-Match": String(version) },
+      body: JSON.stringify({ name: "Renamed in the studio" }) });
+    return r.status;
+  }, { id: before.id, version: before.version });
+  check("the studio takes a rename of the name column alone", patched === 200, String(patched));
+  await until(one, "device 1 to show the rename", async () => (await one.page.inputValue("#project-name")) === "Renamed in the studio");
+  await until(two, "device 2 to show the rename", async () => (await two.page.inputValue("#project-name")) === "Renamed in the studio");
+  await until(one, "device 1 to save it", async () => (await stored(one)).name === "Renamed in the studio");
+  await until(one, "device 1 settled", async () => (await pending(one)) === 0 && (await status(one)) === "synced");
+  await until(two, "device 2 settled", async () => (await pending(two)) === 0 && (await status(two)) === "synced");
+  const after = (await placements(one))[0];
+  check("it reaches both screens and stays: the scene caught up, not sent back", after.name === "Renamed in the studio" &&
+    after.scene.name === "Renamed in the studio" && (await two.page.inputValue("#project-name")) === "Renamed in the studio",
+    JSON.stringify([after.name, after.scene.name]));
+  check("and no review card for it", !(await one.page.$('#studio-card:not([hidden])')) && !(await two.page.$('#studio-card:not([hidden])')));
+
   /* ==== THE PLATFORM IS DOWN ============================================== */
   console.log("\n-- the studio answers 503: the app carries on");
   await one.page.route("**/v1/**", (r) => r.fulfill({ status: 503, contentType: "application/json",
