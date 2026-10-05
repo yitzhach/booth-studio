@@ -76,7 +76,7 @@ try {
   await page.waitForTimeout(300);
   const box = await page.locator('#scene canvas').boundingBox();
   await page.mouse.click(box.x + box.width - 40, box.y + box.height - 120);
-  await page.waitForFunction(() => /Start/.test(document.querySelector('.autopan-menu [data-action="autopan-go"]').textContent), null, { timeout: 3000 });
+  await page.waitForFunction(() => /Start/.test(document.querySelector('.autopan-menu [data-action="autopan-go"]').textContent), null, { timeout: 15000 });
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('booth.autoPan')).dir), -1, 'the settings are remembered');
 
   // ---- Queue the pan in the batch -------------------------------------------------

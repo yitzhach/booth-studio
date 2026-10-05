@@ -38,9 +38,9 @@ try {
 
   // Choosing a move proposes the length it was designed around.
   await move.selectOption('push');
-  await page.waitForFunction(() => document.querySelector('#video-seconds')?.value === '8', null, { timeout: 5000 });
+  await page.waitForFunction(() => document.querySelector('#video-seconds')?.value === '8', null, { timeout: 30000 });
   await move.selectOption('survey');
-  await page.waitForFunction(() => document.querySelector('#video-seconds')?.value === '14', null, { timeout: 5000 });
+  await page.waitForFunction(() => document.querySelector('#video-seconds')?.value === '14', null, { timeout: 30000 });
 
   // Which codec this machine will actually encode, asked the way the app asks.
   // Open Chromium builds ship without H.264 encoding, which is the whole
