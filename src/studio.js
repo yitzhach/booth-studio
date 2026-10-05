@@ -620,10 +620,14 @@ export function connect(host) {
       setStatus(expired() ? "expired" : "syncing");
       setTimeout(() => void sync(), 0);
     },
-    /** After each save of the project on screen. */
+    /**
+     * After each save of the project on screen. An ended sign-in still
+     * queues the change on the device (sync() sends nothing until the artist
+     * signs in again), so "N changes are kept" counts it.
+     */
     saved() {
-      if (!studio || expired()) return;
-      void serial(reconcile).then(kick, (err) => console.error(err));
+      if (!studio) return;
+      void serial(reconcile).then(() => (expired() ? expire() : kick()), (err) => console.error(err));
     },
     openPanel() {
       renderPanel();
