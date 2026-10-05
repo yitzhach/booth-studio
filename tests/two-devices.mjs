@@ -578,7 +578,14 @@ try {
     JSON.stringify([mine.booth.venue, mine.booth.width, mine.booth.pedestals.length]));
   await until(one, "device 1 settled", async () => (await pending(one)) === 0 && (await status(one)) === "synced");
   const current = (await action(one, "placement.edit", { id: builtId, version: (await placements(one)).find((x) => x.id === builtId).version,
-    ops: [{ op: "add_furniture", kind: "table6", x: -30, z: 36, ref: "t" }, { op: "set_booth", color: "#f4f1ea" }, { op: "rename", name: "Edited by an agent" }] }));
+    ops: [
+      { op: "add_furniture", kind: "table6", x: -30, z: 36, ref: "t" }, { op: "set_booth", color: "#f4f1ea" }, { op: "rename", name: "Edited by an agent" },
+      // And the show it's at, from a spec: a floor, two back-to-back rows, this booth marked as mine.
+      { op: "start_floor", venue: "indoor", width: 1200, depth: 720 },
+      { op: "add_booths", count: 8, perRow: 4, x: 120, y: 120, backToBack: true },
+      { op: "set_exhibitor", number: 105, name: "Ada Pottery", status: "sold" },
+      { op: "mark_my_booth", number: 103 },
+    ] }));
   check("the agent edits it while it's open", current.status === 200, JSON.stringify(current.data).slice(0, 200));
   await until(one, "the edit on screen", async () => (await one.page.inputValue("#project-name")) === "Edited by an agent");
   await until(one, "the edit saved", async () => (await savedProject(one)).booth.pedestals.some((x) => x.kind === "table6"));
@@ -586,6 +593,9 @@ try {
   check("the screen follows: the table where it was put, the colour, the name, and still valid",
     mine.booth.pedestals.find((x) => x.kind === "table6")?.x === -30 && mine.booth.color === "#f4f1ea" && validates(mine) &&
     !(await one.page.$('#studio-card:not([hidden])')));
+  check("and the show floor it was given: 8 booths, an exhibitor, this booth as mine",
+    mine.hall?.items?.filter((x) => x.kind === "booth").length === 8 && mine.hall.booths[105]?.name === "Ada Pottery" && mine.hall.mine === 103,
+    JSON.stringify(mine.hall && { items: mine.hall.items.length, mine: mine.hall.mine }));
 
   const errors = [...errorsSeen, ...one.errors, ...two.errors];
   check("no page errors on any device", !errors.length, errors.slice(0, 4).join(" | "));

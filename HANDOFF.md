@@ -2274,7 +2274,10 @@ nothing of this runs.
   fails when it is out of date.
 - `src/scene-ops.js` (pure, `tests/scene-ops.test.js`): a booth changed by
   name — `describe`, `applyOps`, `build` and `OPS`, the op catalog with
-  each op's JSON Schema. **studio-api runs this file**: `npm run
+  each op's JSON Schema. Booth ops (size, venue, furniture, walls, art) and
+  show-floor ops (`start_floor`, `add_booths`, pieces, exhibitors, "my
+  booth"; the floor's own frame is inches from the venue's back-left
+  corner, booths named by number). **studio-api runs this file**: `npm run
   bundle:scene` builds it (and model.js, quickstart.js, arrange.js,
   placement.js under it) into `dist-scene/booth-scene.js`, which
   Art-Talk-Back vendors as `workers/studio-api/src/vendor/booth-scene.js`
@@ -2444,7 +2447,7 @@ npm run build
 npm run test:view        # 34 suites (tools2, hub and share included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
 npm run test:browser     # 25 end-to-end checks
-STUDIO_PLATFORM=../Art-Talk-Back BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/two-devices.mjs   # 49 checks; after npm run build (see Studio platform)
+STUDIO_PLATFORM=../Art-Talk-Back BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/two-devices.mjs   # 50 checks; after npm run build (see Studio platform)
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
 ```
 
