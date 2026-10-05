@@ -1799,6 +1799,8 @@ Extend it; do not rebuild it.
    (fourteenth round): does the clip match what Start showed, and does a
    eased start and stop (now the default; Motion in the menu) feel
    right, and is the default ease too slow to get going on a short pan?
+   *Answered 2026-10-05: all good as built — keep the defaults, no loop or
+   vertical pan wanted.*
 1. **Show Hub links (ninth and tenth rounds), live.** Both deploys were
    confirmed through the Cloudflare connector: the live Worker's code is the
    tenth round's `worker/index.js` (`sweep`, the key routes), so the build
