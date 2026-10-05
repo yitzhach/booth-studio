@@ -1,8 +1,10 @@
-// Booth Studio's one backend: booth share links (Show Hub, phase 1).
+// Booth Studio's Worker: booth share links (Show Hub, phase 1), and the
+// studio platform's API forwarded on `/v1/*` (`forwardToStudio`, below).
 //
 // The owner's word (2026-09-25): an exhibitor sends the promoter a link, not
 // a file — "we do it on the backend". Everything else the app does stays in
-// the browser; this Worker only answers `/api/*` (`run_worker_first` in
+// the browser, unless the artist signs in to the studio (2026-10-05). This
+// Worker only answers `/api/*` and `/v1/*` (`run_worker_first` in
 // wrangler.jsonc) and hands every other path to the static assets, exactly
 // as before it existed.
 //
@@ -240,9 +242,33 @@ export async function sweep(env) {
   return swept;
 }
 
+/**
+ * The studio platform's API, on this origin (Art-Talk-Back D-039): `/v1/*`
+ * goes to the `studio-api` Worker through the `API` service binding, so the
+ * session cookie is first-party and the API needs no CORS. Booth Studio's own
+ * data never passes through here unless the artist signs in to the studio
+ * (src/studio.js). A deployment with no binding — a branch preview — and a
+ * platform that is down both answer 503 in the API's own error shape, which
+ * the app treats as "the studio can't be reached" and carries on locally.
+ */
+export async function forwardToStudio(request, env) {
+  const down = (message) =>
+    new Response(JSON.stringify({ error: { code: "unavailable", message } }), {
+      status: 503,
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    });
+  if (!env.API) return down("The studio isn't connected to this copy of Booth Studio.");
+  try {
+    return await env.API.fetch(request);
+  } catch {
+    return down("The studio can't be reached just now.");
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname.startsWith("/v1/")) return forwardToStudio(request, env);
     if (url.pathname.startsWith("/api/")) {
       try {
         return await handleApi(request, env);

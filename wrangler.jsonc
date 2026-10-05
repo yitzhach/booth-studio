@@ -1,14 +1,19 @@
 {
+  // The live Booth Studio. Cloudflare's Git integration deploys this file's top
+  // level from `main`, so the top level IS production. Keep the name: the
+  // projects people already saved live in IndexedDB on this Worker's origin,
+  // and "Import my existing projects" can only read them from here.
   "name": "booth-studio",
   "compatibility_date": "2026-09-13",
-  // The one backend: booth share links (worker/index.js). Only /api/* reaches
-  // it; every other path is the static app, as it was before.
+  // The Worker answers two things (worker/index.js): booth share links on
+  // /api/*, and the studio platform's API on /v1/*. Every other path is the
+  // static app, as it was before.
   "main": "worker/index.js",
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"],
+    "run_worker_first": ["/api/*", "/v1/*"],
   },
   "r2_buckets": [{ "binding": "SHARES", "bucket_name": "booth-studio-shares" }],
   // Per address, per minute: links made or updated, and images uploaded. An
@@ -19,4 +24,24 @@
   ],
   // The daily sweep of lapsed links (`scheduled` in worker/index.js).
   "triggers": { "crons": ["17 4 * * *"] },
+  // /v1/* goes to the studio API on the same origin (first-party session
+  // cookie, no CORS; Art-Talk-Back D-039). The API lives in
+  // yitzhach/Art-Talk-Back.
+  "services": [{ "binding": "API", "service": "studio-api" }],
+  "env": {
+    // Staging: a separate Worker against the staging API. Deployed by
+    // Art-Talk-Back's "Deploy staging" workflow, never by the Git integration
+    // (its D-041, D-065). No share-links bucket, rate limits or sweep: /api/*
+    // answers 503 there, so staging can never write to the live bucket.
+    "staging": {
+      "name": "studio-booth-studio-staging",
+      "services": [{ "binding": "API", "service": "studio-api-staging" }],
+      "r2_buckets": [],
+      "ratelimits": [],
+      "triggers": { "crons": [] },
+    },
+  },
+  // Branch previews (Cloudflare uploads a preview for every other branch)
+  // get no service bindings, so a preview serves the app but its /v1 calls
+  // answer 503; test sign-in on studio-booth-studio-staging instead.
 }
