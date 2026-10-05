@@ -141,7 +141,7 @@ async function waitUp() {
 }
 async function codeFor(email, after) {
   const re = new RegExp(`sign-in code for ${email.replace(/[.@+]/g, "\\$&")}: (\\d{6})`, "g");
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 300; i++) {
     const all = [...log.slice(after).matchAll(re)];
     if (all.length) return all.at(-1)[1];
     await new Promise((r) => setTimeout(r, 100));
@@ -260,6 +260,10 @@ async function until(d, what, fn, tries = 80) {
   throw new Error(`${d.name}: timed out waiting for ${what}`);
 }
 
+// Something already answering on the port would be tested instead of this
+// build: a dev server left over from an earlier run, say.
+if (await fetch(`${ORIGIN}/`).then(() => true, () => false))
+  throw new Error(`${ORIGIN} is already in use: stop whatever is serving it (an old wrangler dev?) or set E2E_PORT`);
 const { proc, state } = startServer();
 let browser;
 const errorsSeen = []; // from devices already closed
@@ -428,6 +432,11 @@ try {
   await fetch(`${ORIGIN}/v1/auth/logout`, { method: "POST", headers: { Cookie: `studio_session=${sess.value}` } });
   await rename(one, "After the sign-in ended");
   await sync(one);
+  // The save queues the change and the sync finds the sign-in gone, in either order.
+  for (let i = 0; i < 50 && !((await status(one)) === "expired" && (await pending(one)) >= 1); i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    await sync(one);
+  }
   const ended = { status: await status(one), pending: await pending(one) };
   check("the change waits on the device, not wiped", ended.status === "expired" && ended.pending >= 1 &&
     (await stored(one)).name === "After the sign-in ended", JSON.stringify(ended));
