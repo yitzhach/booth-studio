@@ -58,8 +58,15 @@ jobs:
       - name: src/vendor/studio-sdk.js matches the platform's SDK
         working-directory: .studio-platform
         run: pnpm --filter @studio/sdk bundle:esm --check --out "$GITHUB_WORKSPACE/src/vendor/studio-sdk.js"
-      - name: Playwright's Chromium
-        run: npx playwright install --with-deps chromium
+      # The browser suites are written against the Chromium the development
+      # sandbox has (build 1194, Chromium 141, full browser: BOOTH_TEST_CHROMIUM in
+      # CLAUDE.md), with WebGL on swiftshader. The pinned Playwright's own default,
+      # a newer headless shell, stops drawing frames under the suites' single-process
+      # flags, so CI fetches that same build and points the suites at it.
+      - name: Chromium build 1194 (the sandbox's)
+        run: |
+          npx -y playwright@1.56.1 install --with-deps chromium
+          echo "BOOTH_TEST_CHROMIUM=$HOME/.cache/ms-playwright/chromium-1194/chrome-linux/chrome" >> "$GITHUB_ENV"
       - name: Two devices, offline, against studio-api (the app's compatibility date)
         env: { HTTPS_PROXY: "http://127.0.0.1:9", HTTP_PROXY: "http://127.0.0.1:9", NO_PROXY: "127.0.0.1,localhost", STUDIO_PLATFORM: .studio-platform }
         run: node tests/two-devices.mjs
