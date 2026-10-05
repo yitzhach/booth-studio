@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { blankProject, demoProject, validateProject } from "../src/model.js";
 import {
   FORMAT, IMAGES_MAX, SCENE_MAX, blobOf, bytesOf, fileIdsOf, imagesReady, manifestOf, missingImages, patchFor, placementOf,
-  platformId, projectFrom, sceneOf, sceneText, tooBig, typeOf,
+  platformId, projectFrom, sceneFromRecord, sceneOf, sceneText, tooBig, typeOf,
 } from "../src/placement.js";
 import worker, { forwardToStudio } from "../worker/index.js";
 import { readSession, writeSession } from "../src/studio-session.js";
@@ -54,6 +54,28 @@ test("the same project always gives the same scene text; a change gives a patch 
   assert.deepEqual(Object.keys(patchFor(record, placementOf(p))), ["scene"]);
   p.name = "Summer";
   assert.deepEqual(Object.keys(patchFor(record, placementOf(p))).sort(), ["name", "scene"]);
+});
+
+test("a rename made outside the app (the assistant, the API) reaches the project instead of being sent back", () => {
+  const p = booth();
+  const record = { id: "01J000000000000000000000AA", ...placementOf(p) };
+  // Unchanged, and the column's trimmed or defaulted name, leave the scene as it is.
+  assert.equal(sceneText(sceneFromRecord(record)), sceneText(sceneOf(p)));
+  for (const name of ["  Spring booth ", ""]) {
+    const q = { ...p, name };
+    const r = { ...record, ...placementOf(q) };
+    assert.equal(sceneText(sceneFromRecord(r)), sceneText(sceneOf(q)), JSON.stringify(name));
+  }
+  // Renamed in the studio: only the column moved, and the column wins.
+  const renamed = { ...record, name: "Winter Park booth", version: 2 };
+  assert.notEqual(sceneText(sceneFromRecord(renamed)), sceneText(sceneOf(p)), "the bridge sees a change to apply");
+  const back = projectFrom(renamed, { w: p.assets.w });
+  assert.equal(back.name, "Winter Park booth");
+  assert.doesNotThrow(() => validateProject(back));
+  // Once opened, the project's own placement agrees with the row's name: nothing is sent back over it.
+  assert.equal(placementOf(back).name, "Winter Park booth");
+  assert.deepEqual(Object.keys(patchFor(renamed, placementOf(back)) || {}), ["scene"], "only the scene catches up");
+  assert.equal(record.scene.name, "Spring booth", "the record itself is untouched");
 });
 
 test("file ids come from the last manifest, so an image goes up once", () => {

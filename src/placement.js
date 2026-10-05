@@ -121,7 +121,7 @@ export function placementOf(project, known = {}) {
   const images = manifestOf(project, known);
   return {
     kind: "booth",
-    name: String(project.name || "Booth").trim().slice(0, 200) || "Booth",
+    name: nameOf(project.name),
     format: FORMAT,
     width: finite(project.booth?.width),
     depth: finite(project.booth?.depth),
@@ -132,6 +132,8 @@ export function placementOf(project, known = {}) {
   };
 }
 const finite = (n) => (typeof n === "number" && Number.isFinite(n) && n >= 0 ? n : null);
+/** A project's name as a placement's `name` column holds it. */
+const nameOf = (name) => String(name || "Booth").trim().slice(0, 200) || "Booth";
 
 /**
  * Only what changed between a placement record and the fields a project
@@ -154,12 +156,26 @@ export function missingImages(record, have) {
 export const imagesReady = (record) => (record.images || []).every((im) => !!im.fileId);
 
 /**
+ * The scene a placement describes, with the row's name in it. The scene holds
+ * the project's name too, and the app writes both together; but a rename made
+ * anywhere else (the studio assistant, the API) changes only the `name`
+ * column. The column wins, so that rename reaches the screen instead of being
+ * sent back over by the next save. A name the column holds only trimmed or
+ * defaulted ("Booth") is left as the scene has it.
+ */
+export function sceneFromRecord(record) {
+  const scene = JSON.parse(JSON.stringify(record.scene || {}));
+  if (typeof record.name === "string" && record.name && nameOf(scene.name) !== record.name) scene.name = record.name;
+  return scene;
+}
+
+/**
  * The project a placement describes, with `assets` filled from `assets`
  * (key → asset). The caller validates it (model.js validateProject) before
  * it replaces anything.
  */
 export function projectFrom(record, assets) {
-  const project = JSON.parse(JSON.stringify(record.scene || {}));
+  const project = sceneFromRecord(record);
   project.assets = {};
   for (const im of record.images || []) if (assets[im.key]) project.assets[im.key] = assets[im.key];
   return project;

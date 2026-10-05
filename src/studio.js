@@ -26,6 +26,10 @@
 //                            device's (Art-Talk-Back D-064). The server sends
 //                            the same card when it finds the clash itself.
 //
+// The copy's scene is read with the placement's `name` column in it
+// (`sceneFromRecord`): a rename made outside the app (the studio assistant,
+// the API) moves only that column, and counts as the copy moving.
+//
 // Which projects go to the studio: once signed in, the project open now
 // syncs if it is already in the studio, or if it was started or opened on
 // this browser since signing in. The project that was here *before* signing
@@ -38,7 +42,7 @@
 import { ApiClient, ApiError, PUSH_BATCH, Studio } from "./vendor/studio-sdk.js";
 import { validateProject } from "./model.js";
 import {
-  blobOf, fileIdsOf, imagesReady, manifestOf, missingImages, patchFor, placementOf, platformId, projectFrom, sceneOf,
+  blobOf, fileIdsOf, imagesReady, manifestOf, missingImages, patchFor, placementOf, platformId, projectFrom, sceneFromRecord, sceneOf,
   sceneText, tooBig,
 } from "./placement.js";
 import { load, thumbnailOf } from "./storage.js";
@@ -190,7 +194,7 @@ export function connect(host) {
       writeJSON(APPLIED_KEY, { id, version: 0, hash: hash(localText) });
       return kick();
     }
-    const recordText = sceneText(record.scene);
+    const recordText = sceneText(sceneFromRecord(record));
     if (recordText === localText) {
       writeJSON(APPLIED_KEY, { id, version: record.version ?? 0, hash: hash(localText) });
       const patch = patchFor(record, fields);
@@ -230,7 +234,7 @@ export function connect(host) {
     } catch (err) {
       return setStatus("error", `The studio's copy of this booth couldn't be opened: ${err.message}`);
     }
-    writeJSON(APPLIED_KEY, { id: record.id, version: record.version ?? 0, hash: hash(sceneText(record.scene)) });
+    writeJSON(APPLIED_KEY, { id: record.id, version: record.version ?? 0, hash: hash(sceneText(sceneFromRecord(record))) });
     host.open(next);
     setStatus("synced");
   }
