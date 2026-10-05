@@ -159,6 +159,8 @@ const IGNORE = /Failed to load resource|ERR_INTERNET_DISCONNECTED|net::ERR_FAILE
 async function device(browser, name) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });
   const page = await ctx.newPage();
+  // A CI runner draws WebGL on the CPU, several pages at once: give it time.
+  page.setDefaultTimeout(90_000);
   const errors = [];
   const v1 = [];
   const chunks = [];
@@ -179,6 +181,9 @@ async function ready(d) {
     const s = document.querySelector("#save-status");
     return !!document.querySelector("#project-name") && s && s.textContent !== "Opening…";
   });
+  // The first frames compile the scene's shaders, which on a CPU renderer can
+  // hold the page for a while; a click waits for the page to draw again.
+  await d.page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
 }
 /** Change something and wait until it is saved on the device. */
 async function edit(d, fn) {
@@ -257,6 +262,7 @@ async function until(d, what, fn, tries = 80) {
 
 const { proc, state } = startServer();
 let browser;
+const errorsSeen = []; // from devices already closed
 try {
   await waitUp();
   console.log(`(app compatibility_date ${COMPAT})`);
@@ -274,6 +280,8 @@ try {
   check("signed out, nothing calls /v1", zero.v1.length === 0, zero.v1.join(", "));
   check("signed out, the studio code is never even loaded", zero.chunks.length === 0, zero.chunks.join(", "));
   check("signed out, the footer says Local workspace", (await zero.page.textContent("#network")) === "Local workspace");
+  errorsSeen.push(...zero.errors);
+  await zero.ctx.close(); // one fewer page drawing on the CPU
 
   /* ==== DEVICE 1: sign in, then import ==================================== */
   console.log("\n-- device 1: sign in from inside Booth Studio, then import");
@@ -397,6 +405,8 @@ try {
   got = await stored(three);
   check("a signed-out copy of the app opens it, images and all", got.name === "Name from two" && Object.keys(got.assets).length === 3);
   check("and that copy never called the studio", three.v1.length === 0);
+  errorsSeen.push(...three.errors);
+  await three.ctx.close();
 
   /* ==== THE PLATFORM IS DOWN ============================================== */
   console.log("\n-- the studio answers 503: the app carries on");
@@ -433,7 +443,7 @@ try {
   await until(two, "device 2 to get it", async () => (await stored(two)).name === "After the sign-in ended");
   check("and it reaches the other device", true);
 
-  const errors = [...zero.errors, ...one.errors, ...two.errors, ...three.errors];
+  const errors = [...errorsSeen, ...one.errors, ...two.errors];
   check("no page errors on any device", !errors.length, errors.slice(0, 4).join(" | "));
 } catch (err) {
   fails.push(`crashed: ${err?.stack || err}`);
