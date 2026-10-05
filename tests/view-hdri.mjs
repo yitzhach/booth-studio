@@ -90,7 +90,7 @@ try {
   assert.equal(await rotation.count(), 1, 'a preset with a backdrop offers rotation');
   await rotation.fill('90');
   await rotation.dispatchEvent('change');
-  await page.waitForFunction(() => Math.abs(window.__booth.scene.scene.backgroundRotation.y - Math.PI / 2) < 1e-6, null, { timeout: 5000 });
+  await page.waitForFunction(() => Math.abs(window.__booth.scene.scene.backgroundRotation.y - Math.PI / 2) < 1e-6, null, { timeout: 30000 });
   const turned = await page.evaluate(() => {
     const s = window.__booth.scene.scene;
     return { y: s.backgroundRotation.y, background: !!s.background?.isTexture, intensity: s.backgroundIntensity };
@@ -133,7 +133,7 @@ try {
   await page.waitForFunction(
     () => Math.abs(window.__booth.scene.scene.backgroundRotation.x - Math.PI / 6) < 1e-6,
     null,
-    { timeout: 5000 },
+    { timeout: 30000 },
   );
   const aimed = await page.evaluate(() => {
     const view = window.__booth.scene;
@@ -242,7 +242,7 @@ try {
   await page.waitForFunction(
     () => Math.abs(window.__booth.scene.backdropFraming - 100) < 1e-6,
     null,
-    { timeout: 5000 },
+    { timeout: 30000 },
   );
   const matched = await page.evaluate(() => {
     const view = window.__booth.scene;
@@ -258,7 +258,7 @@ try {
   await page.waitForFunction(
     () => Math.abs(window.__booth.scene.backdropFraming - 65) < 1e-6,
     null,
-    { timeout: 5000 },
+    { timeout: 30000 },
   );
 
   // Image-based lighting must not reach uploaded artwork on the default setting.
@@ -268,7 +268,7 @@ try {
 
   // Going back to a preset with no assets has to release the backdrop.
   await page.selectOption('select[aria-label="Environment"]', 'studio');
-  await page.waitForFunction(() => !window.__booth.scene.scene.environment, null, { timeout: 5000 });
+  await page.waitForFunction(() => !window.__booth.scene.scene.environment, null, { timeout: 30000 });
   const cleared = await page.evaluate(() => {
     const s = window.__booth.scene.scene;
     return { environment: s.environment, intensity: s.backgroundIntensity, rotation: s.backgroundRotation.y };

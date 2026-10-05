@@ -73,7 +73,17 @@ jobs:
       - name: Two devices again, at the platform's pinned compatibility date (its D-025)
         env: { HTTPS_PROXY: "http://127.0.0.1:9", HTTP_PROXY: "http://127.0.0.1:9", NO_PROXY: "127.0.0.1,localhost", STUDIO_PLATFORM: .studio-platform, BOOTH_COMPAT_DATE: "2026-08-15" }
         run: node tests/two-devices.mjs
+      # The same suites as `npm run test:view`, read from package.json, each run
+      # to the end so one CI run reports every failure, not only the first.
       - name: View suites
-        run: npm run test:view
+        run: |
+          suites=$(node -p "require('./package.json').scripts['test:view'].match(/tests\/view-[\w-]+\.mjs/g).join(' ')")
+          failed=""
+          for s in $suites; do
+            echo "::group::$s"
+            node "$s" || failed="$failed $s"
+            echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then echo "::error::View suites failed:$failed"; exit 1; fi
       - name: End-to-end checks
         run: npm run test:browser
