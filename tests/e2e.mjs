@@ -5,6 +5,10 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 const out = path.resolve("test-results");
+// A 4096px export renders on the CPU (swiftshader). On a GitHub runner that
+// takes 25–40 s, past Playwright's default 30 s, so the two 4096px downloads
+// wait longer. It is a wait for the render, not a performance gate.
+const RENDER_WAIT = { timeout: 180_000 };
 await fs.mkdir(out, { recursive: true });
 const server = await createServer({
   server: { host: "127.0.0.1", port: 5183 },
@@ -353,7 +357,7 @@ try {
   await page.locator('[data-action="reset-view"]').click();
   pass("Booth presets and canopy configure actual geometry");
   await page.locator('[data-tab="export"]').click();
-  const dlPromise = page.waitForEvent("download");
+  const dlPromise = page.waitForEvent("download", RENDER_WAIT);
   await page.locator('[data-action="export-image"]').click();
   const dl = await dlPromise;
   await dl.saveAs(path.join(out, "booth-4096.png"));
@@ -408,7 +412,7 @@ try {
     0.8,
   );
   await page.locator('[data-tab="export"]').click();
-  const photoDL = page.waitForEvent("download");
+  const photoDL = page.waitForEvent("download", RENDER_WAIT);
   await page.locator('[data-action="export-image"]').click();
   await (await photoDL).saveAs(path.join(out, "photo-4096.png"));
   const photoPNG = await fs.readFile(path.join(out, "photo-4096.png"));
