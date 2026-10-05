@@ -42,7 +42,7 @@ enough on its own & is the record of what was decided & why.
   - **Studio sign-in and sync through studio-api (2026-10-05)** — replaces the
     old "no accounts, sync or AI calls" rule. `/v1/*` is forwarded to the
     `studio-api` Worker by service binding (same origin). The API lives in
-    `yitzhach/Art-Talk-Back` (its D-059…D-065, `docs/phase-5-booth.md`). Keep
+    `yitzhach/Art-Talk-Back` (its D-061…D-067, `docs/phase-5-booth.md`). Keep
     the Worker name `booth-studio`: the IndexedDB data people already saved
     lives on its origin.
   Anything more server-side is the owner's call first.

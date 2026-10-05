@@ -23,7 +23,7 @@
 //   only the copy moved    → another device's edit arrived: open it here,
 //                            once every image it names can be fetched.
 //   both moved             → the studio keeps its copy and a card offers this
-//                            device's (Art-Talk-Back D-062). The server sends
+//                            device's (Art-Talk-Back D-064). The server sends
 //                            the same card when it finds the clash itself.
 //
 // Which projects go to the studio: once signed in, the project open now
@@ -33,7 +33,7 @@
 // artist asking (the Show Tracker's rule).
 //
 // Images go up one at a time after their placement exists on the server
-// (attach checks it, D-061), and come down when a version that names them is
+// (attach checks it, D-063), and come down when a version that names them is
 // opened. Their thumbnails are made again here.
 import { ApiClient, ApiError, PUSH_BATCH, Studio } from "./vendor/studio-sdk.js";
 import { validateProject } from "./model.js";

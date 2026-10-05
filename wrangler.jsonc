@@ -31,7 +31,7 @@
   "env": {
     // Staging: a separate Worker against the staging API. Deployed by
     // Art-Talk-Back's "Deploy staging" workflow, never by the Git integration
-    // (its D-041, D-065). No share-links bucket, rate limits or sweep: /api/*
+    // (its D-041, D-067). No share-links bucket, rate limits or sweep: /api/*
     // answers 503 there, so staging can never write to the live bucket.
     "staging": {
       "name": "studio-booth-studio-staging",
