@@ -114,6 +114,14 @@ try {
     await page.fill('#autopan-time', '2');
     await page.dispatchEvent('#autopan-time', 'change');
     const still = await pose();
+    // Every toast shown from here on: on a slow runner the app may lower the
+    // preview's detail during the recording and say so, replacing the
+    // export's own toast before it is read.
+    await page.evaluate(() => {
+      const t = document.querySelector('#toast');
+      window.__toasts = [];
+      new MutationObserver(() => window.__toasts.push(t.textContent)).observe(t, { childList: true, characterData: true, subtree: true });
+    });
     const [download] = await Promise.all([
       page.waitForEvent('download', { timeout: 240000 }),
       page.click('.autopan-menu [data-action="autopan-record"]'),
@@ -121,7 +129,9 @@ try {
     assert.match(download.suggestedFilename(), /auto-pan\.mp4$/, 'an MP4 named for the pan');
     const after = await pose();
     assert.deepEqual(after.c, still.c, 'recording leaves the view where it was');
-    assert.match(await page.textContent('#toast'), /2s MP4 exported · 48 frames at 24 fps|Exported as VP9/);
+    const exported = /2s MP4 exported · 48 frames at 24 fps|Exported as VP9/;
+    await page.waitForFunction((src) => window.__toasts.some((m) => new RegExp(src).test(m)), exported.source, { timeout: 15000 })
+      .catch(async () => assert.fail(`no export toast; toasts: ${JSON.stringify(await page.evaluate(() => window.__toasts))}`));
   }
 
   // ---- The card opens with the section chips on -----------------------------------
