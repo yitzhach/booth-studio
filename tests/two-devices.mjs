@@ -477,6 +477,42 @@ try {
   await until(two, "device 2 to get it", async () => (await stored(two)).name === "After the sign-in ended");
   check("and it reaches the other device", true);
 
+  /* ==== THE OPEN BOOTH DELETED FROM THE STUDIO ========================== */
+  // The assistant (or anything else on the API) deletes the booth open on both
+  // devices. Each keeps its copy and says so; neither sends it back. Before
+  // this was handled, a device re-created it, the studio refused the id, and
+  // the two went round again every half second for as long as it was open.
+  console.log("\n-- the open booth is deleted from the studio, not in the app");
+  await until(one, "device 1 settled", async () => (await pending(one)) === 0 && (await status(one)) === "synced");
+  await until(two, "device 2 settled", async () => (await pending(two)) === 0 && (await status(two)) === "synced");
+  const doomed = (await placements(one))[0];
+  const pushes = { one: 0, two: 0 };
+  one.page.on("request", (r) => r.url().includes("/v1/sync/push") && pushes.one++);
+  two.page.on("request", (r) => r.url().includes("/v1/sync/push") && pushes.two++);
+  const removed = await one.page.evaluate(async ({ id, version }) =>
+    (await fetch(`/v1/placements/${id}`, { method: "DELETE", headers: { "If-Match": String(version) } })).status,
+  { id: doomed.id, version: doomed.version });
+  check("the studio takes the delete", removed >= 200 && removed < 300, String(removed));
+  await until(one, "device 1 to see it gone", async () => (await status(one)) === "gone");
+  await until(two, "device 2 to see it gone", async () => (await status(two)) === "gone");
+  const seen = { ...pushes };
+  for (let i = 0; i < 8; i++) {
+    await sync(one);
+    await sync(two);
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  check("neither device sends it back, and nothing goes round", (await placements(one)).length === 0 &&
+    pushes.one === seen.one && pushes.two === seen.two, JSON.stringify({ seen, pushes }));
+  check("both keep the booth, and the footer says so", (await stored(one)).name === doomed.name && (await stored(two)).name === doomed.name &&
+    /deleted from the studio · kept on this device/.test(await one.page.textContent("#network")));
+  if (await one.page.isVisible("#st-close")) await one.page.click("#st-close"); // still open from signing in again
+  await rename(one, "Edited after the delete");
+  await sync(one);
+  await new Promise((r) => setTimeout(r, 600));
+  await sync(one);
+  check("an edit afterwards stays on the device too", (await stored(one)).name === "Edited after the delete" &&
+    (await status(one)) === "gone" && pushes.one === seen.one && (await placements(one)).length === 0, JSON.stringify(pushes));
+
   const errors = [...errorsSeen, ...one.errors, ...two.errors];
   check("no page errors on any device", !errors.length, errors.slice(0, 4).join(" | "));
 } catch (err) {
