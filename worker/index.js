@@ -4,7 +4,7 @@
 // The owner's word (2026-09-25): an exhibitor sends the promoter a link, not
 // a file — "we do it on the backend". Everything else the app does stays in
 // the browser, unless the artist signs in to the studio (2026-10-05). This
-// Worker only answers `/api/*` and `/v1/*` (`run_worker_first` in
+// Worker only answers `/api/*`, `/v1/*` and `/assistant/*` (`run_worker_first` in
 // wrangler.jsonc) and hands every other path to the static assets, exactly
 // as before it existed.
 //
@@ -265,10 +265,33 @@ export async function forwardToStudio(request, env) {
   }
 }
 
+/**
+ * The studio assistant, on this origin (Art-Talk-Back phase-5-booth.md 9c):
+ * `/assistant/*` goes to the `studio-assistant` Worker through the
+ * `ASSISTANT` service binding, with the person's own session cookie.
+ * `GET /assistant/status` is answered here: whether this copy has an
+ * assistant at all, so the panel (src/studio-assistant.js) shows only where
+ * one exists. Staging binds one; production gets the binding once "Deploy
+ * production assistant" has run (Art-Talk-Back D-068).
+ */
+export async function forwardToAssistant(request, env) {
+  const url = new URL(request.url);
+  const json = (status, body) =>
+    new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
+  if (url.pathname === "/assistant/status") return json(200, { available: !!env.ASSISTANT });
+  if (!env.ASSISTANT) return json(404, { error: { code: "not_found", message: "The assistant isn't switched on for this copy of Booth Studio." } });
+  try {
+    return await env.ASSISTANT.fetch(request);
+  } catch {
+    return json(503, { error: { code: "unavailable", message: "The assistant can't be reached just now." } });
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/v1/")) return forwardToStudio(request, env);
+    if (url.pathname.startsWith("/assistant/")) return forwardToAssistant(request, env);
     if (url.pathname.startsWith("/api/")) {
       try {
         return await handleApi(request, env);

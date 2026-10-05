@@ -6586,7 +6586,15 @@ async function boot() {
   // never called.
   let studioLoading = null;
   function loadStudio() {
-    return (studioLoading ||= import("./studio.js").then((m) => (studioBridge = m.connect(studioHost))));
+    return (studioLoading ||= import("./studio.js").then((m) => {
+      studioBridge = m.connect(studioHost);
+      // The assistant's panel comes with the studio, and shows only where an
+      // assistant is connected (src/studio-assistant.js).
+      import("./studio-assistant.js")
+        .then((a) => a.mount(studioBridge, studioHost))
+        .catch((err) => console.error(err));
+      return studioBridge;
+    }));
   }
   const studioHost = {
     project: () => p,

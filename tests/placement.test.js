@@ -9,7 +9,7 @@ import {
   FORMAT, IMAGES_MAX, SCENE_MAX, blobOf, bytesOf, fileIdsOf, imagesReady, manifestOf, missingImages, patchFor, placementOf,
   platformId, projectFrom, sceneFromRecord, sceneOf, sceneText, tooBig, typeOf,
 } from "../src/placement.js";
-import worker, { forwardToStudio } from "../worker/index.js";
+import worker, { forwardToAssistant, forwardToStudio } from "../worker/index.js";
 import { readSession, writeSession } from "../src/studio-session.js";
 
 const PNG = "data:image/png;base64,iVBORw0KGgo=";
@@ -152,4 +152,25 @@ test("the session flag: absent unless signed in, and unreadable storage means si
   assert.equal(readSession({ getItem: () => { throw new Error("blocked"); } }), null);
   store.set("booth.studio", "{nope");
   assert.equal(readSession(storage), null);
+});
+
+test("the Worker forwards /assistant/* to the assistant where one is bound, and says whether one is", async () => {
+  const req = (path, init) => new Request(`https://booth.test${path}`, init);
+  // No binding (production before "Deploy production assistant", a branch preview): available false, chat 404.
+  let res = await forwardToAssistant(req("/assistant/status"), {});
+  assert.deepEqual([res.status, await res.json()], [200, { available: false }]);
+  res = await forwardToAssistant(req("/assistant/chat", { method: "POST", body: "{}" }), {});
+  assert.equal(res.status, 404);
+  assert.match((await res.json()).error.message, /isn't switched on/);
+  // Bound (staging): status says so; everything else goes to the assistant, cookie and all.
+  const seen = [];
+  const ASSISTANT = { fetch: async (r) => (seen.push([r.method, new URL(r.url).pathname, r.headers.get("cookie")]), new Response("event: end\ndata: {}\n\n", { headers: { "content-type": "text/event-stream" } })) };
+  res = await forwardToAssistant(req("/assistant/status"), { ASSISTANT });
+  assert.deepEqual(await res.json(), { available: true });
+  res = await worker.fetch(req("/assistant/chat", { method: "POST", body: "{}", headers: { cookie: "studio_session=abc" } }), { ASSISTANT, ASSETS: { fetch: () => new Response("asset") } });
+  assert.equal(res.headers.get("content-type"), "text/event-stream");
+  assert.deepEqual(seen, [["POST", "/assistant/chat", "studio_session=abc"]]);
+  // The assistant down: a 503 in the API's error shape.
+  res = await forwardToAssistant(req("/assistant/chat", { method: "POST" }), { ASSISTANT: { fetch: async () => { throw new Error("down"); } } });
+  assert.equal(res.status, 503);
 });
