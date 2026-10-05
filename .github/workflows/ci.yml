@@ -58,6 +58,13 @@ jobs:
       - name: src/vendor/studio-sdk.js matches the platform's SDK
         working-directory: .studio-platform
         run: pnpm --filter @studio/sdk bundle:esm --check --out "$GITHUB_WORKSPACE/src/vendor/studio-sdk.js"
+      - name: The platform's src/vendor/booth-scene.js is this app's scene build (Art-Talk-Back D-070)
+        run: |
+          npm run -s bundle:scene
+          f=.studio-platform/workers/studio-api/src/vendor/booth-scene.js
+          if [ ! -f "$f" ]; then echo "::notice::the platform doesn't run this app's scene code yet"; exit 0; fi
+          cmp dist-scene/booth-scene.js "$f" || {
+            echo "::error::Art-Talk-Back's workers/studio-api/src/vendor/booth-scene.js differs from npm run bundle:scene: copy dist-scene/booth-scene.js there on the branch of the same name"; exit 1; }
       # The browser suites are written against the Chromium the development
       # sandbox has (build 1194, Chromium 141, full browser: BOOTH_TEST_CHROMIUM in
       # CLAUDE.md), with WebGL on swiftshader. The pinned Playwright's own default,

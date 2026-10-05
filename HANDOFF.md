@@ -2272,6 +2272,17 @@ nothing of this runs.
 - `src/vendor/studio-sdk.js`: **generated** — Art-Talk-Back `pnpm --filter
   @studio/sdk bundle:esm --out <this file>`. Never edit it; CI in both repos
   fails when it is out of date.
+- `src/scene-ops.js` (pure, `tests/scene-ops.test.js`): a booth changed by
+  name — `describe`, `applyOps`, `build` and `OPS`, the op catalog with
+  each op's JSON Schema. **studio-api runs this file**: `npm run
+  bundle:scene` builds it (and model.js, quickstart.js, arrange.js,
+  placement.js under it) into `dist-scene/booth-scene.js`, which
+  Art-Talk-Back vendors as `workers/studio-api/src/vendor/booth-scene.js`
+  for `placement.edit`, `placement.build` and `describe_booth` (its D-070).
+  So the studio assistant, or any agent, edits a booth with this app's own
+  helpers and validator. Change an op, or anything those modules export
+  that it uses, and the platform's copy must be rebuilt on the branch of
+  the same name: CI in both repos compares the two byte for byte.
 - main.js touches it in three places only: `studioHost` + `loadStudio`
   (near the end of `boot`), `studioBridge?.saved()` after each save, and
   the `studio-account` action.
@@ -2308,6 +2319,11 @@ nothing of this runs.
   this was fixed, the device re-created the booth, the studio refused the
   id, the SDK dropped it, and the two went round about three times a
   second for as long as the booth was open.
+- **The scene code has one author: this app.** studio-api never edits a
+  Booth Studio scene by itself; it runs `src/scene-ops.js` as built here.
+  Keep those modules pure (no DOM, no storage): the bundle runs in a
+  Worker. Every op result passes `validateProject`, so an edit made by the
+  assistant opens here like one made by hand.
 - **Merge order across the repos:** when this app needs a platform change,
   the platform merges and deploys first, because `main` here is production
   and talks to production `studio-api`. Each PR says its order.
@@ -2428,7 +2444,7 @@ npm run build
 npm run test:view        # 34 suites (tools2, hub and share included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
 npm run test:browser     # 25 end-to-end checks
-STUDIO_PLATFORM=../Art-Talk-Back BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/two-devices.mjs   # 44 checks; after npm run build (see Studio platform)
+STUDIO_PLATFORM=../Art-Talk-Back BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/two-devices.mjs   # 49 checks; after npm run build (see Studio platform)
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
 ```
 

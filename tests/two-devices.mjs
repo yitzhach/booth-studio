@@ -42,6 +42,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { validateProject } from "../src/model.js";
 
 const APP = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ROOT = path.resolve(APP, process.env.STUDIO_PLATFORM || path.join("..", "Art-Talk-Back"));
@@ -215,6 +216,15 @@ async function addImage(d, name, color) {
   throw new Error(`${d.name}: the image never reached the device's storage`);
 }
 /** What the device has saved: the project's name and id, and each image's original by key. */
+/** Whether the app's own validator opens this project (what a backup restore checks). */
+const validates = (p) => {
+  try {
+    validateProject(structuredClone(p));
+    return true;
+  } catch {
+    return false;
+  }
+};
 const stored = (d) =>
   d.page.evaluate(() => new Promise((resolve, reject) => {
     const r = indexedDB.open("artist-os-booth-studio");
@@ -230,6 +240,29 @@ const stored = (d) =>
         keys.result.forEach((k, i) => (assets[k] = rows.result[i].data));
         db.close();
         resolve({ name: project.result?.name, id: project.result?.id, assets });
+      };
+    };
+  }));
+/** The whole saved project, put back together the way storage.js load() does. */
+const savedProject = (d) =>
+  d.page.evaluate(() => new Promise((resolve, reject) => {
+    const r = indexedDB.open("artist-os-booth-studio");
+    r.onerror = () => reject(r.error);
+    r.onsuccess = () => {
+      const db = r.result;
+      const tx = db.transaction(["projects", "assets"]);
+      const project = tx.objectStore("projects").get("current");
+      const keys = tx.objectStore("assets").getAllKeys();
+      const rows = tx.objectStore("assets").getAll();
+      tx.oncomplete = () => {
+        const p = project.result;
+        db.close();
+        if (!p.assets || !Object.keys(p.assets).length) {
+          p.assets = {};
+          keys.result.forEach((k, i) => (p.assets[k] = rows.result[i]));
+          delete p.assetOrder;
+        }
+        resolve(p);
       };
     };
   }));
@@ -512,6 +545,47 @@ try {
   await sync(one);
   check("an edit afterwards stays on the device too", (await stored(one)).name === "Edited after the delete" &&
     (await status(one)) === "gone" && pushes.one === seen.one && (await placements(one)).length === 0, JSON.stringify(pushes));
+
+  /* ==== A BOOTH BUILT AND CHANGED BY AN AGENT ============================ */
+  // Art-Talk-Back D-070: studio-api runs this app's own scene code
+  // (src/scene-ops.js), so a booth an agent builds or edits through the API
+  // opens here like one made here, and passes the app's own validator.
+  console.log("\n-- a booth built and changed through the studio API, by an agent");
+  const action = (d, name, input) => d.page.evaluate(async ({ name, input }) => {
+    const r = await fetch(`/v1/actions/${name}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
+    return { status: r.status, data: await r.json() };
+  }, { name, input });
+  const built = await action(one, "placement.build", {
+    name: "Built by an agent", show: "artshow", size: "10x15",
+    ops: [{ op: "add_furniture", kind: "chair", x: 0, z: 20, rotation: 180 }],
+  });
+  check("an agent builds a booth through the API", built.status === 200 && built.data.result.width === 180, JSON.stringify(built.data).slice(0, 200));
+  const builtId = built.data.result.id;
+  await sync(one);
+  if (await one.page.isVisible("#st-close")) await one.page.click("#st-close");
+  await one.page.click('button.avatar[data-action="studio-account"]');
+  await one.page.waitForSelector(`[data-open-booth="${builtId}"]`);
+  check("Studio account lists it", /Built by an agent/.test(await one.page.textContent("#st-booths")));
+  await one.page.click(`[data-open-booth="${builtId}"]`);
+  // The booth open here was deleted from the studio, so a backup of it goes first.
+  await one.page.waitForSelector("#confirm-go");
+  await Promise.all([one.page.waitForEvent("download"), one.page.click("#confirm-go")]);
+  await until(one, "the built booth to open", async () => (await one.page.inputValue("#project-name")) === "Built by an agent");
+  await until(one, "the built booth to save", async () => (await stored(one)).name === "Built by an agent");
+  let mine = await savedProject(one);
+  check("it opens on screen: an indoor art-show booth, 15′ wide, with its chair, and the app's validator takes it",
+    mine.booth.venue === "artshow" && mine.booth.width === 180 && mine.booth.pedestals.some((x) => x.kind === "chair") && validates(mine),
+    JSON.stringify([mine.booth.venue, mine.booth.width, mine.booth.pedestals.length]));
+  await until(one, "device 1 settled", async () => (await pending(one)) === 0 && (await status(one)) === "synced");
+  const current = (await action(one, "placement.edit", { id: builtId, version: (await placements(one)).find((x) => x.id === builtId).version,
+    ops: [{ op: "add_furniture", kind: "table6", x: -30, z: 36, ref: "t" }, { op: "set_booth", color: "#f4f1ea" }, { op: "rename", name: "Edited by an agent" }] }));
+  check("the agent edits it while it's open", current.status === 200, JSON.stringify(current.data).slice(0, 200));
+  await until(one, "the edit on screen", async () => (await one.page.inputValue("#project-name")) === "Edited by an agent");
+  await until(one, "the edit saved", async () => (await savedProject(one)).booth.pedestals.some((x) => x.kind === "table6"));
+  mine = await savedProject(one);
+  check("the screen follows: the table where it was put, the colour, the name, and still valid",
+    mine.booth.pedestals.find((x) => x.kind === "table6")?.x === -30 && mine.booth.color === "#f4f1ea" && validates(mine) &&
+    !(await one.page.$('#studio-card:not([hidden])')));
 
   const errors = [...errorsSeen, ...one.errors, ...two.errors];
   check("no page errors on any device", !errors.length, errors.slice(0, 4).join(" | "));
