@@ -16,6 +16,12 @@ Extend it; do not rebuild it.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
+- **Studio platform (started 2026-10-05, branch `claude/festive-curie-ohram8`).**
+  The owner approved studio sign-in and sync through `studio-api` (the shared
+  backend in `yitzhach/Art-Talk-Back`). The plan, its gate and what still
+  needs the owner are in Art-Talk-Back `docs/phase-5-booth.md`; the decisions
+  are its D-059…D-065. Read the section **Studio platform** below before
+  touching sign-in, sync, `worker/index.js` or `wrangler.jsonc`.
 - **Last deploy: 2026-09-28, fifteenth round — a double-clicked figure's card is shown whichever section chip was open.**
   The owner reported that double-clicking the man did not open his card.
   The pick itself was fine, from every view and orbit (a sweep of 24 orbits
