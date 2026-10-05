@@ -20,7 +20,7 @@ Extend it; do not rebuild it.
   The owner approved studio sign-in and sync through `studio-api` (the shared
   backend in `yitzhach/Art-Talk-Back`). The plan, its gate and what still
   needs the owner are in Art-Talk-Back `docs/phase-5-booth.md`; the decisions
-  are its D-059…D-065. Read the section **Studio platform** below before
+  are its D-061…D-067. Read the section **Studio platform** below before
   touching sign-in, sync, `worker/index.js` or `wrangler.jsonc`.
 - **Last deploy: 2026-09-28, fifteenth round — a double-clicked figure's card is shown whichever section chip was open.**
   The owner reported that double-clicking the man did not open his card.
@@ -1795,6 +1795,19 @@ Extend it; do not rebuild it.
 
 ## Next
 
+1. **The studio, by hand (2026-10-05).** Everything in Studio platform
+   (below) is tested here with two browser contexts against a local
+   studio-api; none of it has been used by a person. On
+   `studio-booth-studio-staging` first, then production: sign in from
+   Studio account on the Mac, Import my existing projects, then sign in on
+   the phone and open the booth from Studio account. Is the avatar the
+   right door (it is hidden on a phone; Export → Keep your work → Studio
+   account & sync is the phone's)? Does "the project from before signing
+   in stays here until you import it" read right? With a real booth of
+   full-size photographs, how long does the import's upload take, and is
+   "uploading images 3 of 40" in the footer enough to watch? The assistant
+   panel (stage 2 of the plan) waits on the first production deploy of
+   `studio-assistant`, which is the owner's.
 1. **The thirteenth round, on the real machine.** Double-click a figure
    from the Left and Right views and from an orbit round the side: does
    its card open every time? *Reported 2026-09-28: the man's did not —
@@ -2209,6 +2222,84 @@ with sliders — custom video mode with its keyframe timeline, fades and
 tracking lens flare, the Ken Burns move, people for scale, and the indoor
 art-show booth are **done** and are no longer on this list; see Now.
 
+## Studio platform
+
+Booth Studio is an app on the studio platform (owner-approved 2026-10-05).
+The platform — `studio-api`, its database, the SDK, and later the assistant —
+lives in **`yitzhach/Art-Talk-Back`**: read its `docs/HANDOFF.md`, its
+`docs/phase-5-booth.md` (this app's plan, gate and what still needs the
+owner) and its decisions D-061…D-067 before changing anything here that
+talks to it. The two repos stay separate (its D-042).
+
+**What a signed-in artist gets.** Studio account (the avatar, or Export →
+Keep your work) signs in with the studio's emailed code, on this origin.
+Signed in, the open project is kept in the studio as a *placement* and
+opens on any other signed-in device; its images go up as studio files.
+"Import my existing projects" moves the project that was on the device
+before signing in (nothing goes up until the artist asks). Signed out,
+nothing of this runs.
+
+**Where it lives.**
+
+- `worker/index.js` `forwardToStudio`: `/v1/*` → the `API` service binding
+  (same origin; the session cookie is first-party). No binding, or the
+  platform down → 503 in the API's error shape.
+- `src/studio-session.js`: the one thing main.js reads at start — whether
+  this browser is signed in. Only a yes (or opening Studio account) loads
+  `src/studio.js` and the SDK, a separate chunk.
+- `src/placement.js` (pure, `tests/placement.test.js`): a project as a
+  placement and back. `scene` is the schema-1 project with `assets` taken
+  out; `images` is the manifest (asset id → studio file id, size, type,
+  role). So a synced project *is* a project, and its backup is the backup
+  it always was.
+- `src/studio.js`: sign-in, the sync loop, `reconcile()` (the comment at the
+  top of the file is the rule book: who wins when the project on screen
+  and the studio's copy differ), image upload and download, the review card,
+  an ended sign-in, the import, and the list of the studio's booths.
+  Exposes `window.BoothStudio` (sync, status, pendingCount) for the
+  two-device test and for debugging on a phone.
+- `src/vendor/studio-sdk.js`: **generated** — Art-Talk-Back `pnpm --filter
+  @studio/sdk bundle:esm --out <this file>`. Never edit it; CI in both repos
+  fails when it is out of date.
+- main.js touches it in three places only: `studioHost` + `loadStudio`
+  (near the end of `boot`), `studioBridge?.saved()` after each save, and
+  the `studio-account` action.
+
+**Rules that bite.**
+
+- **Keep the Worker name `booth-studio`.** The projects people saved are in
+  IndexedDB on its origin; the import can only read them from here.
+- **Schema 1 still rules the scene.** The studio stores the project as it is;
+  a new project field needs nothing on the platform, but the platform caps a
+  scene at 600,000 characters of JSON and 400 images (its D-062). A bigger
+  project stays on the device and the footer says why.
+- **One project open at a time, as ever.** The studio holds many; Studio
+  account lists them and opens one in place of the current project (a
+  backup downloads first if the current one isn't in the studio).
+- **Two devices, one booth:** the whole scene is one field, so edits on two
+  devices at once don't merge: the studio keeps its copy and the second
+  device gets a card with "Use this device's" (its D-064).
+- **Merge order across the repos:** when this app needs a platform change,
+  the platform merges and deploys first, because `main` here is production
+  and talks to production `studio-api`. Each PR says its order.
+
+**Testing.** `tests/two-devices.mjs` runs the built app behind its real Worker
+and a real studio-api from an Art-Talk-Back checkout under `wrangler dev`,
+two (and more) browser contexts as devices:
+
+```sh
+npm run build
+STUDIO_PLATFORM=../Art-Talk-Back BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/two-devices.mjs
+BOOTH_COMPAT_DATE=2026-08-15 STUDIO_PLATFORM=... node tests/two-devices.mjs   # the platform's pinned date
+E2E_LOG=/tmp/wr.log ...   # on a failure, the dev server's log (studio-api's errors) goes here
+```
+
+The checkout needs `pnpm install`. The test writes its own copy of
+studio-api's dev config with a throwaway `SIGNING_KEY` (image links need
+one) and wraps `worker/index.js` in a default-export-only entry, because
+`wrangler dev` with several Workers rejects its exported constants as
+entrypoints (the deployed Worker is unaffected).
+
 ## Diagnosing "the texture isn't showing"
 
 This came up twice and was guessed at twice. Do not guess a third time.
@@ -2269,20 +2360,31 @@ the picker became one list.
 | Push target | Cloudflare result |
 | - | - |
 | `main` | **production** |
-| any other branch | preview only |
+| any other branch | preview only (no service bindings: `/v1` answers 503) |
+| Art-Talk-Back "Deploy staging" (`booth_ref`) | `studio-booth-studio-staging` |
 
-- Merging to `main` is the deploy. There is no other step, and **there is no
-  GitHub Actions workflow** — it is Cloudflare's Git integration alone.
+- Merging to `main` is the deploy. There is no other step. **GitHub Actions
+  runs CI only** (`.github/workflows/ci.yml`, job `booth`, since 2026-10-05);
+  it never deploys — production is Cloudflare's Git integration alone.
+- **Staging** is a separate Worker, `studio-booth-studio-staging`
+  (`env.staging` in `wrangler.jsonc`), bound to `studio-api-staging`. Only
+  Art-Talk-Back's manual "Deploy staging" workflow deploys it (input
+  `booth_ref`: the branch). It has no share-links bucket, so `/api/*`
+  answers 503 there. Test studio sign-in on staging, never on a branch
+  preview.
 - **The dashboard uploader cannot deploy this project** and will say so: it is
   a Vite app with a `wrangler.jsonc`, so it needs a build. Do not fight it.
 - `wrangler deploy` with no credentials opens a browser login and hangs forever
   in a headless session. Needs `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`
   and `CI=true`. Merging is easier.
 - Account `8e38cda861b39784706d53545a0a435f`, worker `booth-studio`.
-- **Since 2026-09-25 the Worker has code** (`worker/index.js`, `/api/*` only)
-  and an **R2 binding to `booth-studio-shares`**, which must exist or the
-  deploy fails. `npx wrangler deploy --dry-run --outdir /tmp/wd` after a
-  build checks the config without credentials and lists both bindings.
+- **Since 2026-09-25 the Worker has code** (`worker/index.js`) and an **R2
+  binding to `booth-studio-shares`**, which must exist or the deploy fails.
+  **Since 2026-10-05 it also has a service binding `API` → `studio-api`**,
+  which must exist too (it does: the platform's production API). `npx
+  wrangler deploy --dry-run --outdir /tmp/wd` after a build checks the config
+  without credentials and lists the bindings; add `--env staging` for
+  staging's.
 - The footer reads `v0.1.0 · <time> UTC · <commit>`, hidden under the mobile
   breakpoint — use `window.BOOTH_BUILD` on a phone. **Check it before
   believing a fix did not ship**: a merge was reported as not working twice,
@@ -2292,11 +2394,12 @@ the picker became one list.
 
 ```sh
 npm ci
-npm test                 # 413 Node tests
+npm test                 # 438 Node tests
 npm run build
 npm run test:view        # 34 suites (tools2, hub and share included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
 npm run test:browser     # 25 end-to-end checks
+STUDIO_PLATFORM=../Art-Talk-Back BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/two-devices.mjs   # 37 checks; after npm run build (see Studio platform)
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
 ```
 
@@ -2784,5 +2887,8 @@ anything else in a browser until it is done.
 - `AI_EXPORT_PHASE.md` — the paid AI export's server side, still design
   only; its client half (the passes, the protected artwork) is
   `src/ai-render.js`. Read both before choosing a provider.
+- `src/studio.js`, `src/placement.js`, `src/studio-session.js` — the studio
+  platform: sign-in and sync (see Studio platform); `tests/two-devices.mjs`
+  — its gate. The platform itself is in `yitzhach/Art-Talk-Back`.
 - `docs/ORIGINAL-HANDOFF.md` — historical; ignore unless you need old
   requirements.

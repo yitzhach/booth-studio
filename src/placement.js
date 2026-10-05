@@ -1,4 +1,4 @@
-// A Booth Studio project as a studio placement, and back (Art-Talk-Back D-060).
+// A Booth Studio project as a studio placement, and back (Art-Talk-Back D-062).
 //
 // Pure: no DOM, no network, so tests/placement.test.js can hold every rule.
 // src/studio.js does the talking.
@@ -13,7 +13,7 @@
 //   the scene already uses (`art[].asset`, `photo.asset`, "upload:<id>"
 //   grounds…), naming the studio file that holds the original once it has
 //   been uploaded (`fileId`, null until then). The bytes never go in the row
-//   (D-061); thumbnails are made again on each device.
+//   (D-063); thumbnails are made again on each device.
 // - The space's real size (`width`, `depth`, `height` in inches) and the name
 //   sit in columns, so a list or another app (ar-wall-placer, later) can read
 //   them without knowing Booth Studio's format.
