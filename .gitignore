@@ -5,3 +5,4 @@ dist/
 test-results/
 .tmp-scratch/
 .probe/
+dist-scene
