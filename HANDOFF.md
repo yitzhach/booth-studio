@@ -38,9 +38,11 @@ Extend it; do not rebuild it.
   (Art-Talk-Back `phase-5-booth.md` 9c) as "Ask the assistant", bottom
   right, `src/studio-assistant.js`. It shows only while signed in to the
   studio *and* where this copy of Booth Studio has an assistant connected:
-  staging (`studio-booth-studio-staging`) has one; production has none
-  until the owner's "Deploy production assistant" has run and the
-  `ASSISTANT` line is added to `wrangler.jsonc` (see Studio platform). The
+  staging (`studio-booth-studio-staging`) and, since 2026-10-06,
+  production: the owner approved "Deploy production assistant" and the
+  `ASSISTANT` line to `studio-assistant` is in `wrangler.jsonc`'s
+  top-level services (see Studio platform). On a phone it is the same
+  button, bottom right, and opens as a sheet from the bottom. The
   Show Tracker's chat is likewise on its staging Worker only
   (https://studio-show-tracker-staging.bobdylan2000.workers.dev, main page
   and Expenses), never on its production address.
@@ -2318,10 +2320,8 @@ nothing of this runs.
   lines, and calls the bridge's `sync()` after Confirm and Undo so the
   change reaches the screen; a booth the assistant made gets "Open it".
   `/assistant/*` goes to the `ASSISTANT` service binding: only
-  `env.staging` has one (`studio-assistant-staging`). **For production**,
-  once `studio-assistant` exists, add
-  `{ "binding": "ASSISTANT", "service": "studio-assistant" }` to the
-  top-level `services`; until then the panel never shows there.
+  `env.staging` has `studio-assistant-staging`; production (top-level
+  `services`) has `studio-assistant` since 2026-10-06.
   `tests/view-assistant.mjs` proves it with the studio and the assistant
   routed (no model runs).
 - main.js touches it in three places only: `studioHost` + `loadStudio`

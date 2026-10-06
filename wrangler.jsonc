@@ -27,7 +27,11 @@
   // /v1/* goes to the studio API on the same origin (first-party session
   // cookie, no CORS; Art-Talk-Back D-039). The API lives in
   // yitzhach/Art-Talk-Back.
-  "services": [{ "binding": "API", "service": "studio-api" }],
+  "services": [
+    { "binding": "API", "service": "studio-api" },
+    // The chat panel's assistant (src/studio-assistant.js; Art-Talk-Back D-068).
+    { "binding": "ASSISTANT", "service": "studio-assistant" },
+  ],
   "env": {
     // Staging: a separate Worker against the staging API. Deployed by
     // Art-Talk-Back's "Deploy staging" workflow, never by the Git integration
@@ -36,9 +40,8 @@
     "staging": {
       "name": "studio-booth-studio-staging",
       // ASSISTANT: the chat panel's studio-assistant (src/studio-assistant.js).
-      // Production has none until "Deploy production assistant" has run
-      // (Art-Talk-Back D-068); then add the same line, with studio-assistant,
-      // to the top-level services. Without it the panel never shows.
+      // Production's is studio-assistant (top-level services), deployed by
+      // Art-Talk-Back's "Deploy production assistant" (D-068).
       "services": [
         { "binding": "API", "service": "studio-api-staging" },
         { "binding": "ASSISTANT", "service": "studio-assistant-staging" },
