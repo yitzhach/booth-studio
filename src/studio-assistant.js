@@ -675,6 +675,13 @@ class Panel extends HTMLElement {
       const map = this.host?.appMap?.();
       if (map) body.appMap = String(map).slice(0, 15000);
     } catch {}
+    // A booth from before signing in, untouched since, waits for the import:
+    // asking about it sends it to the studio first, so the assistant can read it.
+    if (this.bridge?.status?.() === "local" && this.bridge.adopt) {
+      try {
+        await this.bridge.adopt();
+      } catch {}
+    }
     const record = await this.record();
     if (record) body.record = record;
     if (this.fresh) {

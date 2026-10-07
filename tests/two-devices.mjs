@@ -597,6 +597,23 @@ try {
     mine.hall?.items?.filter((x) => x.kind === "booth").length === 8 && mine.hall.booths[105]?.name === "Ada Pottery" && mine.hall.mine === 103,
     JSON.stringify(mine.hall && { items: mine.hall.items.length, mine: mine.hall.mine }));
 
+  /* ==== the booth on screen, changed after signing in, goes up by itself === */
+  console.log("\n-- a device's own booth: untouched it waits, changed it goes to the studio");
+  await two.ctx.close(); // one fewer page drawing on the CPU
+  const four = await device(browser, "device 4");
+  await ready(four);
+  await signIn(four);
+  await sync(four);
+  const had = (await placements(four)).length;
+  check("untouched since signing in, it waits for the import", (await status(four)) === "local" && (await placements(four)).length === had);
+  await four.page.click("#st-close");
+  await rename(four, "Changed after signing in");
+  await until(four, "the changed booth in the studio", async () => (await placements(four)).some((b) => b.name === "Changed after signing in"));
+  check("changed after signing in, it goes to the studio by itself (the owner, 2026-10-07)",
+    (await placements(four)).length === had + 1 && (await status(four)) === "synced", await status(four));
+  errorsSeen.push(...four.errors);
+  await four.ctx.close();
+
   const errors = [...errorsSeen, ...one.errors, ...two.errors];
   check("no page errors on any device", !errors.length, errors.slice(0, 4).join(" | "));
 } catch (err) {

@@ -98,7 +98,8 @@ export function connect(host) {
   let status = "signed_out";
   let detail = "";
   let timer = null;
-  let syncing = null;
+  let syncing = null,
+    again = null;
   let chain = Promise.resolve();
   let card = null; // { deviceCopy } while a review card is showing
   const listeners = new Set();
@@ -206,9 +207,16 @@ export function connect(host) {
     const agreed = applied && applied.id === id ? applied : null;
 
     if (!record) {
-      // Not in the studio. The project from before signing in waits for the import.
+      // Not in the studio. The project that was open when signing in waits
+      // for the import only while it is untouched (the owner, 2026-10-07: the
+      // assistant couldn't see a booth he was working on). Changed since, or
+      // asked about in the assistant (adopt), it goes up like any other. A
+      // sign-in from before localHash existed has none: it goes up now.
       const s = session();
-      if (s?.local === p.id) return setStatus("local");
+      if (s?.local === p.id) {
+        if (s.localHash && s.localHash === hash(localText)) return setStatus("local");
+        writeSession({ ...s, local: null, localHash: null });
+      }
       // It was there (this browser agreed with a version the studio gave it)
       // and now it isn't: deleted from the studio, by the assistant, the API
       // or another app. The project stays here and is never sent back; an
@@ -323,14 +331,19 @@ export function connect(host) {
 
   // ----------------------------------------------------------------- sync
 
-  /** Push, pull, upload, reconcile. Never throws: problems become a status. */
+  /**
+   * Push, pull, upload, reconcile. Never throws: problems become a status.
+   * Called while one is on its way, it runs once more after it, so what was
+   * saved (or adopted) before the call is in the studio when it resolves; the
+   * one already running may have reconciled before that.
+   */
   function sync() {
     if (!studio) return Promise.resolve();
     if (expired()) {
       setStatus("expired");
       return Promise.resolve();
     }
-    if (syncing) return syncing;
+    if (syncing) return (again ||= syncing.then(() => ((again = null), sync())));
     setStatus("syncing");
     syncing = (async () => {
       try {
@@ -426,7 +439,7 @@ export function connect(host) {
     const same = prev && prev.email === email && (prev.studioId || null) === studioId;
     if (prev && !same) await forget();
     const p = host.project();
-    writeSession(same ? { ...prev, expired: false } : { signedIn: true, email, studioId, local: p.id, synced: false });
+    writeSession(same ? { ...prev, expired: false } : { signedIn: true, email, studioId, local: p.id, localHash: hash(sceneText(placementOf(p).scene)), synced: false });
     if (!studio) open();
     setStatus("syncing");
     await sync();
@@ -609,7 +622,7 @@ export function connect(host) {
       };
       return;
     }
-    box.innerHTML = `<h2>Studio account</h2><p id="st-signed-in">Signed in as <strong>${e(s.email)}</strong>.</p><p class="muted" id="st-status">${e(networkText())}${detail && status !== "offline" && status !== "uploading" ? ` — ${e(detail)}` : ""}</p><div class="button-row"><button id="st-sync">Sync now</button><button id="st-signout">Sign out</button></div><section><h3>Your studio's booths</h3><div id="st-booths" class="muted">Loading…</div></section><section><h3>This device's projects</h3><p class="muted" id="st-import-text">${s.local ? "The project that was on this device before you signed in stays here until you import it." : "Projects you start or open here go to the studio by themselves."}</p><div class="button-row"><button class="primary" id="st-import">Import my existing projects</button></div><p class="muted" id="st-import-result" role="status"></p></section><div class="button-row"><button id="st-close">Close</button></div>`;
+    box.innerHTML = `<h2>Studio account</h2><p id="st-signed-in">Signed in as <strong>${e(s.email)}</strong>.</p><p class="muted" id="st-status">${e(networkText())}${detail && status !== "offline" && status !== "uploading" ? ` — ${e(detail)}` : ""}</p><div class="button-row"><button id="st-sync">Sync now</button><button id="st-signout">Sign out</button></div><section><h3>Your studio's booths</h3><div id="st-booths" class="muted">Loading…</div></section><section><h3>This device's projects</h3><p class="muted" id="st-import-text">${s.local ? "The project that was on this device when you signed in stays here until you change it, ask the assistant about it, or import it." : "Projects you start or open here go to the studio by themselves."}</p><div class="button-row"><button class="primary" id="st-import">Import my existing projects</button></div><p class="muted" id="st-import-result" role="status"></p></section><div class="button-row"><button id="st-close">Close</button></div>`;
     box.querySelector("#st-close").onclick = () => d.close();
     box.querySelector("#st-sync").onclick = async () => {
       await sync();
@@ -675,6 +688,13 @@ export function connect(host) {
     detail: () => detail,
     pendingCount: async () => (studio ? (await studio).pendingCount() : 0),
     placementId: currentId,
+    // The assistant was asked about the booth on screen: send it to the studio
+    // now if it was waiting for the import, so the assistant can read it.
+    async adopt() {
+      const s = session();
+      if (s?.local === host.project().id) writeSession({ ...s, local: null, localHash: null });
+      await sync();
+    },
     importExisting,
     // For the assistant panel's "Open it" on a booth it just made.
     openBooth: (id) => openBooth(id),
