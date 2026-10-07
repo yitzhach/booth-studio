@@ -14,6 +14,11 @@
 // open booth goes with each message as the chat's `record`, so "this booth"
 // means the one on screen.
 //
+// On the page it is a pop-up the artist drags by its title bar, resizes from
+// its corner and shrinks to the bar, kept where it was left on this device;
+// main.js adds two more doors to it (the header's button, and a phone's round
+// icon above Find a tool's, which replaces the floating button there).
+//
 // Shown only while signed in to the studio and only where this copy of Booth
 // Studio has an assistant (GET /assistant/status, answered by worker/index.js):
 // staging has one; production has none until "Deploy production assistant"
@@ -150,60 +155,104 @@ function rememberSaid(text) {
 
 const CSS = [
   "*,*::before,*::after{box-sizing:border-box}",
+  // The app's own dark palette (style.css :root; custom properties reach into the
+  // shadow root), with the same values as fallbacks.
+  ":host{--bg:var(--surface,#1b2026);--fg:#e9edf0;--line2:var(--line,#333a42);--mut:var(--muted,#9ca5af);--btn:#252c33;--me:var(--selected,#293d53);--bot:#252c33;--accent:var(--blue,#91beff);--warn:#f5b766;color-scheme:dark}",
   // Above the footer, clear of the library on the left.
-  ":host{position:fixed;right:16px;bottom:44px;z-index:1900;font:inherit;color:#171717}",
+  ":host{position:fixed;right:16px;bottom:44px;z-index:1900;font:inherit;color:var(--fg)}",
   ":host([hidden]){display:none}",
-  ".launch{font:inherit;font-size:14px;font-weight:600;padding:9px 15px;border-radius:999px;border:1px solid #d9d9d9;background:#fff;color:inherit;box-shadow:0 6px 24px rgba(0,0,0,.18);cursor:pointer}",
-  ".panel{position:fixed;right:16px;bottom:92px;width:min(420px,calc(100vw - 32px));max-height:min(70vh,640px);display:flex;flex-direction:column;background:#fff;border:1px solid #e5e5e5;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.2)}",
+  ".launch{font:inherit;font-size:14px;font-weight:600;padding:9px 15px;border-radius:999px;border:1px solid var(--line2);background:var(--btn);color:inherit;box-shadow:0 6px 24px rgba(0,0,0,.4);cursor:pointer}",
+  // A pop-up the artist can drag by its title bar, resize from the corner and
+  // shrink to its title bar; place() sets left, top, width and height.
+  ".panel{position:fixed;display:flex;flex-direction:column;background:var(--bg);border:1px solid var(--line2);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.5);overflow:hidden}",
   ".panel[hidden]{display:none}",
-  "header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #e5e5e5}",
-  "h2{margin:0;font-size:15px}",
-  ".tools{display:flex;align-items:center;gap:4px}",
+  ".panel.moving{opacity:.75}",
+  ".panel.min{height:auto!important}",
+  ".panel.min>:not(header){display:none!important}",
+  "header{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:6px 8px 6px 14px;border-bottom:1px solid var(--line2);cursor:move;touch-action:none;user-select:none;-webkit-user-select:none}",
+  ".panel.min header{border-bottom:none}",
+  "h2{margin:0;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
+  ".tools{display:flex;align-items:center;gap:4px;flex:none}",
   "button.small{font-size:13px;padding:4px 10px}",
-  ".close{font:inherit;font-size:20px;line-height:1;border:none;background:none;color:inherit;cursor:pointer;padding:4px 8px}",
+  ".close,.shrink{font:inherit;font-size:20px;line-height:1;border:none;background:none;color:inherit;cursor:pointer;padding:4px 8px;min-width:32px}",
+  ".grip{position:absolute;right:0;bottom:0;width:22px;height:22px;cursor:nwse-resize;touch-action:none;background:linear-gradient(135deg,transparent 50%,var(--mut) 50%,var(--mut) 58%,transparent 58%,transparent 70%,var(--mut) 70%,var(--mut) 78%,transparent 78%)}",
   ".log{flex:1;overflow:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px;font-size:15px;line-height:1.45}",
   ".msg{margin:0;max-width:90%;padding:8px 11px;border-radius:10px;white-space:pre-wrap;overflow-wrap:anywhere}",
-  ".me{align-self:flex-end;background:#eef2ff;color:#1e1b4b}",
-  ".bot{align-self:flex-start;background:#f5f5f5}",
-  ".bot.thinking{color:#737373}",
-  ".card{border:1px solid #e5e5e5;border-radius:10px;padding:10px 12px;background:#fff}",
-  ".card h3{margin:0 0 4px;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#737373}",
+  ".me{align-self:flex-end;background:var(--me);color:var(--fg)}",
+  ".bot{align-self:flex-start;background:var(--bot)}",
+  ".bot.thinking{color:var(--mut)}",
+  ".card{border:1px solid var(--line2);border-radius:10px;padding:10px 12px;background:var(--bg)}",
+  ".card h3{margin:0 0 4px;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--mut)}",
   ".card .sum{margin:0 0 6px;font-weight:600}",
   ".card dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:14px}",
-  ".card dt{color:#737373}.card dd{margin:0;overflow-wrap:anywhere}",
+  ".card dt{color:var(--mut)}.card dd{margin:0;overflow-wrap:anywhere}",
   ".row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}",
-  "button.btn{font:inherit;font-size:15px;padding:8px 14px;border-radius:8px;border:1px solid #d9d9d9;background:#fff;color:inherit;cursor:pointer}",
-  "button.primary{background:#171717;color:#fff;border-color:transparent}",
+  "button.btn{font:inherit;font-size:15px;padding:8px 14px;border-radius:8px;border:1px solid var(--line2);background:var(--btn);color:inherit;cursor:pointer}",
+  "button.primary{background:var(--accent);color:#10151b;border-color:transparent;font-weight:600}",
   "button[disabled]{opacity:.55;cursor:default}",
   ".status{margin:6px 0 0;font-size:14px}",
   ".picks,.replies{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 8px}",
   ".picks[hidden],.replies[hidden]{display:none}",
-  ".replies .hint{width:100%;margin:0;font-size:12px;color:#737373}",
-  "form{display:flex;gap:8px;padding:10px 14px;border-top:1px solid #e5e5e5}",
+  ".replies .hint{width:100%;margin:0;font-size:12px;color:var(--mut)}",
+  "form{display:flex;gap:8px;padding:10px 22px 10px 14px;border-top:1px solid var(--line2)}",
   // 16px or iOS zooms in on focus and never zooms back out.
-  ".compose{position:relative;flex:1;display:flex;border-radius:8px;background:#fff}",
+  ".compose{position:relative;flex:1;display:flex;border-radius:8px;background:var(--bg)}",
   ".ghost,textarea{font:inherit;font-size:16px;line-height:1.4;padding:8px 10px;border:1px solid transparent;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere;margin:0}",
   ".ghost{position:absolute;inset:0;overflow:hidden;pointer-events:none;color:transparent}",
-  ".ghost .hint{color:#9a9a9a}",
-  "textarea{position:relative;flex:1;resize:none;border-color:#d9d9d9;background:transparent;color:inherit}",
-  ".long{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 14px 8px;padding:8px 10px;border-radius:8px;border:1px solid #e5e5e5;font-size:14px}",
+  ".ghost .hint{color:var(--mut);opacity:.75}",
+  "textarea{position:relative;flex:1;resize:none;border-color:var(--line2);background:transparent;color:inherit}",
+  "textarea::placeholder{color:var(--mut)}",
+  ".long{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 14px 8px;padding:8px 10px;border-radius:8px;border:1px solid var(--line2);font-size:14px}",
   ".long[hidden]{display:none}",
   ".long p{margin:0;flex:1 1 200px}",
   "button.past{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;margin-top:6px;text-align:left}",
-  "button.past small{color:#737373;font-size:12px}",
-  ".note{margin:0;padding:0 14px 10px;font-size:14px;color:#b45309}",
+  "button.past small{color:var(--mut);font-size:12px}",
+  ".note{margin:0;padding:0 14px 10px;font-size:14px;color:var(--warn)}",
   ".note[hidden]{display:none}",
   ".attach{flex:none;padding:0 10px;font-size:18px}",
   ".pics{display:flex;gap:8px;padding:8px 14px 0;flex-wrap:wrap}",
   ".pics[hidden]{display:none}",
   ".pic{position:relative}",
-  ".pic img,.msg img{display:block;width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #e5e5e5}",
+  ".pic img,.msg img{display:block;width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--line2)}",
   ".msg img{margin-bottom:4px}",
   ".pic button{position:absolute;top:-6px;right:-6px;width:22px;height:22px;padding:0;border-radius:11px;line-height:1;font-size:14px}",
-  // Phones: above the inspector's tab bar (50px at the bottom up to 700px wide, style.css), not on it.
-  "@media (max-width:700px){:host{bottom:calc(62px + env(safe-area-inset-bottom));right:12px}}",
-  "@media (max-width:600px){.panel{left:0;right:0;bottom:0;width:100%;max-height:80vh;border-radius:12px 12px 0 0}}",
+  // Phones: the app's own round icon above Find a tool opens the panel (style.css
+  // .assistant-fab), so this floating button would only cover the viewport's buttons.
+  "@media (max-width:700px){.launch{display:none}}",
 ].join("");
+
+/* Where the panel sits, per device: { x, y, w, h, min } in CSS pixels. */
+const PLACE_KEY = "booth.assistantPlace";
+function readPlace() {
+  try {
+    const v = JSON.parse(localStorage.getItem(PLACE_KEY) || "null");
+    return v && ["x", "y", "w", "h"].every((k) => Number.isFinite(v[k])) ? v : null;
+  } catch {
+    return null;
+  }
+}
+function savePlace(v) {
+  try {
+    localStorage.setItem(PLACE_KEY, JSON.stringify(v));
+  } catch {}
+}
+/** Where a new panel opens: bottom right on a computer; on a phone the lower half, above the tab bar. */
+export function defaultPlace(vw, vh) {
+  if (vw <= 600) {
+    const h = Math.round(Math.min(vh * 0.5, 460));
+    return { x: 8, y: vh - h - 66, w: vw - 16, h, min: false };
+  }
+  const w = Math.min(420, vw - 32), h = Math.round(Math.min(vh * 0.7, 640));
+  return { x: vw - w - 16, y: vh - h - 92, w, h, min: false };
+}
+/** Kept inside the window, at least 260 × 200, its title bar always reachable. */
+export function clampPlace(v, vw, vh, bar = 44) {
+  const w = Math.round(Math.max(Math.min(260, vw), Math.min(v.w, vw)));
+  const h = Math.round(Math.max(Math.min(200, vh), Math.min(v.h, vh)));
+  const x = Math.round(Math.min(Math.max(0, v.x), vw - w));
+  const y = Math.round(Math.min(Math.max(0, v.y), vh - (v.min ? bar : h)));
+  return { x, y, w, h, min: !!v.min };
+}
 
 /** A long chat costs more per message (all of it is sent each time): past this, offer a new one. */
 const LONG_CHAT = 8;
@@ -226,6 +275,8 @@ class Panel extends HTMLElement {
     this.pictures = [];
     this.note = el("p", { class: "note", role: "status", hidden: true });
     const close = el("button", { class: "close", type: "button", "aria-label": "Close the assistant", text: "×" });
+    this.shrinkBtn = el("button", { class: "shrink", type: "button", "aria-label": "Shrink the assistant to its title bar", title: "Shrink", text: "–" });
+    const grip = el("div", { class: "grip", "aria-hidden": "true", title: "Drag to resize" });
     const fresh = el("button", { class: "btn small", type: "button", text: "New chat" });
     const past = el("button", { class: "btn small", type: "button", text: "Past chats" });
     const restart = el("button", { class: "btn small", type: "button", text: "Start a new chat" });
@@ -239,14 +290,21 @@ class Panel extends HTMLElement {
     this.said = readSaid();
     this.names = [];
     this.panel = el("section", { class: "panel", id: "panel", role: "dialog", "aria-label": "Studio assistant", hidden: true }, [
-      el("header", {}, [el("h2", { text: "Studio assistant" }), el("div", { class: "tools" }, [past, fresh, close])]),
-      this.log, this.long, this.picks, this.replies, this.note, this.pics, form,
+      el("header", { title: "Drag to move" }, [el("h2", { text: "Assistant" }), el("div", { class: "tools" }, [past, fresh, this.shrinkBtn, close])]),
+      this.log, this.long, this.picks, this.replies, this.note, this.pics, form, grip,
     ]);
     root.appendChild(this.launch);
     root.appendChild(this.panel);
 
     this.launch.addEventListener("click", () => this.toggle());
     close.addEventListener("click", () => this.toggle(false));
+    this.shrinkBtn.addEventListener("click", () => this.shrink());
+    // Drag the title bar to move it, the corner to resize it.
+    const header = this.panel.querySelector("header");
+    this.drag(header, (s, dx, dy) => ({ ...s, x: s.x + dx, y: s.y + dy }));
+    this.drag(grip, (s, dx, dy) => ({ ...s, w: s.w + dx, h: s.h + dy }));
+    header.addEventListener("dblclick", (e) => !e.target.closest("button") && this.shrink());
+    addEventListener("resize", () => !this.panel.hidden && this.place(this.where));
     // Forget the conversation (the model starts clean); saved changes stay saved.
     const startNew = () => {
       if (this.busy) return;
@@ -295,7 +353,50 @@ class Panel extends HTMLElement {
   paint() {
     const s = readSession();
     this.hidden = !this.available || !s || !!s.expired;
+    // The app's own doors to the panel (header button, phone icon) follow it.
+    document.body.classList.toggle("assistant-on", !this.hidden);
     if (this.hidden) this.toggle(false);
+  }
+
+  /** Puts the panel at `v` (or where it was last left on this device), kept on screen. */
+  place(v) {
+    const vw = innerWidth, vh = innerHeight;
+    this.where = clampPlace(v || readPlace() || defaultPlace(vw, vh), vw, vh);
+    const { x, y, w, h, min } = this.where;
+    Object.assign(this.panel.style, { left: `${x}px`, top: `${y}px`, width: `${w}px`, height: `${h}px` });
+    this.panel.classList.toggle("min", min);
+    this.shrinkBtn.textContent = min ? "▢" : "–";
+    this.shrinkBtn.setAttribute("aria-label", min ? "Open the assistant out again" : "Shrink the assistant to its title bar");
+    this.shrinkBtn.title = min ? "Open out" : "Shrink";
+  }
+
+  /** Shrinks the panel to its title bar, or opens it out again; remembered. */
+  shrink(min = !this.where?.min) {
+    this.place({ ...this.where, min });
+    savePlace(this.where);
+    if (!min) this.input.focus();
+  }
+
+  /** Pointer drag on `handle`: `to(start, dx, dy)` gives the new place; saved when let go. */
+  drag(handle, to) {
+    handle.addEventListener("pointerdown", (e) => {
+      if (e.button > 0 || e.target.closest("button")) return;
+      e.preventDefault();
+      const start = { ...this.where }, sx = e.clientX, sy = e.clientY;
+      handle.setPointerCapture?.(e.pointerId);
+      this.panel.classList.add("moving");
+      const move = (ev) => this.place(to(start, ev.clientX - sx, ev.clientY - sy));
+      const up = () => {
+        handle.removeEventListener("pointermove", move);
+        handle.removeEventListener("pointerup", up);
+        handle.removeEventListener("pointercancel", up);
+        this.panel.classList.remove("moving");
+        savePlace(this.where);
+      };
+      handle.addEventListener("pointermove", move);
+      handle.addEventListener("pointerup", up);
+      handle.addEventListener("pointercancel", up);
+    });
   }
 
   clear() {
@@ -423,8 +524,10 @@ class Panel extends HTMLElement {
     open = open === undefined ? this.panel.hidden : open;
     this.panel.hidden = !open;
     this.launch.setAttribute("aria-expanded", String(open));
+    for (const b of document.querySelectorAll('[data-action="assistant"]')) b.setAttribute("aria-expanded", String(open));
     if (open) {
-      this.input.focus();
+      this.place();
+      if (!this.where.min) this.input.focus();
       if (!this._loaded) {
         this._loaded = true;
         void this.load();

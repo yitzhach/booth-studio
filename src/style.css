@@ -2094,6 +2094,20 @@ dialog li {
   .find-tool svg {width:20px;height:20px;}
   .find-tool span {display:none;}
 }
+/* The studio assistant's doors besides its own button (src/studio-assistant.js):
+   one in the header beside Find a tool, and on a phone a round icon stacked
+   above Find a tool's, in place of the panel's floating button. Shown only
+   while signed in where an assistant is connected (body.assistant-on). */
+.assistant-top,.assistant-fab {display:none;}
+body.assistant-on .assistant-top {display:inline-flex;flex:none;min-height:34px;padding:6px 11px;gap:6px;font-size:13px;}
+body.assistant-on .assistant-top svg {width:16px;height:16px;}
+@media (max-width: 700px) {
+  body.assistant-on .assistant-top {width:36px;height:36px;padding:0;border-radius:50%;}
+  body.assistant-on .assistant-top span {display:none;}
+  body.assistant-on .assistant-fab {display:flex;align-items:center;justify-content:center;position:absolute;right:12px;bottom:116px;z-index:6;width:44px;height:44px;padding:0;border-radius:50%;border:1px solid var(--line);background:#1b2128;color:#eef1f4;box-shadow:0 6px 16px rgba(0,0,0,.4);}
+  body.assistant-on .assistant-fab svg {width:20px;height:20px;}
+}
+body:has(.timeline-dialog[open]) .assistant-fab {display:none;}
 /* Five kinds of figure: the add buttons wrap rather than push the panel sideways. */
 .button-row.people-add {flex-wrap:wrap;}
 .button-row.people-add button {flex:1 1 30%;min-width:0;}

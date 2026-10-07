@@ -105,15 +105,30 @@ try {
   const box = await launch.boundingBox();
   assert.ok(box.x > 640 && box.y + box.height <= 900 - 40, `the button sits bottom right, clear of the footer: ${JSON.stringify(box)}`);
 
-  // On a phone the button sits above the inspector's tab bar, not on it.
+  // The header has a button too (beside Find a tool), shown only with the panel's.
+  assert.equal(await page.locator('header .assistant-top').isVisible(), true, 'the header\'s Assistant button shows');
+  // On a phone the floating button gives way to a round icon above Find a tool's,
+  // in the app's own layout: above the tab bar, clear of the zoom and view buttons.
   await page.setViewportSize({ width: 390, height: 844 });
-  const onTop = await page.evaluate(() => {
-    const el = document.querySelector('studio-assistant');
-    const b = el.shadowRoot.querySelector('.launch').getBoundingClientRect();
-    const tabs = document.querySelector('.inspector-tabs').getBoundingClientRect();
-    return { clear: b.bottom <= tabs.top, hit: document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2) === el };
+  const phone = await page.evaluate(() => {
+    const r = (el) => el.getBoundingClientRect();
+    const fab = document.querySelector('.assistant-fab'), b = r(fab);
+    const over = (q) => [...document.querySelectorAll(q)].some((n) => { const o = r(n); return o.width && !(o.right <= b.left || o.left >= b.right || o.bottom <= b.top || o.top >= b.bottom); });
+    return {
+      launch: getComputedStyle(document.querySelector('studio-assistant').shadowRoot.querySelector('.launch')).display,
+      top: getComputedStyle(document.querySelector('.assistant-top')).display,
+      clear: b.width > 0 && b.bottom <= r(document.querySelector('.inspector-tabs')).top,
+      hit: document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)?.closest('.assistant-fab') === fab,
+      covers: over('.find-tool, .zoom-controls button, .view-switch button'),
+    };
   });
-  assert.deepEqual(onTop, { clear: true, hit: true }, 'phone: the button is above the tab bar and nothing covers it');
+  assert.deepEqual(phone, { launch: 'none', top: 'flex', clear: true, hit: true, covers: false }, 'phone: one round icon, clear of the tab bar and the viewport\'s buttons, and the header\'s icon');
+  await page.locator('.assistant-fab').click();
+  await page.waitForFunction(() => !document.querySelector('studio-assistant').shadowRoot.querySelector('.panel').hidden);
+  const sheet = await inPanel('.panel').boundingBox();
+  assert.ok(sheet.height <= 844 * 0.55 && sheet.y > 300, `phone: the panel opens as the lower half, the booth above stays in view: ${JSON.stringify(sheet)}`);
+  await page.locator('header .assistant-top').click();
+  assert.equal(await inPanel('.panel').isHidden(), true, 'the header\'s icon closes it again');
   await page.setViewportSize({ width: 1280, height: 900 });
 
   // ---- A change proposed, confirmed, undone ---------------------------------
@@ -230,6 +245,53 @@ try {
   await inPanel('.note:text("Up to 3 pictures with one message.")').waitFor();
   assert.equal(await inPanel('.pic').count(), 3);
 
+  // ---- On the page: Backspace, colours, moving it -------------------------
+  // Backspace in the chat box deletes a letter, not the selected artwork (a key
+  // in the shadow root reached main.js's shortcuts as <studio-assistant>).
+  const works = await page.evaluate(() => window.__booth.project.art.length);
+  await inPanel('textarea').fill('');
+  await inPanel('textarea').pressSequentially('abc');
+  await inPanel('textarea').press('Backspace');
+  assert.equal(await inPanel('textarea').inputValue(), 'ab', 'Backspace deletes the letter typed');
+  await inPanel('textarea').press('Delete');
+  assert.equal(await page.evaluate(() => window.__booth.project.art.length), works, 'and never the selected artwork');
+  await inPanel('textarea').fill('');
+  // Dark, with the app.
+  const colours = await page.evaluate(() => {
+    const sh = document.querySelector('studio-assistant').shadowRoot;
+    return [getComputedStyle(sh.querySelector('.panel')).backgroundColor, getComputedStyle(sh.querySelector('textarea')).color];
+  });
+  assert.deepEqual(colours, ['rgb(27, 32, 38)', 'rgb(233, 237, 240)'], 'the panel takes the app\'s dark surface and text');
+  // Dragged by its title bar, resized from its corner, shrunk to the bar; remembered.
+  const at = await inPanel('.panel').boundingBox();
+  const bar = await inPanel('.panel header h2').boundingBox();
+  await page.mouse.move(bar.x + 10, bar.y + 5);
+  await page.mouse.down();
+  await page.mouse.move(bar.x - 290, bar.y - 95, { steps: 4 });
+  await page.mouse.up();
+  const moved = await inPanel('.panel').boundingBox();
+  assert.deepEqual([Math.round(moved.x - at.x), Math.round(moved.y - at.y)], [-300, -100], 'dragged by its title bar');
+  const grip = await inPanel('.grip').boundingBox();
+  await page.mouse.move(grip.x + 10, grip.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(grip.x - 90, grip.y - 90, { steps: 4 });
+  await page.mouse.up();
+  const sized = await inPanel('.panel').boundingBox();
+  assert.deepEqual([Math.round(at.width - sized.width), Math.round(at.height - sized.height)], [100, 100], 'resized from its corner');
+  await inPanel('.shrink').click();
+  const small = await inPanel('.panel').boundingBox();
+  assert.ok(small.height < 60 && (await inPanel('.log').isHidden()), 'shrunk to its title bar');
+  const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('booth.assistantPlace')));
+  assert.deepEqual(kept, { x: Math.round(moved.x), y: Math.round(moved.y), w: Math.round(sized.width), h: Math.round(sized.height), min: true }, 'its place is kept on this device');
+  await inPanel('.shrink').click();
+  assert.equal(await inPanel('.log').isVisible(), true, 'opened out again');
+  // Never lost off screen: a window smaller than the stored place pulls it back in.
+  const fit = await page.evaluate(async () => {
+    const { clampPlace } = await import('/src/studio-assistant.js');
+    return clampPlace({ x: 5000, y: -80, w: 900, h: 2000 }, 390, 844);
+  });
+  assert.deepEqual(fit, { x: 0, y: 0, w: 390, h: 844, min: false });
+
   // Past chats show where a picture was, never the stored note's wording.
   const shownText = await page.evaluate(async () => {
     const { plainText } = await import('/src/studio-assistant.js');
@@ -242,7 +304,7 @@ try {
   assert.deepEqual(shownText, ['(picture)\nmake this booth', '(picture)']);
 
   assert.deepEqual(errors, [], 'no page errors');
-  console.log('PASS the assistant shows only signed in where one is connected, sends the booth on screen with each message, shows a card in the studio\'s words, syncs after Confirm and Undo, opens a booth it made in one tap, sends pictures shrunk to 1568 px, and says plainly when it isn\'t there.');
+  console.log('PASS the assistant shows only signed in where one is connected, sends the booth on screen with each message, shows a card in the studio\'s words, syncs after Confirm and Undo, opens a booth it made in one tap, sends pictures shrunk to 1568 px, lets Backspace type, is dark with the app, moves, resizes and shrinks, has a header button and a phone icon clear of the viewport\'s buttons, and says plainly when it isn\'t there.');
 } finally {
   await browser.close();
   await server.close();

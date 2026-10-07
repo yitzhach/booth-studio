@@ -46,12 +46,30 @@ Extend it; do not rebuild it.
   the model reads a real sketch well is the owner's to judge on his phone:
   no session can. Live in production since 2026-10-07: the owner approved
   "Deploy production assistant" run 2 (Sonnet 5.5) after booth-studio#17.
-- **Where the chat is on a phone (the owner asked, 2026-10-07).** "Ask the
-  assistant", bottom right, just above the inspector's tab bar (Artwork,
-  Layout, Art show…). It shows only while signed in to the studio (Studio
-  account → emailed code); signed out there is no button at all. Before
-  this round it sat on top of the tab bar on phones; now it clears it
-  (`tests/view-assistant.mjs` checks at 390 × 844).
+- **The assistant panel on a phone — the owner's list (2026-10-07).** Four
+  doors and a pop-up, all in `src/studio-assistant.js` unless said:
+  - **Backspace types.** A key in the panel's chat box reached `src/main.js`'s
+    shortcuts retargeted to `<studio-assistant>`, so Backspace was
+    swallowed (and deleted the selected artwork). `typingIn(ev)`
+    (`src/typing.js`) reads the event's composed path; `main.js`'s two
+    document key handlers and the show floor's Space-to-pan use it.
+  - **Dark, with the app.** The panel takes the app's own palette (style.css
+    `:root` custom properties, which reach into the shadow root). The app has
+    no light theme, so neither does the panel.
+  - **Where to open it.** A header button beside Find a tool ("Assistant";
+    an icon on a phone), and on a phone a round icon stacked above Find a
+    tool's in the viewport (`.assistant-fab`, style.css), in place of the
+    floating "Ask the assistant" pill, which stays on a computer. Both show
+    only while the panel would (`body.assistant-on`, set by `paint()`) and
+    run `actions.assistant`.
+  - **A movable pop-up.** Drag the title bar to move it, the corner grip to
+    resize it, – to shrink it to its title bar (or double-click the bar).
+    On a phone it opens as the lower half above the tab bar, not 80% of the
+    screen. Its place is kept per device (`booth.assistantPlace`) and
+    clamped back on screen (`clampPlace`).
+  Checked at 390 × 844 and 1280 × 900 by `tests/view-assistant.mjs`
+  (Backspace fails there on the old code). Signed out nothing shows, as
+  before. Not judged by eye on a real phone: the owner's to try.
 - **Last deploy: 2026-10-05, seventeenth round — booths and show floors by
   name, for the studio assistant and agents.** The owner approved
   scene-level actions (Art-Talk-Back D-070) with a wider aim: a booth or a
@@ -1860,33 +1878,11 @@ Extend it; do not rebuild it.
 
 ## Next
 
-0. **The assistant panel on a phone — the owner's list, 2026-10-07, for
-   the next round (new chat).** In `src/studio-assistant.js` unless said.
-   - **Backspace doesn't delete typed text in the chat box.** Cause found:
-     `src/main.js` ~6449, the document `keydown` handler, skips typing only
-     when `ev.target.matches("input,textarea,select")`; a key in the
-     panel's shadow-root textarea reaches it retargeted to
-     `<studio-assistant>`, so Backspace/Delete is `preventDefault()`ed
-     (and deletes the selected artwork if one is selected). Fix: test
-     `ev.composedPath()[0]`, and look for other document key handlers with
-     the same check (5094, 6438). Test: type then Backspace in the panel.
-   - **Dark mode.** The panel is always light; it should follow the app's
-     own theme (style.css's dark palette / its theme setting) and the
-     system `prefers-color-scheme`. Test both.
-   - **The floating button covers other buttons on a phone.** #18 lifted it
-     above the inspector's tab bar, but it still floats over the viewport
-     (e.g. the zoom and view buttons). The owner wants it less in the way.
-   - **An assistant button at the top too.** One in the header beside
-     "Find a tool" (an icon on a phone), as well as the one at the bottom,
-     so it's easy to find; the bottom one could then shrink to an icon.
-   - **A movable, see-through-able panel.** The chat as a pop-up the owner
-     can drag (and resize or shrink) so what's under it stays visible,
-     instead of a sheet covering 80% of the phone. Remember its place per
-     device (localStorage, wrapped in try/catch).
-   Plan these as one round; check each at 390 × 844 in
-   `tests/view-assistant.mjs` and keep view-responsive green. The Show
-   Tracker's panel (art-show-tracker `tracker/studio-assistant.js`) is the
-   same design: ask the owner whether it gets the same changes.
+0. **The assistant panel on a phone (2026-10-07): built — see Now.** The
+   owner's to try on his phone: Backspace, the two new doors, dragging,
+   resizing and shrinking the panel. The Show Tracker's panel
+   (art-show-tracker `tracker/studio-assistant.js`) gets the same changes
+   (the owner, 2026-10-07): a change in that repo, not here.
 
 1. **The studio, by hand (2026-10-05).** Everything in Studio platform
    (below) is tested here with two browser contexts against a local
