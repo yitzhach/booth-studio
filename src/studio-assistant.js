@@ -67,6 +67,23 @@ export function plainText(content) {
 /* The note studio-assistant stores where a picture was (Art-Talk-Back D-071): pictures aren't kept. */
 const PICTURE_NOTE = /^\[The artist attached a picture here[^\]]*\]$/;
 
+/**
+ * The studio's sync states (src/studio.js setStatus) that mean the booth on
+ * screen isn't in the studio as it is now, in words the assistant passes on.
+ */
+const SYNC_NOTES = {
+  local: "not in the studio yet: it was made before signing in and waits for Export → Keep your work → Studio account & sync → Import my existing projects",
+  syncing: "still being saved to the studio; a moment",
+  offline: "offline: changes are kept on this device and reach the studio when the connection is back",
+  uploading: "its images are still uploading to the studio",
+  waiting: "saved to the studio, its images still on the way",
+  gone: "deleted from the studio; this copy stays on this device only",
+  refused: "the studio refused this version; Studio account & sync says why",
+  too_big: "too large to save to the studio; Studio account & sync says why",
+  expired: "the studio sign-in ended; sign in again from Studio account & sync",
+  error: "couldn't reach the studio last try; Studio account & sync has Sync now",
+};
+
 /** The long side the model reads a picture at full detail; larger is only slower to send. */
 export const PICTURE_EDGE = 1568;
 export const MAX_PICTURES = 3;
@@ -445,7 +462,12 @@ class Panel extends HTMLElement {
     try {
       const id = await this.bridge?.placementId();
       const p = this.host?.project();
-      return id ? { type: "placement", id, label: String(p?.name || "Booth").slice(0, 200) } : undefined;
+      if (!id) return undefined;
+      const record = { type: "placement", id, label: String(p?.name || "Booth").slice(0, 200) };
+      // Whether the studio has this booth yet, so the assistant can say what to tap instead of "it doesn't exist".
+      const note = SYNC_NOTES[this.bridge?.status?.()];
+      if (note) record.note = note;
+      return record;
     } catch {
       return undefined;
     }
@@ -543,6 +565,11 @@ class Panel extends HTMLElement {
     };
     const body = { message: text, app: "booth-studio", today: today(), page: "Booth Studio" };
     if (pictures.length) body.images = pictures.map(({ mediaType, data }) => ({ mediaType, data }));
+    // Every tab, bar and button the tool search knows, so the assistant can say where to tap.
+    try {
+      const map = this.host?.appMap?.();
+      if (map) body.appMap = String(map).slice(0, 15000);
+    } catch {}
     const record = await this.record();
     if (record) body.record = record;
     if (this.fresh) {

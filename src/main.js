@@ -6314,6 +6314,19 @@ async function boot() {
     }
     return dedupe(list);
   }
+  /** The tool index as lines grouped by place, e.g. "Export · Keep your work: Studio account, Import…". */
+  function appMapText(list) {
+    const byWhere = new Map();
+    for (const x of list) {
+      const label = String(x.label || "").replace(/\s+/g, " ").trim();
+      if (!label) continue;
+      const where = x.where === "Inspector tab" ? "Inspector tabs (bottom bar on a phone, side panel on a computer)" : x.where;
+      const names = byWhere.get(where) || [];
+      if (!names.includes(label)) names.push(label);
+      byWhere.set(where, names);
+    }
+    return [...byWhere].map(([where, names]) => `${where}: ${names.join(", ")}`).join("\n").slice(0, 15000);
+  }
   function renderToolHits() {
     const box = document.querySelector("#tool-search"),
       ul = document.querySelector("#tool-results");
@@ -6598,6 +6611,9 @@ async function boot() {
   }
   const studioHost = {
     project: () => p,
+    // For the assistant: every control the tool search knows, as "where: names",
+    // so it can tell the artist which tab or bar and which button (Art-Talk-Back D-072).
+    appMap: () => appMapText(toolIndex || (toolIndex = buildToolIndex())),
     // A version from the studio replaces the project on screen, like an
     // opened backup: one step, and Undo brings back what was here.
     open(next) {
