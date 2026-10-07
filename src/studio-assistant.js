@@ -183,7 +183,9 @@ const CSS = [
   ".pic img,.msg img{display:block;width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #e5e5e5}",
   ".msg img{margin-bottom:4px}",
   ".pic button{position:absolute;top:-6px;right:-6px;width:22px;height:22px;padding:0;border-radius:11px;line-height:1;font-size:14px}",
-  "@media (max-width:600px){:host{bottom:12px;right:12px}.panel{left:0;right:0;bottom:0;width:100%;max-height:80vh;border-radius:12px 12px 0 0}}",
+  // Phones: above the inspector's tab bar (50px at the bottom up to 700px wide, style.css), not on it.
+  "@media (max-width:700px){:host{bottom:calc(62px + env(safe-area-inset-bottom));right:12px}}",
+  "@media (max-width:600px){.panel{left:0;right:0;bottom:0;width:100%;max-height:80vh;border-radius:12px 12px 0 0}}",
 ].join("");
 
 /** A long chat costs more per message (all of it is sent each time): past this, offer a new one. */

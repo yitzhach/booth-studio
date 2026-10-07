@@ -34,10 +34,14 @@ Extend it; do not rebuild it.
   says what it read. Proven by `tests/view-assistant.mjs` (attach, preview,
   remove, the size sent, a picture alone, the three-picture cap). Whether
   the model reads a real sketch well is the owner's to judge on his phone:
-  no session can. Production pictures need studio-assistant redeployed
-  ("Deploy production assistant", the owner's button); until then
-  production's assistant ignores the pictures and answers the words, and
-  a picture sent alone gets its "Send a message" refusal.
+  no session can. Live in production since 2026-10-07: the owner approved
+  "Deploy production assistant" run 2 (Sonnet 5.5) after booth-studio#17.
+- **Where the chat is on a phone (the owner asked, 2026-10-07).** "Ask the
+  assistant", bottom right, just above the inspector's tab bar (Artwork,
+  Layout, Art show…). It shows only while signed in to the studio (Studio
+  account → emailed code); signed out there is no button at all. Before
+  this round it sat on top of the tab bar on phones; now it clears it
+  (`tests/view-assistant.mjs` checks at 390 × 844).
 - **Last deploy: 2026-10-05, seventeenth round — booths and show floors by
   name, for the studio assistant and agents.** The owner approved
   scene-level actions (Art-Talk-Back D-070) with a wider aim: a booth or a
