@@ -22,6 +22,16 @@ Extend it; do not rebuild it.
   needs the owner are in Art-Talk-Back `docs/phase-5-booth.md`; the decisions
   are its D-061…D-067. Read the section **Studio platform** below before
   touching sign-in, sync, `worker/index.js` or `wrangler.jsonc`.
+- **The assistant knows where everything is (2026-10-07, Art-Talk-Back
+  D-072).** The owner found it saying it "can't see the app's buttons". Now
+  each message sends `appMap`: every tab, bar and button the tool search
+  indexes (`buildToolIndex` → `appMapText` in `src/main.js`, about 4,400
+  characters), so it answers "Export tab → Keep your work → …" and stays in
+  step with the app by itself. The booth on screen also carries a sync
+  `note` (`SYNC_NOTES` in `src/studio-assistant.js`) when the studio doesn't
+  have it as it is, e.g. a project made before signing in that waits for
+  Import my existing projects: the owner's "Spring booth" case, where the
+  assistant had said the booth doesn't exist.
 - **2026-10-07, pictures in the chat (Art-Talk-Back 10a, D-071).** The
   assistant panel has a 📷 button beside the message box: up to three
   pictures (a photo, a sketch, a show's map) go with the next message, or on
