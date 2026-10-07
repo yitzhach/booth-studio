@@ -52,14 +52,45 @@ async function post(url, body) {
 }
 const getJSON = (url) => fetch(url, { credentials: "same-origin" }).then((r) => (r.ok ? r.json() : null));
 /** The text the person typed, without the context line the assistant adds. */
-function plainText(content) {
+export function plainText(content) {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   return content
     .filter((b) => b && b.type === "text")
-    .map((b) => String(b.text).replace(/^\[Context from the app[^\]]*\]\s*/, "").replace(/\s*\[\[replies:[^\]]*\]\]\s*$/, ""))
+    .map((b) => String(b.text).replace(/^\[Context from the app[^\]]*\]\s*/, "").replace(/\s*\[\[replies:[^\]]*\]\]\s*$/, "").replace(PICTURE_NOTE, "(picture)"))
+    .filter(Boolean)
     .join("\n")
+    .replace(/\(picture\)\n\((pictures?) attached\)$/, "($1)")
     .trim();
+}
+
+/* The note studio-assistant stores where a picture was (Art-Talk-Back D-071): pictures aren't kept. */
+const PICTURE_NOTE = /^\[The artist attached a picture here[^\]]*\]$/;
+
+/** The long side the model reads a picture at full detail; larger is only slower to send. */
+export const PICTURE_EDGE = 1568;
+export const MAX_PICTURES = 3;
+
+/** Width and height that fit inside PICTURE_EDGE, keeping the shape; never enlarged. */
+export function fitPicture(w, h, edge = PICTURE_EDGE) {
+  const k = Math.min(1, edge / Math.max(w, h));
+  return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)) };
+}
+
+/** A picture the artist picked, shrunk to a JPEG: { mediaType, data (base64), url (for the preview) }. */
+async function shrinkPicture(file) {
+  const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+  const { w, h } = fitPicture(bitmap.width, bitmap.height);
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const g = canvas.getContext("2d");
+  g.fillStyle = "#fff"; // transparent PNGs become white, not black
+  g.fillRect(0, 0, w, h);
+  g.drawImage(bitmap, 0, 0, w, h);
+  bitmap.close?.();
+  const url = canvas.toDataURL("image/jpeg", 0.85);
+  return { mediaType: "image/jpeg", data: url.slice(url.indexOf(",") + 1), url, w, h };
 }
 
 /*
@@ -145,6 +176,13 @@ const CSS = [
   "button.past small{color:#737373;font-size:12px}",
   ".note{margin:0;padding:0 14px 10px;font-size:14px;color:#b45309}",
   ".note[hidden]{display:none}",
+  ".attach{flex:none;padding:0 10px;font-size:18px}",
+  ".pics{display:flex;gap:8px;padding:8px 14px 0;flex-wrap:wrap}",
+  ".pics[hidden]{display:none}",
+  ".pic{position:relative}",
+  ".pic img,.msg img{display:block;width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #e5e5e5}",
+  ".msg img{margin-bottom:4px}",
+  ".pic button{position:absolute;top:-6px;right:-6px;width:22px;height:22px;padding:0;border-radius:11px;line-height:1;font-size:14px}",
   "@media (max-width:600px){:host{bottom:12px;right:12px}.panel{left:0;right:0;bottom:0;width:100%;max-height:80vh;border-radius:12px 12px 0 0}}",
 ].join("");
 
@@ -162,6 +200,11 @@ class Panel extends HTMLElement {
     this.picks = el("div", { class: "picks", hidden: true });
     this.input = el("textarea", { rows: "2", "aria-label": "Message to the assistant", placeholder: "e.g. make this a 10 × 15 art-show booth with a table and two chairs" });
     this.sendBtn = el("button", { class: "btn primary", type: "submit", text: "Send" });
+    // A photo, sketch or show map goes with the next message (10a).
+    this.file = el("input", { type: "file", accept: "image/*", multiple: "", hidden: true });
+    this.attachBtn = el("button", { class: "btn attach", type: "button", "aria-label": "Attach a picture", title: "Attach a photo, sketch or show map", text: "📷" });
+    this.pics = el("div", { class: "pics", hidden: true });
+    this.pictures = [];
     this.note = el("p", { class: "note", role: "status", hidden: true });
     const close = el("button", { class: "close", type: "button", "aria-label": "Close the assistant", text: "×" });
     const fresh = el("button", { class: "btn small", type: "button", text: "New chat" });
@@ -173,12 +216,12 @@ class Panel extends HTMLElement {
     ]);
     this.ghost = el("div", { class: "ghost", "aria-hidden": "true" });
     this.replies = el("div", { class: "replies", hidden: true });
-    const form = el("form", {}, [el("div", { class: "compose" }, [this.ghost, this.input]), this.sendBtn]);
+    const form = el("form", {}, [this.attachBtn, this.file, el("div", { class: "compose" }, [this.ghost, this.input]), this.sendBtn]);
     this.said = readSaid();
     this.names = [];
     this.panel = el("section", { class: "panel", id: "panel", role: "dialog", "aria-label": "Studio assistant", hidden: true }, [
       el("header", {}, [el("h2", { text: "Studio assistant" }), el("div", { class: "tools" }, [past, fresh, close])]),
-      this.log, this.long, this.picks, this.replies, this.note, form,
+      this.log, this.long, this.picks, this.replies, this.note, this.pics, form,
     ]);
     root.appendChild(this.launch);
     root.appendChild(this.panel);
@@ -210,6 +253,12 @@ class Panel extends HTMLElement {
       if (e.key === "Tab" && !e.shiftKey && this.tab()) e.preventDefault();
     });
     this.input.addEventListener("input", () => this.hint());
+    this.attachBtn.addEventListener("click", () => this.file.click());
+    this.file.addEventListener("change", () => {
+      const files = [...this.file.files];
+      this.file.value = "";
+      this.addPictures(files);
+    });
     this.input.addEventListener("scroll", () => (this.ghost.scrollTop = this.input.scrollTop));
     this.paint();
   }
@@ -402,9 +451,41 @@ class Panel extends HTMLElement {
     }
   }
 
+  /** Shrinks and previews picked pictures, up to MAX_PICTURES; each has a × to take it off. */
+  async addPictures(files) {
+    this.setNote("");
+    for (const f of files) {
+      if (this.pictures.length >= MAX_PICTURES) {
+        this.setNote(`Up to ${MAX_PICTURES} pictures with one message.`);
+        break;
+      }
+      if (!/^image\//.test(f.type)) continue;
+      try {
+        this.pictures.push(await shrinkPicture(f));
+      } catch {
+        this.setNote("That picture couldn’t be opened. Try a JPEG or PNG.");
+      }
+    }
+    this.paintPictures();
+    this.input.focus();
+  }
+
+  paintPictures() {
+    this.pics.textContent = "";
+    this.pictures.forEach((p, i) => {
+      const x = el("button", { class: "btn", type: "button", "aria-label": `Remove picture ${i + 1}`, text: "×" });
+      x.addEventListener("click", () => {
+        this.pictures.splice(i, 1);
+        this.paintPictures();
+      });
+      this.pics.appendChild(el("div", { class: "pic" }, [el("img", { src: p.url, alt: `Picture ${i + 1} to send` }), x]));
+    });
+    this.pics.hidden = !this.pictures.length;
+  }
+
   async send(text) {
     text = String(text || "").trim();
-    if (!text || this.busy) return;
+    if ((!text && !this.pictures.length) || this.busy) return;
     this.setNote("");
     if (!navigator.onLine) {
       this.setNote("The assistant needs a connection. Everything else in Booth Studio works offline as usual.");
@@ -423,7 +504,11 @@ class Panel extends HTMLElement {
       this.said = readSaid();
     }
     let gotReplies = false, started = false, acted = false, lastSearch = null;
-    this.say("me", text);
+    const pictures = this.pictures;
+    this.pictures = [];
+    this.paintPictures();
+    const mine = this.say("me", text);
+    for (const p of pictures.slice().reverse()) mine.prepend(el("img", { src: p.url, alt: "Picture sent" }));
     const bubble = this.say("bot thinking", "Thinking…");
     const write = (t) => {
       if (!started) {
@@ -457,6 +542,7 @@ class Panel extends HTMLElement {
       }
     };
     const body = { message: text, app: "booth-studio", today: today(), page: "Booth Studio" };
+    if (pictures.length) body.images = pictures.map(({ mediaType, data }) => ({ mediaType, data }));
     const record = await this.record();
     if (record) body.record = record;
     if (this.fresh) {
