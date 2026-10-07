@@ -18,6 +18,11 @@
 // visitor, not a claim about anybody.
 import * as T from "three";
 import { IN } from "./model.js";
+import { DEFAULT_PERSON, PERSON_KINDS, personHeight, resolvePerson } from "./people-kinds.js";
+
+export {
+  DEFAULT_PERSON, LIFT_STEP, MAX_HEIGHT, MAX_LIFT, MAX_PEOPLE, MIN_HEIGHT, MIN_LIFT, flipFacing, newPerson, personHeight, personName, resolvePerson,
+} from "./people-kinds.js";
 
 // `cutout.box` is the figure's own extent in the picture, in pixels, from the
 // top of the hair to the soles — left, top, right, bottom, inclusive — out of
@@ -26,13 +31,11 @@ import { IN } from "./model.js";
 // hair is the typed height and the soles stand on the floor.
 export const PEOPLE = {
   woman: {
-    label: "Woman · 5′6″",
-    height: 66,
+    ...PERSON_KINDS.woman,
     cutout: { file: "assets/people/woman.png", size: [750, 1827], box: [130, 40, 603, 1781] },
   },
   man: {
-    label: "Man · 6′0″",
-    height: 72,
+    ...PERSON_KINDS.man,
     cutout: { file: "assets/people/man.png", size: [750, 1827], box: [152, 28, 586, 1764] },
   },
   // Three more kinds, asked for 2026-09-24. Their pictures are plain black
@@ -41,41 +44,18 @@ export const PEOPLE = {
   // the top of its tallest head: for the pair, the taller of the two; for the
   // wheelchair user, seated.
   child: {
-    label: "Child · 4′0″",
-    height: 48,
+    ...PERSON_KINDS.child,
     cutout: { file: "assets/people/child.png", size: [600, 1400], box: [120, 45, 479, 1351] },
   },
   group: {
-    label: "Pair · 5′10″",
-    height: 70,
+    ...PERSON_KINDS.group,
     cutout: { file: "assets/people/group.png", size: [1000, 1830], box: [150, 35, 825, 1809] },
   },
   wheelchair: {
-    label: "Wheelchair user · 4′4″",
-    height: 52,
+    ...PERSON_KINDS.wheelchair,
     cutout: { file: "assets/people/wheelchair.png", size: [1100, 1300], box: [150, 28, 1009, 1249] },
   },
 };
-/** What a figure is called in its row and its toast: the label's first part. */
-export const personName = (kind) => PEOPLE[resolvePerson(kind)].label.split(" · ")[0];
-export const DEFAULT_PERSON = "woman";
-export const MAX_PEOPLE = 6;
-export const MIN_HEIGHT = 48;
-export const MAX_HEIGHT = 84;
-// How far a figure can be raised off the floor, in inches: onto a pedestal, a
-// drawn box used as a stage, or a riser. Optional on the record; absent is on
-// the floor, which is every figure saved before it existed. The range runs as
-// far below the floor as above it, so the slider's travel has 0 at its middle
-// — asked for so that raise and lower start from the same place — and a
-// figure can be sunk into a stepped-down floor or a pit as easily as stood on
-// a riser. Half-inch steps: a figure standing on a 3/4" platform is a real
-// thing, and whole inches could not say it.
-export const MAX_LIFT = 120;
-export const MIN_LIFT = -120;
-export const LIFT_STEP = 0.5;
-export const personHeight = (kind) => (PEOPLE[kind] || PEOPLE[DEFAULT_PERSON]).height;
-export const resolvePerson = (kind) => (PEOPLE[kind] ? kind : DEFAULT_PERSON);
-
 // Proportions as fractions of standing height, from the ordinary artist's
 // canon: the head is about an eighth of a figure, the hip sits near the
 // half-way mark. They are what keeps a 5'6" figure reading as shorter rather
@@ -330,25 +310,3 @@ export function placePerson(group, person) {
   return group;
 }
 
-/** A new figure for the project, placed a little in front of the back wall. */
-export const newPerson = (kind = DEFAULT_PERSON, id = "") => ({
-  id,
-  kind: resolvePerson(kind),
-  height: personHeight(resolvePerson(kind)),
-  // Inches from the centre of the floor, the same frame the lights use.
-  x: 0,
-  z: 18,
-  // Degrees. 0 faces the aisle, which is how someone looking at the back wall
-  // would be standing if you were photographing the booth from outside.
-  rotation: 180,
-});
-
-/**
- * A figure turned round to face the other way, kept in the Facing field's
- * -180…180 range. The cut-out picture mirrors with its facing, so this is
- * the one-click Flip in the People panel.
- */
-export function flipFacing(rotation) {
-  const r = (((Number(rotation) || 0) + 180) % 360 + 360) % 360;
-  return r > 180 ? r - 360 : r;
-}

@@ -36,6 +36,7 @@ import {
 import { OWN, deleteEffect, liveNumber, setMine, setOpen } from "./linked.js";
 import { HANG_LINE, hangAt, sameWall, spaceEvenly } from "./arrange.js";
 import { FORMAT, placementOf } from "./placement.js";
+import { MAX_HEIGHT, MAX_LIFT, MAX_PEOPLE, MIN_HEIGHT, MIN_LIFT, PERSON_KINDS, newPerson, personHeight, personName } from "./people-kinds.js";
 
 export { FORMAT };
 export const SCENE_OPS_VERSION = 1;
@@ -65,6 +66,19 @@ const across = (x) => (Math.abs(x) < 0.5 ? "centred" : `${inches(Math.abs(x))} $
 const deep = (z) => (Math.abs(z) < 0.5 ? "mid-depth" : `${inches(Math.abs(z))} toward the ${z < 0 ? "back" : "front"}`);
 const quote = (s) => `“${String(s)}”`;
 const furnitureName = (ped) => ped.name || FURNITURE[ped.kind || "pedestal"]?.label || "Pedestal";
+
+// A figure's facing in words, as seen from the entrance (the app's front view).
+// rotation is the People panel's Facing: 0 faces the entrance, 180 the back
+// wall, -90 the viewer's left, 90 the viewer's right; the cut-out picture
+// mirrors to look the way its figure faces.
+export const LOOKS = { front: 0, back: 180, left: -90, right: 90 };
+export function looksOf(rotation) {
+  const r = ((((Number(rotation) || 0) % 360) + 540) % 360) - 180;
+  if (Math.abs(r) >= 135) return "back";
+  if (Math.abs(r) <= 45) return "front";
+  return r < 0 ? "left" : "right";
+}
+const LOOK_WORDS = { front: "facing the entrance", back: "facing the back wall", left: "looking left", right: "looking right" };
 
 // ------------------------------------------------------------- scene ↔ project
 
@@ -150,8 +164,14 @@ export function describe(scene, images = []) {
       x: round(ped.x), z: round(ped.z), rotation: ped.rotation, width: ped.width, depth: ped.depth, height: ped.height,
       ...(ped.hidden ? { hidden: true } : {}),
     })),
+    people: (b.people || []).map((x) => ({
+      id: x.id, kind: x.kind, name: personName(x.kind), height: x.height, x: round(x.x), z: round(x.z),
+      rotation: x.rotation ?? 0, looks: looksOf(x.rotation ?? 0),
+      ...(x.lift ? { lift: x.lift } : {}), ...(x.hidden ? { hidden: true } : {}),
+    })),
+    ...(b.showPeople === false ? { peopleShown: false } : {}),
     floor: p.hall ? floorSummary(p.hall) : null,
-    limits: { furniture: MAX_PEDESTALS, freeStandingWalls: MAX_PANELS, floorPieces: MAX_ITEMS, ops: MAX_OPS },
+    limits: { furniture: MAX_PEDESTALS, freeStandingWalls: MAX_PANELS, people: MAX_PEOPLE, floorPieces: MAX_ITEMS, ops: MAX_OPS },
   };
 }
 
@@ -189,6 +209,15 @@ const ID = str("The id, as describe_booth lists it, or the ref you gave a piece 
 const REF = str("Optional name for the new piece, so later ops in this list can use it as \"@ref\".", { maxLength: 40 });
 const WALL = str("back, left, right, or a free-standing wall as \"panel:<id>\" (or \"panel:@ref\").");
 const KINDS = Object.keys(FURNITURE);
+const PERSON = Object.keys(PERSON_KINDS);
+const PERSON_FIELDS = {
+  x: num("Across from the booth's centre, inches (+ right); the aisle in front is fine", { minimum: -600, maximum: 600 }),
+  z: num("From the centre toward the entrance, inches (+ front)", { minimum: -600, maximum: 600 }),
+  height: num(`Inches, ${MIN_HEIGHT}–${MAX_HEIGHT} (7′ is 84)`, { minimum: MIN_HEIGHT, maximum: MAX_HEIGHT }),
+  looks: str("Which way the figure faces, as seen from the entrance: left, right, front (toward the entrance) or back (toward the back wall)", { enum: Object.keys(LOOKS) }),
+  rotation: num("Or the exact facing in degrees: 0 the entrance, 180 the back wall, −90 left, 90 right", { minimum: -180, maximum: 180 }),
+  lift: num(`Raised off the floor, inches (onto a riser or pedestal), ${MIN_LIFT}–${MAX_LIFT}`, { minimum: MIN_LIFT, maximum: MAX_LIFT }),
+};
 const op = (name, description, properties, required = []) => ({
   name,
   description,
@@ -248,6 +277,19 @@ export const OPS = [
     ["id"],
   ),
   op("remove_furniture", "Take a piece of furniture out of the booth.", { id: ID }, ["id"]),
+  op(
+    "add_person",
+    `Stand a figure for scale in or in front of the booth (up to ${MAX_PEOPLE}). Kinds: ${PERSON.map((k) => `${k} (${PERSON_KINDS[k].label})`).join(", ")}. Height defaults to the kind's.`,
+    { kind: str("One of the kinds above", { enum: PERSON }), ...PERSON_FIELDS, ref: REF },
+    ["kind"],
+  ),
+  op(
+    "change_person",
+    "Move, turn, resize, raise, swap the kind of, hide or show one figure. Send only what changes; a new kind without a height takes that kind's height.",
+    { id: ID, kind: str("One of the kinds", { enum: PERSON }), ...PERSON_FIELDS, hidden: { type: "boolean", description: "Hidden figures stay placed but are not drawn" } },
+    ["id"],
+  ),
+  op("remove_person", "Take a figure out of the booth.", { id: ID }, ["id"]),
   op(
     "add_wall",
     `Stand a free-standing wall inside the booth (up to ${MAX_PANELS}). x and z are its centre; rotation 0 faces the entrance.`,
@@ -464,6 +506,16 @@ function pieceOf(p, id, i) {
   if (!ped) throw new SceneOpError(`Op ${i + 1}: this booth has no furniture with id ${id}.`, i);
   return ped;
 }
+function personOf(p, id, i) {
+  const x = (p.booth.people || []).find((f) => f.id === id);
+  if (!x) throw new SceneOpError(`Op ${i + 1}: this booth has no figure with id ${id}.`, i);
+  return x;
+}
+function facing(o, i) {
+  if (has(o, "looks") && has(o, "rotation")) throw new SceneOpError(`Op ${i + 1} (${o.op}): give looks or rotation, not both.`, i);
+  return has(o, "looks") ? LOOKS[o.looks] : has(o, "rotation") ? o.rotation : undefined;
+}
+const personWords = (x) => `${personName(x.kind).toLowerCase()}, ${inches(x.height)} tall, ${LOOK_WORDS[looksOf(x.rotation ?? 0)]}`;
 function artOf(p, id, i) {
   const a = p.art.find((x) => x.id === id);
   if (!a) throw new SceneOpError(`Op ${i + 1}: this booth has no work with id ${id}.`, i);
@@ -579,6 +631,55 @@ function run(p, o, i, refs) {
       const ped = pieceOf(p, id, i);
       p.booth.pedestals = p.booth.pedestals.filter((x) => x.id !== id);
       return `Remove ${furnitureName(ped)}`;
+    }
+    case "add_person": {
+      const people = b.people || [];
+      if (people.length >= MAX_PEOPLE) throw new SceneOpError(`Op ${i + 1}: a booth holds at most ${MAX_PEOPLE} figures.`, i);
+      // Where the People panel puts the next one, so two added together don't stand in each other.
+      const n = people.length;
+      const turn = facing(o, i);
+      const person = {
+        ...newPerson(o.kind, uid()),
+        x: o.x ?? (n % 3) * 30 - 30,
+        z: o.z ?? 18 + Math.floor(n / 3) * 24,
+        ...(has(o, "height") ? { height: o.height } : {}),
+        ...(turn !== undefined ? { rotation: turn } : {}),
+        ...(has(o, "lift") && o.lift ? { lift: o.lift } : {}),
+      };
+      b.people = [...people, person];
+      // Figures switched off for the whole booth would hide the one just asked for.
+      if (b.showPeople === false) b.showPeople = true;
+      remember(o, person.id, refs, i);
+      return `Add a ${personWords(person)}, ${across(person.x)}, ${deep(person.z)}${person.lift ? `, raised ${inches(person.lift)}` : ""}`;
+    }
+    case "change_person": {
+      const id = resolve(o.id, refs, i);
+      const was = personOf(p, id, i);
+      const next = { ...was };
+      if (has(o, "kind")) {
+        next.kind = o.kind;
+        if (!has(o, "height")) next.height = personHeight(o.kind);
+      }
+      for (const k of ["x", "z", "height", "lift", "hidden"]) if (has(o, k)) next[k] = o[k];
+      const turn = facing(o, i);
+      if (turn !== undefined) next.rotation = turn;
+      if (next.lift === 0) delete next.lift;
+      b.people = b.people.map((x) => (x.id === id ? next : x));
+      const said = [];
+      if (has(o, "kind")) said.push(`now a ${personName(next.kind).toLowerCase()}`);
+      if (has(o, "x") || has(o, "z")) said.push(`to ${across(next.x)}, ${deep(next.z)}`);
+      if (has(o, "height") || has(o, "kind")) said.push(`${inches(next.height)} tall`);
+      if (turn !== undefined) said.push(LOOK_WORDS[looksOf(next.rotation)]);
+      if (has(o, "lift")) said.push(next.lift ? `raised ${inches(next.lift)}` : "on the floor");
+      if (has(o, "hidden")) said.push(next.hidden ? "hidden" : "shown");
+      if (!said.length) throw new SceneOpError(`Op ${i + 1} (change_person): say what to change.`, i);
+      return `${personName(was.kind)}: ${said.join(", ")}`;
+    }
+    case "remove_person": {
+      const id = resolve(o.id, refs, i);
+      const was = personOf(p, id, i);
+      b.people = b.people.filter((x) => x.id !== id);
+      return `Remove the ${personWords(was)}`;
     }
     case "add_wall": {
       const panels = boothPanels(p);

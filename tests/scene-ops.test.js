@@ -43,7 +43,7 @@ test("describe: the booth, its walls, each work and piece with its id and place 
 
 test("every op is in the catalog with a JSON Schema whose op is its own name", () => {
   assert.deepEqual(OP_NAMES, [
-    "rename", "set_booth", "add_furniture", "change_furniture", "remove_furniture", "add_wall", "change_wall", "remove_wall", "change_art", "remove_art", "arrange_wall",
+    "rename", "set_booth", "add_furniture", "change_furniture", "remove_furniture", "add_person", "change_person", "remove_person", "add_wall", "change_wall", "remove_wall", "change_art", "remove_art", "arrange_wall",
     "start_floor", "set_floor", "add_booths", "add_floor_piece", "change_floor_piece", "remove_floor_piece", "set_exhibitor", "mark_my_booth", "fit_floor",
   ]);
   for (const o of OPS) {
@@ -76,6 +76,39 @@ test("furniture: added by kind at its real size, moved, turned, resized and remo
   // A piece past the booth is pulled back to its edge, as a drag would be.
   const { scene: s3 } = applyOps(s1, [{ op: "change_furniture", id: chair.id, x: 500 }], images);
   assert.equal(s3.booth.pedestals[1].x, 60);
+});
+
+test("people: a 7′ man looking left added beside the one there, turned, raised, swapped, hidden and removed (the owner, 2026-10-07)", () => {
+  const { p, scene, images } = synced();
+  scene.booth.people = [{ id: "man1", kind: "man", height: 72, x: -30, z: 18, rotation: 180 }];
+  scene.booth.showPeople = false;
+  assert.deepEqual(describe(scene, images).people, [{ id: "man1", kind: "man", name: "Man", height: 72, x: -30, z: 18, rotation: 180, looks: "back" }]);
+  const { scene: s1, lines } = applyOps(scene, [{ op: "add_person", kind: "man", height: 84, looks: "left", ref: "m" }, { op: "change_person", id: "@m", x: 24, z: 40 }], images);
+  const added = s1.booth.people[1];
+  assert.deepEqual([added.kind, added.height, added.rotation, added.x, added.z], ["man", 84, -90, 24, 40]);
+  assert.equal(lines[0], "Add a man, 7′ tall, looking left, centred, 1′ 6″ toward the front");
+  assert.equal(lines[1], "Man: to 2′ right of centre, 3′ 4″ toward the front");
+  assert.equal(s1.booth.showPeople, true, "figures switched off for the booth come back on, or the new one wouldn't show");
+  assert.equal(describe(s1, images).people[1].looks, "left");
+  assert.doesNotThrow(() => opens(s1, p));
+  const { scene: s2, lines: l2 } = applyOps(s1, [
+    { op: "change_person", id: added.id, looks: "right", lift: 6 },
+    { op: "change_person", id: "man1", kind: "woman" },
+    { op: "change_person", id: "man1", hidden: true },
+  ], images);
+  assert.deepEqual([s2.booth.people[1].rotation, s2.booth.people[1].lift], [90, 6]);
+  assert.deepEqual([s2.booth.people[0].kind, s2.booth.people[0].height, s2.booth.people[0].hidden], ["woman", 66, true]);
+  assert.equal(l2[0], "Man: looking right, raised 6″");
+  assert.equal(l2[1], "Man: now a woman, 5′ 6″ tall");
+  assert.doesNotThrow(() => opens(s2, p));
+  const { scene: s3, lines: l3 } = applyOps(s2, [{ op: "remove_person", id: "man1" }], images);
+  assert.deepEqual(s3.booth.people.map((x) => x.id), [added.id]);
+  assert.equal(l3[0], "Remove the woman, 5′ 6″ tall, facing the back wall");
+  // Refused in words: too tall, both facings, a seventh figure, an unknown id.
+  assert.throws(() => applyOps(scene, [{ op: "add_person", kind: "man", height: 90 }], images), /height must be at most 84/);
+  assert.throws(() => applyOps(scene, [{ op: "add_person", kind: "man", looks: "left", rotation: 10 }], images), /looks or rotation, not both/);
+  assert.throws(() => applyOps(scene, Array.from({ length: 6 }, () => ({ op: "add_person", kind: "child" })), images), /at most 6 figures/);
+  assert.throws(() => applyOps(scene, [{ op: "remove_person", id: "nobody" }], images), /no figure with id nobody/);
 });
 
 test("the booth: venue, size, height, canopy and colour; what no longer fits is pulled inside", () => {
