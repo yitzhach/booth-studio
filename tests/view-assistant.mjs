@@ -104,6 +104,17 @@ try {
   const box = await launch.boundingBox();
   assert.ok(box.x > 640 && box.y + box.height <= 900 - 40, `the button sits bottom right, clear of the footer: ${JSON.stringify(box)}`);
 
+  // On a phone the button sits above the inspector's tab bar, not on it.
+  await page.setViewportSize({ width: 390, height: 844 });
+  const onTop = await page.evaluate(() => {
+    const el = document.querySelector('studio-assistant');
+    const b = el.shadowRoot.querySelector('.launch').getBoundingClientRect();
+    const tabs = document.querySelector('.inspector-tabs').getBoundingClientRect();
+    return { clear: b.bottom <= tabs.top, hit: document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2) === el };
+  });
+  assert.deepEqual(onTop, { clear: true, hit: true }, 'phone: the button is above the tab bar and nothing covers it');
+  await page.setViewportSize({ width: 1280, height: 900 });
+
   // ---- A change proposed, confirmed, undone ---------------------------------
   await launch.click();
   await page.waitForFunction(() => !document.querySelector('studio-assistant').shadowRoot.querySelector('.panel').hidden);
