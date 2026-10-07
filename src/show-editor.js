@@ -22,6 +22,7 @@
 // During a gesture only the moving groups' transforms change; the plan itself
 // is written once, when the gesture ends, as one undo step — through `edit`,
 // which the app wraps in its own checkpoint and redraw.
+import { typingIn } from "./typing.js";
 import { KINDS, boundsOf, boxOf, floorOf, floorSVG, makePiece, pieceSVG, piecesSVG, showItems, snapMove, toGrid } from "./show.js";
 
 const NS = "http://www.w3.org/2000/svg";
@@ -343,7 +344,7 @@ export function createShowEditor(host, { hall, edit, onSelect = () => {}, grid =
   svg.addEventListener("wheel", wheel, { passive: false });
   svg.addEventListener("contextmenu", (ev) => ev.preventDefault());
   const keySpace = (ev) => {
-    if (ev.code === "Space" && !ev.target.matches?.("input,textarea,select,button")) {
+    if (ev.code === "Space" && !typingIn(ev, ",button")) {
       spaceDown = ev.type === "keydown";
       svg.classList.toggle("panning", spaceDown);
     }
