@@ -22,6 +22,16 @@ Extend it; do not rebuild it.
   needs the owner are in Art-Talk-Back `docs/phase-5-booth.md`; the decisions
   are its D-061…D-067. Read the section **Studio platform** below before
   touching sign-in, sync, `worker/index.js` or `wrangler.jsonc`.
+- **The assistant knows where everything is (2026-10-07, Art-Talk-Back
+  D-072).** The owner found it saying it "can't see the app's buttons". Now
+  each message sends `appMap`: every tab, bar and button the tool search
+  indexes (`buildToolIndex` → `appMapText` in `src/main.js`, about 4,400
+  characters), so it answers "Export tab → Keep your work → …" and stays in
+  step with the app by itself. The booth on screen also carries a sync
+  `note` (`SYNC_NOTES` in `src/studio-assistant.js`) when the studio doesn't
+  have it as it is, e.g. a project made before signing in that waits for
+  Import my existing projects: the owner's "Spring booth" case, where the
+  assistant had said the booth doesn't exist.
 - **2026-10-07, pictures in the chat (Art-Talk-Back 10a, D-071).** The
   assistant panel has a 📷 button beside the message box: up to three
   pictures (a photo, a sketch, a show's map) go with the next message, or on
@@ -1849,6 +1859,34 @@ Extend it; do not rebuild it.
   `WALLS_PHASE.md` is now the record of what was decided.
 
 ## Next
+
+0. **The assistant panel on a phone — the owner's list, 2026-10-07, for
+   the next round (new chat).** In `src/studio-assistant.js` unless said.
+   - **Backspace doesn't delete typed text in the chat box.** Cause found:
+     `src/main.js` ~6449, the document `keydown` handler, skips typing only
+     when `ev.target.matches("input,textarea,select")`; a key in the
+     panel's shadow-root textarea reaches it retargeted to
+     `<studio-assistant>`, so Backspace/Delete is `preventDefault()`ed
+     (and deletes the selected artwork if one is selected). Fix: test
+     `ev.composedPath()[0]`, and look for other document key handlers with
+     the same check (5094, 6438). Test: type then Backspace in the panel.
+   - **Dark mode.** The panel is always light; it should follow the app's
+     own theme (style.css's dark palette / its theme setting) and the
+     system `prefers-color-scheme`. Test both.
+   - **The floating button covers other buttons on a phone.** #18 lifted it
+     above the inspector's tab bar, but it still floats over the viewport
+     (e.g. the zoom and view buttons). The owner wants it less in the way.
+   - **An assistant button at the top too.** One in the header beside
+     "Find a tool" (an icon on a phone), as well as the one at the bottom,
+     so it's easy to find; the bottom one could then shrink to an icon.
+   - **A movable, see-through-able panel.** The chat as a pop-up the owner
+     can drag (and resize or shrink) so what's under it stays visible,
+     instead of a sheet covering 80% of the phone. Remember its place per
+     device (localStorage, wrapped in try/catch).
+   Plan these as one round; check each at 390 × 844 in
+   `tests/view-assistant.mjs` and keep view-responsive green. The Show
+   Tracker's panel (art-show-tracker `tracker/studio-assistant.js`) is the
+   same design: ask the owner whether it gets the same changes.
 
 1. **The studio, by hand (2026-10-05).** Everything in Studio platform
    (below) is tested here with two browser contexts against a local

@@ -64,9 +64,10 @@ try {
       onStatus(fn) { window.__bridge.paint = fn; return () => {}; },
       sync: async () => { window.__bridge.synced++; },
       placementId: async () => '01J00000000000000000000BTH',
+      status: () => window.__bridge.status || 'synced',
       openBooth: (id) => { window.__bridge.opened = id; },
     };
-    const host = { project: () => window.__booth.project };
+    const host = { project: () => window.__booth.project, appMap: () => 'Export · Keep your work: Download project backup' };
     const { mount } = await import('/src/studio-assistant.js');
     await mount(bridge, host);
   });
@@ -136,6 +137,7 @@ try {
   assert.equal(body.message, 'slide the table two feet left and make the booth 10 by 15');
   assert.deepEqual(body.record, { type: 'placement', id: PLACEMENT, label: await page.evaluate(() => window.__booth.project.name) },
     'the booth on screen goes with the message');
+  assert.equal(body.appMap, 'Export · Keep your work: Download project backup', "the app's map of its buttons goes with the message");
   const lines = await inPanel('[data-card="card-edit"] dd').allTextContents();
   assert.deepEqual(lines.slice(1), ['Spring booth', 'Table 6′ with cloth: to 2′ left of centre, 2′ 6″ toward the front', 'Make the booth 15′ wide × 10′ deep']);
   assert.equal(await inPanel('.msg.bot').last().textContent(), 'Here is the change.');
@@ -174,6 +176,15 @@ try {
   await inPanel('textarea').fill('make Winter');
   await inPanel('textarea').press('Tab');
   assert.equal(await inPanel('textarea').inputValue(), 'make Winter Park corner booth');
+
+  // A booth not in the studio yet says so, so the assistant can say what to tap.
+  await page.evaluate(() => (window.__bridge.status = 'local'));
+  chat = [{ type: 'text', text: 'Not in the studio yet.' }, { type: 'end', reason: 'end_turn' }];
+  await inPanel('textarea').fill('move the table');
+  await inPanel('textarea').press('Enter');
+  await inPanel('.msg.bot:text("Not in the studio yet.")').waitFor();
+  assert.match(sent.at(-1).record.note, /Import my existing projects/);
+  await page.evaluate(() => (window.__bridge.status = 'synced'));
 
   // ---- Pictures (10a): attach, preview, take one off, send with the message ----
   // A 3000×2000 PNG, made in the page: the panel shrinks it to 1568 on its long side.
