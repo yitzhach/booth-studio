@@ -1907,8 +1907,14 @@ Extend it; do not rebuild it.
 0. **The assistant panel on a phone (2026-10-07): built — see Now.** The
    owner's to try on his phone: Backspace, the two new doors, dragging,
    resizing and shrinking the panel. The Show Tracker's panel
-   (art-show-tracker `tracker/studio-assistant.js`) gets the same changes
-   (the owner, 2026-10-07): a change in that repo, not here.
+   (art-show-tracker `tracker/studio-assistant.js`) got the same changes
+   (art-show-tracker#5), and "take me to …" too (art-show-tracker#7). Both
+   apps' take-me-to waits on the owner's "Deploy production assistant" run.
+0. **Render with AI needs a provider (asked 2026-10-07).** `provider` is
+   `null` in `src/ai-render.js`; the pack download works. Plugging one in
+   needs an image model (not Claude) whose key sits behind a studio Worker
+   route, never in this app: the owner picks the service and OKs the
+   spend first.
 
 1. **The studio, by hand (2026-10-05).** Everything in Studio platform
    (below) is tested here with two browser contexts against a local
