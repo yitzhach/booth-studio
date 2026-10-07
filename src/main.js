@@ -218,7 +218,9 @@ import { FOOTPRINTS, SHOWS, STARTERS, fromTemplate, quickStart, templateOf } fro
 import { PhotoEditor } from "./photo.js";
 import { hangingGuide } from "./guide.js";
 import { showPack } from "./showpack.js";
-import { SHORTCUTS, dedupe, fold, rankTools, shortcutOf } from "./toolsearch.js";
+// `fold` is also the inspector's open/closed helper below, which hides this one inside
+// the app; text matching uses `foldText`.
+import { SHORTCUTS, dedupe, fold, fold as foldText, rankTools, shortcutOf } from "./toolsearch.js";
 import { PRO_FEATURES, TIERS, actionFeature, can, readTier, resolveTier, writeTier } from "./tier.js";
 async function boot() {
   const icons = {
@@ -6353,7 +6355,22 @@ async function boot() {
     ul.querySelector("li.active")?.scrollIntoView({ block: "nearest" });
   }
   /** Take the user to a found tool: its tab, scrolled to, focused and flashed. */
-  function openTool(hit) {
+  /** The tool index entry for a place in appMapText's words ("Layout · People for scale", "Add man"), or the closest by name. */
+  function placeHit(place, control) {
+    const list = toolIndex || (toolIndex = buildToolIndex());
+    const where = (x) => foldText(x.where === "Inspector tab" ? "Inspector tabs (bottom bar on a phone, side panel on a computer)" : x.where);
+    const p = foldText(place || ""),
+      c = foldText(control || "");
+    const here = list.filter((x) => where(x) === p);
+    return (
+      (c && here.find((x) => foldText(x.label) === c)) ||
+      (c && rankTools(here, control, 1)[0]) ||
+      here[0] ||
+      rankTools(list, control || place, 1)[0] ||
+      null
+    );
+  }
+  function openTool(hit, { press = true } = {}) {
     const box = document.querySelector("#tool-search");
     box.value = "";
     box.blur();
@@ -6366,15 +6383,15 @@ async function boot() {
         const all = [...root.querySelectorAll(FINDABLE)];
         target = all[hit.index];
         // The inspector redrew; if it came out different, find it by name.
-        if (!target || fold(findableName(target)) !== fold(hit.label))
-          target = all.find((el) => fold(findableName(el)) === fold(hit.label)) || null;
+        if (!target || foldText(findableName(target)) !== foldText(hit.label))
+          target = all.find((el) => foldText(findableName(el)) === foldText(hit.label)) || null;
       } else target = document.querySelector(`.inspector-tabs [data-tab="${hit.tab}"]`);
     }
     if (!target) return;
     // A toolbar button is a tool in itself, so finding it uses it; anything in
     // the inspector is only shown and focused, because "Remove" found is not
     // "Remove" meant.
-    if (!hit.tab && target.matches("button")) {
+    if (press && !hit.tab && target.matches("button")) {
       target.click();
       return;
     }
@@ -6621,6 +6638,14 @@ async function boot() {
     // For the assistant: every control the tool search knows, as "where: names",
     // so it can tell the artist which tab or bar and which button (Art-Talk-Back D-072).
     appMap: () => appMapText(toolIndex || (toolIndex = buildToolIndex())),
+    // "Take me to …" from the assistant (Art-Talk-Back D-075): open the tab and
+    // show the control, never press it. False when nothing matched.
+    openPlace(place, control) {
+      const hit = placeHit(place, control);
+      if (!hit) return false;
+      openTool(hit, { press: false });
+      return true;
+    },
     // A version from the studio replaces the project on screen, like an
     // opened backup: one step, and Undo brings back what was here.
     open(next) {
@@ -6653,6 +6678,8 @@ async function boot() {
   // Development-only inspection hook for integration tests; absent from production.
   if (import.meta.env.DEV)
     window.__booth = {
+      // The assistant's "take me to …" on the real index, for tests/view-assistant.mjs.
+      openPlace: (place, control) => studioHost.openPlace(place, control),
       get project() {
         return p;
       },

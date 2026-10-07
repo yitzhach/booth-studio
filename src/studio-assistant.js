@@ -655,6 +655,12 @@ class Panel extends HTMLElement {
       } else if (e.type === "replies") {
         gotReplies = true;
         this.offerReplies(e.items || []);
+      } else if (e.type === "open") {
+        // "Take me to …": the app shows the place; nothing changes. On a phone the
+        // panel shrinks to its bar so what it opened isn't under it.
+        const shown = this.host?.openPlace?.(e.place, e.control);
+        if (shown && innerWidth <= 600 && !this.where?.min) this.place({ ...this.where, min: true }); // not saved: it opens out as before
+        if (!shown) this.setNote(`Couldn’t find ${e.control || e.place} on this screen.`);
       } else if (e.type === "done") {
         acted = true;
         this.done(e);
@@ -682,6 +688,8 @@ class Panel extends HTMLElement {
         await this.bridge.adopt();
       } catch {}
     }
+    // This app can show a place when asked ("take me to lighting", D-075).
+    if (this.host?.openPlace) body.commands = ["open"];
     const record = await this.record();
     if (record) body.record = record;
     if (this.fresh) {

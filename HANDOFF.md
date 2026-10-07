@@ -46,6 +46,18 @@ Extend it; do not rebuild it.
   the model reads a real sketch well is the owner's to judge on his phone:
   no session can. Live in production since 2026-10-07: the owner approved
   "Deploy production assistant" run 2 (Sonnet 5.5) after booth-studio#17.
+- **"Take me to …" (Art-Talk-Back D-075, step 10c, 2026-10-07).** The owner
+  asked the assistant to open the Layout tab and it said it couldn't. The panel
+  now sends `commands: ["open"]`; the assistant's `open_in_app` tool streams an
+  `open` event with a place and control from the app map, and
+  `studioHost.openPlace` finds it in the tool index (`placeHit`) and shows it
+  with Find a tool's own `openTool(hit, { press: false })`: the tab opens, the
+  section scrolls into view, the control is focused and highlighted, and
+  nothing is pressed. On a phone the panel shrinks to its bar (not saved) so
+  the control isn't under it. Note: `fold` in main.js is the inspector's
+  open/closed helper and hides toolsearch's `fold`; text matching uses
+  `foldText` (openTool's re-find by name had silently compared "" to "").
+  Needs "Deploy production assistant" for the tool to reach production.
 - **The booth on screen goes to the studio by itself (the owner, 2026-10-07).**
   He asked the assistant to add a figure to the booth he was working on and
   it said the booth "didn't open": it had been on his device since before
