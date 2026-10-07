@@ -69,7 +69,7 @@ try {
       // Sends a booth waiting for the import to the studio; here it can be made to fail, leaving it local.
       adopt: async () => { window.__bridge.adopted++; if (!window.__bridge.adoptFails) window.__bridge.status = 'synced'; },
     };
-    const host = { project: () => window.__booth.project, appMap: () => 'Export · Keep your work: Download project backup' };
+    const host = { project: () => window.__booth.project, appMap: () => 'Export · Keep your work: Download project backup', openPlace: (p, c) => window.__booth.openPlace(p, c) };
     const { mount } = await import('/src/studio-assistant.js');
     await mount(bridge, host);
   });
@@ -195,6 +195,27 @@ try {
   assert.equal(await inPanel('textarea').inputValue(), 'make Winter Park corner booth');
 
   // A booth not in the studio yet says so, so the assistant can say what to tap.
+  // "Take me to the tool to add a man" (D-075): the app says it can open places,
+  // and an open event shows Layout → People for scale → Add man, pressing nothing.
+  const people = await page.evaluate(() => (window.__booth.project.booth.people || []).length);
+  chat = [{ type: 'open', place: 'Layout · People for scale', control: 'Add man' }, { type: 'text', text: 'It’s open: tap Add man.' }, { type: 'end', reason: 'end_turn' }];
+  await inPanel('textarea').fill('take me to the tool to add a man');
+  await inPanel('textarea').press('Enter');
+  await inPanel('.msg.bot:text("It’s open: tap Add man.")').waitFor();
+  assert.deepEqual(sent.at(-1).commands, ['open'], 'the panel says this app can open places');
+  const opened = await page.evaluate(() => ({
+    tab: document.querySelector('.inspector-tabs [data-tab="layout"]')?.classList.contains('active'),
+    focused: document.activeElement?.getAttribute('aria-label') || document.activeElement?.textContent?.trim(),
+    found: !!document.querySelector('#inspector-content .found'),
+    people: (window.__booth.project.booth.people || []).length,
+  }));
+  assert.deepEqual(opened, { tab: true, focused: 'Add man', found: true, people }, `Layout open, Add man shown and focused, nobody added: ${JSON.stringify(opened)}`);
+  // A place the app doesn't have says so, and nothing moves.
+  chat = [{ type: 'open', place: 'Nowhere · Nothing', control: 'zzqx' }, { type: 'end', reason: 'end_turn' }];
+  await inPanel('textarea').fill('take me to nowhere');
+  await inPanel('textarea').press('Enter');
+  await inPanel('.note:text("Couldn’t find zzqx on this screen.")').waitFor();
+
   // A booth waiting for the import is sent to the studio first, so the assistant can read it.
   await page.evaluate(() => (window.__bridge.status = 'local'));
   chat = [{ type: 'text', text: 'Moved.' }, { type: 'end', reason: 'end_turn' }];
