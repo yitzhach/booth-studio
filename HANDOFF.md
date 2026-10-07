@@ -22,6 +22,22 @@ Extend it; do not rebuild it.
   needs the owner are in Art-Talk-Back `docs/phase-5-booth.md`; the decisions
   are its D-061…D-067. Read the section **Studio platform** below before
   touching sign-in, sync, `worker/index.js` or `wrangler.jsonc`.
+- **2026-10-07, pictures in the chat (Art-Talk-Back 10a, D-071).** The
+  assistant panel has a 📷 button beside the message box: up to three
+  pictures (a photo, a sketch, a show's map) go with the next message, or on
+  their own. The panel shrinks each to a JPEG 1568 px on its long side
+  (`fitPicture`, `shrinkPicture` in `src/studio-assistant.js`) and sends it
+  as `images` with the message; studio-assistant shows it to the model for
+  that turn only and stores a note in its place, so Past chats show
+  "(picture)". The model builds a booth with `placement_build`, changes the
+  one on screen with `placement_edit`, or lays out a floor from a map, and
+  says what it read. Proven by `tests/view-assistant.mjs` (attach, preview,
+  remove, the size sent, a picture alone, the three-picture cap). Whether
+  the model reads a real sketch well is the owner's to judge on his phone:
+  no session can. Production pictures need studio-assistant redeployed
+  ("Deploy production assistant", the owner's button); until then
+  production's assistant ignores the pictures and answers the words, and
+  a picture sent alone gets its "Send a message" refusal.
 - **Last deploy: 2026-10-05, seventeenth round — booths and show floors by
   name, for the studio assistant and agents.** The owner approved
   scene-level actions (Art-Talk-Back D-070) with a wider aim: a booth or a
