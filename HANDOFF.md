@@ -46,6 +46,20 @@ Extend it; do not rebuild it.
   the model reads a real sketch well is the owner's to judge on his phone:
   no session can. Live in production since 2026-10-07: the owner approved
   "Deploy production assistant" run 2 (Sonnet 5.5) after booth-studio#17.
+- **The booth on screen goes to the studio by itself (the owner, 2026-10-07).**
+  He asked the assistant to add a figure to the booth he was working on and
+  it said the booth "didn't open": it had been on his device since before
+  he signed in, waiting for Import my existing projects, so the studio (and
+  the assistant) had never seen it. Now the project that was open at sign-in
+  waits only while it is untouched (`localHash` in the session, a hash of its
+  scene at sign-in): changed since, it goes up like any other; asked about
+  in the assistant, the panel calls `bridge.adopt()` and it goes up before
+  the message is sent. A sign-in from before `localHash` existed sends it at
+  once. A fresh device's untouched demo still never goes up by itself.
+  `sync()` called while one runs now runs once more after it, so what was
+  saved or adopted before the call is in the studio when it resolves.
+  Proven by `tests/two-devices.mjs` (untouched waits; renamed goes up) and
+  `tests/view-assistant.mjs` (adopt before the message).
 - **The assistant panel on a phone — the owner's list (2026-10-07).** Four
   doors and a pop-up, all in `src/studio-assistant.js` unless said:
   - **Backspace types.** A key in the panel's chat box reached `src/main.js`'s
