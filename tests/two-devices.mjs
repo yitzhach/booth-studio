@@ -612,9 +612,12 @@ try {
   await four.page.click("#st-close");
   await rename(four, "Changed after signing in");
   await until(four, "the changed booth in the studio", async () => (await placements(four)).some((b) => b.name === "Changed after signing in"));
-  await until(four, "device 4 settled", async () => (await status(four)) !== "syncing");
+  // A sync can start again between two reads (the rename's own save), so wait for
+  // the footer to say synced with nothing waiting, and judge that same reading.
+  let settled = "";
+  await until(four, "device 4 settled", async () => (await pending(four)) === 0 && (settled = await status(four)) === "synced");
   check("changed after signing in, it goes to the studio by itself (the owner, 2026-10-07)",
-    (await placements(four)).length === had + 1 && (await status(four)) === "synced", await status(four));
+    (await placements(four)).length === had + 1 && settled === "synced", settled);
   errorsSeen.push(...four.errors);
   await four.ctx.close();
 
