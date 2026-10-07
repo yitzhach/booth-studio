@@ -36,7 +36,8 @@ Extend it; do not rebuild it.
   the model reads a real sketch well is the owner's to judge on his phone:
   no session can. Production pictures need studio-assistant redeployed
   ("Deploy production assistant", the owner's button); until then
-  production's assistant ignores the pictures and answers the words.
+  production's assistant ignores the pictures and answers the words, and
+  a picture sent alone gets its "Send a message" refusal.
 - **Last deploy: 2026-10-05, seventeenth round — booths and show floors by
   name, for the studio assistant and agents.** The owner approved
   scene-level actions (Art-Talk-Back D-070) with a wider aim: a booth or a
