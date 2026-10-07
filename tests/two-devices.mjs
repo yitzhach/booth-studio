@@ -543,6 +543,9 @@ try {
   await sync(one);
   await new Promise((r) => setTimeout(r, 600));
   await sync(one);
+  // The footer reads "syncing" while any sync runs (the save's own, the timer's),
+  // so wait for it to settle rather than read it mid-run.
+  await until(one, "device 1 settled after the edit", async () => (await status(one)) !== "syncing");
   check("an edit afterwards stays on the device too", (await stored(one)).name === "Edited after the delete" &&
     (await status(one)) === "gone" && pushes.one === seen.one && (await placements(one)).length === 0, JSON.stringify(pushes));
 
@@ -609,6 +612,7 @@ try {
   await four.page.click("#st-close");
   await rename(four, "Changed after signing in");
   await until(four, "the changed booth in the studio", async () => (await placements(four)).some((b) => b.name === "Changed after signing in"));
+  await until(four, "device 4 settled", async () => (await status(four)) !== "syncing");
   check("changed after signing in, it goes to the studio by itself (the owner, 2026-10-07)",
     (await placements(four)).length === had + 1 && (await status(four)) === "synced", await status(four));
   errorsSeen.push(...four.errors);
