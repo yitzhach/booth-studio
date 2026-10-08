@@ -662,7 +662,11 @@ export function connect(host) {
         ? "You have a password: sign in with it or with an emailed code."
         : "Optional: sign in next time with a password instead of an emailed code. The code always works too.";
     };
-    api().request("GET", "/me").then((me) => box.isConnected && showPassword(!!me.hasPassword), () => {});
+    // The dialog can redraw (a sync, a sign-out) before /me answers; the box
+    // is still in the page then but this draw's buttons are not, so check
+    // one of them rather than the box.
+    const setBtn = box.querySelector("#st-setpw");
+    api().request("GET", "/me").then((me) => setBtn.isConnected && showPassword(!!me.hasPassword), () => {});
     box.querySelector("#st-setpw").onclick = async () => {
       const pw = box.querySelector("#st-newpw").value;
       if (pw.length < 10) return pwMsg("Use at least 10 characters.", true);
