@@ -19,9 +19,13 @@ Extend it; do not rebuild it.
   on the phone too); signed in it shows the email's initials and its title says
   who is signed in. `accountLabel` in `src/studio-session.js`; `writeSession`
   fires a `studio-session` event and main.js repaints the button. Checked in
-  `tests/view-assistant.mjs` at 390 px. He also asked to choose his own password
-  instead of the emailed code: that is a studio-api (Art-Talk-Back) change and
-  waits on his answer.
+  `tests/view-assistant.mjs` at 390 px (booth-studio#27).
+- **Optional password (Art-Talk-Back D-080).** Isaac chose "code, then optional
+  password". Studio account signed out has "Use my password"; signed in, a
+  Password section sets, changes or removes one (`/v1/auth/password*`, read via
+  `Me.hasPassword`). The emailed code always still works. Covered by
+  `tests/view-password.mjs` (studio routed, no real studio-api). Needs
+  Art-Talk-Back#39 deployed to production first.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
