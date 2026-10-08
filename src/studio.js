@@ -431,8 +431,17 @@ export function connect(host) {
 
   async function verify(email, code) {
     email = String(email || "").trim().toLowerCase();
+    return signedIn(email, await api().verify(email, String(code || "").trim()));
+  }
+
+  /** Signing in with a password instead of a code (Art-Talk-Back D-080). */
+  async function passwordSignIn(email, password) {
+    email = String(email || "").trim().toLowerCase();
+    return signedIn(email, await api().request("POST", "/auth/password/login", { json: { email, password: String(password || "") } }));
+  }
+
+  async function signedIn(email, me) {
     const prev = session();
-    const me = await api().verify(email, String(code || "").trim());
     const studioId = me.activeStudioId || null;
     // Back after an ended sign-in as the same person and studio: keep this
     // device's copy and its waiting changes. Anyone else starts clean.
@@ -591,7 +600,7 @@ export function connect(host) {
     const s = session();
     const box = d.querySelector("#dialog-content");
     if (!s || s.expired) {
-      box.innerHTML = `<h2>Studio account</h2>${s?.expired ? `<p class="warning" id="st-expired">Your studio sign-in has ended. Sign in again as ${e(s.email)}${detail ? ` — ${e(detail)}` : ""}.</p>` : `<p class="muted">Sign in to keep your booths in your studio and open them on your other devices. Signed out, Booth Studio works on this device exactly as it always has.</p>`}<label class="setting-label">Email<input id="st-email" type="email" autocomplete="email" value="${e(s?.email || "")}"/></label><div class="button-row"><button class="primary" id="st-send">Send me a code</button></div><div id="st-code-row" hidden><label class="setting-label">The 6-digit code from the email<input id="st-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6"/></label><div class="button-row"><button class="primary" id="st-verify">Sign in</button></div></div><p class="muted" id="st-msg" role="status"></p><div class="button-row"><button id="st-close">Close</button></div>`;
+      box.innerHTML = `<h2>Studio account</h2>${s?.expired ? `<p class="warning" id="st-expired">Your studio sign-in has ended. Sign in again as ${e(s.email)}${detail ? ` — ${e(detail)}` : ""}.</p>` : `<p class="muted">Sign in to keep your booths in your studio and open them on your other devices. Signed out, Booth Studio works on this device exactly as it always has.</p>`}<label class="setting-label">Email<input id="st-email" type="email" autocomplete="email" value="${e(s?.email || "")}"/></label><div class="button-row"><button class="primary" id="st-send">Send me a code</button><button id="st-pw-show">Use my password</button></div><div id="st-pw-row" hidden><label class="setting-label">Password<input id="st-pw" type="password" autocomplete="current-password" maxlength="200"/></label><div class="button-row"><button class="primary" id="st-pw-go">Sign in with password</button></div><p class="muted">No password yet? Sign in with a code first, then set one here.</p></div><div id="st-code-row" hidden><label class="setting-label">The 6-digit code from the email<input id="st-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6"/></label><div class="button-row"><button class="primary" id="st-verify">Sign in</button></div></div><p class="muted" id="st-msg" role="status"></p><div class="button-row"><button id="st-close">Close</button></div>`;
       const msg = (t, bad) => {
         const m = box.querySelector("#st-msg");
         m.textContent = t;
@@ -611,6 +620,23 @@ export function connect(host) {
           msg(err.status === 503 ? "The studio can't be reached from here just now. Booth Studio keeps working on this device." : err.message, true);
         }
       };
+      box.querySelector("#st-pw-show").onclick = () => {
+        box.querySelector("#st-pw-row").hidden = false;
+        box.querySelector("#st-pw").focus();
+      };
+      const pwGo = async () => {
+        const email = box.querySelector("#st-email").value;
+        if (!/^\S+@\S+\.\S+$/.test(email.trim())) return msg("Type the email you use for the studio.", true);
+        msg("Signing in…");
+        try {
+          await passwordSignIn(email, box.querySelector("#st-pw").value);
+          renderPanel();
+        } catch (err) {
+          msg(err.status === 503 ? "The studio can't be reached from here just now. Booth Studio keeps working on this device." : err.message, true);
+        }
+      };
+      box.querySelector("#st-pw-go").onclick = pwGo;
+      box.querySelector("#st-pw").onkeydown = (ev) => ev.key === "Enter" && pwGo();
       box.querySelector("#st-verify").onclick = async () => {
         msg("Signing in…");
         try {
@@ -622,8 +648,43 @@ export function connect(host) {
       };
       return;
     }
-    box.innerHTML = `<h2>Studio account</h2><p id="st-signed-in">Signed in as <strong>${e(s.email)}</strong>.</p><p class="muted" id="st-status">${e(networkText())}${detail && status !== "offline" && status !== "uploading" ? ` — ${e(detail)}` : ""}</p><div class="button-row"><button id="st-sync">Sync now</button><button id="st-signout">Sign out</button></div><section><h3>Your studio's booths</h3><div id="st-booths" class="muted">Loading…</div></section><section><h3>This device's projects</h3><p class="muted" id="st-import-text">${s.local ? "The project that was on this device when you signed in stays here until you change it, ask the assistant about it, or import it." : "Projects you start or open here go to the studio by themselves."}</p><div class="button-row"><button class="primary" id="st-import">Import my existing projects</button></div><p class="muted" id="st-import-result" role="status"></p></section><div class="button-row"><button id="st-close">Close</button></div>`;
+    box.innerHTML = `<h2>Studio account</h2><p id="st-signed-in">Signed in as <strong>${e(s.email)}</strong>.</p><p class="muted" id="st-status">${e(networkText())}${detail && status !== "offline" && status !== "uploading" ? ` — ${e(detail)}` : ""}</p><div class="button-row"><button id="st-sync">Sync now</button><button id="st-signout">Sign out</button></div><section><h3>Password</h3><p class="muted" id="st-pw-state">Optional: sign in next time with a password instead of an emailed code. The code always works too.</p><label class="setting-label">New password (10 characters or more)<input id="st-newpw" type="password" autocomplete="new-password" maxlength="200"/></label><div class="button-row"><button id="st-setpw">Set password</button><button id="st-rmpw" hidden>Remove password</button></div><p class="muted" id="st-pw-msg" role="status"></p></section><section><h3>Your studio's booths</h3><div id="st-booths" class="muted">Loading…</div></section><section><h3>This device's projects</h3><p class="muted" id="st-import-text">${s.local ? "The project that was on this device when you signed in stays here until you change it, ask the assistant about it, or import it." : "Projects you start or open here go to the studio by themselves."}</p><div class="button-row"><button class="primary" id="st-import">Import my existing projects</button></div><p class="muted" id="st-import-result" role="status"></p></section><div class="button-row"><button id="st-close">Close</button></div>`;
     box.querySelector("#st-close").onclick = () => d.close();
+    const pwMsg = (t, bad) => {
+      const m = box.querySelector("#st-pw-msg");
+      m.textContent = t;
+      m.classList.toggle("error", !!bad);
+    };
+    const showPassword = (has) => {
+      box.querySelector("#st-setpw").textContent = has ? "Change password" : "Set password";
+      box.querySelector("#st-rmpw").hidden = !has;
+      box.querySelector("#st-pw-state").textContent = has
+        ? "You have a password: sign in with it or with an emailed code."
+        : "Optional: sign in next time with a password instead of an emailed code. The code always works too.";
+    };
+    api().request("GET", "/me").then((me) => box.isConnected && showPassword(!!me.hasPassword), () => {});
+    box.querySelector("#st-setpw").onclick = async () => {
+      const pw = box.querySelector("#st-newpw").value;
+      if (pw.length < 10) return pwMsg("Use at least 10 characters.", true);
+      pwMsg("Saving…");
+      try {
+        await api().request("PUT", "/auth/password", { json: { password: pw } });
+        box.querySelector("#st-newpw").value = "";
+        showPassword(true);
+        pwMsg("Password set. Your other devices were signed out; sign in there with it or a code.");
+      } catch (err) {
+        pwMsg(err.message, true);
+      }
+    };
+    box.querySelector("#st-rmpw").onclick = async () => {
+      try {
+        await api().request("DELETE", "/auth/password");
+        showPassword(false);
+        pwMsg("Password removed. Sign in with an emailed code.");
+      } catch (err) {
+        pwMsg(err.message, true);
+      }
+    };
     box.querySelector("#st-sync").onclick = async () => {
       await sync();
       renderPanel();
