@@ -13,6 +13,15 @@ Extend it; do not rebuild it.
   the rules that bite. It does not need to be asked for again. That rule is
   about chat only: code comments, commit messages and this file stay in full
   prose, because a cold session has nothing else to read.
+- **2026-10-08: the header says "Sign in".** Isaac couldn't find where to sign
+  in: the only way was a grey round "IA" in the header, and below 700px it was
+  hidden altogether. Signed out, that button now reads "Sign in" (a light pill,
+  on the phone too); signed in it shows the email's initials and its title says
+  who is signed in. `accountLabel` in `src/studio-session.js`; `writeSession`
+  fires a `studio-session` event and main.js repaints the button. Checked in
+  `tests/view-assistant.mjs` at 390 px. He also asked to choose his own password
+  instead of the emailed code: that is a studio-api (Art-Talk-Back) change and
+  waits on his answer.
 - Repo: https://github.com/yitzhach/booth-studio
 - Production: https://booth-studio.bobdylan2000.workers.dev
 - `main` is deployed. Every other branch is preview-only.
