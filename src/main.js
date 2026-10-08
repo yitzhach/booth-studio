@@ -2576,6 +2576,7 @@ async function boot() {
     } else scene.stopWalk();
     document.querySelector(".walk-pad").hidden = !walking;
     document.querySelector("#scene").classList.toggle("walking", walking);
+    document.body.classList.toggle("walking-on", walking);
     document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", !walking && b.dataset.view === "perspective"));
     renderStatus();
     syncTools();
@@ -3251,6 +3252,10 @@ async function boot() {
     bar.setAttribute("aria-label", "Sections of this panel");
     bar.innerHTML = [...labels, SUB_ALL].map((l) => `<button type="button" role="tab" data-subtab="${e(l)}" aria-selected="${l === chosen}" class="${l === chosen ? "active" : ""}" title="${e(l)}">${e(l)}</button>`).join("");
     list[0].sec.before(bar);
+    // On a phone the row is one line that scrolls sideways; keep the chosen
+    // chip in sight rather than off the edge.
+    const on = bar.querySelector(".active");
+    if (on && bar.scrollWidth > bar.clientWidth) bar.scrollLeft = Math.max(0, on.offsetLeft - (bar.clientWidth - on.offsetWidth) / 2);
   }
   /** Choose the chip a section belongs to, so it can be shown and focused. */
   function showSection(el) {
