@@ -21,7 +21,11 @@ Extend it; do not rebuild it.
   (`body.walking-on`, set in `setWalking`) the round search and assistant
   buttons hide on a phone, because they sat under the walk pad. CSS at the end
   of `src/style.css`. Checked by screenshot at 390 px; not yet on his phone.
-  A fuller revamp (toolbar, view switch, statusbar) is open for his direction.
+  Second pass the same day: the booth takes 43% of the screen, the tool row
+  is 38 px, and the five view buttons became one View menu (`#view-quick`,
+  which presses the matching `#view-switch` button and follows the lit one)
+  beside the zoom buttons; the statusbar is hidden on a phone (Preview
+  quality stays in Export).
 - **2026-10-08: the header says "Sign in".** Isaac couldn't find where to sign
   in: the only way was a grey round "IA" in the header, and below 700px it was
   hidden altogether. Signed out, that button now reads "Sign in" (a light pill,
