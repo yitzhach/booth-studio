@@ -198,6 +198,15 @@ button.avatar {
   padding: 0;
   border: 0;
 }
+button.avatar.sign-in {
+  width: auto;
+  padding: 0 14px;
+  border-radius: 15px;
+  background: #e8e2d4;
+  color: #1d2024;
+  font-weight: 600;
+  white-space: nowrap;
+}
 /* Studio sync: the review card when a booth changed on two devices, and the
    list of the studio's booths in Studio account. */
 #studio-card {
@@ -1111,7 +1120,6 @@ dialog li {
   }
   .brand span,
   .app-badge,
-  .avatar,
   header > .icon-only {
     display: none;
   }

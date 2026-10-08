@@ -20,4 +20,17 @@ export function writeSession(value, storage = globalThis.localStorage) {
     if (value == null) storage.removeItem(STUDIO_KEY);
     else storage.setItem(STUDIO_KEY, JSON.stringify(value));
   } catch {}
+  // The header's account button repaints from this (main.js accountButton).
+  try {
+    globalThis.dispatchEvent?.(new Event("studio-session"));
+  } catch {}
+}
+
+/** The header's account button: "Sign in" signed out, initials signed in. */
+export function accountLabel(session) {
+  if (!session) return { text: "Sign in", signedIn: false, title: "Sign in to your studio: sync booths and turn on the assistant" };
+  const name = String(session.email || "").split("@")[0];
+  const parts = name.split(/[._\-+]+/).filter(Boolean);
+  const initials = ((parts[0]?.[0] || "") + (parts[1]?.[0] || "")).toUpperCase() || "✓";
+  return { text: initials, signedIn: true, title: session.expired ? `Sign-in ended for ${session.email}: sign in again` : `Signed in as ${session.email}: studio account and sync` };
 }

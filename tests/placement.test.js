@@ -174,3 +174,12 @@ test("the Worker forwards /assistant/* to the assistant where one is bound, and 
   res = await forwardToAssistant(req("/assistant/chat", { method: "POST" }), { ASSISTANT: { fetch: async () => { throw new Error("down"); } } });
   assert.equal(res.status, 503);
 });
+
+test("the header's account button says Sign in signed out, initials signed in", async () => {
+  const { accountLabel } = await import("../src/studio-session.js");
+  assert.equal(accountLabel(null).text, "Sign in");
+  assert.equal(accountLabel(null).signedIn, false);
+  assert.equal(accountLabel({ signedIn: true, email: "isaac.anderson@example.com" }).text, "IA");
+  assert.equal(accountLabel({ signedIn: true, email: "isaac@example.com" }).text, "I");
+  assert.match(accountLabel({ signedIn: true, email: "a@b.c", expired: true }).title, /sign in again/);
+});

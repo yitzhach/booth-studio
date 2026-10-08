@@ -125,6 +125,15 @@ try {
     };
   });
   assert.deepEqual(phone, { launch: 'none', top: 'flex', clear: true, hit: true, covers: false }, 'phone: one round icon, clear of the tab bar and the viewport\'s buttons, and the header\'s icon');
+  // Isaac (2026-10-08): "I can't see where to even login." Signed out, the
+  // header says Sign in, on a phone too, inside the header and clear of the rest.
+  const signIn = await page.evaluate(() => {
+    const b = document.querySelector('header button.avatar'), r = b.getBoundingClientRect();
+    const others = [...document.querySelectorAll('header > *')].filter((n) => n !== b && n.getBoundingClientRect().width);
+    return { text: b.textContent, shown: r.width > 40 && r.right <= innerWidth, hit: document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) === b,
+      clear: others.every((n) => { const o = n.getBoundingClientRect(); return o.right <= r.left + 1 || o.left >= r.right - 1; }) };
+  });
+  assert.deepEqual(signIn, { text: 'Sign in', shown: true, hit: true, clear: true }, 'phone: the header shows Sign in');
   await page.locator('.assistant-fab').click();
   await page.waitForFunction(() => !document.querySelector('studio-assistant').shadowRoot.querySelector('.panel').hidden);
   const sheet = await inPanel('.panel').boundingBox();
