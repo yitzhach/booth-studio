@@ -178,7 +178,9 @@ try {
   // One page: a second one in this single-process browser closes the first.
   const phone = page;
   await phone.setViewportSize({ width: 390, height: 844 });
-  await phone.click('[data-action="mode-show"]');
+  // On a phone the mode switch sits behind More tools.
+  await phone.click('.toolbar [data-action="tools-more"]');
+  await phone.click('.toolbar [data-action="mode-show"]');
   assert.equal(await phone.locator('#show-floor').isVisible(), true);
   assert.ok(await phone.locator('.inspector .mobile-library [data-show-shape]').first().isVisible(), 'on a phone the shapes are in the panel');
   const n0 = await phone.evaluate(() => window.__booth.project.hall.items.length);
