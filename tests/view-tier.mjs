@@ -75,6 +75,10 @@ try {
     assert.ok(await page.locator(`[data-tab="${t}"].active`).count(), `the ${t} tab can be reached on a phone`);
   }
   const exportTop = page.locator('.toolbar [data-action="export-tab"]');
+  // On a phone the toolbar shows Select, Move, Walk and Undo; More tools
+  // opens the rest, Export among them, in the same row.
+  assert.ok(!(await exportTop.isVisible()), 'the toolbar keeps Export behind More tools on a phone');
+  await page.click('.toolbar [data-action="tools-more"]');
   await exportTop.scrollIntoViewIfNeeded();
   assert.ok(await exportTop.isVisible(), 'the toolbar scrolls to its last button');
 
