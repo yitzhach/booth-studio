@@ -13,6 +13,15 @@ Extend it; do not rebuild it.
   the rules that bite. It does not need to be asked for again. That rule is
   about chat only: code comments, commit messages and this file stay in full
   prose, because a cold session has nothing else to read.
+- **2026-10-08: phone panels tidied, first pass.** Isaac found the iPhone
+  sheet cluttered and pointed at Lightroom iOS. Below 700px the section chips
+  (`applySectionTabs`) are now one sideways-scrolling line of plain words with
+  the chosen one underlined, instead of wrapped rows of pills that took half
+  the sheet; the chosen chip is scrolled into sight. While walking
+  (`body.walking-on`, set in `setWalking`) the round search and assistant
+  buttons hide on a phone, because they sat under the walk pad. CSS at the end
+  of `src/style.css`. Checked by screenshot at 390 px; not yet on his phone.
+  A fuller revamp (toolbar, view switch, statusbar) is open for his direction.
 - **2026-10-08: the header says "Sign in".** Isaac couldn't find where to sign
   in: the only way was a grey round "IA" in the header, and below 700px it was
   hidden altogether. Signed out, that button now reads "Sign in" (a light pill,
