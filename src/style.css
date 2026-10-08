@@ -2346,5 +2346,11 @@ section.sub-hidden {display:none;}
   .tool-search > span {font-size:18px;color:#eef1f4;}
   .tool-search:focus-within {position:absolute;left:13px;right:13px;top:10px;z-index:30;width:auto;padding:0 10px;justify-content:flex-start;}
   .tool-search:focus-within input {flex:1;width:auto;}
+  /* Bottom tabs and the sheet handle a little tighter: icon over a small
+     label in 42 px, and a 14 px handle, so the panel gets the room. */
+  .inspector-tabs {height:calc(42px + env(safe-area-inset-bottom));}
+  .inspector-tabs button {gap:1px;padding:3px 8px;font-size:9.5px;}
+  .inspector-tabs button svg {width:18px;height:18px;}
+  .sheet-toggle {height:14px;min-height:14px;}
   body.walking-on .find-tool,body.walking-on .assistant-fab {display:none !important;}
 }
