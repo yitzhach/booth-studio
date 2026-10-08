@@ -2267,6 +2267,7 @@ body:has(.timeline-dialog[open]) .find-tool {display:none;}
 .measure-bar label {display:flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap;}
 .measure-bar button {min-height:28px;padding:2px 10px;font-size:12px;}
 /* Sub-tabs: one chip per section of a long panel; the chosen one is shown. */
+.view-quick {display:none;}
 .section-tabs {position:sticky;top:-22px;z-index:2;display:flex;flex-wrap:wrap;gap:6px;padding:10px 0;margin:0 0 12px;background:var(--surface);border-bottom:1px solid var(--line);}
 .section-tabs button {min-height:28px;max-width:100%;padding:3px 11px;border-radius:14px;font-size:12px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;}
 .section-tabs button.active {background:var(--blue);border-color:var(--blue);color:#10161d;}
@@ -2321,5 +2322,13 @@ section.sub-hidden {display:none;}
   .editor {height:43%;}
   .toolbar {height:38px;}
   .toolbar button {min-width:31px;min-height:31px;}
+  /* One compact row under the booth: a View menu on the left, zoom on the
+     right. The five view buttons and the statusbar (gesture hint, Preview
+     menu) go; Preview quality is still in Export (owner, 2026-10-08). */
+  .viewport-bottom {flex-wrap:nowrap;justify-content:space-between;left:10px;right:10px;}
+  .viewport-bottom .view-switch {display:none;}
+  .view-quick {display:block;width:140px;min-height:32px;height:32px;padding:0 28px 0 12px;font-size:13px;border-radius:16px;background-color:#20252aee;}
+  .viewport-bottom .zoom-controls button {width:34px;min-height:32px;height:32px;}
+  .statusbar {display:none;}
   body.walking-on .find-tool,body.walking-on .assistant-fab {display:none !important;}
 }
