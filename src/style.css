@@ -2268,6 +2268,7 @@ body:has(.timeline-dialog[open]) .find-tool {display:none;}
 .measure-bar button {min-height:28px;padding:2px 10px;font-size:12px;}
 /* Sub-tabs: one chip per section of a long panel; the chosen one is shown. */
 .view-quick {display:none;}
+.toolbar .tools-more {display:none;}
 .section-tabs {position:sticky;top:-22px;z-index:2;display:flex;flex-wrap:wrap;gap:6px;padding:10px 0;margin:0 0 12px;background:var(--surface);border-bottom:1px solid var(--line);}
 .section-tabs button {min-height:28px;max-width:100%;padding:3px 11px;border-radius:14px;font-size:12px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;}
 .section-tabs button.active {background:var(--blue);border-color:var(--blue);color:#10161d;}
@@ -2330,5 +2331,20 @@ section.sub-hidden {display:none;}
   .view-quick {display:block;width:140px;min-height:32px;height:32px;padding:0 28px 0 12px;font-size:13px;border-radius:16px;background-color:#20252aee;}
   .viewport-bottom .zoom-controls button {width:34px;min-height:32px;height:32px;}
   .statusbar {display:none;}
+  /* The toolbar keeps Select, Move, Walk and Undo; "More tools" opens the
+     rest in the same sideways row (owner, 2026-10-08). */
+  .toolbar .tools-more {display:inline-flex;}
+  body.tools-open .toolbar .tools-more {background:var(--blue);color:#10161d;}
+  body:not(.tools-open) .toolbar .toolgroup:first-child > [data-action]:not([data-action="select"],[data-action="move"],[data-action="walk"],[data-action="tools-more"]),
+  body:not(.tools-open) .toolbar [data-action="redo"],
+  body:not(.tools-open) .toolbar .mode-switch,
+  body:not(.tools-open) .toolbar .export-top {display:none;}
+  /* The header's search box is a magnifier until tapped, then opens across
+     the header, so the project name gets the room. */
+  .tool-search {flex:0 0 36px;width:36px;padding:0;justify-content:center;cursor:pointer;}
+  .tool-search input {flex:0 0 0;width:0;}
+  .tool-search > span {font-size:18px;color:#eef1f4;}
+  .tool-search:focus-within {position:absolute;left:13px;right:13px;top:10px;z-index:30;width:auto;padding:0 10px;justify-content:flex-start;}
+  .tool-search:focus-within input {flex:1;width:auto;}
   body.walking-on .find-tool,body.walking-on .assistant-fab {display:none !important;}
 }
