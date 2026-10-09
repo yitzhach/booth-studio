@@ -26,6 +26,10 @@ Extend it; do not rebuild it.
   which presses the matching `#view-switch` button and follows the lit one)
   beside the zoom buttons; the statusbar is hidden on a phone (Preview
   quality stays in Export).
+  Third pass: the phone toolbar shows Select, Move, Walk and Undo, and a
+  "More tools" button (`tools-more`, `body.tools-open`) opens the rest in the
+  same row; the header search box is a magnifier that opens across the header
+  when tapped, so the project name has the room.
 - **2026-10-08: the header says "Sign in".** Isaac couldn't find where to sign
   in: the only way was a grey round "IA" in the header, and below 700px it was
   hidden altogether. Signed out, that button now reads "Sign in" (a light pill,

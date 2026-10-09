@@ -513,6 +513,8 @@ try {
     state,
   );
   pass("Browser close/reopen restores images and settings");
+  // On a phone the mode switch sits behind More tools.
+  await page.locator('.toolbar [data-action="tools-more"]').click();
   await page.locator('[data-action="mode-3d"]').click();
   await page.locator('[data-tab="art"]').click();
   await page.waitForTimeout(300);
