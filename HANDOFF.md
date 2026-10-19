@@ -2011,10 +2011,27 @@ Extend it; do not rebuild it.
 
 ## Next
 
-0. **Rev 1 is built (parts A, B and C, 2026-10-19) on
-   `claude/awesome-planck-vie2y0`, not yet in a pull request.** The owner's
-   call: review the branch preview first, or merge once green. Then the Rev 1
-   gate: three artists and one promoter use it on their own devices.
+0. **Rev 1 (parts A, B and C) is merged and live (2026-10-19), untested by
+   a person.** The owner said merge now and test later. Start the next
+   session here. His checklist, on the live site in a private window (a
+   fresh browser is a first visit):
+   - The welcome: do the three cards read right? Pick My booth: does Quick
+     start follow, and are Artwork, Layout, Walls, Lighting, Export the right
+     five tabs? Does More beside the tabs find the rest?
+   - Pick A show floor (Workspace in the header): Layout, Show floor, Export.
+   - Lighting → Make it beautiful on the example booth: hang and aim as you
+     would have done them? Try each of the four looks.
+   - Export → Hero set: are Front, Three-quarter, Aisle and Close-up the
+     pictures a jury or a promoter wants, and does the 15 s orbit play?
+   - On the phone: the welcome, the tabs and More, Layout → Project →
+     Workspace.
+   - Signed in: Workspace → describe a booth → does the assistant build it?
+   Anything wrong is one table to change: `ROLES` in `src/roles.js`,
+   `LOOKS` and `heroShots` in `src/polish.js`. If the welcome itself proves
+   unwelcome, `needsWelcome` returning false turns it off without touching
+   anything else. Then the Rev 1 gate: three artists and one promoter use it
+   on their own devices; after that, Rev 2 (hosted Show Hub) needs the
+   owner's yes on payments and server work.
 0. **Looks and the hero set (Rev 1 part B, 2026-10-19): the owner's to
    judge.** Do the four looks look right, and is Make it beautiful's hang
    and aim what you would have done by hand? Are the four hero pictures the
