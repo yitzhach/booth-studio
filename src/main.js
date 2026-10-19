@@ -3797,13 +3797,42 @@ async function boot() {
       return `<button type="button" class="role-card${current === k ? " active" : ""}" data-action="role-${k}" aria-pressed="${current === k}">${icon(r.icon)}<strong>${e(r.title)}</strong><span>${e(r.blurb)}</span></button>`;
     };
     document.querySelector("#dialog-content").innerHTML =
-      `<div class="panel-heading"><h2>${first ? "What are you planning?" : "Workspace"}</h2>${btn("welcome-close", "Close", "x", "icon-only")}</div><p class="muted">${first ? "Booth Studio shows the tools for the job." : "Which tabs and tools to show."} Nothing is taken away: More, beside the tabs, shows the rest, and Workspace in the header (Layout → Project on a phone) switches at any time.</p><div class="role-cards">${card("artist")}${card("organizer")}${card("all")}</div>`;
+      `<div class="panel-heading"><h2>${first ? "What are you planning?" : "Workspace"}</h2>${btn("welcome-close", "Close", "x", "icon-only")}</div><p class="muted">${first ? "Booth Studio shows the tools for the job." : "Which tabs and tools to show."} Nothing is taken away: More, beside the tabs, shows the rest, and Workspace in the header (Layout → Project on a phone) switches at any time.</p><div class="role-cards">${card("artist")}${card("organizer")}${card("all")}</div>${describeBlock()}`;
     welcomeFirst = first;
     // Esc fires `cancel` at once, while `close` can wait for a frame, so both
     // are heard; the Close button says so itself (welcomeDismissed).
     if (first) for (const t of ["cancel", "close"]) d.addEventListener(t, welcomeDismissed, { once: true });
     refreshIcons();
     if (!d.open) d.showModal();
+  }
+  /**
+   * The welcome's other door: say what the booth is, in words, and the studio
+   * assistant builds it (Rev 1 part C). Only where the assistant is on — signed
+   * in, with one connected (body.assistant-on, set by src/studio-assistant.js);
+   * signed out, a line says what signing in adds and opens Studio account.
+   */
+  function describeBlock() {
+    if (document.body.classList.contains("assistant-on"))
+      return `<form class="welcome-describe" onsubmit="return false"><label class="setting-label" for="welcome-describe">Or describe it, and the assistant builds it</label><textarea id="welcome-describe" rows="3" maxlength="2000" placeholder="e.g. A 10 × 10 outdoor booth with a canopy, my twelve spring paintings on three walls, warm light"></textarea><div class="button-row">${btn("welcome-describe", "Ask the assistant", "message-circle", "primary")}</div><p class="muted">It shows what it will do before anything changes. A photo or a sketch works too: the 📷 in its panel.</p></form>`;
+    return `<p class="muted welcome-describe">Signed in to the studio, you can also describe a booth in words, or show a photo or a sketch, and the assistant builds it. ${btn("welcome-sign-in", "Sign in", "user-round", "text-button")}</p>`;
+  }
+  /** Hand the description to the assistant, which shows a card before it changes anything. */
+  function describeToAssistant() {
+    const text = document.querySelector("#welcome-describe")?.value.trim() || "";
+    const panel = document.querySelector("studio-assistant");
+    if (!text) return document.querySelector("#welcome-describe")?.focus();
+    if (!panel) return toast("The assistant isn't connected here.", true);
+    const first = welcomeFirst;
+    welcomeFirst = false;
+    // Describing a booth is an artist's start; a choice already made stays.
+    if (!role || first) {
+      role = role || "artist";
+      writeRole(role);
+    }
+    document.querySelector("#dialog").close();
+    renderInspector();
+    panel.toggle(true);
+    void panel.send(text);
   }
   /** The welcome closed without a choice: every tool, and it is not asked again. */
   function welcomeDismissed() {
@@ -4428,6 +4457,12 @@ async function boot() {
     "quick-start": () => openQuickStart(),
     "qs-go": () => runQuickStart(),
     "qs-cancel": () => document.querySelector("#dialog").close(),
+    "welcome-describe": () => describeToAssistant(),
+    "welcome-sign-in": () => {
+      document.querySelector("#dialog").close();
+      welcomeDismissed();
+      actions["studio-account"]();
+    },
     "welcome-close": () => {
       document.querySelector("#dialog").close();
       welcomeDismissed();

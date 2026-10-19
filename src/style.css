@@ -2383,3 +2383,7 @@ section.sub-hidden {display:none;}
 .look-grid button {display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:3px;text-align:left;padding:9px 10px;min-height:0;}
 .look-grid strong {font-size:13px;color:#f2f5f7;}
 .look-grid span {font-size:11.5px;line-height:1.35;color:var(--muted);}
+.welcome-describe {margin-top:14px;}
+.welcome-describe textarea {width:100%;resize:vertical;font:inherit;font-size:16px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:#11151a;color:inherit;}
+p.welcome-describe .text-button {display:inline;min-height:0;padding:0;border:0;background:none;color:var(--blue);text-decoration:underline;}
+p.welcome-describe .text-button svg {display:none;}

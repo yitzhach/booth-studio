@@ -58,6 +58,8 @@ try {
     await open(page);
     assert.ok(await page.locator('#dialog[open] .role-cards').count(), 'the welcome is the first thing on screen');
     assert.equal(await page.locator('#dialog[open] .role-card').count(), 3);
+    assert.ok(await page.locator('#dialog[open] [data-action="welcome-sign-in"]').count(), 'signed out, it says what signing in adds');
+    assert.equal(await page.locator('#dialog[open] #welcome-describe').count(), 0, 'and has no box for an assistant that is not there');
     assert.match(await page.locator('#dialog h2').textContent(), /What are you planning/);
 
     await page.click('[data-action="role-artist"]');

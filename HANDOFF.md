@@ -13,6 +13,19 @@ Extend it; do not rebuild it.
   the rules that bite. It does not need to be asked for again. That rule is
   about chat only: code comments, commit messages and this file stay in full
   prose, because a cold session has nothing else to read.
+- **2026-10-19: Rev 1, part C — describe it to the assistant.** The
+  welcome and the Workspace dialog (`describeBlock` in `src/main.js`) offer a
+  second door: where the assistant is on (signed in, one connected:
+  `body.assistant-on`), a box "Or describe it, and the assistant builds it";
+  Ask the assistant closes the dialog, opens the panel and sends the words
+  (`describeToAssistant` → the panel's `toggle(true)` and `send`), so it
+  arrives as an ordinary message with the booth on screen as its record, and
+  the assistant shows its card before anything changes. On a first visit
+  with nothing chosen it also picks the Artist workspace. Signed out — which
+  is every first visit, since the welcome is not shown to a browser already
+  signed in — the dialog says what signing in adds and its Sign in link opens
+  Studio account. No change to the assistant or the platform. Tested in
+  `tests/view-assistant.mjs` (routed assistant) and `tests/view-roles.mjs`.
 - **2026-10-19: Rev 1, part B — looks, Make it beautiful, the hero set.**
   `src/polish.js`, pure (`tests/polish.test.js`), on the same branch as part
   A. **Looks** (Lighting tab, 3D only): Gallery white, Convention hall,
@@ -1998,6 +2011,10 @@ Extend it; do not rebuild it.
 
 ## Next
 
+0. **Rev 1 is built (parts A, B and C, 2026-10-19) on
+   `claude/awesome-planck-vie2y0`, not yet in a pull request.** The owner's
+   call: review the branch preview first, or merge once green. Then the Rev 1
+   gate: three artists and one promoter use it on their own devices.
 0. **Looks and the hero set (Rev 1 part B, 2026-10-19): the owner's to
    judge.** Do the four looks look right, and is Make it beautiful's hang
    and aim what you would have done by hand? Are the four hero pictures the
