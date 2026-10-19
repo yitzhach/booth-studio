@@ -13,6 +13,83 @@ Extend it; do not rebuild it.
   the rules that bite. It does not need to be asked for again. That rule is
   about chat only: code comments, commit messages and this file stay in full
   prose, because a cold session has nothing else to read.
+- **2026-10-19: Rev 1, part C — describe it to the assistant.** The
+  welcome and the Workspace dialog (`describeBlock` in `src/main.js`) offer a
+  second door: where the assistant is on (signed in, one connected:
+  `body.assistant-on`), a box "Or describe it, and the assistant builds it";
+  Ask the assistant closes the dialog, opens the panel and sends the words
+  (`describeToAssistant` → the panel's `toggle(true)` and `send`), so it
+  arrives as an ordinary message with the booth on screen as its record, and
+  the assistant shows its card before anything changes. On a first visit
+  with nothing chosen it also picks the Artist workspace. Signed out — which
+  is every first visit, since the welcome is not shown to a browser already
+  signed in — the dialog says what signing in adds and its Sign in link opens
+  Studio account. No change to the assistant or the platform. Tested in
+  `tests/view-assistant.mjs` (routed assistant) and `tests/view-roles.mjs`.
+- **2026-10-19: Rev 1, part B — looks, Make it beautiful, the hero set.**
+  `src/polish.js`, pure (`tests/polish.test.js`), on the same branch as part
+  A. **Looks** (Lighting tab, 3D only): Gallery white, Convention hall,
+  Outdoor fair, Warm evening — each sets the environment preset (with its
+  floor and horizon), the ambient level and the spotlights' colour and power
+  in one undo step. The values are the one `LOOKS` table; whether they look
+  right is the owner's to judge on his screen. The Environment picker and the
+  looks now share one rule, `applyEnvPreset` (the preset's floor, horizon,
+  and an art-show booth leaving its white hall for a photographed
+  environment), moved out of main.js unchanged. **Make it beautiful**
+  (Lighting and Export): the venue's look (`lookFor`: art show and open
+  booth → Gallery white, canopy → Outdoor fair), every wall of this booth
+  spaced evenly with centres on 60″ (`evenHang`; a wall carrying a sign or
+  label, and a neighbouring booth's wall, are left alone), and the spotlights
+  aimed at the work (`aimLights`: inside faces of the three perimeter walls,
+  up to four targets — one per wall with work, spares to the fullest — each
+  light 48″ into the booth in front of its target; lights beyond the targets
+  are removed, one work gets two lights crossing on it). One undo puts it all
+  back. **Hero set** (Export → Hero set): four 4096 px 16:9 PNGs — Front,
+  Three-quarter, Aisle, Close-up of the fullest wall — each from its own
+  camera (`heroShots`, fitted to the viewport's shape because the export cuts
+  its frame from the viewport), then a 15 s orbit MP4 where video is allowed
+  and supported. It runs through the batch renderer (`runClips`), so the
+  files are named `<booth>-01-front.png` … `-05-orbit.mp4` and Cancel keeps
+  what was written. Every camera stands in front of the open side: the side
+  walls run the full depth, and a camera off to the side saw only the back
+  of one (found by looking at the first render). `tests/view-polish.mjs`
+  drives all three; it cancels the 450-frame orbit, which swiftshader is too
+  slow to wait for. Not seen by the owner.
+- **2026-10-19: Rev 1, part A — workspaces.** The owner asked for the app to
+  serve artists, show promoters and directors, and people running larger
+  exhibitions: easy to use, high-quality results. The plan is the Claude Doc
+  "Booth Studio — Revision Plan" (https://claude.ai/artifact/QSXHZbhe2S3P4f51oVCAHV):
+  keep the engine, and give each kind of user a front door of their own.
+  Rev 1 is three small pull requests with no backend or schema change:
+  A, workspaces (this one); B, quality defaults (named looks, "Make it
+  beautiful", hero-shot export); C, the assistant offered on the welcome.
+  Rev 2 is the hosted Show Hub and Rev 3 exhibitions; both wait on the
+  owner (payments and more server-side work).
+  **What A does.** A first visit — no project saved on this browser, no
+  workspace chosen, not signed in, no booth link opening — opens "What are
+  you planning?" with three cards: *My booth* (Artist), *A show floor* (Show
+  organizer) and *Every tool*. An artist goes straight on to Quick start
+  with its backup box unticked (the example booth is not theirs); an
+  organizer opens on the Show floor tab; closing it without a choice keeps
+  every tool and is not asked again. A workspace shows only its tabs —
+  Artist: Artwork, Layout, Walls, Lighting, Export, plus Art show when the
+  booth is an art-show booth; Organizer: Layout, Show floor, Export — and a
+  **More** button beside them shows every tab (Fewer puts them back). The
+  open tab always shows, so tool search, the assistant's "take me to" and
+  Open the Walls tool still land on a lit tab. It hides a few toolbar tools
+  (Box and Fast edit for both; Show floor for the artist, Photo for the
+  organizer). **Workspace** in the header (Layout → Project on a phone,
+  where the header has no room) switches at any time. **Every tool is
+  today's app, unchanged**, and it is what anyone who already had a project
+  gets without being asked. The choice is `localStorage["booth.role"]`, a
+  view setting like the tier: never in a project, a backup or the studio.
+  `src/roles.js` is the table and is pure (`tests/roles.test.js`);
+  `applyRole`, `openWelcome`, `chooseRole` and `welcomeDismissed` in
+  `src/main.js` put it on the page; `tests/view-roles.mjs` drives it.
+  **Every other browser suite now sets `booth.role` to `all` before the page
+  loads** (one `addInitScript` line after each `newPage`), because a fresh
+  browser is a first visit and the welcome is modal. A new suite needs the
+  same line. Not yet seen by the owner or on a phone.
 - **2026-10-08: phone panels tidied, first pass.** Isaac found the iPhone
   sheet cluttered and pointed at Lightroom iOS. Below 700px the section chips
   (`applySectionTabs`) are now one sideways-scrolling line of plain words with
@@ -1934,6 +2011,37 @@ Extend it; do not rebuild it.
 
 ## Next
 
+0. **Rev 1 (parts A, B and C) is merged and live (2026-10-19), untested by
+   a person.** The owner said merge now and test later. Start the next
+   session here. His checklist, on the live site in a private window (a
+   fresh browser is a first visit):
+   - The welcome: do the three cards read right? Pick My booth: does Quick
+     start follow, and are Artwork, Layout, Walls, Lighting, Export the right
+     five tabs? Does More beside the tabs find the rest?
+   - Pick A show floor (Workspace in the header): Layout, Show floor, Export.
+   - Lighting → Make it beautiful on the example booth: hang and aim as you
+     would have done them? Try each of the four looks.
+   - Export → Hero set: are Front, Three-quarter, Aisle and Close-up the
+     pictures a jury or a promoter wants, and does the 15 s orbit play?
+   - On the phone: the welcome, the tabs and More, Layout → Project →
+     Workspace.
+   - Signed in: Workspace → describe a booth → does the assistant build it?
+   Anything wrong is one table to change: `ROLES` in `src/roles.js`,
+   `LOOKS` and `heroShots` in `src/polish.js`. If the welcome itself proves
+   unwelcome, `needsWelcome` returning false turns it off without touching
+   anything else. Then the Rev 1 gate: three artists and one promoter use it
+   on their own devices; after that, Rev 2 (hosted Show Hub) needs the
+   owner's yes on payments and server work.
+0. **Looks and the hero set (Rev 1 part B, 2026-10-19): the owner's to
+   judge.** Do the four looks look right, and is Make it beautiful's hang
+   and aim what you would have done by hand? Are the four hero pictures the
+   ones a jury or a promoter wants? Every value is in `LOOKS` and
+   `heroShots` in `src/polish.js`.
+0. **Workspaces (Rev 1 part A, 2026-10-19): the owner's to try.** On a
+   fresh browser (a private window): does "What are you planning?" read
+   right, and are the artist's five tabs and the organizer's three the right
+   ones? Is More, beside the tabs, findable? Then parts B and C of Rev 1
+   (see Now and the Revision Plan doc).
 0. **The assistant panel on a phone (2026-10-07): built — see Now.** The
    owner's to try on his phone: Backspace, the two new doors, dragging,
    resizing and shrinking the panel. The Show Tracker's panel
@@ -2596,9 +2704,9 @@ the picker became one list.
 
 ```sh
 npm ci
-npm test                 # 438 Node tests
+npm test                 # 467 Node tests
 npm run build
-npm run test:view        # 34 suites (tools2, hub and share included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
+npm run test:view        # 40 suites (tools2, hub, share, roles and polish included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
 npm run test:browser     # 25 end-to-end checks
 STUDIO_PLATFORM=../Art-Talk-Back BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/two-devices.mjs   # 50 checks; after npm run build (see Studio platform)
@@ -3058,6 +3166,10 @@ anything else in a browser until it is done.
   from each tab's `inspectorHTML()`.
 - `src/tier.js` — Lite and Pro: the one table of Pro features and `can()`.
   `gated` / `proLock` and the action gate in `src/main.js` use it.
+- `src/polish.js` — looks, Make it beautiful (even hang, aimed lights) and
+  the hero set's cameras; `applyEnvPreset` is the Environment picker's rule.
+- `src/roles.js` — workspaces: which tabs and toolbar tools each shows, and
+  whether the first visit's welcome is due. `applyRole` in `src/main.js`.
 - `src/hall.js` — the hall planner (layout, totals, map, CSV);
   `src/show.js` — the show floor's pieces: kinds, the library, validation,
   snapping, blocks of booths, spacing, renumbering, the map's SVG;

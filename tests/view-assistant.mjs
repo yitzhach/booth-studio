@@ -29,6 +29,7 @@ const card = (id, action, details) => ({
 });
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  await page.addInitScript(() => localStorage.setItem('booth.role', 'all')); // past the first visit's welcome (src/roles.js)
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.stack || e.message));
   const sent = [], confirmed = [], undone = [];
@@ -344,8 +345,23 @@ try {
   });
   assert.deepEqual(shownText, ['(picture)\nmake this booth', '(picture)']);
 
+  // ---- The welcome's door: describe a booth and the assistant gets it -------
+  chat = [{ type: 'text', text: 'Here is a booth.' }, { type: 'end', reason: 'end_turn' }];
+  await inPanel('.close').click().catch(() => {});
+  await page.click('header [data-action="workspace"]');
+  assert.ok(await page.locator('#dialog[open] #welcome-describe').count(), 'signed in with an assistant: the box is offered');
+  assert.equal(await page.locator('#dialog[open] [data-action="welcome-sign-in"]').count(), 0);
+  const before = sent.length;
+  await page.fill('#welcome-describe', 'A 10 by 10 canopy booth with my twelve spring paintings');
+  await page.click('[data-action="welcome-describe"]');
+  await inPanel('.msg.bot').last().waitFor();
+  assert.equal(await page.locator('#dialog[open]').count(), 0, 'the dialog closes');
+  assert.equal(sent.length, before + 1);
+  assert.equal(sent.at(-1).message, 'A 10 by 10 canopy booth with my twelve spring paintings', 'the words reach the assistant');
+  assert.equal(await page.evaluate(() => document.querySelector('studio-assistant').panel.hidden), false, 'the panel is open');
+
   assert.deepEqual(errors, [], 'no page errors');
-  console.log('PASS the assistant shows only signed in where one is connected, sends the booth on screen with each message, shows a card in the studio\'s words, syncs after Confirm and Undo, opens a booth it made in one tap, sends pictures shrunk to 1568 px, lets Backspace type, is dark with the app, moves, resizes and shrinks, has a header button and a phone icon clear of the viewport\'s buttons, and says plainly when it isn\'t there.');
+  console.log('PASS the assistant shows only signed in where one is connected, sends the booth on screen with each message, shows a card in the studio\'s words, syncs after Confirm and Undo, opens a booth it made in one tap, sends pictures shrunk to 1568 px, lets Backspace type, is dark with the app, moves, resizes and shrinks, has a header button and a phone icon clear of the viewport\'s buttons, and says plainly when it isn\'t there; the Workspace dialog hands a described booth to it.');
 } finally {
   await browser.close();
   await server.close();

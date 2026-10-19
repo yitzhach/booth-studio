@@ -19,6 +19,7 @@ const browser = await chromium.launch({
 try {
   const env = { SHARES: fakeR2() };
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });
+  await page.addInitScript(() => localStorage.setItem('booth.role', 'all')); // past the first visit's welcome (src/roles.js)
   await page.route('**/api/**', async (route) => {
     const r = route.request();
     const res = await handleApi(new Request(r.url(), { method: r.method(), headers: r.headers(), body: ['GET', 'HEAD'].includes(r.method()) ? undefined : r.postData() }), env);

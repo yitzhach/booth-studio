@@ -19,6 +19,7 @@ const browser = await chromium.launch({
 });
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  await page.addInitScript(() => localStorage.setItem('booth.role', 'all')); // past the first visit's welcome (src/roles.js)
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.stack || e.message));
   await page.goto('http://127.0.0.1:5198');
