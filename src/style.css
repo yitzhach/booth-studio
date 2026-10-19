@@ -2368,6 +2368,12 @@ section.sub-hidden {display:none;}
 .role-card span {font-size:13px;line-height:1.4;color:var(--muted);}
 .role-card:hover {border-color:#4b5562;background:#2a323a;}
 .role-card.active {border-color:var(--blue);background:var(--selected);}
+/* Between a phone and a laptop the header is full: the button keeps its
+   icon and its title says which workspace it is. */
+@media (max-width:950px) and (min-width:701px) {
+  .workspace-pill {width:36px;height:36px;padding:0;border-radius:50%;}
+  .workspace-pill span {display:none;}
+}
 @media (max-width:700px) {
   .workspace-pill {display:none;}
 }

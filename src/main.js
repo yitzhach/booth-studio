@@ -3328,7 +3328,10 @@ async function boot() {
     document.querySelectorAll(".toolbar [data-action]").forEach((b) => b.classList.toggle("role-hidden", hide.has(b.dataset.action)));
     document.body.dataset.role = resolveRole(role);
     const label = document.querySelector("#workspace-label");
-    if (label) label.textContent = ROLES[resolveRole(role)].label;
+    if (label) {
+      label.textContent = ROLES[resolveRole(role)].label;
+      label.parentElement.title = `Workspace: ${ROLES[resolveRole(role)].label} · which tabs and tools to show`;
+    }
   }
   function renderInspector() {
     document
@@ -3743,12 +3746,6 @@ async function boot() {
     }
   }
   /**
-   * Quick start: show type, size, starter furniture and a name, and a booth
-   * set up from them — or one of the user's saved templates. One form rather
-   * than a sequence of steps, because four answers fit on one screen and a
-   * wizard's Next button is three clicks nobody needs.
-   */
-  /**
    * The welcome, and the Workspace button's dialog: which tools to show
    * (src/roles.js). On a first visit it is the first thing on screen, and
    * closing it without a choice keeps every tool, so it asks only once.
@@ -3792,6 +3789,12 @@ async function boot() {
     if (first && role === "artist") openQuickStart({ backupFirst: false });
     else toast(role === "all" ? "Every tool is showing." : `${ROLES[role].label} workspace. More, beside the tabs, shows the rest.`);
   }
+  /**
+   * Quick start: show type, size, starter furniture and a name, and a booth
+   * set up from them — or one of the user's saved templates. One form rather
+   * than a sequence of steps, because four answers fit on one screen and a
+   * wizard's Next button is three clicks nobody needs.
+   */
   function openQuickStart({ backupFirst = true } = {}) {
     const d = document.querySelector("#dialog");
     const templates = readTemplates();
@@ -4926,8 +4929,6 @@ async function boot() {
     // header's button and, on a phone, the icon above Find a tool. Both show
     // only while the panel's own button would (body.assistant-on).
     assistant: () => document.querySelector("studio-assistant")?.toggle(),
-    // Phones only (the button is hidden wider): the toolbar shows Select,
-    // Move, Walk and Undo, and this opens the rest in the same row.
     // The inspector's More: every tab, then back to the workspace's own.
     "tabs-more": () => {
       tabsMore = !tabsMore;
@@ -4937,6 +4938,8 @@ async function boot() {
     "role-artist": () => chooseRole("artist"),
     "role-organizer": () => chooseRole("organizer"),
     "role-all": () => chooseRole("all"),
+    // Phones only (the button is hidden wider): the toolbar shows Select,
+    // Move, Walk and Undo, and this opens the rest in the same row.
     "tools-more": () => {
       const open = document.body.classList.toggle("tools-open");
       document.querySelector('.toolbar [data-action="tools-more"]').setAttribute("aria-expanded", String(open));
