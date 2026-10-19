@@ -16,6 +16,7 @@ const browser = await chromium.launch({
 });
 try {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.addInitScript(() => localStorage.setItem('booth.role', 'all')); // past the first visit's welcome (src/roles.js)
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.stack || e.message));
   const me = (hasPassword) => ({ user: { id: 'U1', email: 'isaac@example.com', name: null }, memberships: [{ studioId: 'S1', studioName: 'Studio', role: 'owner', clientId: null }], activeStudioId: 'S1', hasPassword });

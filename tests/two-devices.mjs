@@ -160,6 +160,7 @@ const IGNORE = /Failed to load resource|ERR_INTERNET_DISCONNECTED|net::ERR_FAILE
 async function device(browser, name) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });
   const page = await ctx.newPage();
+  await page.addInitScript(() => localStorage.setItem('booth.role', 'all')); // past the first visit's welcome (src/roles.js)
   // A CI runner draws WebGL on the CPU, several pages at once: give it time.
   page.setDefaultTimeout(90_000);
   const errors = [];

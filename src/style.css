@@ -2354,3 +2354,20 @@ section.sub-hidden {display:none;}
   .sheet-toggle {height:14px;min-height:14px;}
   body.walking-on .find-tool,body.walking-on .assistant-fab {display:none !important;}
 }
+
+/* Workspaces (src/roles.js): a workspace hides tabs and toolbar tools it
+   does not need, and the inspector's More shows the tabs again. */
+.inspector-tabs button[hidden],
+.toolbar .role-hidden {display:none !important;}
+.workspace-pill {flex:none;min-height:34px;padding:6px 11px;gap:6px;font-size:13px;white-space:nowrap;}
+.workspace-pill svg {width:16px;height:16px;}
+.role-cards {display:grid;gap:10px;margin-top:14px;}
+.role-card {display:grid;grid-template-columns:28px 1fr;grid-template-rows:auto auto;column-gap:12px;row-gap:3px;align-items:start;justify-items:start;text-align:left;padding:14px 16px;min-height:0;}
+.role-card svg {grid-row:1 / span 2;width:24px;height:24px;color:var(--blue);margin-top:2px;}
+.role-card strong {font-size:15px;color:#f2f5f7;}
+.role-card span {font-size:13px;line-height:1.4;color:var(--muted);}
+.role-card:hover {border-color:#4b5562;background:#2a323a;}
+.role-card.active {border-color:var(--blue);background:var(--selected);}
+@media (max-width:700px) {
+  .workspace-pill {display:none;}
+}

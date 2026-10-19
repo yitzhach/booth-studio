@@ -14,6 +14,7 @@ const browser=await chromium.launch({headless:true,...(process.env.BOOTH_TEST_CH
   args:['--no-sandbox','--enable-unsafe-swiftshader','--use-angle=swiftshader','--use-gl=angle','--in-process-gpu','--single-process','--disable-dev-shm-usage']});
 try {
  const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
+ await page.addInitScript(() => localStorage.setItem('booth.role', 'all')); // past the first visit's welcome (src/roles.js)
  page.on('pageerror',e=>errors.push(e.stack||e.message));
  await page.goto('http://127.0.0.1:5190');
  await page.waitForFunction(()=>!!window.__booth?.scene);

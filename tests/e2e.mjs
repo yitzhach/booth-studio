@@ -45,6 +45,7 @@ try {
     acceptDownloads: true,
   });
   let page = await context.newPage();
+  await page.addInitScript(() => localStorage.setItem('booth.role', 'all')); // past the first visit's welcome (src/roles.js)
   page.on("pageerror", (err) => errors.push(err.message));
   await page.goto("http://127.0.0.1:5183");
   await page.waitForFunction(() => !!window.__booth?.scene);
@@ -505,6 +506,7 @@ try {
     isMobile: true,
   });
   page = await context.newPage();
+  await page.addInitScript(() => localStorage.setItem('booth.role', 'all')); // past the first visit's welcome (src/roles.js)
   page.on("pageerror", (err) => errors.push(err.message));
   await page.goto("http://127.0.0.1:5183");
   await page.waitForFunction(() => !!window.__booth);

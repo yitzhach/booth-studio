@@ -29,6 +29,7 @@ const card = (id, action, details) => ({
 });
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  await page.addInitScript(() => localStorage.setItem('booth.role', 'all')); // past the first visit's welcome (src/roles.js)
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.stack || e.message));
   const sent = [], confirmed = [], undone = [];

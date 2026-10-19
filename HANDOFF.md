@@ -13,6 +13,41 @@ Extend it; do not rebuild it.
   the rules that bite. It does not need to be asked for again. That rule is
   about chat only: code comments, commit messages and this file stay in full
   prose, because a cold session has nothing else to read.
+- **2026-10-19: Rev 1, part A — workspaces.** The owner asked for the app to
+  serve artists, show promoters and directors, and people running larger
+  exhibitions: easy to use, high-quality results. The plan is the Claude Doc
+  "Booth Studio — Revision Plan" (https://claude.ai/artifact/QSXHZbhe2S3P4f51oVCAHV):
+  keep the engine, and give each kind of user a front door of their own.
+  Rev 1 is three small pull requests with no backend or schema change:
+  A, workspaces (this one); B, quality defaults (named looks, "Make it
+  beautiful", hero-shot export); C, the assistant offered on the welcome.
+  Rev 2 is the hosted Show Hub and Rev 3 exhibitions; both wait on the
+  owner (payments and more server-side work).
+  **What A does.** A first visit — no project saved on this browser, no
+  workspace chosen, not signed in, no booth link opening — opens "What are
+  you planning?" with three cards: *My booth* (Artist), *A show floor* (Show
+  organizer) and *Every tool*. An artist goes straight on to Quick start
+  with its backup box unticked (the example booth is not theirs); an
+  organizer opens on the Show floor tab; closing it without a choice keeps
+  every tool and is not asked again. A workspace shows only its tabs —
+  Artist: Artwork, Layout, Walls, Lighting, Export, plus Art show when the
+  booth is an art-show booth; Organizer: Layout, Show floor, Export — and a
+  **More** button beside them shows every tab (Fewer puts them back). The
+  open tab always shows, so tool search, the assistant's "take me to" and
+  Open the Walls tool still land on a lit tab. It hides a few toolbar tools
+  (Box and Fast edit for both; Show floor for the artist, Photo for the
+  organizer). **Workspace** in the header (Layout → Project on a phone,
+  where the header has no room) switches at any time. **Every tool is
+  today's app, unchanged**, and it is what anyone who already had a project
+  gets without being asked. The choice is `localStorage["booth.role"]`, a
+  view setting like the tier: never in a project, a backup or the studio.
+  `src/roles.js` is the table and is pure (`tests/roles.test.js`);
+  `applyRole`, `openWelcome`, `chooseRole` and `welcomeDismissed` in
+  `src/main.js` put it on the page; `tests/view-roles.mjs` drives it.
+  **Every other browser suite now sets `booth.role` to `all` before the page
+  loads** (one `addInitScript` line after each `newPage`), because a fresh
+  browser is a first visit and the welcome is modal. A new suite needs the
+  same line. Not yet seen by the owner or on a phone.
 - **2026-10-08: phone panels tidied, first pass.** Isaac found the iPhone
   sheet cluttered and pointed at Lightroom iOS. Below 700px the section chips
   (`applySectionTabs`) are now one sideways-scrolling line of plain words with
@@ -1934,6 +1969,11 @@ Extend it; do not rebuild it.
 
 ## Next
 
+0. **Workspaces (Rev 1 part A, 2026-10-19): the owner's to try.** On a
+   fresh browser (a private window): does "What are you planning?" read
+   right, and are the artist's five tabs and the organizer's three the right
+   ones? Is More, beside the tabs, findable? Then parts B and C of Rev 1
+   (see Now and the Revision Plan doc).
 0. **The assistant panel on a phone (2026-10-07): built — see Now.** The
    owner's to try on his phone: Backspace, the two new doors, dragging,
    resizing and shrinking the panel. The Show Tracker's panel
@@ -2596,9 +2636,9 @@ the picker became one list.
 
 ```sh
 npm ci
-npm test                 # 438 Node tests
+npm test                 # 467 Node tests
 npm run build
-npm run test:view        # 34 suites (tools2, hub and share included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
+npm run test:view        # 39 suites (tools2, hub, share and roles included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
 npm run test:browser     # 25 end-to-end checks
 STUDIO_PLATFORM=../Art-Talk-Back BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/two-devices.mjs   # 50 checks; after npm run build (see Studio platform)
@@ -3058,6 +3098,8 @@ anything else in a browser until it is done.
   from each tab's `inspectorHTML()`.
 - `src/tier.js` — Lite and Pro: the one table of Pro features and `can()`.
   `gated` / `proLock` and the action gate in `src/main.js` use it.
+- `src/roles.js` — workspaces: which tabs and toolbar tools each shows, and
+  whether the first visit's welcome is due. `applyRole` in `src/main.js`.
 - `src/hall.js` — the hall planner (layout, totals, map, CSV);
   `src/show.js` — the show floor's pieces: kinds, the library, validation,
   snapping, blocks of booths, spacing, renumbering, the map's SVG;
