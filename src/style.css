@@ -2377,3 +2377,9 @@ section.sub-hidden {display:none;}
 @media (max-width:700px) {
   .workspace-pill {display:none;}
 }
+
+/* Looks (src/polish.js): one card per look, two to a row. */
+.look-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:10px 0 4px;}
+.look-grid button {display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:3px;text-align:left;padding:9px 10px;min-height:0;}
+.look-grid strong {font-size:13px;color:#f2f5f7;}
+.look-grid span {font-size:11.5px;line-height:1.35;color:var(--muted);}

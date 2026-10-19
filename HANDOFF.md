@@ -13,6 +13,35 @@ Extend it; do not rebuild it.
   the rules that bite. It does not need to be asked for again. That rule is
   about chat only: code comments, commit messages and this file stay in full
   prose, because a cold session has nothing else to read.
+- **2026-10-19: Rev 1, part B — looks, Make it beautiful, the hero set.**
+  `src/polish.js`, pure (`tests/polish.test.js`), on the same branch as part
+  A. **Looks** (Lighting tab, 3D only): Gallery white, Convention hall,
+  Outdoor fair, Warm evening — each sets the environment preset (with its
+  floor and horizon), the ambient level and the spotlights' colour and power
+  in one undo step. The values are the one `LOOKS` table; whether they look
+  right is the owner's to judge on his screen. The Environment picker and the
+  looks now share one rule, `applyEnvPreset` (the preset's floor, horizon,
+  and an art-show booth leaving its white hall for a photographed
+  environment), moved out of main.js unchanged. **Make it beautiful**
+  (Lighting and Export): the venue's look (`lookFor`: art show and open
+  booth → Gallery white, canopy → Outdoor fair), every wall of this booth
+  spaced evenly with centres on 60″ (`evenHang`; a wall carrying a sign or
+  label, and a neighbouring booth's wall, are left alone), and the spotlights
+  aimed at the work (`aimLights`: inside faces of the three perimeter walls,
+  up to four targets — one per wall with work, spares to the fullest — each
+  light 48″ into the booth in front of its target; lights beyond the targets
+  are removed, one work gets two lights crossing on it). One undo puts it all
+  back. **Hero set** (Export → Hero set): four 4096 px 16:9 PNGs — Front,
+  Three-quarter, Aisle, Close-up of the fullest wall — each from its own
+  camera (`heroShots`, fitted to the viewport's shape because the export cuts
+  its frame from the viewport), then a 15 s orbit MP4 where video is allowed
+  and supported. It runs through the batch renderer (`runClips`), so the
+  files are named `<booth>-01-front.png` … `-05-orbit.mp4` and Cancel keeps
+  what was written. Every camera stands in front of the open side: the side
+  walls run the full depth, and a camera off to the side saw only the back
+  of one (found by looking at the first render). `tests/view-polish.mjs`
+  drives all three; it cancels the 450-frame orbit, which swiftshader is too
+  slow to wait for. Not seen by the owner.
 - **2026-10-19: Rev 1, part A — workspaces.** The owner asked for the app to
   serve artists, show promoters and directors, and people running larger
   exhibitions: easy to use, high-quality results. The plan is the Claude Doc
@@ -1969,6 +1998,11 @@ Extend it; do not rebuild it.
 
 ## Next
 
+0. **Looks and the hero set (Rev 1 part B, 2026-10-19): the owner's to
+   judge.** Do the four looks look right, and is Make it beautiful's hang
+   and aim what you would have done by hand? Are the four hero pictures the
+   ones a jury or a promoter wants? Every value is in `LOOKS` and
+   `heroShots` in `src/polish.js`.
 0. **Workspaces (Rev 1 part A, 2026-10-19): the owner's to try.** On a
    fresh browser (a private window): does "What are you planning?" read
    right, and are the artist's five tabs and the organizer's three the right
@@ -2638,7 +2672,7 @@ the picker became one list.
 npm ci
 npm test                 # 467 Node tests
 npm run build
-npm run test:view        # 39 suites (tools2, hub, share and roles included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
+npm run test:view        # 40 suites (tools2, hub, share, roles and polish included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
 npm run test:browser     # 25 end-to-end checks
 STUDIO_PLATFORM=../Art-Talk-Back BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/two-devices.mjs   # 50 checks; after npm run build (see Studio platform)
@@ -3098,6 +3132,8 @@ anything else in a browser until it is done.
   from each tab's `inspectorHTML()`.
 - `src/tier.js` — Lite and Pro: the one table of Pro features and `can()`.
   `gated` / `proLock` and the action gate in `src/main.js` use it.
+- `src/polish.js` — looks, Make it beautiful (even hang, aimed lights) and
+  the hero set's cameras; `applyEnvPreset` is the Environment picker's rule.
 - `src/roles.js` — workspaces: which tabs and toolbar tools each shows, and
   whether the first visit's welcome is due. `applyRole` in `src/main.js`.
 - `src/hall.js` — the hall planner (layout, totals, map, CSV);
