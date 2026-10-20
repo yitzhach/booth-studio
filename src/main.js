@@ -3356,6 +3356,17 @@ async function boot() {
    * scrolled by hand where they put it.
    */
   let tabInSight = null;
+  // Keep your work's last answer, drawn straight back on a redraw (paintKeepSafe).
+  let keepSafeShown = null;
+  // Where site data is blocked, even reading `localStorage` throws: null then,
+  // which src/keep-safe.js reads as nothing remembered.
+  const deviceStore = () => {
+    try {
+      return window.localStorage;
+    } catch {
+      return null;
+    }
+  };
   function keepTabInSight() {
     if (tab === tabInSight) return;
     tabInSight = tab;
@@ -3383,10 +3394,15 @@ async function boot() {
   /**
    * Export → Keep your work: whether this browser keeps this device's copy,
    * how much room it takes, and when a backup was last downloaded here
-   * (src/keep-safe.js). Asked of the browser each time the tab is drawn, so
-   * it is never stale; the questions are cheap and prompt nobody.
+   * (src/keep-safe.js). The Export tab redraws on every edit made in it, so
+   * the last answer is drawn straight back (`keepSafeShown`) and the browser
+   * is asked again at most every 10 seconds, or at once after a backup or a
+   * persist() — the questions are cheap and prompt nobody.
    */
-  async function paintKeepSafe() {
+  async function paintKeepSafe(force = false) {
+    const id = p.id;
+    if (!force && keepSafeShown?.id === id && Date.now() - keepSafeShown.asked < 10000) return;
+    const asked = Date.now();
     let persisted = null;
     let usage;
     let quota;
@@ -3396,10 +3412,12 @@ async function boot() {
     try {
       if (navigator.storage?.estimate) ({ usage, quota } = await navigator.storage.estimate());
     } catch {}
+    if (p.id !== id) return;
+    const { lines, ask } = keepSafeLines({ persisted, usage, quota, backup: keepSafeOf(deviceStore(), id).backup, signedIn: !!readSession() });
+    keepSafeShown = { id, asked, html: lines.map((line) => `<p class="muted">${e(line)}</p>`).join("") + (ask ? btn("keep-device-copy", "Ask the browser to keep it", "shield-check", "wide") : "") };
     const el = document.querySelector("#keep-safe");
     if (!el) return;
-    const { lines, ask } = keepSafeLines({ persisted, usage, quota, backup: keepSafeOf(localStorage, p.id).backup, signedIn: !!readSession() });
-    el.innerHTML = lines.map((line) => `<p class="muted">${e(line)}</p>`).join("") + (ask ? btn("keep-device-copy", "Ask the browser to keep it", "shield-check", "wide") : "");
+    el.innerHTML = keepSafeShown.html;
     refreshIcons();
   }
   /**
@@ -3409,13 +3427,24 @@ async function boot() {
    * seconds after opening, so it is not lost under the start's own toasts.
    */
   function remindBackup() {
-    const { backup, reminded } = keepSafeOf(localStorage, p.id);
-    if (!backupDue({ hasOwnImages: Object.keys(p.assets || {}).length > 0, signedIn: !!readSession(), backup, reminded })) return;
-    setTimeout(() => {
-      if (document.querySelector("dialog[open]")) return;
-      toast("This booth and its images live only in this browser. Download a backup now and then: Export → Keep your work.", false, 12000);
-      noteKeepSafe(localStorage, p.id, "reminded");
-    }, 4000);
+    try {
+      const { backup, reminded } = keepSafeOf(deviceStore(), p.id);
+      if (!backupDue({ hasOwnImages: Object.keys(p.assets || {}).length > 0, signedIn: !!readSession(), backup, reminded })) return;
+      const id = p.id;
+      const said = "This booth and its images live only in this browser. Download a backup now and then: Export → Keep your work.";
+      setTimeout(() => {
+        if (document.querySelector("dialog[open]") || p.id !== id) return;
+        toast(said, false, 12000);
+        // There is one toast, and the start has toasts of its own: a reminder
+        // counts as given only once it has stayed on screen for 8 seconds,
+        // or it comes back at the next start rather than in a month.
+        setTimeout(() => {
+          if (document.querySelector("#toast")?.textContent === said) noteKeepSafe(deviceStore(), id, "reminded");
+        }, 8000);
+      }, 4000);
+    } catch {
+      // A reminder is never worth stopping the start for.
+    }
   }
   /**
    * The frame guide: the chosen export frame outlined over the viewport, with
@@ -3498,7 +3527,7 @@ async function boot() {
     }
     if (tab === "hall") html = `<div class="panel-heading"><h2>${showFloor ? "Show floor" : "Hall planner"}</h2>${icon("map")}</div>${hallPanel()}`;
     if (tab === "export") {
-      html = `<div class="panel-heading"><h2>Export your booth</h2>${icon("download")}</div><p class="muted">A clean image of the current ${p.mode === "photo" ? "photo composition" : "camera view"}, without controls or selection outlines.</p>${p.mode === "photo" ? "" : heroSection()}<section><h3>Image size</h3>${p.mode === "photo" ? "" : frameFields("export")}<label class="setting-label">Detail<select id="export-size" aria-label="Export image size">${STILL_SIZES.map((n) => `<option value="${n}" ${exportLong === n ? "selected" : ""}>${n} px on the long side${n <= 1440 ? " · Fast" : n >= 4096 ? " · High resolution" : ""}</option>`).join("")}</select></label><p class="muted">PNG · ${p.mode === "photo" ? "The photograph's own shape. Enlarging a small source cannot restore missing detail." : e(frameNote("export")) + " Preview textures are capped at 2048 px per artwork; originals remain in the backup."}</p>${btn("export-image", "Export PNG", "download", "primary wide")}</section>${p.mode === "photo" ? "" : gated("video", videoSection())}${gated("showPack", `<section><h3>Show pack</h3><p class="muted">For the van: a measured floor plan with every piece numbered and its clearances, the inventory of work with sizes, media and prices, and a packing and load-in checklist worked out from this booth. Open the downloaded HTML to print or save as PDF.</p>${btn("show-pack", "Download show pack", "layers", "wide")}</section>`)}${p.mode === "photo" ? "" : gated("power", powerSection())}${p.mode === "photo" ? "" : gated("glb", `<section><h3>3D model</h3><p class="muted">The booth as a .glb — walls, work, furniture, figures and any models you brought in, in metres — for SketchUp, Blender or an AR viewer. Surroundings, lights and the drawn shadows stay behind.</p>${btn("export-glb", "Download booth as .glb", "box", "wide")}</section>`)}${p.mode === "photo" ? "" : aiSection()}${p.mode === "photo" ? "" : gated("elevations", `<section><h3>Elevations to scale</h3><p class="muted">A floor plan and every wall with work on it, drawn at a real architectural scale with its dimension chain and centre lines — the drawing a carpenter or installer works from. Print at 100%.</p>${btn("elevations", "Download elevations", "ruler", "wide")}</section>`)}${gated("guide", `<section><h3>Installation guide</h3><p class="muted">Measured wall elevations, panel sizes, and left/bottom placement references. Open the downloaded HTML to print or save as PDF. Photo overlays are excluded.</p>${btn("guide", "Download hanging guide", "layout-panel-left", "wide")}</section>`)}<section><h3>Keep your work</h3>${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Includes original artwork and photo files, booth layout, and lighting.</p><div class="keep-safe" id="keep-safe"><p class="muted">Checking how this browser keeps your work…</p></div>${btn("studio-account", "Studio account & sync", "user-round", "wide")}<p class="muted">Signed in to your studio, your booths and their images are kept there and open on your other devices. Signed out, everything stays on this device.</p></section>${p.mode === "photo" ? "" : `<section><h3>Send to the show</h3>${btn("share-design", "Send my booth to the promoter", "send", "primary wide")}<p class="muted">Uploads this booth's design and the images on it — not the rest of your project — and gives you a link to send. The promoter opens it in Booth Studio and puts your booth on their show floor.</p>${btn("send-design", "Download it as a file instead", "download", "wide")}${sentLinksHTML()}</section>`}<section><h3>Preview quality</h3><select id="quality" aria-label="Preview quality (Export)">${qualityOptions()}</select><p class="muted">Auto starts sharp and lowers the detail while it measures this computer drawing slower than it should. The light bar's shadows are drawn live at High detail only; exports always include them. The same menu is under the viewport, beside what it is drawing at now.</p></section><section><h3>Something wrong?</h3>${btn("copy-report", "Copy a problem report", "clipboard-copy", "wide")}<p class="muted">Copies a short report to paste into a message: this build, your browser and screen, the project in counts (no names, titles or images) and the last errors on this page. Nothing is sent anywhere.</p></section>`;
+      html = `<div class="panel-heading"><h2>Export your booth</h2>${icon("download")}</div><p class="muted">A clean image of the current ${p.mode === "photo" ? "photo composition" : "camera view"}, without controls or selection outlines.</p>${p.mode === "photo" ? "" : heroSection()}<section><h3>Image size</h3>${p.mode === "photo" ? "" : frameFields("export")}<label class="setting-label">Detail<select id="export-size" aria-label="Export image size">${STILL_SIZES.map((n) => `<option value="${n}" ${exportLong === n ? "selected" : ""}>${n} px on the long side${n <= 1440 ? " · Fast" : n >= 4096 ? " · High resolution" : ""}</option>`).join("")}</select></label><p class="muted">PNG · ${p.mode === "photo" ? "The photograph's own shape. Enlarging a small source cannot restore missing detail." : e(frameNote("export")) + " Preview textures are capped at 2048 px per artwork; originals remain in the backup."}</p>${btn("export-image", "Export PNG", "download", "primary wide")}</section>${p.mode === "photo" ? "" : gated("video", videoSection())}${gated("showPack", `<section><h3>Show pack</h3><p class="muted">For the van: a measured floor plan with every piece numbered and its clearances, the inventory of work with sizes, media and prices, and a packing and load-in checklist worked out from this booth. Open the downloaded HTML to print or save as PDF.</p>${btn("show-pack", "Download show pack", "layers", "wide")}</section>`)}${p.mode === "photo" ? "" : gated("power", powerSection())}${p.mode === "photo" ? "" : gated("glb", `<section><h3>3D model</h3><p class="muted">The booth as a .glb — walls, work, furniture, figures and any models you brought in, in metres — for SketchUp, Blender or an AR viewer. Surroundings, lights and the drawn shadows stay behind.</p>${btn("export-glb", "Download booth as .glb", "box", "wide")}</section>`)}${p.mode === "photo" ? "" : aiSection()}${p.mode === "photo" ? "" : gated("elevations", `<section><h3>Elevations to scale</h3><p class="muted">A floor plan and every wall with work on it, drawn at a real architectural scale with its dimension chain and centre lines — the drawing a carpenter or installer works from. Print at 100%.</p>${btn("elevations", "Download elevations", "ruler", "wide")}</section>`)}${gated("guide", `<section><h3>Installation guide</h3><p class="muted">Measured wall elevations, panel sizes, and left/bottom placement references. Open the downloaded HTML to print or save as PDF. Photo overlays are excluded.</p>${btn("guide", "Download hanging guide", "layout-panel-left", "wide")}</section>`)}<section><h3>Keep your work</h3>${btn("backup", "Download project backup", "save", "wide")}${btn("import", "Open project backup", "folder-open", "wide")}<p class="muted">Includes original artwork and photo files, booth layout, and lighting.</p><div class="keep-safe" id="keep-safe">${keepSafeShown?.id === p.id ? keepSafeShown.html : '<p class="muted">Checking how this browser keeps your work…</p>'}</div>${btn("studio-account", "Studio account & sync", "user-round", "wide")}<p class="muted">Signed in to your studio, your booths and their images are kept there and open on your other devices. Signed out, everything stays on this device.</p></section>${p.mode === "photo" ? "" : `<section><h3>Send to the show</h3>${btn("share-design", "Send my booth to the promoter", "send", "primary wide")}<p class="muted">Uploads this booth's design and the images on it — not the rest of your project — and gives you a link to send. The promoter opens it in Booth Studio and puts your booth on their show floor.</p>${btn("send-design", "Download it as a file instead", "download", "wide")}${sentLinksHTML()}</section>`}<section><h3>Preview quality</h3><select id="quality" aria-label="Preview quality (Export)">${qualityOptions()}</select><p class="muted">Auto starts sharp and lowers the detail while it measures this computer drawing slower than it should. The light bar's shadows are drawn live at High detail only; exports always include them. The same menu is under the viewport, beside what it is drawing at now.</p></section><section><h3>Something wrong?</h3>${btn("copy-report", "Copy a problem report", "clipboard-copy", "wide")}<p class="muted">Copies a short report to paste into a message: this build, your browser and screen, the project in counts (no names, titles or images) and the last errors on this page. Nothing is sent anywhere.</p></section>`;
     }
     return html;
   }
@@ -3990,9 +4019,9 @@ async function boot() {
       new Blob([JSON.stringify(floorTemplates.length ? { ...p, floorTemplates } : p)], { type: "application/json" }),
       `${safeName()}.booth.json`,
     );
-    noteKeepSafe(localStorage, p.id, "backup");
+    noteKeepSafe(deviceStore(), p.id, "backup");
     toast("Project backup downloaded with original images.");
-    if (tab === "export") paintKeepSafe();
+    if (tab === "export") paintKeepSafe(true);
   }
   function safeName() {
     return (
@@ -4306,7 +4335,7 @@ async function boot() {
           : "This browser said no. Download a backup now and then, or sign in to keep your booths in your studio.",
         !granted,
       );
-      paintKeepSafe();
+      paintKeepSafe(true);
     },
     pan: () => setPanTool(!panTool),
     "autopan-menu": () => {

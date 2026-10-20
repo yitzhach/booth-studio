@@ -19,8 +19,13 @@ Extend it; do not rebuild it.
   "Diagnosing" below says), the page without its query (a booth link's id
   stays out), browser and screen, signed in or not, the project in counts and
   settings only (no names, titles or images), each texture set's state from
-  `window.BOOTH_ASSETS`, and the page's last 20 uncaught errors and unhandled
-  rejections, which main.js records from its first line. Where the clipboard
+  `window.BOOTH_ASSETS`, and the page's last 20 different uncaught errors and
+  unhandled rejections, which main.js records from its first line. The same
+  error again is counted on one line ("— 500 times since …"), so a broken
+  frame loop cannot push out the error that started it; quoted text and a
+  link's query are taken out of every message, since an error can quote what
+  someone typed. Stacks keep the frame that threw in Firefox and Safari too,
+  whose stacks have no message line. Where the clipboard
   is refused it opens in a dialog to copy by hand. Nothing is sent: a Worker
   route for reports is the owner's call (ROADMAP phase 0). `src/report.js`
   (`tests/report.test.js`), `tests/view-report.mjs`. When the owner reports a
@@ -36,8 +41,13 @@ Extend it; do not rebuild it.
   Firefox answers with a permission prompt. A booth holding the artist's own
   images, never backed up or not for 30 days, gets one reminder toast at
   start (12 s), at most once a month per project, never signed in, never
-  over the welcome. What is remembered is per browser and per project
-  (`localStorage["booth.keepSafe"]`), never in a project or a backup.
+  over the welcome; it counts as given only once it has stayed on screen 8
+  seconds, since another toast can cover it. What is remembered is per
+  browser and per project (`localStorage["booth.keepSafe"]`, the 50 projects
+  touched last), never in a project or a backup, and where site data is
+  blocked nothing is remembered and the start goes on. A redraw of the Export
+  tab draws the last answer straight back and asks the browser again at most
+  every 10 seconds. Sizes are in 1024s, as `share.js` counts them.
   `src/keep-safe.js` is pure (`tests/keep-safe.test.js`);
   `tests/view-keep-safe.mjs` stands in for `navigator.storage`. Whether
   Safari on an iPad grants persistence is for a real iPad: HANDOFF → Next.

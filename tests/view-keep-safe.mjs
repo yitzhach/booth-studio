@@ -32,7 +32,7 @@ try {
           sessionStorage.setItem("test.persisted", "yes");
           return true;
         },
-        estimate: async () => ({ usage: 37_000_000, quota: 2_100_000_000 }),
+        estimate: async () => ({ usage: 37 * 1024 ** 2, quota: 2.1 * 1024 ** 3 }),
       },
     });
   });
@@ -44,6 +44,11 @@ try {
   await page.waitForFunction(() => /may clear/.test(document.querySelector("#keep-safe")?.textContent || ""));
   assert.match(await keepSafe(), /Using 37 MB of about 2\.1 GB here/);
   assert.match(await keepSafe(), /No backup downloaded from this browser yet/);
+  // A redraw draws the last answer straight back, never the placeholder in its place.
+  await page.click('[data-tab="lighting"]');
+  await page.click('[data-tab="export"]');
+  assert.doesNotMatch(await keepSafe(), /Checking how this browser/);
+  assert.match(await keepSafe(), /may clear/);
 
   await page.getByRole("button", { name: "Ask the browser to keep it" }).click();
   await page.waitForFunction(() => /until you clear it yourself/.test(document.querySelector("#keep-safe")?.textContent || ""));
@@ -68,9 +73,18 @@ try {
     b.project.assets["own-image"] = { name: "own.png", width: 1, height: 1, role: "artwork", data: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" };
     await b.save();
   });
+  const remindedAgain = () => page.waitForFunction(() => /live only in this browser/.test(document.querySelector("#toast")?.textContent || ""), null, { timeout: 15000 });
   await page.reload();
   await page.waitForFunction(() => !!window.__booth?.scene);
-  await page.waitForFunction(() => /live only in this browser/.test(document.querySelector("#toast")?.textContent || ""), null, { timeout: 15000 });
+  await remindedAgain();
+  // Another toast covers it at once, as the start's own toasts can: not seen, so not counted.
+  await page.evaluate(() => (document.querySelector("#toast").textContent = "Something else happened."));
+  await page.waitForTimeout(9000);
+  await page.reload();
+  await page.waitForFunction(() => !!window.__booth?.scene);
+  await remindedAgain();
+  // On screen for its 8 seconds this time: counted, and not shown again for a month.
+  await page.waitForTimeout(9000);
   await page.reload();
   await page.waitForFunction(() => !!window.__booth?.scene);
   await page.waitForTimeout(5000);

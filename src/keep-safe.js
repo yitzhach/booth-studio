@@ -19,6 +19,8 @@
 export const KEEP_SAFE_KEY = "booth.keepSafe";
 /** Days between reminders, and how old a backup may be before one is due. */
 export const REMIND_DAYS = 30;
+/** Projects remembered; past this, the one not touched longest is forgotten. */
+export const MAX_REMEMBERED = 50;
 const DAY = 24 * 60 * 60 * 1000;
 
 function readAll(storage) {
@@ -52,6 +54,10 @@ export function noteKeepSafe(storage, id, what, now = new Date()) {
   if (!id || (what !== "backup" && what !== "reminded")) return;
   const all = readAll(storage);
   all[id] = { ...(all[id] || {}), [what]: now.toISOString() };
+  // Every Alternative and quick start is a new project id: keep the newest.
+  const last = (e) => Math.max(asDate(e?.backup)?.getTime() || 0, asDate(e?.reminded)?.getTime() || 0);
+  const ids = Object.keys(all).sort((a, b) => last(all[b]) - last(all[a]));
+  for (const old of ids.slice(MAX_REMEMBERED)) delete all[old];
   writeAll(storage, all);
 }
 
@@ -63,16 +69,17 @@ export function noteKeepSafe(storage, id, what, now = new Date()) {
  */
 export function backupDue({ hasOwnImages, signedIn, backup, reminded, now = new Date(), days = REMIND_DAYS }) {
   if (signedIn || !hasOwnImages) return false;
-  const old = (d) => !d || now - d >= days * DAY;
+  // A time more than a day ahead was written by a clock that was wrong: due.
+  const old = (d) => !d || now - d >= days * DAY || d - now > DAY;
   return old(backup) && old(reminded);
 }
 
-/** 512 KB, 37 MB, 2.1 GB. */
+/** 512 KB, 37 MB, 2.1 GB — in 1024s, as the rest of the app counts (share.js). */
 export function formatBytes(n) {
   if (!Number.isFinite(n) || n < 0) return "";
-  if (n >= 1e9) return `${(n / 1e9).toFixed(1)} GB`;
-  if (n >= 1e6) return `${Math.round(n / 1e6)} MB`;
-  return `${Math.max(1, Math.round(n / 1e3))} KB`;
+  if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(1)} GB`;
+  if (n >= 1024 ** 2) return `${Math.round(n / 1024 ** 2)} MB`;
+  return `${Math.max(1, Math.round(n / 1024))} KB`;
 }
 
 const day = (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });

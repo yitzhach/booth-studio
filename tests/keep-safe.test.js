@@ -43,19 +43,30 @@ test("a backup reminder: signed out, own images, no recent backup, not reminded 
   assert.equal(backupDue({ ...base, backup: daysAgo(REMIND_DAYS) }), true);
   assert.equal(backupDue({ ...base, reminded: daysAgo(1) }), false, "never twice in a month");
   assert.equal(backupDue({ ...base, reminded: daysAgo(REMIND_DAYS + 1) }), true);
+  assert.equal(backupDue({ ...base, backup: daysAgo(-300) }), true, "a date from a clock set ahead is no backup");
 });
 
-test("sizes read the way a person says them", () => {
-  assert.equal(formatBytes(512_000), "512 KB");
-  assert.equal(formatBytes(37_400_000), "37 MB");
-  assert.equal(formatBytes(2_140_000_000), "2.1 GB");
+test("only the 50 projects touched last are remembered: every Alternative is a new id", () => {
+  const storage = memory();
+  const start = new Date("2026-01-01T00:00:00Z");
+  for (let i = 0; i < 60; i++) noteKeepSafe(storage, `p${i}`, "backup", new Date(start.getTime() + i * 60_000));
+  const all = JSON.parse(storage.getItem(KEEP_SAFE_KEY));
+  assert.equal(Object.keys(all).length, 50);
+  assert.ok(all.p59 && all.p10 && !all.p9, "the oldest ten forgotten");
+});
+
+test("sizes read the way a person says them, in the 1024s the rest of the app counts in", () => {
+  assert.equal(formatBytes(512 * 1024), "512 KB");
+  assert.equal(formatBytes(37.4 * 1024 ** 2), "37 MB");
+  assert.equal(formatBytes(2.14 * 1024 ** 3), "2.1 GB");
+  assert.equal(formatBytes(199_229_440), "190 MB", "as share.js counts it against its 200 MB");
   assert.equal(formatBytes(10), "1 KB");
   assert.equal(formatBytes(undefined), "");
   assert.equal(formatBytes(-1), "");
 });
 
 test("Keep your work says what the browser does with this device's copy", () => {
-  const kept = keepSafeLines({ persisted: true, usage: 37_000_000, quota: 2_100_000_000, backup: now, signedIn: false });
+  const kept = keepSafeLines({ persisted: true, usage: 37 * 1024 ** 2, quota: 2.1 * 1024 ** 3, backup: now, signedIn: false });
   assert.equal(kept.ask, false);
   assert.match(kept.lines[0], /keeps this device's copy until you clear it/);
   assert.match(kept.lines[1], /Using 37 MB of about 2\.1 GB/);

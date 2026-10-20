@@ -18,6 +18,25 @@ test("an error event and a rejection read as a message and a place", () => {
   assert.equal(errorEntry({ type: "error", message: "y".repeat(1000) }).message.length, 300, "a long message is clipped");
 });
 
+test("Firefox and Safari stacks keep the frame that threw: only V8 opens with the message", () => {
+  const err = new TypeError("x is undefined");
+  err.stack = "paint@https://x.dev/assets/main.js:120:4\nrender@https://x.dev/assets/main.js:90:2\nboot@https://x.dev/assets/main.js:10:1";
+  assert.equal(errorEntry({ type: "error", error: err }).where, "paint@https://x.dev/assets/main.js:120:4 ← render@https://x.dev/assets/main.js:90:2");
+  const anon = new Error("no");
+  anon.stack = "@https://x.dev/assets/main.js:5:1";
+  assert.equal(errorEntry({ type: "error", error: anon }).where, "@https://x.dev/assets/main.js:5:1");
+});
+
+test("what someone typed stays out of an error: quoted text and a link's query", () => {
+  const parse = new SyntaxError(`Unexpected token 'M', "My Booth N"... is not valid JSON`);
+  parse.stack = `SyntaxError: ${parse.message}\n    at JSON.parse (<anonymous>)\n    at open (https://x.dev/assets/main.js:7:3?share=secretid)`;
+  const e = errorEntry({ type: "error", error: parse });
+  assert.equal(e.message, `Unexpected token 'M', "…"... is not valid JSON`);
+  assert.ok(!JSON.stringify(e).includes("My Booth") && !JSON.stringify(e).includes("secretid"));
+  assert.equal(errorEntry({ type: "unhandledrejection", reason: new Error("GET https://x.dev/api/shares?id=secretid failed") }).message, "Unhandled rejection: GET https://x.dev/api/shares failed");
+  assert.equal(errorEntry({ type: "error", message: "Script error.", filename: "https://x.dev/assets/index-abc.js?share=secretid", lineno: 1, colno: 2 }).where, "index-abc.js:1:2");
+});
+
 test("the ring keeps the last MAX_ERRORS, newest first", () => {
   clearErrors();
   for (let i = 0; i < MAX_ERRORS + 5; i++) recordError({ message: `e${i}` }, new Date(Date.UTC(2026, 9, 20, 4, 0, i)));
@@ -29,6 +48,21 @@ test("the ring keeps the last MAX_ERRORS, newest first", () => {
   assert.equal(list.at(-1).message, "e5");
   clearErrors();
   assert.deepEqual(recentErrors(), []);
+});
+
+test("the same error again is counted, so a frame loop can't push out the error that started it", () => {
+  clearErrors();
+  const at = (s) => new Date(Date.UTC(2026, 9, 20, 4, 0, s));
+  recordError({ message: "boot failed", where: "boot (main.js:1:1)" }, at(0));
+  for (let i = 1; i <= 500; i++) recordError({ message: "frame broke", where: "frame (scene.js:9:9)" }, at(1 + (i % 50)));
+  const list = recentErrors();
+  assert.equal(list.length, 2);
+  assert.deepEqual([list[0].message, list[0].count, list[1].message, list[1].count], ["frame broke", 500, "boot failed", 1]);
+  const text = reportText({ errors: list, now: at(59) });
+  assert.match(text, /frame broke \(frame \(scene\.js:9:9\)\) — 500 times since 04:00:02 UTC/);
+  assert.match(text, /boot failed \(boot \(main\.js:1:1\)\)\n?/);
+  assert.ok(!/boot failed.*times since/.test(text), "a single error has no count");
+  clearErrors();
 });
 
 test("the project is counts and settings only — no names, titles or images", () => {

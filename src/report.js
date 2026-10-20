@@ -8,11 +8,13 @@
 // deploy has twice looked like a bug), the page without its query (a booth
 // link's id stays out), the browser and screen, the project in counts only
 // (no names, titles or images), what each texture set reported
-// (`window.BOOTH_ASSETS`) and the recent errors. Sending it anywhere by
+// (`window.BOOTH_ASSETS`) and the recent errors — with any quoted text and
+// any link's query taken out of them, since an error can quote what someone
+// typed (JSON.parse does) or a booth link's id. Sending it anywhere by
 // itself would be server-side work, which is the owner's call (ROADMAP.md
 // phase 0). Pure apart from the ring it keeps, so it is tested in Node.
 
-/** The most errors kept; the oldest go first. */
+/** The most different errors kept; the oldest go first. The same error again is counted, not kept twice. */
 export const MAX_ERRORS = 20;
 const MAX_MESSAGE = 300;
 const ring = [];
@@ -21,6 +23,20 @@ const clip = (text, n) => {
   const s = String(text ?? "").replace(/\s+/g, " ").trim();
   return s.length > n ? `${s.slice(0, n - 1)}…` : s;
 };
+// What someone typed stays out: double-quoted text (JSON.parse quotes its
+// input) and a link's query or fragment (a booth link's id).
+const redact = (s) => s.replace(/"[^"]{2,}"/g, '"…"').replace(/(\bhttps?:\/\/[^\s?#)]+)[?#][^\s)]*/g, "$1");
+
+/**
+ * The first two frames of a stack. V8 opens a stack with the message line;
+ * Firefox and Safari start at the frame that threw (`fn@url:line:col`), so a
+ * first line is dropped only when it is not a frame.
+ */
+function frames(stack) {
+  const lines = stack.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (lines.length && !/^at\s/.test(lines[0]) && !/@\S*:\d+/.test(lines[0])) lines.shift();
+  return lines.slice(0, 2).join(" ← ");
+}
 
 /**
  * What an `error` or `unhandledrejection` event says, as { message, where }:
@@ -28,16 +44,25 @@ const clip = (text, n) => {
  */
 export function errorEntry(event) {
   const reason = event?.reason ?? event?.error;
-  const message = clip(reason?.message ?? event?.message ?? reason ?? "Unknown error", MAX_MESSAGE);
+  const message = clip(redact(String(reason?.message ?? event?.message ?? reason ?? "Unknown error")), MAX_MESSAGE);
   const kind = event?.type === "unhandledrejection" ? "Unhandled rejection: " : "";
-  const stack = typeof reason?.stack === "string" ? reason.stack.split("\n").slice(1, 3).map((l) => l.trim()).join(" ← ") : "";
-  const where = stack || (event?.filename ? `${event.filename.replace(/^.*\//, "")}:${event.lineno ?? "?"}:${event.colno ?? "?"}` : "");
-  return { message: kind + message, where: clip(where, MAX_MESSAGE) };
+  const stack = typeof reason?.stack === "string" ? frames(reason.stack) : "";
+  const where = stack || (event?.filename ? `${event.filename.replace(/[?#].*$/, "").replace(/^.*\//, "")}:${event.lineno ?? "?"}:${event.colno ?? "?"}` : "");
+  return { message: kind + message, where: clip(redact(where), MAX_MESSAGE) };
 }
 
+/**
+ * Keep an error. The same error again (a broken frame loop throws sixty a
+ * second) is counted on the one entry and moved to the newest, so it can
+ * never push out the different, earlier error that is usually the cause.
+ */
 export function recordError(entry, now = new Date()) {
   if (!entry?.message) return;
-  ring.push({ at: now.toISOString(), message: entry.message, where: entry.where || "" });
+  const where = entry.where || "";
+  const at = now.toISOString();
+  const i = ring.findIndex((r) => r.message === entry.message && r.where === where);
+  const same = i >= 0 ? ring.splice(i, 1)[0] : null;
+  ring.push(same ? { ...same, at, count: same.count + 1 } : { at, first: at, count: 1, message: entry.message, where });
   while (ring.length > MAX_ERRORS) ring.shift();
 }
 
@@ -80,6 +105,7 @@ export function reportText({ build, href, userAgent, viewport, signedIn, project
   lines.push(sets.length ? `Texture sets: ${sets.map(([id, a]) => `${id} ${a?.state ?? "?"}`).join(", ")}` : "Texture sets: none reported");
   const list = errors || [];
   lines.push(list.length ? `Recent errors on this page, newest first (${list.length}):` : "Recent errors on this page: none");
-  for (const err of list) lines.push(`- ${err.at.slice(11, 19)} UTC ${err.message}${err.where ? ` (${err.where})` : ""}`);
+  for (const err of list)
+    lines.push(`- ${err.at.slice(11, 19)} UTC ${err.message}${err.where ? ` (${err.where})` : ""}${err.count > 1 ? ` — ${err.count} times since ${err.first.slice(11, 19)} UTC` : ""}`);
   return lines.join("\n");
 }
