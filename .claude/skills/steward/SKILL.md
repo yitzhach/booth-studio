@@ -82,8 +82,10 @@ those says so in its description and waits for the owner.
    failure. Exit 1 is a live page that did not start; exit 2, a deploy that
    never arrived; exit 3 is no verdict at all (the site or the browser could
    not be reached) — never roll back on a 3.
-2. Update `HANDOFF.md`: Now (what shipped, dated) and Next (what the owner
-   must look at in person).
+2. Hand off: what shipped, dated, as a bullet at the top of
+   `docs/HISTORY.md`; any answer the owner gave in `docs/DECISIONS.md`; and in
+   `HANDOFF.md`, Now where what is true changed and Next (what the owner must
+   look at in person).
 3. A bad deploy: on GitHub, the merged pull request → **Revert** → merge the
    revert; the old code deploys itself. Faster: Cloudflare → Workers & Pages →
    `booth-studio` → Deployments → **Rollback**, then revert on GitHub anyway,

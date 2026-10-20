@@ -6,8 +6,8 @@ description: Use on any booth-studio bug report, failing test, red CI run or "it
 # Root cause first
 
 Adapted from superpowers' systematic-debugging (see `../THIRD_PARTY.md`).
-HANDOFF.md records reports here that were guessed at twice before anyone
-measured; this skill is so that the third time is not a guess.
+`docs/DIAGNOSING.md` records reports here that were guessed at twice before
+anyone measured; this skill is so that the third time is not a guess.
 
 **The rule:** no fix until the cause can be said as "X happens because Y",
 backed by something observed in this session.
@@ -28,10 +28,10 @@ backed by something observed in this session.
   --check-only`, or `window.BOOTH_BUILD` in the browser that sees it. A
   Cloudflare build takes minutes, and two reports were a build still running.
 - **A texture, ground or HDRI not showing:** `window.BOOTH_ASSETS` from the
-  browser that sees it. HANDOFF.md → Diagnosing "the texture isn't showing"
+  browser that sees it. `docs/DIAGNOSING.md` → "the texture isn't showing"
   lists the causes already ruled out; don't re-investigate them.
 - **A video that won't play:** which codec it used. VP9 in MP4 does not open
-  in QuickTime (HANDOFF.md → Diagnosing "the video won't play").
+  in QuickTime (`docs/DIAGNOSING.md` → "the video won't play").
 - **Something that appears late, or only after the mouse moves:** the
   viewport draws on demand, and the change never reached `invalidate()`
   (HANDOFF.md → Rules that are easy to break).

@@ -11,7 +11,7 @@ was rewritten into it.
 | --- | --- | --- |
 | `steward` | CLAUDE.md → Shipping, HANDOFF.md → Deployment, Art-Talk-Back `docs/SHIPPING.md` | — |
 | `verify-change` | CLAUDE.md, HANDOFF.md → Testing | superpowers `skills/verification-before-completion` |
-| `root-cause` | HANDOFF.md → the two Diagnosing sections, Rules, Things learned | superpowers `skills/systematic-debugging` |
+| `root-cause` | `docs/DIAGNOSING.md`, HANDOFF.md → Rules, `docs/LESSONS.md` | superpowers `skills/systematic-debugging` |
 | `review-loop` | HANDOFF.md → Rules that are easy to break; the built-in `/code-review`, `/simplify`, `/security-review` | iterate-skill `SKILL.md` and `config/dimensions/*.yaml`; superpowers `skills/receiving-code-review` |
 | `plan-phase` | the repo's `*_PHASE.md` habit, ROADMAP.md | superpowers `skills/brainstorming`, `skills/writing-plans`, `skills/executing-plans` |
 | `product-strategy` | ROADMAP.md and its method | — |

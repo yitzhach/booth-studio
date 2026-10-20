@@ -55,8 +55,9 @@ market research per change would cost much and change little.
 6. **Check the deploy**: `node tools/verify-deploy.mjs` waits until the live
    site serves the merge commit, then opens it in Chromium and checks that the
    app starts.
-7. **Hand off**: HANDOFF.md → Now (what shipped) and Next (what the owner must
-   see in person).
+7. **Hand off**: what shipped, dated, at the top of `docs/HISTORY.md`; the
+   owner's answers in `docs/DECISIONS.md`; HANDOFF.md → Now where what is
+   true changed, and Next (what the owner must see in person).
 
 Whenever something fails along the way: `root-cause` before any fix.
 

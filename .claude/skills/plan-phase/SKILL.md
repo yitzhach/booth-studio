@@ -22,7 +22,7 @@ CLAUDE.md, a look or a feel, a name, a price.
 At most four, in one message (the AskUserQuestion tool), each with options and
 the recommended one first. If none are needed, say in one line which defaults
 were taken. Never one question per message: the owner often reads on a
-phone. Record each answer, dated, in the phase doc and in HANDOFF.md.
+phone. Record each answer, dated, in the phase doc and in `docs/DECISIONS.md`.
 
 ## 3. Size it
 

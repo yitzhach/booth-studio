@@ -28,7 +28,8 @@ Ex:
 
 Artist OS Booth Studio: measured 3D art-show booth planning in the browser.
 **Extend it; do not rebuild it.** Read `HANDOFF.md` first — it is written to be
-enough on its own & is the record of what was decided & why.
+enough on its own. `docs/HISTORY.md` (every round) & `docs/DECISIONS.md` (the
+owner's answers) are the record of what was decided & why.
 
 ## Rules that bite
 

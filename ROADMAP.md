@@ -154,7 +154,7 @@ has made the decisions that every later phase waits on.
 conversations and five watched sessions cost a few days and can save months
 of building the wrong thing.
 
-- [ ] **The owner's Rev 1 checklist** (`HANDOFF.md` → Next, item 0) on the
+- [ ] **The owner's Rev 1 checklist** (`HANDOFF.md` → Next, item 2) on the
       live site, in a private window, then on a phone.
 - [ ] **Five watched sessions** — three artists, one show organizer, one
       gallery or university-gallery person — each on their own device, with
@@ -165,7 +165,7 @@ of building the wrong thing.
       and festivals (Art Fair Insiders, NAIA, ZAPP shows, local markets).
       Questions in the appendix. The aim is two shows willing to pilot
       phase 3 in their next season.
-- [ ] **Owner decisions**, each logged in `HANDOFF.md` with its date:
+- [ ] **Owner decisions**, each logged in `docs/DECISIONS.md` with its date:
   - **Who pays first.** Default: organizers (see Positioning).
   - **Product name and domain.** "Booth Studio" collides with an App Store
     photo-booth app. Default: keep "Booth Studio" inside "Artist OS" until a

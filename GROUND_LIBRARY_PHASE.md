@@ -15,7 +15,7 @@ said so while it was happening. It was still the wrong model — an upload and a
 preset were two different things competing for one slot, so choosing a preset
 appeared to do nothing, and the only way back was Remove ground texture.
 
-It is also, by `HANDOFF.md`'s own count, one of the two known causes behind
+It is also, by `docs/DIAGNOSING.md`'s own count, one of the two known causes behind
 every "the ground selector is broken" report, of which there have been three.
 Removing the behaviour removes the diagnosis, which is why that section of the
 handoff is shorter now.
