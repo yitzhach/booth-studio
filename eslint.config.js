@@ -13,21 +13,19 @@
 //   handlers take arguments they don't read, and `const { assets: _a,
 //   ...rest } = p` is how a field is dropped from a copy.
 //
-// `src/vendor/` is generated in Art-Talk-Back and never edited here; the
-// build outputs and the folders .gitignore keeps out (local tools write
-// there) are not source. The modules the scene build ships to studio-api
+// `src/vendor/` is generated in Art-Talk-Back and never edited here; what
+// .gitignore keeps out (build outputs, the folders local tools write to) is
+// not source, read from .gitignore itself so the two cannot drift. The modules the scene build ships to studio-api
 // are held to a Worker's globals by `npm run typecheck` (tsconfig.json),
 // which follows their imports; here they share the app's.
+import { fileURLToPath } from "node:url";
+import { includeIgnoreFile } from "@eslint/compat";
 import js from "@eslint/js";
 import globals from "globals";
 
 export default [
-  {
-    ignores: [
-      "dist/**", "dist-scene/**", "public/**", "src/vendor/**", ".studio-platform/**",
-      ".wrangler/**", ".tmp-scratch/**", ".probe/**", "test-results/**",
-    ],
-  },
+  includeIgnoreFile(fileURLToPath(new URL(".gitignore", import.meta.url))),
+  { ignores: ["public/**", "src/vendor/**", ".studio-platform/**"] },
   js.configs.recommended,
   {
     languageOptions: { ecmaVersion: 2024, sourceType: "module" },
@@ -41,8 +39,8 @@ export default [
     files: ["src/**/*.js"],
     languageOptions: { globals: { ...globals.browser, __APP_VERSION__: "readonly", __COMMIT_SHA__: "readonly", __BUILD_TIME__: "readonly" } },
   },
-  // Node: the node suites and the config files.
-  { files: ["tests/**/*.test.js", "*.js"], languageOptions: { globals: { ...globals.node } } },
+  // Node: the node suites, their helpers and the config files.
+  { files: ["tests/**/*.js", "*.js"], languageOptions: { globals: { ...globals.node } } },
   // Node driving a browser: the view and end-to-end suites and the tools,
   // whose page.evaluate callbacks run in the page.
   { files: ["tests/**/*.mjs", "tools/**/*.mjs"], languageOptions: { globals: { ...globals.node, ...globals.browser } } },

@@ -2856,7 +2856,8 @@ node tools/verify-deploy.mjs   # after a merge: waits for production to serve th
 
 **A linter and a type check since 2026-10-20 (ROADMAP 1.4, 1.5).** `npm run
 lint` is ESLint's recommended rules (`eslint.config.js` says which two are
-loosened and why: an empty `catch {}`, and a name starting with `_`), over
+loosened and why: an empty `catch {}`; and unread parameters, caught errors
+and names starting with `_`), over
 `src/` (not `src/vendor/`), `tests/`, `tools/` and `worker/`. Its first run
 found thirteen unused names — imports and variables — and a needless escape,
 and no undefined name; they are gone. `npm run typecheck` is TypeScript
@@ -2867,7 +2868,8 @@ the JSDoc as the types and a Worker's globals, not the page's (so a
 moved to `src/image-paint.js` for it). Its fifteen findings were all types
 inferred too narrowly — from a default parameter or a destructured `[lo,
 hi]` — fixed in the JSDoc; the scene bundle came out byte for byte the
-same. Both run first in CI's `core` job.
+same. Both run in CI's `lint` job, beside `core` and the view shards, and
+`booth` needs it green.
 
 **`tests/view-wall-assets.mjs` (was `tests/wall-assets.mjs`) is green and
 in `npm run test:view` since 2026-10-20.** It had failed at line 120 since

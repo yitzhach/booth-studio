@@ -4,16 +4,16 @@ name: CI
 # through Cloudflare's Git integration (CLAUDE.md), and staging through
 # Art-Talk-Back's "Deploy staging" workflow.
 #
-# Three jobs. `core`: the linter and the type check, the node suites, the
-# build, the vendored SDK against the platform, the two-device run against a
-# local studio-api from yitzhach/Art-Talk-Back (its default branch, or its
-# branch of the same name: Art-Talk-Back D-056), and the end-to-end checks.
-# The two-device step points the browser at a dead proxy: it must pass with
-# no internet, the way a show floor often is; loopback bypasses it. `views`:
-# the view suites, in four shards on four runners at once — run one after
-# another they took 40 of the 49 minutes a pull request waited. `booth`: green
-# only when both are, and the name branch protection requires, so a red shard
-# still blocks a merge.
+# Four jobs. `core`: the node suites, the build, the vendored SDK against the
+# platform, the two-device run against a local studio-api from
+# yitzhach/Art-Talk-Back (its default branch, or its branch of the same name:
+# Art-Talk-Back D-056), and the end-to-end checks. The two-device step points
+# the browser at a dead proxy: it must pass with no internet, the way a show
+# floor often is; loopback bypasses it. `lint`: the linter and the type check.
+# `views`: the view suites, in four shards on four runners at once — run one
+# after another they took 40 of the 49 minutes a pull request waited.
+# `booth`: green only when the other three are, and the name branch
+# protection requires, so a red shard still blocks a merge.
 on:
   pull_request:
   push:
@@ -61,13 +61,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # ESLint's recommended rules and TypeScript reading the JSDoc of the
-      # modules studio-api runs (eslint.config.js, tsconfig.json): seconds,
-      # so they go first.
-      - name: Lint
-        run: npm run lint
-      - name: Type check
-        run: npm run typecheck
       - name: Node suites
         run: npm test
       - run: npm run build
@@ -101,6 +94,26 @@ jobs:
         run: node tests/two-devices.mjs
       - name: End-to-end checks
         run: npm run test:browser
+
+  # ESLint's recommended rules and TypeScript reading the JSDoc of the modules
+  # studio-api runs (eslint.config.js, tsconfig.json). A job of its own, so a
+  # lint error is reported in a minute and never stops the suites from
+  # reporting theirs.
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Type check
+        if: ${{ !cancelled() }}
+        run: npm run typecheck
 
   views:
     runs-on: ubuntu-latest
@@ -139,12 +152,13 @@ jobs:
   # Runs when a needed job failed or was skipped, so that is a red check; not
   # when the whole run was cancelled for a newer push, which is no verdict.
   booth:
-    needs: [core, views]
+    needs: [core, lint, views]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - name: Every job passed
         run: |
-          echo "core: ${{ needs.core.result }} · views: ${{ needs.views.result }}"
+          echo "core: ${{ needs.core.result }} · lint: ${{ needs.lint.result }} · views: ${{ needs.views.result }}"
           test "${{ needs.core.result }}" = success
+          test "${{ needs.lint.result }}" = success
           test "${{ needs.views.result }}" = success
