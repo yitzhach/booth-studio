@@ -18,20 +18,24 @@
 //
 // Exit status: 0 live and started · 1 live, but the page did not start ·
 // 2 the commit was not live before the timeout · 3 no verdict: a usage error,
-// or the site or the browser could not be reached (a network block, a missing
-// Chromium). A 3 says nothing about the deploy; never roll back on it.
+// the site or the browser could not be reached (a network block, a missing
+// Chromium), or this checkout cannot tell whether the live commit contains
+// the expected one. A 3 says nothing about the deploy; never roll back on it.
 //
 // In a cloud session the network goes through HTTPS_PROXY. Node's fetch reads
-// it only with NODE_USE_ENV_PROXY=1, so the script runs itself again with that
-// set, and Chromium is given the same proxy (it trusts the proxy's authority
-// through the system's NSS store, which the cloud environment sets up).
-// `BOOTH_TEST_CHROMIUM` picks the browser, as in the test suites.
+// it only with NODE_USE_ENV_PROXY=1 (Node 22.21 and later), so the script runs
+// itself again with that set, and Chromium is given the same proxy (it trusts
+// the proxy's authority through the system's NSS store, which the cloud
+// environment sets up). `BOOTH_TEST_CHROMIUM` picks the browser, and the
+// launch flags are the test suites' own.
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
+import { ROLE_KEY, DEFAULT_ROLE } from "../src/roles.js";
 
-if (process.env.HTTPS_PROXY && process.env.NODE_USE_ENV_PROXY !== "1") {
-  const again = spawnSync(process.execPath, process.argv.slice(1), {
+const proxy = process.env.HTTPS_PROXY || process.env.https_proxy;
+if (proxy && process.env.NODE_USE_ENV_PROXY !== "1") {
+  const again = spawnSync(process.execPath, [...process.execArgv, ...process.argv.slice(1)], {
     stdio: "inherit",
     env: { ...process.env, NODE_USE_ENV_PROXY: "1", NODE_NO_WARNINGS: "1" },
   });
@@ -62,20 +66,22 @@ function git(...args) {
 const args = process.argv.slice(2);
 const given = {};
 for (let i = 0; i < args.length; i++) {
+  const value = args[i + 1];
   if (FLAGS.has(args[i])) given[args[i]] = true;
-  else if (OPTIONS.has(args[i]) && args[i + 1] !== undefined) given[args[i]] = args[++i];
+  else if (OPTIONS.has(args[i]) && value !== undefined && !value.startsWith("--")) given[args[i]] = args[++i];
+  else if (OPTIONS.has(args[i])) stop(3, `${args[i]} needs a value.`);
   else stop(3, `Unknown argument ${args[i]}. See the comment at the top of tools/verify-deploy.mjs.`);
 }
 const site = (given["--url"] ?? LIVE).replace(/\/+$/, "");
 const checkOnly = !!given["--check-only"];
 const timeoutMs = Number(given["--timeout"] ?? 15) * 60_000;
 if (!(timeoutMs > 0)) stop(3, "--timeout is a number of minutes.");
+if (given["--url"] && !given["--commit"] && !checkOnly) {
+  stop(3, "A preview serves its branch, not origin/main: give --commit with --url.");
+}
 
-let fetched = false;
-/** Brings origin/main up to date once, so a merge made on GitHub is known here. */
+/** Brings origin/main up to date, so merges made on GitHub are known here. */
 function fetchMain() {
-  if (fetched) return;
-  fetched = true;
   try {
     git("fetch", "--quiet", "origin", "main");
   } catch {
@@ -99,15 +105,25 @@ function expectedCommit() {
   }
 }
 
-/** Whether the live commit already contains the expected one: a later merge that deployed first. */
-function contains(live, expected) {
-  fetchMain();
+const known = (commit) => {
   try {
-    git("merge-base", "--is-ancestor", expected, live);
+    git("cat-file", "-e", `${commit}^{commit}`);
     return true;
   } catch {
     return false;
   }
+};
+
+/**
+ * Whether the live commit already contains the expected one — a later merge
+ * that deployed first. true or false, or null when this checkout cannot tell
+ * (a commit it has not got, even after fetching; a shallow clone).
+ */
+function contains(live, expected) {
+  if (!known(live) || !known(expected)) fetchMain();
+  if (!known(live) || !known(expected)) return null;
+  const run = spawnSync("git", ["-C", repo, "merge-base", "--is-ancestor", expected, live]);
+  return run.status === 0 ? true : run.status === 1 ? false : null;
 }
 
 async function get(url) {
@@ -131,6 +147,7 @@ async function waitForCommit(expected) {
   const started = Date.now();
   let said = "";
   let failedReads = 0;
+  let checked = new Map();
   for (;;) {
     let now;
     try {
@@ -148,7 +165,9 @@ async function waitForCommit(expected) {
       console.log(`live   ${site} serves ${now} (expected ${expected}) after ${seconds} s`);
       return now;
     }
-    if (/^[0-9a-f]{7}$/.test(now) && contains(now, expected)) {
+    const isCommit = /^[0-9a-f]{7}$/.test(now);
+    if (isCommit && !checked.has(now)) checked.set(now, contains(now, expected));
+    if (isCommit && checked.get(now) === true) {
       console.log(`live   ${site} serves ${now}, a later commit that contains ${expected}, after ${seconds} s`);
       return now;
     }
@@ -157,6 +176,9 @@ async function waitForCommit(expected) {
       said = now;
     }
     if (Date.now() - started + POLL_MS > timeoutMs) {
+      if (isCommit && checked.get(now) === null) {
+        stop(3, `FAIL   ${site} serves ${now}, and this checkout cannot tell whether it contains ${expected} (a shallow clone?): no verdict`);
+      }
       stop(2, `FAIL   ${expected} was not live after ${timeoutMs / 60_000} min; ${site} still serves ${now}`);
     }
     await sleep(POLL_MS);
@@ -165,17 +187,18 @@ async function waitForCommit(expected) {
 
 /**
  * Opens the site in Chromium. `code` is 0 when the app started, 1 when the
- * page loaded but did not start cleanly, 3 when the check itself could not run.
+ * page was reached but did not start cleanly, 3 when the check itself could
+ * not run (no browser, no network path to the page).
  */
 async function startsInBrowser(live) {
-  const cannot = (error) => ({ code: 3, line: `FAIL   the browser check could not run: ${String(error.message ?? error).split("\n")[0]}` });
-  let chromium, browser;
+  const cannot = (error) => ({ code: 3, line: `FAIL   the browser check could not run: ${String(error?.message ?? error).split("\n")[0]}` });
+  let browser;
   try {
-    ({ chromium } = await import("@playwright/test"));
+    const { chromium } = await import("@playwright/test");
     browser = await chromium.launch({
       headless: true,
       ...(process.env.BOOTH_TEST_CHROMIUM ? { executablePath: process.env.BOOTH_TEST_CHROMIUM } : {}),
-      ...(process.env.HTTPS_PROXY ? { proxy: { server: process.env.HTTPS_PROXY } } : {}),
+      ...(proxy ? { proxy: { server: proxy } } : {}),
       args: [
         "--no-sandbox",
         "--enable-unsafe-swiftshader",
@@ -203,47 +226,65 @@ async function startsInBrowser(live) {
     });
     // A fresh browser is a first visit, and the welcome is modal; the test
     // suites pass it the same way.
-    await page.addInitScript(() => localStorage.setItem("booth.role", "all"));
+    await page.addInitScript(([key, role]) => localStorage.setItem(key, role), [ROLE_KEY, DEFAULT_ROLE]);
     let response;
     try {
-      response = await page.goto(`${site}/`, { waitUntil: "load", timeout: 120_000 });
+      response = await page.goto(`${site}/`, { waitUntil: "domcontentloaded", timeout: 120_000 });
     } catch (error) {
-      return cannot(error);
+      // No network path from the browser is no verdict; a page the network
+      // reaches that never finishes arriving is a page that did not start.
+      if (/net::ERR_/.test(String(error?.message))) return cannot(error);
+      problems.push(`the page did not arrive within 120 s (${String(error?.message).split("\n")[0]})`);
     }
     if (response && response.status() >= 400) problems.push(`the page answered ${response.status()}`);
-    try {
-      await page.waitForSelector("#scene canvas", { state: "attached", timeout: 120_000 });
-    } catch {
-      problems.push("the 3D view never appeared (no canvas in #scene after 120 s)");
+    if (!problems.length) {
+      try {
+        await page.waitForSelector("#scene canvas", { state: "attached", timeout: 120_000 });
+      } catch {
+        problems.push("the 3D view never appeared (no canvas in #scene after 120 s)");
+      }
+      // Let the first frames draw and any late error surface.
+      await page.waitForTimeout(3000);
+      const seen = await page.evaluate(() => ({
+        commit: window.BOOTH_BUILD?.commit ?? null,
+        footer: document.querySelector("#build-stamp")?.textContent ?? "",
+        project: document.querySelector("#scene-title")?.textContent.trim() ?? "",
+      }));
+      if (live && seen.commit?.slice(0, 7) !== live) problems.push(`window.BOOTH_BUILD.commit is ${seen.commit}, not ${live}`);
+      if (seen.commit && !seen.footer.includes(seen.commit)) problems.push(`the footer does not name ${seen.commit}`);
+      if (!seen.project) problems.push("no project is open (the scene title is empty)");
+      if (!problems.length) {
+        const took = ((Date.now() - started) / 1000).toFixed(1);
+        return { code: 0, line: `start  ok: 3D canvas, footer ${seen.commit}, project "${seen.project}", no page errors (${took} s)` };
+      }
     }
-    // Let the first frames draw and any late error surface.
-    await page.waitForTimeout(3000);
-    const seen = await page.evaluate(() => ({
-      commit: window.BOOTH_BUILD?.commit ?? null,
-      footer: document.querySelector("#build-stamp")?.textContent ?? "",
-      project: document.querySelector("#scene-title")?.textContent.trim() ?? "",
-    }));
-    if (live && seen.commit?.slice(0, 7) !== live) problems.push(`window.BOOTH_BUILD.commit is ${seen.commit}, not ${live}`);
-    if (seen.commit && !seen.footer.includes(seen.commit)) problems.push(`the footer does not name ${seen.commit}`);
-    if (!seen.project) problems.push("no project is open (the scene title is empty)");
     const took = ((Date.now() - started) / 1000).toFixed(1);
-    if (problems.length) return { code: 1, line: `FAIL   the page did not start cleanly (${took} s):\n  ${problems.join("\n  ")}` };
-    return { code: 0, line: `start  ok: 3D canvas, footer ${seen.commit}, project "${seen.project}", no page errors (${took} s)` };
+    return { code: 1, line: `FAIL   the page did not start cleanly (${took} s):\n  ${problems.join("\n  ")}` };
+  } catch (error) {
+    // The browser itself failing mid-check (a crashed renderer, a closed
+    // target) is the tool's failure, not the deploy's.
+    return cannot(error);
   } finally {
-    await browser.close();
+    await browser.close().catch(() => {});
   }
 }
 
 const expected = expectedCommit();
 if (checkOnly) {
+  let now;
   try {
-    const now = await liveCommit();
-    const verdict = !expected ? "" : now === expected ? " (as expected)" : contains(now, expected) ? ` (contains ${expected})` : ` (expected ${expected})`;
-    console.log(`live   ${site} serves ${now}${verdict}`);
-    process.exit(expected && now !== expected && !contains(now, expected) ? 2 : 0);
+    now = await liveCommit();
   } catch (error) {
     stop(3, `FAIL   ${error.message}: no verdict on the deploy`);
   }
+  if (!expected) {
+    console.log(`live   ${site} serves ${now}`);
+    process.exit(0);
+  }
+  const has = now === expected || contains(now, expected);
+  const verdict = now === expected ? "as expected" : has === true ? `contains ${expected}` : has === null ? `cannot tell whether it contains ${expected}` : `expected ${expected}`;
+  console.log(`live   ${site} serves ${now} (${verdict})`);
+  process.exit(has === true ? 0 : has === null ? 3 : 2);
 }
 const live = await waitForCommit(expected);
 if (!given["--no-browser"]) {

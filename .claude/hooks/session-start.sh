@@ -12,8 +12,10 @@
 # Whatever happens, the session starts: a failed install is reported in one
 # line (it reaches the session as context) and the hook still exits 0. A cold
 # `npm ci` (wrangler, Playwright, Vite, three) can outlast the default hook
-# timeout, so .claude/settings.json gives it ten minutes; an install cut short
-# leaves no node_modules/.package-lock.json, so the next session runs it again.
+# timeout, so .claude/settings.json gives the hook ten minutes and the install
+# itself nine, which leaves the hook time to report a stalled install. One cut
+# short leaves no node_modules/.package-lock.json, so the next session runs it
+# again.
 set -uo pipefail
 
 if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
@@ -30,7 +32,7 @@ export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 notes=""
 note() { notes="${notes:+$notes; }$1"; }
 if [ ! -f node_modules/.package-lock.json ] || [ package-lock.json -nt node_modules/.package-lock.json ]; then
-  if npm ci --no-audit --no-fund --loglevel=error >/tmp/booth-studio-npm-ci.log 2>&1; then
+  if timeout 540 npm ci --no-audit --no-fund --loglevel=error >/tmp/booth-studio-npm-ci.log 2>&1; then
     note "npm ci done"
   else
     note "npm ci FAILED (log: /tmp/booth-studio-npm-ci.log), run it by hand before testing"
