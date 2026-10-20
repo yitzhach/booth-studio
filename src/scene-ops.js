@@ -24,8 +24,8 @@
 // piece by its centre; `rot` turns it clockwise, and a booth at rot 0 opens
 // toward the entrance. Booths are named by number, as the show numbers them.
 import {
-  BOX_LIMITS, FURNITURE, MAX_PANELS, MAX_PEDESTALS, applyVenue, boothPanels, boothPedestals, constrain,
-  constrainPanel, constrainPedestal, isPanelKey, panelKey, uid, validateProject, wallKeys, wallLabel, wallSpec,
+  BOX_LIMITS, FURNITURE, LIGHT_BAR_POWER_STEP, MAX_PANELS, MAX_PEDESTALS, applyVenue, boothPanels, boothPedestals, constrain,
+  constrainPanel, constrainPedestal, isArtShow, isPanelKey, lightBarSpec, panelKey, uid, validateProject, wallKeys, wallLabel, wallSpec,
 } from "./model.js";
 import { FOOTPRINTS, SHOWS, quickStart } from "./quickstart.js";
 import { HALL_LIMITS, STATUSES, boothOf, newHall } from "./hall.js";
@@ -37,6 +37,11 @@ import { OWN, deleteEffect, liveNumber, setMine, setOpen } from "./linked.js";
 import { HANG_LINE, hangAt, sameWall, spaceEvenly } from "./arrange.js";
 import { FORMAT, placementOf } from "./placement.js";
 import { MAX_HEIGHT, MAX_LIFT, MAX_PEOPLE, MIN_HEIGHT, MIN_LIFT, PERSON_KINDS, newPerson, personHeight, personName } from "./people-kinds.js";
+// The looks and "Make it beautiful" (Rev 1 part B), so the assistant can do
+// what those buttons do. Named apart from LOOKS below, which is which way a
+// figure faces.
+import { LOOKS as BOOTH_LOOKS, applyLook, currentLook, polish } from "./polish.js";
+import { resolvePreset } from "./presets.js";
 
 export { FORMAT };
 export const SCENE_OPS_VERSION = 1;
@@ -127,8 +132,9 @@ export function fieldsOf(scene) {
 
 /**
  * What is in a booth, small enough for a model to read: the booth, its walls,
- * each work and each piece of furniture with its id and position. Never the
- * images, lights or camera.
+ * each work and each piece of furniture with its id and position, and the
+ * lighting as levels (where each spotlight hangs is the app's to work out).
+ * Never the images or the camera.
  */
 export function describe(scene, images = []) {
   const p = projectOf(scene, images);
@@ -170,10 +176,35 @@ export function describe(scene, images = []) {
       ...(x.lift ? { lift: x.lift } : {}), ...(x.hidden ? { hidden: true } : {}),
     })),
     ...(b.showPeople === false ? { peopleShown: false } : {}),
+    lighting: lightingSummary(p),
     floor: p.hall ? floorSummary(p.hall) : null,
     limits: { furniture: MAX_PEDESTALS, freeStandingWalls: MAX_PANELS, people: MAX_PEOPLE, floorPieces: MAX_ITEMS, ops: MAX_OPS },
   };
 }
+
+/**
+ * The lighting as the Lighting tab shows it: the look it is in (currentLook:
+ * a look stays editable, so after a change by hand it is in none), the
+ * environment, the room light, each spotlight's temperature and brightness,
+ * and an art-show booth's light bar on the tab's own brightness scale.
+ */
+function lightingSummary(p) {
+  const bar = lightBarSpec(p.booth);
+  return {
+    look: currentLook(p),
+    environment: resolvePreset(p.booth.envPreset).label,
+    ambient: p.ambient,
+    spotlights: (p.lights || []).map((l) => ({ kelvin: l.kelvin, power: l.power, ...(l.on === false ? { hidden: true } : {}) })),
+    ...(isArtShow(p) ? { lightBar: { on: bar.on, kelvin: bar.kelvin, brightness: barBrightness(bar) } } : {}),
+  };
+}
+/** The light bar's brightness as its slider shows it (main.js range): 50 is the default, 100 twice that. */
+const barBrightness = (bar) => Number((bar.power / LIGHT_BAR_POWER_STEP).toFixed(2));
+// What a card adds when a photographed environment puts an art-show booth's
+// white hall out (polish.js applyEnvPreset).
+const HALL_OFF = "; the white hall goes, under the photographed sky";
+/** A value on a slider's own steps, so the tab shows what was set. */
+const onStep = (v, step) => Math.round(Math.round(v / step) * step * 100) / 100;
 
 /** Pieces listed one by one up to this many; past it, counts only. */
 export const FLOOR_LIST_MAX = 300;
@@ -341,6 +372,29 @@ export const OPS = [
       spacing: str("even (default) or keep", { enum: ["even", "keep"] }),
     },
     ["wall"],
+  ),
+  op(
+    "apply_look",
+    `Light and surround the booth in one of the app's named looks, all at once — ${Object.entries(BOOTH_LOOKS).map(([key, l]) => `${key} (${l.label}): ${l.blurb.replace(/\.$/, "")}`).join("; ")}. Sets the environment with its floor and horizon, the room light, and every spotlight's colour and power together; each stays editable by hand.`,
+    { look: str("One of the looks above", { enum: Object.keys(BOOTH_LOOKS) }) },
+    ["look"],
+  ),
+  op(
+    "make_beautiful",
+    `Make it beautiful, the app's one-tap polish: the look for the venue (fair under a canopy, gallery white otherwise) unless look is given; every wall of this booth hung evenly, each work centred on the ${HANG_LINE}″ line (a wall carrying a sign or label is left as it hangs); and, when work hangs on the booth's walls, the spotlights aimed at it, up to four, any beyond what is hung taken down (with nothing hung, the spotlights stay as they are). Use it when asked to make the booth look good or finished, or ready for a jury photograph.`,
+    { look: str("A look instead of the venue's, one of apply_look's", { enum: Object.keys(BOOTH_LOOKS) }) },
+  ),
+  op(
+    "set_lighting",
+    "Change the light by hand, as the Lighting tab's sliders do: the room light (ambient), every spotlight's temperature and brightness at once, and on an art-show booth the light bar over it (on or off, temperature, brightness). describe_booth lists the current values. For a whole look at once use apply_look; to aim the spotlights at the work, make_beautiful.",
+    {
+      ambient: num("Ambient illumination, the room light: 0–4 in steps of 0.05, 1.25 to start with; under 1 is a dim room", { minimum: 0, maximum: 4 }),
+      kelvin: num("Every spotlight's temperature in kelvin, in steps of 100: 2700 (warm, like a lamp) to 6500 (cool daylight); 4000 to start with", { minimum: 2700, maximum: 6500 }),
+      power: num("Every spotlight's brightness: 0–300 in steps of 5, 75 to start with", { minimum: 0, maximum: 300 }),
+      barOn: { type: "boolean", description: "An art-show booth's light bar: switch it on (true) or off (false)" },
+      barKelvin: num("An art-show booth's light bar: its temperature in kelvin, 2700–6500 in steps of 100; 3500 to start with", { minimum: 2700, maximum: 6500 }),
+      barBrightness: num("An art-show booth's light bar: its brightness on the Lighting tab's scale, 0–100; 50 to start with, 100 twice that", { minimum: 0, maximum: 100 }),
+    },
   ),
 
   // ---- the show floor
@@ -789,6 +843,52 @@ function run(p, o, i, refs) {
       const xs = o.spacing === "keep" ? {} : spaceEvenly(sameWall(works, works[0]), wall);
       p.art = p.art.map((a) => (ys[a.id] === undefined ? a : constrain(p, { ...a, y: ys[a.id], ...(xs[a.id] !== undefined ? { x: xs[a.id] } : {}) })));
       return `${wallLabel(p, key)}: ${works.length} work${works.length === 1 ? "" : "s"} centred ${inches(line)} off the floor${o.spacing === "keep" ? "" : ", evenly spaced"}`;
+    }
+    case "apply_look": {
+      const done = applyLook(p, o.look);
+      return `Light it as ${BOOTH_LOOKS[done.look].label}${done.hallOff ? HALL_OFF : ""}`;
+    }
+    case "make_beautiful": {
+      const done = polish(p, o.look ? { look: o.look } : {});
+      const hung = p.art.some((a) => (a.booth || null) === null);
+      const parts = [
+        BOOTH_LOOKS[done.look].label,
+        done.walls ? `${done.walls} wall${done.walls === 1 ? "" : "s"} hung evenly` : hung ? "no wall respaced (a wall carrying a sign or label is left as it hangs)" : "nothing hung to space",
+      ];
+      if (done.lights) parts.push(`${done.lights} spotlight${done.lights === 1 ? "" : "s"} aimed at the work`);
+      return `Make it beautiful: ${parts.join(", ")}${done.hallOff ? HALL_OFF : ""}`;
+    }
+    case "set_lighting": {
+      const said = [];
+      if (has(o, "ambient")) {
+        p.ambient = onStep(o.ambient, 0.05);
+        said.push(`ambient ${p.ambient}`);
+      }
+      if (has(o, "kelvin") || has(o, "power")) {
+        const lights = p.lights || [];
+        if (!lights.length) throw new SceneOpError(`Op ${i + 1} (set_lighting): this booth has no spotlights. make_beautiful adds them, aimed at the work hanging on its walls.`, i);
+        for (const l of lights) {
+          if (has(o, "kelvin")) l.kelvin = onStep(o.kelvin, 100);
+          if (has(o, "power")) l.power = onStep(o.power, 5);
+        }
+        const what = [has(o, "kelvin") ? `${lights[0].kelvin} K` : "", has(o, "power") ? `brightness ${lights[0].power}` : ""].filter(Boolean);
+        const n = lights.length, hidden = lights.filter((l) => l.on === false).length;
+        const which = n === 1 ? "the spotlight" : n === 2 ? "both spotlights" : `all ${n} spotlights`;
+        said.push(`${which}${hidden ? (n === 1 ? " (hidden)" : ` (${hidden} hidden)`) : ""} at ${what.join(", ")}`);
+      }
+      if (has(o, "barOn") || has(o, "barKelvin") || has(o, "barBrightness")) {
+        if (!isArtShow(p)) throw new SceneOpError(`Op ${i + 1} (set_lighting): this booth has no light bar; it comes with an art-show booth (set_booth venue artshow).`, i);
+        const bar = lightBarSpec(p.booth);
+        if (has(o, "barOn")) bar.on = o.barOn;
+        if (has(o, "barKelvin")) bar.kelvin = onStep(o.barKelvin, 100);
+        if (has(o, "barBrightness")) bar.power = Math.round(Math.round(o.barBrightness) * LIGHT_BAR_POWER_STEP * 100) / 100;
+        p.booth.lightBar = bar;
+        const what = [has(o, "barKelvin") ? `${bar.kelvin} K` : "", has(o, "barBrightness") ? `brightness ${barBrightness(bar)}` : ""].filter(Boolean);
+        const state = has(o, "barOn") ? (bar.on ? " switched on" : " switched off") : bar.on ? "" : " (switched off)";
+        said.push(`the light bar${state}${what.length ? ` at ${what.join(", ")}` : ""}`);
+      }
+      if (!said.length) throw new SceneOpError(`Op ${i + 1} (set_lighting): say what to change.`, i);
+      return `Light it: ${said.join("; ")}`;
     }
     case "start_floor":
     case "set_floor":

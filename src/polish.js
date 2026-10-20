@@ -15,9 +15,9 @@
 //
 // What a look *looks* like on screen is the owner's to judge; no session can.
 // The values are in this one table so that judgement is a one-line change.
-import { constrain, groundUpload, hallSpec, isArtShow, isShown, selectGround, uid, wallSpec } from "./model.js";
+import { constrain, groundKind, groundUpload, hallSpec, isArtShow, isShown, selectGround, uid, wallSpec } from "./model.js";
 import { hangAt, sameWall, spaceEvenly } from "./arrange.js";
-import { resolvePreset } from "./lighting.js";
+import { resolvePreset } from "./presets.js";
 
 /**
  * Each look: the environment preset it stands in (which brings its floor and
@@ -90,11 +90,33 @@ export function applyLook(p, key) {
   if (!look) return null;
   const { hallOff } = applyEnvPreset(p, look.envPreset);
   p.ambient = look.ambient;
-  for (const l of p.lights) {
+  for (const l of p.lights || []) {
     l.kelvin = look.kelvin;
     l.power = look.power;
   }
   return { look: key, hallOff };
+}
+
+/**
+ * The look a booth is in: the one whose every value it still holds — the
+ * environment with its floor and horizon (a photographed floor stays, as
+ * applyEnvPreset leaves it), an art-show hall a photographed sky put out,
+ * the room light, and every spotlight's colour and power — or null once any
+ * of them is changed by hand. The inverse of applyLook: a field a look gains
+ * there is checked here too. With no spotlights, a booth whose surroundings
+ * and room light match is in the look, because applying it would change
+ * nothing more.
+ */
+export function currentLook(p) {
+  const env = resolvePreset(p.booth.envPreset);
+  const lights = p.lights || [];
+  for (const [key, look] of Object.entries(LOOKS)) {
+    if (env.id !== look.envPreset || p.ambient !== look.ambient || (p.booth.horizon || "studio") !== env.horizon) continue;
+    if ((groundUpload(p) ? p.booth.groundPreset : groundKind(p)) !== env.ground) continue;
+    if (isArtShow(p) && env.hdri && hallSpec(p.booth).on) continue;
+    if (lights.every((l) => l.kelvin === look.kelvin && l.power === look.power)) return key;
+  }
+  return null;
 }
 
 // Signs and labels are placed beside a particular work, so a wall carrying
@@ -208,11 +230,12 @@ export function lightTargets(p) {
 export function aimLights(p) {
   let targets = lightTargets(p);
   if (!targets.length) return 0;
-  if (targets.length === 1 && p.lights.length >= 2) targets = [targets[0], targets[0]];
+  const have = p.lights || [];
+  if (targets.length === 1 && have.length >= 2) targets = [targets[0], targets[0]];
   const W = p.booth.width / 2 - 6,
     D = p.booth.depth / 2 - 6;
   const height = clamp((p.booth.height || 96) - 5, 60, 150);
-  const like = p.lights[0] || { power: 75, kelvin: 4000 };
+  const like = have[0] || { power: 75, kelvin: 4000 };
   const lights = targets.map((t, i) => {
     const [tx, ty, tz] = t.at;
     // Two lights on one work stand apart along the wall and cross on it.
@@ -220,7 +243,7 @@ export function aimLights(p) {
     const side = [t.n[2], 0, -t.n[0]];
     const x = clamp(tx + t.n[0] * STANDOFF + side[0] * along, -W, W);
     const z = clamp(tz + t.n[2] * STANDOFF + side[2] * along, -D, D);
-    const old = p.lights[i];
+    const old = have[i];
     return {
       ...(old || { id: uid(), power: like.power, kelvin: like.kelvin }),
       x: round(x),
@@ -242,9 +265,11 @@ export function aimLights(p) {
  * toast.
  */
 export function polish(p, { look = lookFor(p) } = {}) {
-  const applied = applyLook(p, look) || applyLook(p, lookFor(p));
   const walls = evenHang(p);
   const lights = aimLights(p);
+  // The look last, so a spotlight aimLights had to add takes its colour and
+  // power like the rest.
+  const applied = applyLook(p, look) || applyLook(p, lookFor(p));
   return { look: applied.look, hallOff: applied.hallOff, walls, lights };
 }
 

@@ -232,7 +232,7 @@ import { showPack } from "./showpack.js";
 // the app; text matching uses `foldText`.
 import { SHORTCUTS, dedupe, fold, fold as foldText, rankTools, shortcutOf } from "./toolsearch.js";
 import { PRO_FEATURES, TIERS, actionFeature, can, readTier, resolveTier, writeTier } from "./tier.js";
-import { HERO_CLIP, LOOKS, applyEnvPreset, applyLook, heroShots, polish } from "./polish.js";
+import { HERO_CLIP, LOOKS, applyEnvPreset, applyLook, currentLook, heroShots, polish } from "./polish.js";
 import { ROLES, hasMoreTabs, hiddenActions, needsWelcome, readRole, resolveRole, tabAfterSwitch, visibleTabs, writeRole } from "./roles.js";
 async function boot() {
   const icons = {
@@ -3772,7 +3772,9 @@ async function boot() {
   }
   // Looks and Make it beautiful (src/polish.js).
   function looksSection() {
-    return `<section><h3>Looks</h3>${btn("polish", "Make it beautiful", "sparkles", "primary wide")}<p class="muted">${e(POLISH_NOTE)}</p><div class="look-grid">${Object.entries(LOOKS).map(([k, l]) => `<button type="button" data-action="look-${k}" title="${e(l.blurb)}" aria-label="Look: ${e(l.label)}"><strong>${e(l.label)}</strong><span>${e(l.blurb)}</span></button>`).join("")}</div><p class="muted">A look sets the environment, the room light and the spotlights' colour and power together. Every value stays editable below.</p></section>`;
+    // The look the booth is in stays marked until a value of it is changed by hand.
+    const now = currentLook(p);
+    return `<section><h3>Looks</h3>${btn("polish", "Make it beautiful", "sparkles", "primary wide")}<p class="muted">${e(POLISH_NOTE)}</p><div class="look-grid">${Object.entries(LOOKS).map(([k, l]) => `<button type="button" data-action="look-${k}" title="${e(l.blurb)}" aria-label="Look: ${e(l.label)}${k === now ? " (this booth's look now)" : ""}"${k === now ? ' class="active" aria-current="true"' : ""}><strong>${e(l.label)}</strong><span>${e(l.blurb)}</span></button>`).join("")}</div><p class="muted">A look sets the environment, the room light and the spotlights' colour and power together. Every value stays editable below.</p></section>`;
   }
   /** Export's first section: polish, then the hero set in one press. */
   function heroSection() {

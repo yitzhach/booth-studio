@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { applyVenue, blankProject, demoProject, uid, validateProject } from "../src/model.js";
 import { ENV_PRESETS } from "../src/lighting.js";
 import { HANG_LINE } from "../src/arrange.js";
-import { LOOKS, aimLights, applyEnvPreset, applyLook, evenHang, lightTargets, lookFor, polish } from "../src/polish.js";
+import { LOOKS, aimLights, applyEnvPreset, applyLook, currentLook, evenHang, lightTargets, lookFor, polish } from "../src/polish.js";
 
 const work = (wall, x, y, w, h, extra = {}) => ({ id: uid(), asset: null, title: "w", wall, x, y, w, h, thickness: 1.5, offset: 0.75, ...extra });
 
@@ -146,4 +146,72 @@ test("hero shots: front, three-quarter, aisle, and a close-up of the fullest wal
   for (const s of shots) for (const v of [...s.pose.position, ...s.pose.target]) assert.ok(Number.isFinite(v) && Math.abs(v) < 1000);
   assert.equal(heroShots(blankProject()).length, 3, "no work, no close-up");
   assert.equal(HERO_CLIP.move, "orbit");
+});
+
+test("currentLook is applyLook read back: named while every value holds, null once one is changed by hand", () => {
+  assert.equal(currentLook(demoProject()), null, "a new booth is in no look");
+  for (const key of Object.keys(LOOKS)) {
+    const p = demoProject();
+    applyLook(p, key);
+    assert.equal(currentLook(p), key);
+  }
+  const changed = (edit) => {
+    const p = demoProject();
+    applyLook(p, "gallery");
+    edit(p);
+    return currentLook(p);
+  };
+  assert.equal(changed((p) => (p.booth.horizon = "open")), null, "the horizon");
+  assert.equal(changed((p) => (p.booth.ground = "grass")), null, "the floor");
+  assert.equal(changed((p) => (p.ambient = 1)), null, "the room light");
+  assert.equal(changed((p) => (p.lights[1].kelvin = 3000)), null, "one spotlight");
+  // Nothing to colour: the surroundings and room light are the look.
+  assert.equal(changed((p) => (p.lights = [])), "gallery");
+  // An art-show booth under a photographed sky is in it only while its white hall stays out.
+  const show = applyVenue(blankProject(), "artshow");
+  applyLook(show, "fair");
+  assert.equal(currentLook(show), "fair");
+  show.booth.hall = { ...show.booth.hall, on: true };
+  assert.equal(currentLook(show), null);
+});
+
+test("Make it beautiful leaves the booth in its look, even where it had to add the spotlights", () => {
+  const p = demoProject();
+  p.lights = [];
+  const done = polish(p);
+  assert.ok(done.lights >= 1, "spotlights added for the work");
+  assert.ok(p.lights.every((l) => l.kelvin === LOOKS[done.look].kelvin && l.power === LOOKS[done.look].power), "in the look's colour and power");
+  assert.equal(currentLook(p), done.look);
+});
+
+test("currentLook reads an older booth with no horizon as the studio horizon it is drawn with", () => {
+  const p = demoProject();
+  applyLook(p, "gallery");
+  delete p.booth.horizon;
+  assert.equal(currentLook(p), "gallery");
+});
+
+// A field a look gains in applyLook must be read back in currentLook. This is
+// the tripwire: every value applyLook writes, found by comparing booths before
+// and after each look, must be one currentLook already reads. A new one fails
+// here until currentLook reads it too and it is added to the list.
+test("currentLook reads back every value applyLook writes", () => {
+  const READ = ["ambient", "booth.envPreset", "booth.ground", "booth.groundPreset", "booth.hall.on", "booth.horizon", "lights.*.kelvin", "lights.*.power"];
+  const leaves = (o, at = []) =>
+    o && typeof o === "object" ? Object.entries(o).flatMap(([k, v]) => leaves(v, [...at, k])) : [[at, o]];
+  const get = (o, path) => path.reduce((x, k) => x?.[k], o);
+  const written = new Set();
+  for (const key of Object.keys(LOOKS)) {
+    for (const start of [demoProject(), applyVenue(blankProject(), "artshow")]) {
+      // Start from values no look uses, so every write shows as a change.
+      start.ambient = 3;
+      start.booth.horizon = "urban";
+      for (const l of start.lights) Object.assign(l, { kelvin: 6500, power: 1 });
+      const before = JSON.parse(JSON.stringify(start));
+      applyLook(start, key);
+      for (const [path, v] of leaves(JSON.parse(JSON.stringify(start))))
+        if (get(before, path) !== v) written.add(path.map((k) => (/^\d+$/.test(k) ? "*" : k)).join("."));
+    }
+  }
+  assert.deepEqual([...written].sort(), READ);
 });
