@@ -1,0 +1,17 @@
+// The page's own modules (ROADMAP.md 1.4, second half): everything in src/
+// that tsconfig.json does not already check, against a browser's globals
+// rather than a Worker's. `npm run typecheck` runs both. Not checked yet:
+// src/main.js and src/scene.js, whose hundreds of findings wait for their
+// split (ROADMAP 1.2 and 1.3), and src/studio.js, which imports the vendored
+// SDK — generated in Art-Talk-Back with no types of its own, so its
+// JavaScript would be checked here, and it is never edited by hand.
+// Same rules as tsconfig.json otherwise: JSDoc as the types, not strict.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["es2022", "dom", "dom.iterable"]
+  },
+  "files": [],
+  "include": ["src/**/*.js", "src/globals.d.ts"],
+  "exclude": ["src/vendor/**", "src/main.js", "src/scene.js", "src/studio.js"]
+}

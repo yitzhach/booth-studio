@@ -233,6 +233,11 @@ export class SurfaceTextures {
   //             must not be tinted, but a wall the user has picked a colour for
   //             must keep it and take only the weave.
   //   strength  scales the relief, 0 to 1, for a "how much texture" control.
+  /**
+   * @param {any} mesh
+   * @param {any} set
+   * @param {{ planeMetres?: number, metres?: number[], consumer?: string, slots?: string[], keepColor?: boolean, strength?: number }} [options]
+   */
   applyTo(mesh, set, {
     planeMetres = GROUND_METRES,
     metres,

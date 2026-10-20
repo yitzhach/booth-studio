@@ -71,7 +71,7 @@ because this app's `main` talks to production `studio-api`. Each PR says its ord
 ```sh
 npm ci
 npm run lint             # ESLint (eslint.config.js)
-npm run typecheck        # TypeScript over what bundle:scene ships (tsconfig.json)
+npm run typecheck        # TypeScript: what bundle:scene ships (tsconfig.json), the page's modules (tsconfig.app.json)
 npm test                 # node suites
 npm run build
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium npm run test:view

@@ -235,7 +235,11 @@ more small pull requests, each green on every suite before it merges.
       breaks the platform as well as the app. Then the other pure modules.
       *(2026-10-20: the first half is in — `npm run typecheck`
       (`tsconfig.json`) checks `src/scene-ops.js` and everything it imports,
-      against a Worker's globals, in CI. Left: the other pure modules.)*
+      against a Worker's globals, in CI. 2026-10-21: and `tsconfig.app.json`
+      every other module in `src/` against a browser's, but three: `main.js`
+      and `scene.js` wait for their split (1.2, 1.3) — 493 findings between
+      them on the day — and `studio.js` imports the vendored SDK, which has
+      no types of its own. Left: those three.)*
 - [x] **1.5 A linter in CI.** ESLint's flat config with its recommended
       rules plus `no-undef` and `no-unused-vars`. Fix what it finds in the
       same pull request, or turn the rule off with a reason.
