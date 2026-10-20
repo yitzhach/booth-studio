@@ -386,11 +386,12 @@ export const OPS = [
   ),
   op(
     "set_lighting",
-    "Change the light by hand, as the Lighting tab's sliders do: the room light (ambient), every spotlight's temperature and brightness at once, and on an art-show booth the light bar over it. describe_booth lists the current values. For a whole look at once use apply_look; to aim the spotlights at the work, make_beautiful.",
+    "Change the light by hand, as the Lighting tab's sliders do: the room light (ambient), every spotlight's temperature and brightness at once, and on an art-show booth the light bar over it (on or off, temperature, brightness). describe_booth lists the current values. For a whole look at once use apply_look; to aim the spotlights at the work, make_beautiful.",
     {
       ambient: num("Ambient illumination, the room light: 0–4 in steps of 0.05, 1.25 to start with; under 1 is a dim room", { minimum: 0, maximum: 4 }),
       kelvin: num("Every spotlight's temperature in kelvin, in steps of 100: 2700 (warm, like a lamp) to 6500 (cool daylight); 4000 to start with", { minimum: 2700, maximum: 6500 }),
       power: num("Every spotlight's brightness: 0–300 in steps of 5, 75 to start with", { minimum: 0, maximum: 300 }),
+      barOn: { type: "boolean", description: "An art-show booth's light bar: switch it on (true) or off (false)" },
       barKelvin: num("An art-show booth's light bar: its temperature in kelvin, 2700–6500 in steps of 100; 3500 to start with", { minimum: 2700, maximum: 6500 }),
       barBrightness: num("An art-show booth's light bar: its brightness on the Lighting tab's scale, 0–100; 50 to start with, 100 twice that", { minimum: 0, maximum: 100 }),
     },
@@ -849,7 +850,11 @@ function run(p, o, i, refs) {
     }
     case "make_beautiful": {
       const done = polish(p, o.look ? { look: o.look } : {});
-      const parts = [BOOTH_LOOKS[done.look].label, done.walls ? `${done.walls} wall${done.walls === 1 ? "" : "s"} hung evenly` : "nothing hung to space"];
+      const hung = p.art.some((a) => (a.booth || null) === null);
+      const parts = [
+        BOOTH_LOOKS[done.look].label,
+        done.walls ? `${done.walls} wall${done.walls === 1 ? "" : "s"} hung evenly` : hung ? "no wall respaced (a wall carrying a sign or label is left as it hangs)" : "nothing hung to space",
+      ];
       if (done.lights) parts.push(`${done.lights} spotlight${done.lights === 1 ? "" : "s"} aimed at the work`);
       return `Make it beautiful: ${parts.join(", ")}${done.hallOff ? HALL_OFF : ""}`;
     }
@@ -871,14 +876,16 @@ function run(p, o, i, refs) {
         const which = n === 1 ? "the spotlight" : n === 2 ? "both spotlights" : `all ${n} spotlights`;
         said.push(`${which}${hidden ? (n === 1 ? " (hidden)" : ` (${hidden} hidden)`) : ""} at ${what.join(", ")}`);
       }
-      if (has(o, "barKelvin") || has(o, "barBrightness")) {
+      if (has(o, "barOn") || has(o, "barKelvin") || has(o, "barBrightness")) {
         if (!isArtShow(p)) throw new SceneOpError(`Op ${i + 1} (set_lighting): this booth has no light bar; it comes with an art-show booth (set_booth venue artshow).`, i);
         const bar = lightBarSpec(p.booth);
+        if (has(o, "barOn")) bar.on = o.barOn;
         if (has(o, "barKelvin")) bar.kelvin = onStep(o.barKelvin, 100);
         if (has(o, "barBrightness")) bar.power = Math.round(Math.round(o.barBrightness) * LIGHT_BAR_POWER_STEP * 100) / 100;
         p.booth.lightBar = bar;
         const what = [has(o, "barKelvin") ? `${bar.kelvin} K` : "", has(o, "barBrightness") ? `brightness ${barBrightness(bar)}` : ""].filter(Boolean);
-        said.push(`the light bar${bar.on ? "" : " (switched off)"} at ${what.join(", ")}`);
+        const state = has(o, "barOn") ? (bar.on ? " switched on" : " switched off") : bar.on ? "" : " (switched off)";
+        said.push(`the light bar${state}${what.length ? ` at ${what.join(", ")}` : ""}`);
       }
       if (!said.length) throw new SceneOpError(`Op ${i + 1} (set_lighting): say what to change.`, i);
       return `Light it: ${said.join("; ")}`;

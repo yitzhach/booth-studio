@@ -90,7 +90,7 @@ export function applyLook(p, key) {
   if (!look) return null;
   const { hallOff } = applyEnvPreset(p, look.envPreset);
   p.ambient = look.ambient;
-  for (const l of p.lights) {
+  for (const l of p.lights || []) {
     l.kelvin = look.kelvin;
     l.power = look.power;
   }
@@ -230,11 +230,12 @@ export function lightTargets(p) {
 export function aimLights(p) {
   let targets = lightTargets(p);
   if (!targets.length) return 0;
-  if (targets.length === 1 && p.lights.length >= 2) targets = [targets[0], targets[0]];
+  const have = p.lights || [];
+  if (targets.length === 1 && have.length >= 2) targets = [targets[0], targets[0]];
   const W = p.booth.width / 2 - 6,
     D = p.booth.depth / 2 - 6;
   const height = clamp((p.booth.height || 96) - 5, 60, 150);
-  const like = p.lights[0] || { power: 75, kelvin: 4000 };
+  const like = have[0] || { power: 75, kelvin: 4000 };
   const lights = targets.map((t, i) => {
     const [tx, ty, tz] = t.at;
     // Two lights on one work stand apart along the wall and cross on it.
@@ -242,7 +243,7 @@ export function aimLights(p) {
     const side = [t.n[2], 0, -t.n[0]];
     const x = clamp(tx + t.n[0] * STANDOFF + side[0] * along, -W, W);
     const z = clamp(tz + t.n[2] * STANDOFF + side[2] * along, -D, D);
-    const old = p.lights[i];
+    const old = have[i];
     return {
       ...(old || { id: uid(), power: like.power, kelvin: like.kelvin }),
       x: round(x),

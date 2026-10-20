@@ -405,6 +405,12 @@ test("a look and Make it beautiful, by name: what the Lighting tab's buttons do,
   const empty = sceneOf(blankProject());
   const { lines: l4 } = applyOps(empty, [{ op: "make_beautiful" }], []);
   assert.equal(l4[0], "Make it beautiful: Gallery white, nothing hung to space");
+  // Work that hangs beside a label is left as it hangs, and the card says why rather than "nothing hung".
+  const labelled = { ...scene, art: scene.art.map((a, n) => (n % 2 ? a : { ...a, kind: "label" })) };
+  assert.match(applyOps(labelled, [{ op: "make_beautiful" }], images).lines[0], /^Make it beautiful: Gallery white, no wall respaced \(a wall carrying a sign or label is left as it hangs\), \d spotlights? aimed at the work$/);
+  // A scene that came without its lights is refused in words, never a crash.
+  const { lights: _l, ...unlit } = scene;
+  assert.throws(() => applyOps(unlit, [{ op: "apply_look", look: "gallery" }], images), SceneOpError);
 });
 
 test("the lighting by hand: described as the Lighting tab shows it, set as its sliders set it", () => {
@@ -451,6 +457,12 @@ test("the lighting by hand: described as the Lighting tab shows it, set as its s
   assert.deepEqual([s4.booth.lightBar.kelvin, s4.booth.lightBar.power], [3000, 6.4]);
   assert.deepEqual(describe(s4, images).lighting.lightBar, { on: true, kelvin: 3000, brightness: 40 });
   assert.doesNotThrow(() => opens(s4, p));
+  // Switched off and on, as the tab's checkbox does; a change to a bar that stays off says so.
+  const { scene: off, lines: l6 } = applyOps(s4, [{ op: "set_lighting", barOn: false }], images);
+  assert.equal(l6[0], "Light it: the light bar switched off");
+  assert.equal(describe(off, images).lighting.lightBar.on, false);
+  assert.equal(applyOps(off, [{ op: "set_lighting", barKelvin: 2700 }], images).lines[0], "Light it: the light bar (switched off) at 2700 K");
+  assert.equal(applyOps(off, [{ op: "set_lighting", barOn: true, barBrightness: 60 }], images).lines[0], "Light it: the light bar switched on at brightness 60");
   assert.equal(describe(scene, images).lighting.lightBar, undefined, "an outdoor booth has no bar");
   assert.throws(() => applyOps(scene, [{ op: "set_lighting", barKelvin: 3000 }], images), /no light bar; it comes with an art-show booth/);
 
