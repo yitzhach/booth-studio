@@ -2374,6 +2374,20 @@ section.sub-hidden {display:none;}
   .workspace-pill {width:36px;height:36px;padding:0;border-radius:50%;}
   .workspace-pill span {display:none;}
 }
+
+/* Between a phone and a wide laptop (701–1200 px, every iPad) the inspector
+   column is 268–290 px, too narrow for eight labelled tabs, and a tab would
+   not shrink below its label: the strip pushed the whole page wider and the
+   app scrolled sideways, with Export half off the screen. The strip now
+   scrolls inside the inspector, as it does on a phone, and keepTabInSight()
+   in main.js keeps the open tab in view. */
+@media (min-width:701px) and (max-width:1200px) {
+  .inspector {min-width:0;}
+  .inspector-tabs {overflow-x:auto;overflow-y:hidden;scrollbar-width:none;padding:0 4px;}
+  .inspector-tabs::-webkit-scrollbar {display:none;}
+  .inspector-tabs button {flex:0 0 auto;min-width:56px;padding:8px 6px;}
+  .inspector-tabs button span {white-space:nowrap;}
+}
 @media (max-width:700px) {
   .workspace-pill {display:none;}
 }

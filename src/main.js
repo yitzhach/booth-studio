@@ -3337,11 +3337,27 @@ async function boot() {
       label.parentElement.title = `Workspace: ${ROLES[resolveRole(role)].label} · which tabs and tools to show`;
     }
   }
+  /**
+   * Where the tab strip scrolls sideways (a phone, a tablet), the open tab is
+   * kept in sight when something other than a tap opens it: tool search, the
+   * assistant's "take me to", the toolbar's Export. Only the strip scrolls;
+   * scrollIntoView would move the page or the sheet as well.
+   */
+  function keepTabInSight() {
+    const strip = document.querySelector(".inspector-tabs");
+    const on = strip?.querySelector(`[data-tab="${tab}"]`);
+    if (!on || strip.scrollWidth <= strip.clientWidth) return;
+    const s = strip.getBoundingClientRect();
+    const b = on.getBoundingClientRect();
+    if (b.left < s.left) strip.scrollLeft -= s.left - b.left;
+    else if (b.right > s.right) strip.scrollLeft += b.right - s.right;
+  }
   function renderInspector() {
     document
       .querySelectorAll("[data-tab]")
       .forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
     applyRole();
+    keepTabInSight();
     const root = document.querySelector("#inspector-content");
     root.innerHTML = inspectorHTML();
     applySectionTabs(root);

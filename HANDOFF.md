@@ -2744,17 +2744,21 @@ the picker became one list.
 npm ci
 npm test                 # 467 Node tests
 npm run build
-npm run test:view        # 40 suites (tools2, hub, share, roles and polish included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
+npm run test:view        # 42 suites (tools2, hub, share, roles, polish and wall-assets included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
 npm run test:browser     # 25 end-to-end checks
 STUDIO_PLATFORM=../Art-Talk-Back BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/two-devices.mjs   # 50 checks; after npm run build (see Studio platform)
-BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
 node tools/verify-deploy.mjs   # after a merge: waits for production to serve the commit, then checks the page starts
 ```
 
-**`tests/wall-assets.mjs` fails at line 120 (sideways scroll at 820 px on
-the Artwork tab), and did before the sixth round** — checked on `2f84454`,
-the commit before it. Not caused by the show floor; not yet looked into.
+**`tests/view-wall-assets.mjs` (was `tests/wall-assets.mjs`) is green and
+in `npm run test:view` since 2026-10-20.** It had failed at line 120 since
+the sixth round: from 701 to 1200 px — every iPad — the inspector's eight
+tabs pushed the page wider and the app scrolled sideways, Export half off the
+screen (`src/style.css` → "Between a phone and a wide laptop", and
+`keepTabInSight` in `src/main.js`). Nobody saw it because it was never in
+CI. In CI the view suites run as four shards at once (`views` in
+`.github/workflows/ci.yml`); `booth` is green only when every job is.
 
 The sandbox has WebGL via swiftshader, but the pinned Playwright expects a
 newer Chromium than is installed, so pass the browser explicitly:

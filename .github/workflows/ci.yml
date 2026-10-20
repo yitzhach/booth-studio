@@ -4,12 +4,15 @@ name: CI
 # through Cloudflare's Git integration (CLAUDE.md), and staging through
 # Art-Talk-Back's "Deploy staging" workflow.
 #
-# The node suites, the build, the vendored SDK against the platform, the
-# two-device run against a local studio-api from yitzhach/Art-Talk-Back (its
-# default branch, or its branch of the same name: Art-Talk-Back D-056), then
-# the view suites and the end-to-end checks CLAUDE.md lists. The two-device
-# step points the browser at a dead proxy: it must pass with no internet, the
-# way a show floor often is; loopback bypasses it.
+# Three jobs. `core`: the node suites, the build, the vendored SDK against the
+# platform, the two-device run against a local studio-api from
+# yitzhach/Art-Talk-Back (its default branch, or its branch of the same name:
+# Art-Talk-Back D-056), and the end-to-end checks. The two-device step points
+# the browser at a dead proxy: it must pass with no internet, the way a show
+# floor often is; loopback bypasses it. `views`: the view suites, in four
+# shards on four runners at once — run one after another they took 40 of the
+# 49 minutes a pull request waited. `booth`: green only when both are, and the
+# name branch protection requires, so a red shard still blocks a merge.
 on:
   pull_request:
   push:
@@ -19,10 +22,16 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same pull request makes the run for the older one
+# pointless: cancel it. Pushes to main always run to the end.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  booth:
+  core:
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       # A change that spans both repos sits on a branch of the same name in each
@@ -80,11 +89,35 @@ jobs:
       - name: Two devices again, at the platform's pinned compatibility date (its D-025)
         env: { HTTPS_PROXY: "http://127.0.0.1:9", HTTP_PROXY: "http://127.0.0.1:9", NO_PROXY: "127.0.0.1,localhost", STUDIO_PLATFORM: .studio-platform, BOOTH_COMPAT_DATE: "2026-08-15" }
         run: node tests/two-devices.mjs
-      # The same suites as `npm run test:view`, read from package.json, each run
-      # to the end so one CI run reports every failure, not only the first.
-      - name: View suites
+      - name: End-to-end checks
+        run: npm run test:browser
+
+  views:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      # Every shard runs to the end, so one CI run reports every failure.
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The same Chromium as `core`, for the same reason (see there).
+      - name: Chromium build 1194 (the sandbox's)
         run: |
-          suites=$(node -p "require('./package.json').scripts['test:view'].match(/tests\/view-[\w-]+\.mjs/g).join(' ')")
+          npx -y playwright@1.56.1 install --with-deps chromium
+          echo "BOOTH_TEST_CHROMIUM=$HOME/.cache/ms-playwright/chromium-1194/chrome-linux/chrome" >> "$GITHUB_ENV"
+      # The suites of `npm run test:view`, read from package.json; this shard
+      # takes every fourth, so a suite added there is picked up with no change
+      # here. Each runs to the end, and the step names every one that failed.
+      - name: View suites, shard ${{ matrix.shard }} of 4
+        run: |
+          suites=$(node -p "require('./package.json').scripts['test:view'].match(/tests\/view-[\w-]+\.mjs/g).filter((_, i) => i % 4 === ${{ matrix.shard }}).join(' ')")
           failed=""
           for s in $suites; do
             echo "::group::$s"
@@ -92,5 +125,14 @@ jobs:
             echo "::endgroup::"
           done
           if [ -n "$failed" ]; then echo "::error::View suites failed:$failed"; exit 1; fi
-      - name: End-to-end checks
-        run: npm run test:browser
+
+  booth:
+    needs: [core, views]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job passed
+        run: |
+          echo "core: ${{ needs.core.result }} · views: ${{ needs.views.result }}"
+          test "${{ needs.core.result }}" = success
+          test "${{ needs.views.result }}" = success

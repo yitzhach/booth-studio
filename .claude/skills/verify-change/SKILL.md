@@ -39,9 +39,6 @@ subagent's report of success is not evidence; check the diff and run the suite.
   it in a snapshot: HANDOFF.md → Testing has the `git worktree` recipe.
 - `BOOTH_TEST_CHROMIUM` is set by the session-start hook; if it is empty,
   prefix the command with `BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium`.
-- `tests/wall-assets.mjs` fails at line 120 and did before the show floor
-  (HANDOFF.md → Testing). Report it as the known failure, not as yours, unless
-  your change touched it.
 
 ## A bug fix proves itself twice
 

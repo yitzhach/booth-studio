@@ -7,6 +7,7 @@ const browser=await chromium.launch({headless:true,...(process.env.BOOTH_TEST_CH
   args:['--no-sandbox','--enable-unsafe-swiftshader','--use-angle=swiftshader','--use-gl=angle','--in-process-gpu','--single-process']});
 try {
  const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
+ await page.addInitScript(() => localStorage.setItem('booth.role', 'all')); // past the first visit's welcome (src/roles.js)
  page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://127.0.0.1:5187');await page.waitForFunction(()=>!!window.__booth?.scene);
  await page.locator('[data-tab="layout"]').click();
@@ -115,11 +116,23 @@ try {
  assert.equal(await page.evaluate(()=>window.__booth.project.booth.neighborGap),36);
  // Editor handles never leak into PNG exports.
  await page.evaluate(async()=>{const b=await window.__booth.scene.export(2048);if(!b.size)throw Error('Empty export');});
- for(const width of [820,390]){
+ // No sideways page scroll at any width: from 701 to 1200 px (every iPad)
+ // the inspector's eight tabs once pushed the page wider, Export half off
+ // the screen. The strip scrolls inside the inspector instead, and a tab
+ // opened by something other than a tap is scrolled into sight.
+ for(const width of [1024,820,768,390]){
    await page.setViewportSize({width,height:1000});await page.locator('[data-tab="art"]').click();
-   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`no sideways scroll at ${width} px`);
    await page.getByRole('button',{name:'Zoom in',exact:true}).click();
    await page.getByRole('button',{name:'Zoom out',exact:true}).click();
+   // Opened the way tool search and the toolbar's Export open it: not by a
+   // tap on the tab, which may be scrolled out of the strip.
+   await page.evaluate(()=>document.querySelector('.inspector-tabs [data-tab="export"]').click());
+   assert.ok(await page.evaluate(()=>{
+     const strip=document.querySelector('.inspector-tabs').getBoundingClientRect();
+     const b=document.querySelector('.inspector-tabs [data-tab="export"]').getBoundingClientRect();
+     return b.left>=strip.left-1&&b.right<=strip.right+1&&b.right<=innerWidth+1;
+   }),`Export tab in sight at ${width} px`);
  }
  assert.deepEqual(errors,[]);
  console.log('PASS neighboring booths, reusable original copies, exterior signs, labels, select/scale, persistence, export and responsive zoom.');
