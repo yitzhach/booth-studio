@@ -13,6 +13,22 @@ Extend it; do not rebuild it.
   the rules that bite. It does not need to be asked for again. That rule is
   about chat only: code comments, commit messages and this file stay in full
   prose, because a cold session has nothing else to read.
+- **2026-10-20: Keep your work says how safe the work is (ROADMAP 1.8).**
+  Signed out, a booth lives only in this browser's IndexedDB, which a
+  browser may clear by itself (low disk; Safari after a week without a
+  visit). Export → Keep your work now says whether this browser keeps this
+  device's copy (`navigator.storage.persisted()`), the space it uses
+  (`estimate()`), when a backup was last downloaded here, and, signed in,
+  that the studio keeps it too. Where the browser may clear it, **Ask the
+  browser to keep it** calls `persist()` — only from that button, because
+  Firefox answers with a permission prompt. A booth holding the artist's own
+  images, never backed up or not for 30 days, gets one reminder toast at
+  start (12 s), at most once a month per project, never signed in, never
+  over the welcome. What is remembered is per browser and per project
+  (`localStorage["booth.keepSafe"]`), never in a project or a backup.
+  `src/keep-safe.js` is pure (`tests/keep-safe.test.js`);
+  `tests/view-keep-safe.mjs` stands in for `navigator.storage`. Whether
+  Safari on an iPad grants persistence is for a real iPad: HANDOFF → Next.
 - **2026-10-20: the assistant can apply a look and Make it beautiful
   (Art-Talk-Back D-081).** Two booth ops in `src/scene-ops.js`:
   `apply_look` (gallery, hall, fair, evening — `LOOKS` in `src/polish.js`)

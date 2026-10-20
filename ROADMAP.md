@@ -245,10 +245,13 @@ more small pull requests, each green on every suite before it merges.
       home-screen apps are counted separately — an artist who doesn't open
       the app between shows could lose their booth. Test this on a real
       iPad; no session can.
-- [ ] **1.8 Show how safe the work is.** In Export → Keep your work: whether
+- [x] **1.8 Show how safe the work is.** In Export → Keep your work: whether
       storage is persistent, how much is used, when the last backup was
       downloaded, and whether the studio has this project. Remind the artist
       to back up when they have not for 30 days (a toast, never a block).
+      *(2026-10-20: built — `src/keep-safe.js`. The persist() request from
+      1.7 is the "Ask the browser to keep it" button there, never automatic,
+      because Firefox answers it with a permission prompt.)*
 - [ ] **1.9 Errors you can see.** Catch `error` and `unhandledrejection` into
       a small ring buffer; Help → Report a problem copies the build
       (`window.BOOTH_BUILD`), browser, `window.BOOTH_ASSETS` and the last
