@@ -65,6 +65,12 @@ window.BOOTH_BUILD = BUILD;
 // the page before there were a report to copy.
 addEventListener("error", (ev) => recordError(errorEntry(ev)));
 addEventListener("unhandledrejection", (ev) => recordError(errorEntry(ev)));
+// A chunk loaded on demand that would not load (Vite's vite:preloadError),
+// from the first line too: boot sets what the page says (chunkFailed), and
+// until when that notice stays over the error toasts that follow from it.
+let chunkFailed = null;
+let chunkNoticeUntil = 0;
+addEventListener("vite:preloadError", () => chunkFailed?.());
 import {
   createIcons,
   Shapes,
@@ -870,6 +876,9 @@ async function boot() {
     }, 350);
   }
   function toast(message, error = false, ms = 6000) {
+    // The notice for a chunk that would not load outranks the errors that
+    // follow from the same failure, for its 15 seconds (chunkFailed).
+    if (error && Date.now() < chunkNoticeUntil) return;
     const t = document.querySelector("#toast");
     t.textContent = message;
     t.className = "show" + (error ? " error" : "");
@@ -6996,24 +7005,40 @@ async function boot() {
   // Its code and the SDK load only when this browser is signed in, or when the
   // artist opens Studio account; signed out, nothing here runs and /v1 is
   // never called.
-  // A tab left open across a deploy asks for the old names of the chunks
-  // loaded on demand (the studio, the assistant), and the Worker answers a
-  // missing file with the page itself, so the import fails. Say what to do
-  // rather than fail in silence; the error still reaches the problem report.
-  addEventListener("vite:preloadError", () =>
-    toast("Booth Studio was updated while this tab was open, so that part couldn't load. Reload the page: your work is saved on this device.", true, 15000),
-  );
+  // A chunk loaded on demand that would not load. Online, it is nearly always
+  // a tab left open across a deploy: it asks for the old names of the
+  // chunks (the studio, the assistant), and the Worker answers a missing
+  // file with the page itself. Offline, it is a part never loaded here yet.
+  // Either way say what to do, and keep saying it for its 15 seconds over the
+  // error toasts that follow from the same failure (toast); the error itself
+  // still reaches the problem report.
+  chunkFailed = () => {
+    toast(
+      navigator.onLine === false
+        ? "That part of Booth Studio hasn't been loaded on this device yet, and needs a connection: try again when you're online."
+        : "Booth Studio was updated while this tab was open, so that part couldn't load. Reload the page: your work is saved on this device.",
+      true,
+      15000,
+    );
+    chunkNoticeUntil = Date.now() + 15000;
+  };
   let studioLoading = null;
   function loadStudio() {
-    return (studioLoading ||= import("./studio.js").then((m) => {
-      studioBridge = m.connect(studioHost);
-      // The assistant's panel comes with the studio, and shows only where an
-      // assistant is connected (src/studio-assistant.js).
-      import("./studio-assistant.js")
-        .then((a) => a.mount(studioBridge, studioHost))
-        .catch((err) => console.error(err));
-      return studioBridge;
-    }));
+    return (studioLoading ||= import("./studio.js")
+      .then((m) => {
+        studioBridge = m.connect(studioHost);
+        // The assistant's panel comes with the studio, and shows only where an
+        // assistant is connected (src/studio-assistant.js).
+        import("./studio-assistant.js")
+          .then((a) => a.mount(studioBridge, studioHost))
+          .catch((err) => console.error(err));
+        return studioBridge;
+      })
+      .catch((err) => {
+        // Not kept: a load that failed (offline, a deploy) is tried again next time.
+        studioLoading = null;
+        throw err;
+      }));
   }
   const studioHost = {
     project: () => p,

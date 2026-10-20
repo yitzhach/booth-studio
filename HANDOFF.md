@@ -18,11 +18,12 @@ Extend it; do not rebuild it.
   so every returning browser fetched all of it again. `vite.config.js`
   (`manualChunks`) now puts three.js's core in `assets/three-<hash>.js`,
   preloaded beside `assets/index-<hash>.js` (about 525 KB, the app). Its name
-  and bytes don't change from build to build while neither three nor the
-  build tools (vite, rollup, esbuild) do, and the Worker serves assets with an
-  ETag and `max-age=0, must-revalidate`, so after a deploy a returning
-  browser gets a 304 for three.js (about 145 KB gzipped, with the orbit
-  controls) and fetches only the app's half. The loaders and the exporter
+  and bytes change only with three itself, the build tools (vite, rollup,
+  esbuild), or the set of three.js parts the app uses (the chunk holds only
+  those) — rarely, where the app's half changes with every merge — and the
+  Worker serves assets with an ETag and `max-age=0, must-revalidate`, so
+  after a deploy a returning browser gets a 304 for three.js (144 KB
+  gzipped, with the orbit controls) and fetches only the app's half. The loaders and the exporter
   (three/examples) stay in the chunks they load on demand with; CI's "The
   first load is split" fails if the chunk goes; `tools/verify-deploy.mjs`
   still finds the index script by name. Measured in ROADMAP 1.6: the rest of
@@ -32,8 +33,10 @@ Extend it; do not rebuild it.
   A tab left open across a deploy asks for the old names of the chunks the
   app loads on demand (the studio, the assistant), which the Worker answers
   with the page itself; the import fails, and the app now says so in a toast
-  — reload, the work is saved — instead of failing in silence (Vite's
-  `vite:preloadError`).
+  — reload, the work is saved; offline, that the part needs a connection —
+  over the error toasts that follow from it, instead of failing in silence
+  (Vite's `vite:preloadError`). A studio load that failed is tried again on
+  the next click instead of failing for the rest of the tab's life.
 - **2026-10-20: the assistant can see the booth (🖼).** Beside the panel's 📷
   is a 🖼, **Attach the booth as it looks now**: the view on screen, rendered
   clean through `scene.export` (no controls or outlines) in the window's own
