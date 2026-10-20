@@ -198,8 +198,13 @@ function lightingSummary(p) {
     ...(isArtShow(p) ? { lightBar: { on: bar.on, kelvin: bar.kelvin, brightness: barBrightness(bar) } } : {}),
   };
 }
-/** The light bar's brightness as its slider shows it: 50 is the default, 100 twice that. */
-const barBrightness = (bar) => Math.round(bar.power / LIGHT_BAR_POWER_STEP);
+/** The light bar's brightness as its slider shows it (main.js range): 50 is the default, 100 twice that. */
+const barBrightness = (bar) => Number((bar.power / LIGHT_BAR_POWER_STEP).toFixed(2));
+// What a card adds when a photographed environment puts an art-show booth's
+// white hall out (polish.js applyEnvPreset).
+const HALL_OFF = "; the white hall goes, under the photographed sky";
+/** A value on a slider's own steps, so the tab shows what was set. */
+const onStep = (v, step) => Math.round(Math.round(v / step) * step * 100) / 100;
 
 /** Pieces listed one by one up to this many; past it, counts only. */
 export const FLOOR_LIST_MAX = 300;
@@ -376,17 +381,17 @@ export const OPS = [
   ),
   op(
     "make_beautiful",
-    `Make it beautiful, the app's one-tap polish: the look for the venue (gallery indoors and at an art show, fair under a canopy) unless look is given; every wall of this booth hung evenly, each work centred on the ${HANG_LINE}″ line (a wall carrying a sign or label is left as it hangs); and, when work hangs on the booth's walls, the spotlights aimed at it, up to four, any beyond what is hung taken down (with nothing hung, the spotlights stay as they are). Use it when asked to make the booth look good or finished, or ready for a jury photograph.`,
+    `Make it beautiful, the app's one-tap polish: the look for the venue (fair under a canopy, gallery white otherwise) unless look is given; every wall of this booth hung evenly, each work centred on the ${HANG_LINE}″ line (a wall carrying a sign or label is left as it hangs); and, when work hangs on the booth's walls, the spotlights aimed at it, up to four, any beyond what is hung taken down (with nothing hung, the spotlights stay as they are). Use it when asked to make the booth look good or finished, or ready for a jury photograph.`,
     { look: str("A look instead of the venue's, one of apply_look's", { enum: Object.keys(BOOTH_LOOKS) }) },
   ),
   op(
     "set_lighting",
     "Change the light by hand, as the Lighting tab's sliders do: the room light (ambient), every spotlight's temperature and brightness at once, and on an art-show booth the light bar over it. describe_booth lists the current values. For a whole look at once use apply_look; to aim the spotlights at the work, make_beautiful.",
     {
-      ambient: num("Ambient illumination, the room light: 0–4, 1.25 to start with; under 1 is a dim room", { minimum: 0, maximum: 4 }),
-      kelvin: num("Every spotlight's temperature in kelvin: 2700 (warm, like a lamp) to 6500 (cool daylight); 4000 to start with", { minimum: 2700, maximum: 6500 }),
-      power: num("Every spotlight's brightness: 0–300, 75 to start with", { minimum: 0, maximum: 300 }),
-      barKelvin: num("An art-show booth's light bar: its temperature in kelvin, 2700–6500; 3500 to start with", { minimum: 2700, maximum: 6500 }),
+      ambient: num("Ambient illumination, the room light: 0–4 in steps of 0.05, 1.25 to start with; under 1 is a dim room", { minimum: 0, maximum: 4 }),
+      kelvin: num("Every spotlight's temperature in kelvin, in steps of 100: 2700 (warm, like a lamp) to 6500 (cool daylight); 4000 to start with", { minimum: 2700, maximum: 6500 }),
+      power: num("Every spotlight's brightness: 0–300 in steps of 5, 75 to start with", { minimum: 0, maximum: 300 }),
+      barKelvin: num("An art-show booth's light bar: its temperature in kelvin, 2700–6500 in steps of 100; 3500 to start with", { minimum: 2700, maximum: 6500 }),
       barBrightness: num("An art-show booth's light bar: its brightness on the Lighting tab's scale, 0–100; 50 to start with, 100 twice that", { minimum: 0, maximum: 100 }),
     },
   ),
@@ -840,28 +845,28 @@ function run(p, o, i, refs) {
     }
     case "apply_look": {
       const done = applyLook(p, o.look);
-      return `Light it as ${BOOTH_LOOKS[done.look].label}${done.hallOff ? "; the white hall goes, under the photographed sky" : ""}`;
+      return `Light it as ${BOOTH_LOOKS[done.look].label}${done.hallOff ? HALL_OFF : ""}`;
     }
     case "make_beautiful": {
       const done = polish(p, o.look ? { look: o.look } : {});
       const parts = [BOOTH_LOOKS[done.look].label, done.walls ? `${done.walls} wall${done.walls === 1 ? "" : "s"} hung evenly` : "nothing hung to space"];
       if (done.lights) parts.push(`${done.lights} spotlight${done.lights === 1 ? "" : "s"} aimed at the work`);
-      return `Make it beautiful: ${parts.join(", ")}${done.hallOff ? "; the white hall goes, under the photographed sky" : ""}`;
+      return `Make it beautiful: ${parts.join(", ")}${done.hallOff ? HALL_OFF : ""}`;
     }
     case "set_lighting": {
       const said = [];
       if (has(o, "ambient")) {
-        p.ambient = Math.round(o.ambient * 100) / 100;
+        p.ambient = onStep(o.ambient, 0.05);
         said.push(`ambient ${p.ambient}`);
       }
       if (has(o, "kelvin") || has(o, "power")) {
         const lights = p.lights || [];
         if (!lights.length) throw new SceneOpError(`Op ${i + 1} (set_lighting): this booth has no spotlights. make_beautiful adds them, aimed at the work hanging on its walls.`, i);
         for (const l of lights) {
-          if (has(o, "kelvin")) l.kelvin = Math.round(o.kelvin);
-          if (has(o, "power")) l.power = Math.round(o.power);
+          if (has(o, "kelvin")) l.kelvin = onStep(o.kelvin, 100);
+          if (has(o, "power")) l.power = onStep(o.power, 5);
         }
-        const what = [has(o, "kelvin") ? `${Math.round(o.kelvin)} K` : "", has(o, "power") ? `brightness ${Math.round(o.power)}` : ""].filter(Boolean);
+        const what = [has(o, "kelvin") ? `${lights[0].kelvin} K` : "", has(o, "power") ? `brightness ${lights[0].power}` : ""].filter(Boolean);
         const n = lights.length, hidden = lights.filter((l) => l.on === false).length;
         const which = n === 1 ? "the spotlight" : n === 2 ? "both spotlights" : `all ${n} spotlights`;
         said.push(`${which}${hidden ? (n === 1 ? " (hidden)" : ` (${hidden} hidden)`) : ""} at ${what.join(", ")}`);
@@ -869,8 +874,8 @@ function run(p, o, i, refs) {
       if (has(o, "barKelvin") || has(o, "barBrightness")) {
         if (!isArtShow(p)) throw new SceneOpError(`Op ${i + 1} (set_lighting): this booth has no light bar; it comes with an art-show booth (set_booth venue artshow).`, i);
         const bar = lightBarSpec(p.booth);
-        if (has(o, "barKelvin")) bar.kelvin = Math.round(o.barKelvin);
-        if (has(o, "barBrightness")) bar.power = Math.round(o.barBrightness * LIGHT_BAR_POWER_STEP * 100) / 100;
+        if (has(o, "barKelvin")) bar.kelvin = onStep(o.barKelvin, 100);
+        if (has(o, "barBrightness")) bar.power = Math.round(Math.round(o.barBrightness) * LIGHT_BAR_POWER_STEP * 100) / 100;
         p.booth.lightBar = bar;
         const what = [has(o, "barKelvin") ? `${bar.kelvin} K` : "", has(o, "barBrightness") ? `brightness ${barBrightness(bar)}` : ""].filter(Boolean);
         said.push(`the light bar${bar.on ? "" : " (switched off)"} at ${what.join(", ")}`);

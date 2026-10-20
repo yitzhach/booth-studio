@@ -428,6 +428,10 @@ test("the lighting by hand: described as the Lighting tab shows it, set as its s
   assert.doesNotThrow(() => opens(s2, p));
   const { lines: l3 } = applyOps(s1, [{ op: "set_lighting", power: 150.4, kelvin: 3500 }], images);
   assert.equal(l3[0], "Light it: both spotlights at 3500 K, brightness 150");
+  // On the sliders' own steps (0.05, 100 K, 5), so the tab shows what the card says.
+  const { scene: s5, lines: l5 } = applyOps(s1, [{ op: "set_lighting", ambient: 0.62, kelvin: 3250, power: 92 }], images);
+  assert.equal(l5[0], "Light it: ambient 0.6; both spotlights at 3300 K, brightness 90");
+  assert.deepEqual([s5.ambient, s5.lights[0].kelvin, s5.lights[0].power], [0.6, 3300, 90]);
 
   // A look is lost to any of its values changed by hand, the horizon as much as a light.
   assert.equal(describe({ ...s1, booth: { ...s1.booth, horizon: "open" } }, images).lighting.look, null);

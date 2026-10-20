@@ -174,3 +174,44 @@ test("currentLook is applyLook read back: named while every value holds, null on
   show.booth.hall = { ...show.booth.hall, on: true };
   assert.equal(currentLook(show), null);
 });
+
+test("Make it beautiful leaves the booth in its look, even where it had to add the spotlights", () => {
+  const p = demoProject();
+  p.lights = [];
+  const done = polish(p);
+  assert.ok(done.lights >= 1, "spotlights added for the work");
+  assert.ok(p.lights.every((l) => l.kelvin === LOOKS[done.look].kelvin && l.power === LOOKS[done.look].power), "in the look's colour and power");
+  assert.equal(currentLook(p), done.look);
+});
+
+test("currentLook reads an older booth with no horizon as the studio horizon it is drawn with", () => {
+  const p = demoProject();
+  applyLook(p, "gallery");
+  delete p.booth.horizon;
+  assert.equal(currentLook(p), "gallery");
+});
+
+// A field a look gains in applyLook must be read back in currentLook. This is
+// the tripwire: every value applyLook writes, found by comparing booths before
+// and after each look, must be one currentLook already reads. A new one fails
+// here until currentLook reads it too and it is added to the list.
+test("currentLook reads back every value applyLook writes", () => {
+  const READ = ["ambient", "booth.envPreset", "booth.ground", "booth.groundPreset", "booth.hall.on", "booth.horizon", "lights.*.kelvin", "lights.*.power"];
+  const leaves = (o, at = []) =>
+    o && typeof o === "object" ? Object.entries(o).flatMap(([k, v]) => leaves(v, [...at, k])) : [[at, o]];
+  const get = (o, path) => path.reduce((x, k) => x?.[k], o);
+  const written = new Set();
+  for (const key of Object.keys(LOOKS)) {
+    for (const start of [demoProject(), applyVenue(blankProject(), "artshow")]) {
+      // Start from values no look uses, so every write shows as a change.
+      start.ambient = 3;
+      start.booth.horizon = "urban";
+      for (const l of start.lights) Object.assign(l, { kelvin: 6500, power: 1 });
+      const before = JSON.parse(JSON.stringify(start));
+      applyLook(start, key);
+      for (const [path, v] of leaves(JSON.parse(JSON.stringify(start))))
+        if (get(before, path) !== v) written.add(path.map((k) => (/^\d+$/.test(k) ? "*" : k)).join("."));
+    }
+  }
+  assert.deepEqual([...written].sort(), READ);
+});

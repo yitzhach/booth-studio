@@ -111,7 +111,7 @@ export function currentLook(p) {
   const env = resolvePreset(p.booth.envPreset);
   const lights = p.lights || [];
   for (const [key, look] of Object.entries(LOOKS)) {
-    if (env.id !== look.envPreset || p.ambient !== look.ambient || p.booth.horizon !== env.horizon) continue;
+    if (env.id !== look.envPreset || p.ambient !== look.ambient || (p.booth.horizon || "studio") !== env.horizon) continue;
     if ((groundUpload(p) ? p.booth.groundPreset : groundKind(p)) !== env.ground) continue;
     if (isArtShow(p) && env.hdri && hallSpec(p.booth).on) continue;
     if (lights.every((l) => l.kelvin === look.kelvin && l.power === look.power)) return key;
@@ -264,9 +264,11 @@ export function aimLights(p) {
  * toast.
  */
 export function polish(p, { look = lookFor(p) } = {}) {
-  const applied = applyLook(p, look) || applyLook(p, lookFor(p));
   const walls = evenHang(p);
   const lights = aimLights(p);
+  // The look last, so a spotlight aimLights had to add takes its colour and
+  // power like the rest.
+  const applied = applyLook(p, look) || applyLook(p, lookFor(p));
   return { look: applied.look, hallOff: applied.hallOff, walls, lights };
 }
 

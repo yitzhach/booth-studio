@@ -24,7 +24,7 @@ Extend it; do not rebuild it.
   the environment presets (`ENV_PRESETS`, `resolvePreset` and the rules that
   go with them) out of `src/lighting.js`, which imports three.js, into a pure
   `src/presets.js`; `lighting.js` re-exports all of it, so no importer
-  changed. The build grows from 98 KB to 112 KB, still with no three.js in
+  changed. The build grows from 98 KB to 113 KB, still with no three.js in
   it. Ships as a pair with Art-Talk-Back's branch of the same name (its
   vendored `booth-scene.js`); the assistant Worker reads the op catalog from
   studio-api's tool list, so no "Deploy production assistant" is needed.
