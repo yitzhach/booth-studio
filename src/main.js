@@ -4741,7 +4741,7 @@ async function boot() {
       toast("Hanging guide downloaded. Open it to print or save as PDF.");
     },
     "export-image": async () => {
-      if (busy) return;
+      if (busy) return toast("Another export is still running: try again in a moment.");
       busy = true;
       const b = document.querySelector('[data-action="export-image"]');
       b.disabled = true;
@@ -7013,6 +7013,30 @@ async function boot() {
   }
   const studioHost = {
     project: () => p,
+    // The assistant panel's 🖼: the booth as it is drawn now — clean, without
+    // controls or outlines, in the window's own shape — as a PNG `long` px on
+    // its long side, for the panel to shrink and send with the next message.
+    // Photo mode gives the photo composition (photo.export takes a width).
+    // Null while an export or a previewed move holds the renderer; an error
+    // in the panel's words otherwise (the exports' own speak of a size menu
+    // the panel doesn't have).
+    viewPicture: async (long) => {
+      if (busy || busyVideo || busyPreview) return null;
+      // The show floor's plan is drawn by the show editor, not the 3D scene;
+      // a render would be the booth hidden behind it.
+      if (showFloor && !show3d) throw new Error("The show floor's plan can't be pictured yet. Open The show in 3D, or attach a screenshot with 📷.");
+      const a = p.mode === "photo" ? p.assets[p.photo.asset] : null;
+      if (p.mode === "photo" && !a) throw new Error("Upload a booth photo first, or switch to 3D booth.");
+      if (p.mode !== "photo" && !scene) throw new Error("3D isn't available on this browser, so there is no view to send. A screenshot works too: 📷.");
+      busy = true;
+      try {
+        return p.mode === "photo" ? await photo.export(a.height > a.width ? Math.round((long * a.width) / a.height) : long) : await scene.export(long);
+      } catch {
+        throw new Error("This device couldn't draw the booth just now. A screenshot works too: 📷.");
+      } finally {
+        busy = false;
+      }
+    },
     // For the assistant: every control the tool search knows, as "where: names",
     // so it can tell the artist which tab or bar and which button (Art-Talk-Back D-072).
     appMap: () => appMapText(toolIndex || (toolIndex = buildToolIndex())),
@@ -7058,6 +7082,7 @@ async function boot() {
     window.__booth = {
       // The assistant's "take me to …" on the real index, for tests/view-assistant.mjs.
       openPlace: (place, control) => studioHost.openPlace(place, control),
+      viewPicture: (long) => studioHost.viewPicture(long),
       get project() {
         return p;
       },

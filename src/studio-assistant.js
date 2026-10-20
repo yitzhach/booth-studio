@@ -92,6 +92,13 @@ const SYNC_NOTES = {
 /** The long side the model reads a picture at full detail; larger is only slower to send. */
 export const PICTURE_EDGE = 1568;
 export const MAX_PICTURES = 3;
+const ASK_PLACEHOLDER = "e.g. make this a 10 × 15 art-show booth with a table and two chairs";
+const VIEW_PLACEHOLDER = "Ask about this view, e.g. what would make it look better?";
+// How long the 🖼 waits for the app to draw the booth (it waits for textures
+// still loading first) before saying so.
+const VIEW_WAIT = 20000;
+const CAP_NOTE = `Up to ${MAX_PICTURES} pictures with one message.`;
+const VIEW_TOO_SLOW = "The booth is taking too long to draw. Try again, or attach a screenshot with 📷.";
 
 /** Width and height that fit inside PICTURE_EDGE, keeping the shape; never enlarged. */
 export function fitPicture(w, h, edge = PICTURE_EDGE) {
@@ -266,11 +273,14 @@ class Panel extends HTMLElement {
     this.launch = el("button", { class: "launch", type: "button", "aria-expanded": "false", "aria-controls": "panel", text: "Ask the assistant" });
     this.log = el("div", { class: "log", role: "log", "aria-live": "polite" });
     this.picks = el("div", { class: "picks", hidden: true });
-    this.input = el("textarea", { rows: "2", "aria-label": "Message to the assistant", placeholder: "e.g. make this a 10 × 15 art-show booth with a table and two chairs" });
+    this.input = el("textarea", { rows: "2", "aria-label": "Message to the assistant", placeholder: ASK_PLACEHOLDER });
     this.sendBtn = el("button", { class: "btn primary", type: "submit", text: "Send" });
     // A photo, sketch or show map goes with the next message (10a).
     this.file = el("input", { type: "file", accept: "image/*", multiple: "", hidden: true });
     this.attachBtn = el("button", { class: "btn attach", type: "button", "aria-label": "Attach a picture", title: "Attach a photo, sketch or show map", text: "📷" });
+    // The booth as it is drawn now, for the assistant to look at ("how does
+    // this look?"): only where the app can draw one (host.viewPicture).
+    this.viewBtn = el("button", { class: "btn attach", type: "button", "aria-label": "Attach the booth as it looks now", title: "Attach the booth as it looks now, so the assistant can see it", text: "🖼", hidden: true });
     this.pics = el("div", { class: "pics", hidden: true });
     this.pictures = [];
     this.note = el("p", { class: "note", role: "status", hidden: true });
@@ -286,7 +296,7 @@ class Panel extends HTMLElement {
     ]);
     this.ghost = el("div", { class: "ghost", "aria-hidden": "true" });
     this.replies = el("div", { class: "replies", hidden: true });
-    const form = el("form", {}, [this.attachBtn, this.file, el("div", { class: "compose" }, [this.ghost, this.input]), this.sendBtn]);
+    const form = el("form", {}, [this.attachBtn, this.viewBtn, this.file, el("div", { class: "compose" }, [this.ghost, this.input]), this.sendBtn]);
     this.said = readSaid();
     this.names = [];
     this.panel = el("section", { class: "panel", id: "panel", role: "dialog", "aria-label": "Studio assistant", hidden: true }, [
@@ -331,6 +341,7 @@ class Panel extends HTMLElement {
     });
     this.input.addEventListener("input", () => this.hint());
     this.attachBtn.addEventListener("click", () => this.file.click());
+    this.viewBtn.addEventListener("click", () => this.addView());
     this.file.addEventListener("change", () => {
       const files = [...this.file.files];
       this.file.value = "";
@@ -345,6 +356,7 @@ class Panel extends HTMLElement {
     this.bridge = bridge;
     this.host = host;
     this.available = available;
+    this.viewBtn.hidden = typeof host?.viewPicture !== "function";
     bridge.onStatus(() => this.paint());
     this.paint();
   }
@@ -579,16 +591,16 @@ class Panel extends HTMLElement {
   }
 
   /** Shrinks and previews picked pictures, up to MAX_PICTURES; each has a × to take it off. */
-  async addPictures(files) {
+  async addPictures(files, { view = false } = {}) {
     this.setNote("");
     for (const f of files) {
       if (this.pictures.length >= MAX_PICTURES) {
-        this.setNote(`Up to ${MAX_PICTURES} pictures with one message.`);
+        this.setNote(CAP_NOTE);
         break;
       }
       if (!/^image\//.test(f.type)) continue;
       try {
-        this.pictures.push(await shrinkPicture(f));
+        this.pictures.push({ ...(await shrinkPicture(f)), ...(view ? { view: true } : {}) });
       } catch {
         this.setNote("That picture couldn’t be opened. Try a JPEG or PNG.");
       }
@@ -597,7 +609,55 @@ class Panel extends HTMLElement {
     this.input.focus();
   }
 
+  /**
+   * The booth as it is drawn now (host.viewPicture), as one more picture with
+   * the next message — through addPictures, so the cap and the tray are the
+   * 📷's. Resolves true once it is in the tray. A message sent while it is
+   * drawn waits for it, and stays unsent if it never comes (send).
+   */
+  addView() {
+    if (this.viewing) return this.viewing;
+    if (this.pictures.length >= MAX_PICTURES) {
+      this.setNote(CAP_NOTE);
+      return Promise.resolve(false);
+    }
+    this.viewing = (async () => {
+      // Past this line only once `this.viewing` holds this promise, so the
+      // finally below can never clear it before it is stored.
+      await 0;
+      this.setNote("Picturing the booth…");
+      this.viewBtn.disabled = true;
+      let timer, drawing = null;
+      try {
+        const late = new Promise((_, no) => (timer = setTimeout(() => no(new Error(VIEW_TOO_SLOW)), VIEW_WAIT)));
+        drawing = Promise.resolve(this.host.viewPicture(PICTURE_EDGE));
+        const shot = await Promise.race([drawing, late]);
+        if (!shot) {
+          this.setNote("Something else is drawing the booth just now (an export or a preview): try again when it has finished.");
+          return false;
+        }
+        const had = this.pictures.length;
+        await this.addPictures([shot], { view: true });
+        return this.pictures.length > had;
+      } catch (err) {
+        this.setNote(err?.message || "The booth couldn’t be pictured just now. A screenshot works too: 📷.");
+        return false;
+      } finally {
+        clearTimeout(timer);
+        this.viewing = null;
+        // Past the timeout the app is still drawing, and holds its renderer
+        // until it is done: the 🖼 waits for that, so a retry doesn't blame an
+        // export that isn't running.
+        if (drawing) drawing.catch(() => {}).finally(() => (this.viewBtn.disabled = false));
+        else this.viewBtn.disabled = false;
+      }
+    })();
+    return this.viewing;
+  }
+
   paintPictures() {
+    // With the booth attached, the empty box suggests asking about it.
+    this.input.placeholder = this.pictures.some((p) => p.view) ? VIEW_PLACEHOLDER : ASK_PLACEHOLDER;
     this.pics.textContent = "";
     this.pictures.forEach((p, i) => {
       const x = el("button", { class: "btn", type: "button", "aria-label": `Remove picture ${i + 1}`, text: "×" });
@@ -611,6 +671,17 @@ class Panel extends HTMLElement {
   }
 
   async send(text) {
+    // The booth still being pictured (🖼) goes with this message, not the
+    // next; if it never comes, the message stays in the box with the reason,
+    // rather than going to the assistant about a booth it can't see.
+    if (this.viewing) {
+      this.sendBtn.disabled = true;
+      const ok = await this.viewing;
+      this.sendBtn.disabled = !!this.busy;
+      if (!ok) return;
+      // Words typed while the booth was being drawn go too.
+      text = this.input.value;
+    }
     text = String(text || "").trim();
     if ((!text && !this.pictures.length) || this.busy) return;
     this.setNote("");
