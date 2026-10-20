@@ -25,7 +25,8 @@ import globals from "globals";
 
 export default [
   includeIgnoreFile(fileURLToPath(new URL(".gitignore", import.meta.url))),
-  { ignores: ["public/**", "src/vendor/**", ".studio-platform/**"] },
+  // public/ is copied into the build as it is; its one script is the service worker.
+  { ignores: ["public/**/*", "!public/sw.js", "src/vendor/**", ".studio-platform/**"] },
   js.configs.recommended,
   {
     languageOptions: { ecmaVersion: 2024, sourceType: "module" },
@@ -44,6 +45,6 @@ export default [
   // Node driving a browser: the view and end-to-end suites and the tools,
   // whose page.evaluate callbacks run in the page.
   { files: ["tests/**/*.mjs", "tools/**/*.mjs"], languageOptions: { globals: { ...globals.node, ...globals.browser } } },
-  // The Cloudflare Worker.
-  { files: ["worker/**/*.js"], languageOptions: { globals: { ...globals.serviceworker } } },
+  // The Cloudflare Worker, and the page's service worker.
+  { files: ["worker/**/*.js", "public/sw.js"], languageOptions: { globals: { ...globals.serviceworker } } },
 ];

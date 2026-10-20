@@ -74,6 +74,7 @@ npm test                 # node suites
 npm run build
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium npm run test:view
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium npm run test:browser
+BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium npm run test:offline   # after npm run build
 ```
 
 Sandbox has WebGL via swiftshader but the pinned Playwright wants a newer

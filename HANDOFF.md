@@ -13,6 +13,31 @@ Extend it; do not rebuild it.
   the rules that bite. It does not need to be asked for again. That rule is
   about chat only: code comments, commit messages and this file stay in full
   prose, because a cold session has nothing else to read.
+- **2026-10-20: opens with no signal, and installs (ROADMAP 1.7).** A show
+  floor often has no signal, and until now the app opened only with one: a
+  tab left open kept working, a new one didn't. `public/sw.js`, a service
+  worker, now keeps the page and the build's own files, so once Booth Studio
+  has been opened in a browser it opens there again offline, with the
+  booths saved on that device. Pages come from the network first (a
+  connected browser always gets the deployed app; the kept page only stands
+  in when there is none); the build's hashed files are kept the first time
+  and served from the worker after that; textures, HDRIs and the cut-out
+  people are kept as they are first used, never all 29 MB up front; `/api`,
+  `/v1` and `/assistant` are never touched; and nothing of type text/html is
+  ever kept for a file, because the Worker answers a missing file with the
+  page itself and the app's texture fallbacks depend on seeing that. It is
+  registered by `src/main.js` in a built app only (the dev server the view
+  suites drive never has one), after the page has loaded, as
+  `/sw.js?v=<build commit>`, so every deploy installs a new worker and drops
+  the old one's caches. **`OFFLINE` in `src/main.js` is the off switch:**
+  false, and the page unregisters the worker. `public/manifest.webmanifest`
+  and `public/icons/` (drawn from the favicon by `tools/make-icons.mjs`)
+  make it installable: Add to Home Screen on an iPad or a phone, Install in
+  Chrome. `npm run test:offline` (`tests/offline.mjs`, in CI after the
+  build) opens the built app, saves a booth, cuts the network and opens it
+  again — red without the worker, and red with the worker but no offline
+  page. Whether Safari on a real iPad keeps it, and how an installed app
+  feels, is the owner's to try: HANDOFF → Next.
 - **2026-10-20: three.js loads as a file of its own (ROADMAP 1.6).** It was
   half of the one 1.1 MB script, and every merge changed that script's name,
   so every returning browser fetched all of it again. `vite.config.js`
@@ -2165,6 +2190,9 @@ Extend it; do not rebuild it.
      offer to make the changes it suggests?
    - When anything goes wrong: Export → Something wrong? → **Copy a problem
      report**, and paste it into the message. It names the build first.
+   - Offline: open the live site once on the iPad (and on a phone), then
+     turn on airplane mode and open it again — does it come up with your
+     booths? Then Share → Add to Home Screen, and open it from there.
 0. **Rev 1 (parts A, B and C) is merged and live (2026-10-19), untested by
    a person.** The owner said merge now and test later. Start the next
    session here. His checklist, on the live site in a private window (a
@@ -2777,6 +2805,13 @@ entrypoints (the deployed Worker is unaffected).
 
 This came up twice and was guessed at twice. Do not guess a third time.
 
+Since 2026-10-20 a service worker (`public/sw.js`) sits between the page and
+the network in a built app. It never keeps an HTML answer for a file, so it
+cannot hide a texture behind the fallback, and it fetches a kept texture
+again in the background every time it serves it. To rule it out anyway:
+DevTools → Application → Service workers → Unregister, then reload; or set
+`OFFLINE` to false in `src/main.js` for everyone.
+
 **`window.BOOTH_ASSETS`** works in production and records, per texture set,
 whether it loaded and what it found. `window.BOOTH_BUILD` gives the deployed
 commit. `window.__booth` is dev-only.
@@ -2874,6 +2909,7 @@ npm run build
 npm run test:view        # 44 suites (tools2, hub, share, roles, polish and wall-assets included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
 npm run test:browser     # 25 end-to-end checks
+npm run test:offline     # the built app opens with the network cut (after npm run build)
 STUDIO_PLATFORM=../Art-Talk-Back BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/two-devices.mjs   # 50 checks; after npm run build (see Studio platform)
 node tools/verify-deploy.mjs   # after a merge: waits for production to serve the commit, then checks the page starts
 ```

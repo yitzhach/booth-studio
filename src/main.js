@@ -59,6 +59,22 @@ BUILD.stamp = (() => {
   }
 })();
 window.BOOTH_BUILD = BUILD;
+// Opens with no signal (ROADMAP.md 1.7): public/sw.js keeps the app's own
+// files, so once opened here it opens again offline, as on a show floor. A
+// built app only — the dev server, which the view suites drive, never has
+// one — registered once the page has loaded, under the build's commit so
+// every deploy brings a new worker. OFFLINE false is the off switch: the
+// page then unregisters the worker, and with it goes what it kept.
+const OFFLINE = true;
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  const offline = () =>
+    (OFFLINE
+      ? navigator.serviceWorker.register(`/sw.js?v=${encodeURIComponent(BUILD.commit)}`)
+      : navigator.serviceWorker.getRegistrations().then((all) => Promise.all(all.map((r) => r.unregister())))
+    ).catch((err) => console.warn("Service worker:", err));
+  if (document.readyState === "complete") offline();
+  else addEventListener("load", offline, { once: true });
+}
 // Report a problem (src/report.js): the page's uncaught errors are kept from
 // here on, so one thrown while the app starts (boot, below) is in the report
 // too. The imports above this run before it; one of them throwing would stop
