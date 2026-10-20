@@ -64,6 +64,33 @@ jobs:
       - name: Node suites
         run: npm test
       - run: npm run build
+      # vite.config.js puts three.js in a chunk of its own, so a deploy doesn't
+      # re-send it to every returning browser; nothing else would notice if a
+      # tool upgrade quietly folded it back into the app's script.
+      # A second build (its time stamp differs, so the app's half does) must
+      # give three.js's chunk the same name, or a deploy re-sends it.
+      - name: The first load is split (three.js on its own, same name build to build)
+        run: |
+          check='
+            const fs = require("fs");
+            const files = fs.readdirSync("dist/assets");
+            const three = files.find((f) => /^three-[\w-]+\.js$/.test(f));
+            const index = files.find((f) => /^index-[\w-]+\.js$/.test(f));
+            const html = fs.readFileSync("dist/index.html", "utf8");
+            const preloaded = [...html.matchAll(/<link\b[^>]*>/g)].map((m) => m[0])
+              .filter((tag) => /\brel="modulepreload"/.test(tag)).map((tag) => /\bhref="([^"]+)"/.exec(tag)?.[1] || "");
+            const kb = (f) => Math.round(fs.statSync(`dist/assets/${f}`).size / 1024);
+            if (!three || !index) throw new Error(`expected index-*.js and three-*.js in dist/assets, found: ${files.join(", ")}`);
+            if (!preloaded.some((href) => href.endsWith(`/${three}`))) throw new Error(`index.html does not preload ${three}: ${preloaded.join(", ")}`);
+            if (kb(three) < 400) throw new Error(`three-*.js is only ${kb(three)} KB: is three.js still in it?`);
+            console.log(`index ${kb(index)} KB, three ${kb(three)} KB`);
+            fs.writeFileSync("/tmp/three-chunk", three);
+          '
+          node -e "$check"
+          first=$(cat /tmp/three-chunk)
+          npm run -s build >/dev/null
+          node -e "$check"
+          test "$first" = "$(cat /tmp/three-chunk)" || { echo "::error::three.js's chunk changed name between two builds: $first, then $(cat /tmp/three-chunk)"; exit 1; }
       - name: Studio platform (wrangler + studio-api)
         working-directory: .studio-platform
         run: pnpm install --frozen-lockfile
