@@ -53,6 +53,11 @@ test("only the 50 projects touched last are remembered: every Alternative is a n
   const all = JSON.parse(storage.getItem(KEEP_SAFE_KEY));
   assert.equal(Object.keys(all).length, 50);
   assert.ok(all.p59 && all.p10 && !all.p9, "the oldest ten forgotten");
+  // A clock set back a day: the backup just noted is still the one kept.
+  noteKeepSafe(storage, "fresh", "backup", new Date("2025-12-31T00:00:00Z"));
+  const after = JSON.parse(storage.getItem(KEEP_SAFE_KEY));
+  assert.equal(Object.keys(after).length, 50);
+  assert.ok(after.fresh, "the entry just written is never the one forgotten");
 });
 
 test("an entry that is not ours is replaced, never spread into junk keys", () => {
@@ -70,6 +75,9 @@ test("sizes read the way a person says them, in the 1024s the rest of the app co
   assert.equal(formatBytes(600), "1 KB");
   assert.equal(formatBytes(10), "under 1 KB");
   assert.equal(formatBytes(0), "0 KB", "an empty origin uses nothing");
+  assert.equal(formatBytes(1024 ** 2 - 1), "1 MB", "never 1024 KB");
+  assert.equal(formatBytes(1024 ** 3 - 1), "1.0 GB", "never 1024 MB");
+  assert.equal(formatBytes(1_073_000_000), "1023 MB");
   assert.equal(formatBytes(undefined), "");
   assert.equal(formatBytes(-1), "");
 });

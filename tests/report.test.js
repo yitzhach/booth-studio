@@ -47,6 +47,16 @@ test("a V8 message over several lines is not taken for the frames", () => {
   const err = new Error("line1\nline2\nline3");
   err.stack = "Error: line1\nline2\nline3\n    at paint (main.js:120:4)\n    at render (main.js:90:2)";
   assert.equal(errorEntry({ type: "error", error: err }).where, "at paint (main.js:120:4) ← at render (main.js:90:2)");
+  // Not even a message line that looks like a Firefox frame.
+  const typed = new Error("a\nname@host:8080\nb");
+  typed.stack = "Error: a\nname@host:8080\nb\n    at paint (main.js:1:1)";
+  assert.equal(errorEntry({ type: "error", error: typed }).where, "at paint (main.js:1:1)");
+});
+
+test("a frame's link loses its query and keeps its line and column", () => {
+  const err = new Error("x");
+  err.stack = "Error: x\n    at f (https://host/assets/index-abc.js?v=3:120:7)\n    at g (https://host/assets/index-abc.js#frag:1:2)";
+  assert.equal(errorEntry({ type: "error", error: err }).where, "at f (https://host/assets/index-abc.js:120:7) ← at g (https://host/assets/index-abc.js:1:2)");
 });
 
 test("the ring keeps the last MAX_ERRORS, newest first", () => {

@@ -27,13 +27,13 @@ const clip = (text, n) => {
 // to the last, since what JSON.parse quotes of its input can hold quotes of
 // its own. Single-quoted text, first quote to last, goes when it holds a
 // space, which a property name or token the code quotes ('length', 'x') never
-// does and a typed name usually does. A link keeps its address and loses its
-// query or fragment (a booth link's id).
+// does and a typed name usually does. A link keeps its address and a stack
+// frame's :line:col, and loses its query or fragment (a booth link's id).
 const redact = (s) =>
   s
     .replace(/"[\s\S]*"/, '"…"')
     .replace(/'[\s\S]*'/, (quoted) => (/\s/.test(quoted) ? "'…'" : quoted))
-    .replace(/(\bhttps?:\/\/[^\s?#)]+)[?#][^\s)]*/g, "$1");
+    .replace(/(\bhttps?:\/\/[^\s?#)]+)[?#][^\s)]*?((?::\d+){1,2})?(?=[\s)]|$)/g, "$1$2");
 
 /**
  * The first two frames of a stack. V8 opens a stack with the message, which
@@ -42,8 +42,11 @@ const redact = (s) =>
  * lines that are frames are kept.
  */
 function frames(stack) {
-  const isFrame = (l) => /^at\s/.test(l) || /@\S*:\d+/.test(l);
-  return stack.split("\n").map((l) => l.trim()).filter(isFrame).slice(0, 2).join(" ← ");
+  const lines = stack.split("\n").map((l) => l.trim());
+  // A V8 stack's frames are its `at` lines; anything else in it is message.
+  const v8 = lines.some((l) => /^at\s/.test(l));
+  const isFrame = (l) => (v8 ? /^at\s/.test(l) : /@\S*:\d+/.test(l));
+  return lines.filter(isFrame).slice(0, 2).join(" ← ");
 }
 
 /**

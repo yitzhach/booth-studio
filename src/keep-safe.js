@@ -57,8 +57,8 @@ export function noteKeepSafe(storage, id, what, now = new Date()) {
   all[id] = { ...was, [what]: now.toISOString() };
   // Every Alternative and quick start is a new project id: keep the newest.
   const last = (e) => Math.max(asDate(e?.backup)?.getTime() || 0, asDate(e?.reminded)?.getTime() || 0);
-  const ids = Object.keys(all).sort((a, b) => last(all[b]) - last(all[a]));
-  for (const old of ids.slice(MAX_REMEMBERED)) delete all[old];
+  const ids = Object.keys(all).filter((k) => k !== id).sort((a, b) => last(all[b]) - last(all[a]));
+  for (const old of ids.slice(MAX_REMEMBERED - 1)) delete all[old];
   writeAll(storage, all);
 }
 
@@ -78,10 +78,12 @@ export function backupDue({ hasOwnImages, signedIn, backup, reminded, now = new 
 /** 512 KB, 37 MB, 2.1 GB — in 1024s, as the rest of the app counts (share.js). */
 export function formatBytes(n) {
   if (!Number.isFinite(n) || n < 0) return "";
-  if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(1)} GB`;
-  if (n >= 1024 ** 2) return `${Math.round(n / 1024 ** 2)} MB`;
   if (n === 0) return "0 KB";
-  return n < 512 ? "under 1 KB" : `${Math.round(n / 1024)} KB`;
+  if (n < 512) return "under 1 KB";
+  // Up a unit wherever rounding would show 1024 of this one.
+  if (n >= 1023.5 * 1024 ** 2) return `${(n / 1024 ** 3).toFixed(1)} GB`;
+  if (n >= 1023.5 * 1024) return `${Math.round(n / 1024 ** 2)} MB`;
+  return `${Math.round(n / 1024)} KB`;
 }
 
 const day = (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
