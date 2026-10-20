@@ -6996,6 +6996,13 @@ async function boot() {
   // Its code and the SDK load only when this browser is signed in, or when the
   // artist opens Studio account; signed out, nothing here runs and /v1 is
   // never called.
+  // A tab left open across a deploy asks for the old names of the chunks
+  // loaded on demand (the studio, the assistant), and the Worker answers a
+  // missing file with the page itself, so the import fails. Say what to do
+  // rather than fail in silence; the error still reaches the problem report.
+  addEventListener("vite:preloadError", () =>
+    toast("Booth Studio was updated while this tab was open, so that part couldn't load. Reload the page: your work is saved on this device.", true, 15000),
+  );
   let studioLoading = null;
   function loadStudio() {
     return (studioLoading ||= import("./studio.js").then((m) => {

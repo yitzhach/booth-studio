@@ -17,14 +17,23 @@ Extend it; do not rebuild it.
   half of the one 1.1 MB script, and every merge changed that script's name,
   so every returning browser fetched all of it again. `vite.config.js`
   (`manualChunks`) now puts three.js's core in `assets/three-<hash>.js`,
-  preloaded beside `assets/index-<hash>.js` (544 KB, the app). Its name and
-  bytes don't change from build to build while the dependency doesn't, and
-  the Worker serves assets with an ETag and `max-age=0, must-revalidate`, so
-  after a deploy a returning browser gets a 304 for three.js (140 KB
-  gzipped) and fetches only the app's 181 KB. The loaders and the exporter
-  (three/examples) stay in the chunks they load on demand with;
-  `tools/verify-deploy.mjs` still finds the index script by name. Measured
-  in ROADMAP 1.6: the rest of that item's target needs main.js split (1.2).
+  preloaded beside `assets/index-<hash>.js` (about 525 KB, the app). Its name
+  and bytes don't change from build to build while neither three nor the
+  build tools (vite, rollup, esbuild) do, and the Worker serves assets with an
+  ETag and `max-age=0, must-revalidate`, so after a deploy a returning
+  browser gets a 304 for three.js (about 145 KB gzipped, with the orbit
+  controls) and fetches only the app's half. The loaders and the exporter
+  (three/examples) stay in the chunks they load on demand with; CI's "The
+  first load is split" fails if the chunk goes; `tools/verify-deploy.mjs`
+  still finds the index script by name. Measured in ROADMAP 1.6: the rest of
+  that item's target needs main.js split (1.2). Not done: `immutable` caching
+  for the hashed files (they share `/assets/` with the unhashed textures, so
+  it needs its own folder first).
+  A tab left open across a deploy asks for the old names of the chunks the
+  app loads on demand (the studio, the assistant), which the Worker answers
+  with the page itself; the import fails, and the app now says so in a toast
+  — reload, the work is saved — instead of failing in silence (Vite's
+  `vite:preloadError`).
 - **2026-10-20: the assistant can see the booth (🖼).** Beside the panel's 📷
   is a 🖼, **Attach the booth as it looks now**: the view on screen, rendered
   clean through `scene.export` (no controls or outlines) in the window's own

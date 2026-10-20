@@ -64,6 +64,23 @@ jobs:
       - name: Node suites
         run: npm test
       - run: npm run build
+      # vite.config.js puts three.js in a chunk of its own, so a deploy doesn't
+      # re-send it to every returning browser; nothing else would notice if a
+      # tool upgrade quietly folded it back into the app's script.
+      - name: The first load is split (three.js on its own)
+        run: |
+          node -e '
+            const fs = require("fs");
+            const files = fs.readdirSync("dist/assets");
+            const three = files.find((f) => /^three-[\w-]+\.js$/.test(f));
+            const index = files.find((f) => /^index-[\w-]+\.js$/.test(f));
+            const html = fs.readFileSync("dist/index.html", "utf8");
+            const kb = (f) => Math.round(fs.statSync(`dist/assets/${f}`).size / 1024);
+            if (!three || !index) throw new Error(`expected index-*.js and three-*.js in dist/assets, found: ${files.join(", ")}`);
+            if (!html.includes(`modulepreload" crossorigin href="/assets/${three}"`)) throw new Error("index.html does not preload the three.js chunk");
+            if (kb(three) < 400) throw new Error(`three-*.js is only ${kb(three)} KB: is three.js still in it?`);
+            console.log(`index ${kb(index)} KB, three ${kb(three)} KB`);
+          '
       - name: Studio platform (wrangler + studio-api)
         working-directory: .studio-platform
         run: pnpm install --frozen-lockfile

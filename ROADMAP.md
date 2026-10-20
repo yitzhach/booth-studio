@@ -247,9 +247,10 @@ more small pull requests, each green on every suite before it merges.
       KB and main.js 245 KB; everything this item names to load later comes
       to about 50 KB, so that alone moves little. Done first: three.js in a
       chunk of its own (`vite.config.js`), whose name and bytes stay the same
-      from deploy to deploy — the app's half is now 544 KB, and a returning
-      browser revalidates three.js's 140 KB (gzipped) with a 304 instead of
-      fetching it again. The rest of the target needs 1.2, main.js split.)*
+      from deploy to deploy — the app's half is now about 525 KB, and a
+      returning browser revalidates three.js's 144 KB (gzipped) with a 304
+      instead of fetching it again. The rest of the target needs 1.2,
+      main.js split.)*
 - [ ] **1.7 Installable and offline.** A web app manifest and icons; a
       service worker that keeps the app shell for use with no signal and
       caches textures and HDRIs as they are first used, never all 29 MB up

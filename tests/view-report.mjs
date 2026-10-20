@@ -51,7 +51,12 @@ try {
   assert.match(await page.locator(".report-text").inputValue(), /Booth Studio problem report/);
   await page.click("#report-close");
   assert.equal(await page.evaluate(() => document.querySelector("#dialog").open), false);
-  console.log("PASS Report a problem keeps the page's errors and rejections and copies a report with the build, the browser, the project in counts (no names) and those errors, or shows it to copy by hand.");
+
+  // A chunk loaded on demand that a deploy took away (Vite's vite:preloadError): the page says to reload.
+  await page.evaluate(() => window.dispatchEvent(new Event("vite:preloadError")));
+  await page.waitForFunction(() => /updated while this tab was open/.test(document.querySelector("#toast")?.textContent || ""));
+  assert.match(await page.locator("#toast").innerText(), /Reload the page: your work is saved on this device/);
+  console.log("PASS Report a problem keeps the page's errors and rejections and copies a report with the build, the browser, the project in counts (no names) and those errors, or shows it to copy by hand; a chunk a deploy took away says to reload.");
 } finally {
   await browser.close();
   await server.close();
