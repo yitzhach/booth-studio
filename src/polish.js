@@ -17,7 +17,7 @@
 // The values are in this one table so that judgement is a one-line change.
 import { constrain, groundUpload, hallSpec, isArtShow, isShown, selectGround, uid, wallSpec } from "./model.js";
 import { hangAt, sameWall, spaceEvenly } from "./arrange.js";
-import { resolvePreset } from "./lighting.js";
+import { resolvePreset } from "./presets.js";
 
 /**
  * Each look: the environment preset it stands in (which brings its floor and

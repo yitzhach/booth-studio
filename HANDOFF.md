@@ -13,6 +13,23 @@ Extend it; do not rebuild it.
   the rules that bite. It does not need to be asked for again. That rule is
   about chat only: code comments, commit messages and this file stay in full
   prose, because a cold session has nothing else to read.
+- **2026-10-20: the assistant can apply a look and Make it beautiful
+  (Art-Talk-Back D-081).** Two booth ops in `src/scene-ops.js`:
+  `apply_look` (gallery, hall, fair, evening — `LOOKS` in `src/polish.js`)
+  and `make_beautiful` (the venue's look unless one is given, every wall
+  hung evenly on the 60″ line, the spotlights aimed at the work), each with
+  a card line in the app's words. "Make my booth look good for a jury photo"
+  is now one `placement_edit` instead of a pointer at a button. For it,
+  `polish.js` joins the scene build that studio-api runs, which meant moving
+  the environment presets (`ENV_PRESETS`, `resolvePreset` and the rules that
+  go with them) out of `src/lighting.js`, which imports three.js, into a pure
+  `src/presets.js`; `lighting.js` re-exports all of it, so no importer
+  changed. The build grows from 98 KB to 108 KB, still with no three.js in
+  it. Ships as a pair with Art-Talk-Back's branch of the same name (its
+  vendored `booth-scene.js`); the assistant Worker reads the op catalog from
+  studio-api's tool list, so no "Deploy production assistant" is needed.
+  Whether the model reaches for `make_beautiful` when asked in plain words is
+  the owner's to try in the chat.
 - **2026-10-20: a permanent way of working — `docs/WORKFLOW.md`.** The owner
   asked for a project-level workflow for cloud sessions (assessment, research,
   roadmap, phased building, review in rounds, tests, a checked deploy, this

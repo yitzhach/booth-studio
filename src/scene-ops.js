@@ -37,6 +37,10 @@ import { OWN, deleteEffect, liveNumber, setMine, setOpen } from "./linked.js";
 import { HANG_LINE, hangAt, sameWall, spaceEvenly } from "./arrange.js";
 import { FORMAT, placementOf } from "./placement.js";
 import { MAX_HEIGHT, MAX_LIFT, MAX_PEOPLE, MIN_HEIGHT, MIN_LIFT, PERSON_KINDS, newPerson, personHeight, personName } from "./people-kinds.js";
+// The looks and "Make it beautiful" (Rev 1 part B), so the assistant can do
+// what those buttons do. Named apart from LOOKS below, which is which way a
+// figure faces.
+import { LOOKS as BOOTH_LOOKS, applyLook, polish } from "./polish.js";
 
 export { FORMAT };
 export const SCENE_OPS_VERSION = 1;
@@ -341,6 +345,17 @@ export const OPS = [
       spacing: str("even (default) or keep", { enum: ["even", "keep"] }),
     },
     ["wall"],
+  ),
+  op(
+    "apply_look",
+    `Light and surround the booth in one of the app's named looks, all at once — ${Object.entries(BOOTH_LOOKS).map(([key, l]) => `${key} (${l.label}): ${l.blurb.replace(/\.$/, "")}`).join("; ")}. Sets the environment with its floor and horizon, the room light, and every spotlight's colour and power together; each stays editable by hand.`,
+    { look: str("One of the looks above", { enum: Object.keys(BOOTH_LOOKS) }) },
+    ["look"],
+  ),
+  op(
+    "make_beautiful",
+    `Make it beautiful, the app's one-tap polish: the look for the venue (gallery indoors and at an art show, fair under a canopy) unless look is given; every wall of this booth hung evenly, each work centred on the ${HANG_LINE}″ line (a wall carrying a sign or label is left as it hangs); and the spotlights aimed at the work, up to four, any beyond what is hung taken down. Use it when asked to make the booth look good or finished, or ready for a jury photograph.`,
+    { look: str("A look instead of the venue's, one of apply_look's", { enum: Object.keys(BOOTH_LOOKS) }) },
   ),
 
   // ---- the show floor
@@ -789,6 +804,16 @@ function run(p, o, i, refs) {
       const xs = o.spacing === "keep" ? {} : spaceEvenly(sameWall(works, works[0]), wall);
       p.art = p.art.map((a) => (ys[a.id] === undefined ? a : constrain(p, { ...a, y: ys[a.id], ...(xs[a.id] !== undefined ? { x: xs[a.id] } : {}) })));
       return `${wallLabel(p, key)}: ${works.length} work${works.length === 1 ? "" : "s"} centred ${inches(line)} off the floor${o.spacing === "keep" ? "" : ", evenly spaced"}`;
+    }
+    case "apply_look": {
+      const done = applyLook(p, o.look);
+      return `Light it as ${BOOTH_LOOKS[done.look].label}${done.hallOff ? "; the white hall goes, under the photographed sky" : ""}`;
+    }
+    case "make_beautiful": {
+      const done = polish(p, o.look ? { look: o.look } : {});
+      const parts = [BOOTH_LOOKS[done.look].label, done.walls ? `${done.walls} wall${done.walls === 1 ? "" : "s"} hung evenly` : "nothing hung to space"];
+      if (done.lights) parts.push(`${done.lights} spotlight${done.lights === 1 ? "" : "s"} aimed at the work`);
+      return `Make it beautiful: ${parts.join(", ")}${done.hallOff ? "; the white hall goes, under the photographed sky" : ""}`;
     }
     case "start_floor":
     case "set_floor":
