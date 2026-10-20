@@ -23,9 +23,11 @@ permissions:
   contents: read
 
 # A newer push to the same pull request makes the run for the older one
-# pointless: cancel it. Pushes to main always run to the end.
+# pointless: cancel it. Every other run (a push to main, a manual run) is a
+# group of its own, so none of them is ever cancelled or dropped from the
+# queue: a group keeps only one waiting run, even when it cancels nothing.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -126,9 +128,11 @@ jobs:
           done
           if [ -n "$failed" ]; then echo "::error::View suites failed:$failed"; exit 1; fi
 
+  # Runs when a needed job failed or was skipped, so that is a red check; not
+  # when the whole run was cancelled for a newer push, which is no verdict.
   booth:
     needs: [core, views]
-    if: always()
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - name: Every job passed

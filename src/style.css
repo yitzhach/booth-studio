@@ -2388,6 +2388,14 @@ section.sub-hidden {display:none;}
   .inspector-tabs button {flex:0 0 auto;min-width:56px;padding:8px 6px;}
   .inspector-tabs button span {white-space:nowrap;}
 }
+/* With a mouse the strip shows a thin scrollbar, so the tabs past the edge
+   read as more to scroll to rather than as missing; the wheel moves it too
+   (main.js, the strip's wheel listener). Touch screens keep it hidden. */
+@media (min-width:701px) and (max-width:1200px) and (pointer:fine) {
+  .inspector-tabs {scrollbar-width:thin;scrollbar-color:#46505b transparent;}
+  .inspector-tabs::-webkit-scrollbar {display:block;height:5px;}
+  .inspector-tabs::-webkit-scrollbar-thumb {background:#46505b;border-radius:3px;}
+}
 @media (max-width:700px) {
   .workspace-pill {display:none;}
 }
