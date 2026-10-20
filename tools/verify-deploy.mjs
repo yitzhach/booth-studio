@@ -7,8 +7,9 @@
 // stamp vite.config.js writes into the bundle as `commit:"<7 characters>"` —
 // or a later commit that contains it, and then opens the page in Chromium and
 // checks that the app starts: the 3D view has its canvas, the footer names
-// the commit, a project is open, and the page threw nothing. It only reads:
-// it never signs in, and the browser profile it uses is thrown away.
+// the commit, a project is open, no code file came back as the site's HTML
+// fallback, and the page threw nothing. It only reads: it never signs in, and
+// the browser profile it uses is thrown away.
 //
 //   node tools/verify-deploy.mjs                    origin/main, fetched first
 //   node tools/verify-deploy.mjs --commit fe7305d   a given commit
@@ -48,6 +49,13 @@ const POLL_MS = 20_000;
 const MAX_FAILED_READS = 3;
 const FLAGS = new Set(["--check-only", "--no-browser"]);
 const OPTIONS = new Set(["--commit", "--url", "--timeout"]);
+/**
+ * Browser network errors that say nothing about the deploy: the path to it
+ * (proxy, tunnel, name lookup, certificate, a reset or refused connection,
+ * which the proxy also produces). Anything else from a site the network just
+ * reached — an empty response, a redirect loop — is the deploy's own.
+ */
+const NO_PATH = /net::ERR_(PROXY|TUNNEL|NAME_NOT_RESOLVED|NAME_RESOLUTION|CERT_|INTERNET_DISCONNECTED|ADDRESS_UNREACHABLE|NETWORK_CHANGED|CONNECTION_RESET|CONNECTION_REFUSED|CONNECTION_CLOSED|TIMED_OUT|SSL_)/;
 const repo = fileURLToPath(new URL("..", import.meta.url));
 
 function stop(code, message) {
@@ -80,12 +88,13 @@ if (given["--url"] && !given["--commit"] && !checkOnly) {
   stop(3, "A preview serves its branch, not origin/main: give --commit with --url.");
 }
 
-/** Brings origin/main up to date, so merges made on GitHub are known here. */
-function fetchMain() {
+/** Fetches from origin (main only, or every branch); true when it worked. */
+function fetchOrigin(everything = false) {
   try {
-    git("fetch", "--quiet", "origin", "main");
+    git("fetch", "--quiet", "origin", ...(everything ? [] : ["main"]));
+    return true;
   } catch {
-    console.log("note   could not fetch origin/main; using this checkout's copy");
+    return false;
   }
 }
 
@@ -97,7 +106,9 @@ function expectedCommit() {
     return commit.slice(0, 7).toLowerCase();
   }
   if (checkOnly) return null;
-  fetchMain();
+  // A stale origin/main would name a commit that is already live and pass at
+  // once, before the merge that was meant has deployed.
+  if (!fetchOrigin()) stop(3, "Could not fetch origin/main, so the merge to wait for is unknown: give --commit.");
   try {
     return git("rev-parse", "origin/main").slice(0, 7);
   } catch {
@@ -115,12 +126,15 @@ const known = (commit) => {
 };
 
 /**
- * Whether the live commit already contains the expected one — a later merge
- * that deployed first. true or false, or null when this checkout cannot tell
- * (a commit it has not got, even after fetching; a shallow clone).
+ * Whether `live` contains `expected` (is it, or a later commit built on it).
+ * true or false, or null when this checkout cannot tell: a commit it hasn't
+ * got even after fetching main and then every branch (a preview's newer
+ * commits live on its branch), or a shallow clone.
  */
 function contains(live, expected) {
-  if (!known(live) || !known(expected)) fetchMain();
+  if (live === expected) return true;
+  if (!known(live) || !known(expected)) fetchOrigin();
+  if (!known(live) || !known(expected)) fetchOrigin(true);
   if (!known(live) || !known(expected)) return null;
   const run = spawnSync("git", ["-C", repo, "merge-base", "--is-ancestor", expected, live]);
   return run.status === 0 ? true : run.status === 1 ? false : null;
@@ -147,7 +161,8 @@ async function waitForCommit(expected) {
   const started = Date.now();
   let said = "";
   let failedReads = 0;
-  let checked = new Map();
+  // Settled answers only: a "cannot tell" is asked again on the next read.
+  const settled = new Map();
   for (;;) {
     let now;
     try {
@@ -161,25 +176,29 @@ async function waitForCommit(expected) {
       now = `unreadable (${error.message})`;
     }
     const seconds = Math.round((Date.now() - started) / 1000);
-    if (now === expected) {
-      console.log(`live   ${site} serves ${now} (expected ${expected}) after ${seconds} s`);
-      return now;
-    }
     const isCommit = /^[0-9a-f]{7}$/.test(now);
-    if (isCommit && !checked.has(now)) checked.set(now, contains(now, expected));
-    if (isCommit && checked.get(now) === true) {
-      console.log(`live   ${site} serves ${now}, a later commit that contains ${expected}, after ${seconds} s`);
-      return now;
+    let has = null;
+    if (isCommit) {
+      has = settled.has(now) ? settled.get(now) : contains(now, expected);
+      if (has !== null) settled.set(now, has);
+    }
+    if (has === true) {
+      console.log(
+        now === expected
+          ? `live   ${site} serves ${now} (expected ${expected}) after ${seconds} s`
+          : `live   ${site} serves ${now}, a later commit that contains ${expected}, after ${seconds} s`,
+      );
+      return expected;
     }
     if (now !== said) {
       console.log(`wait   ${site} serves ${now}; waiting for ${expected}`);
       said = now;
     }
     if (Date.now() - started + POLL_MS > timeoutMs) {
-      if (isCommit && checked.get(now) === null) {
-        stop(3, `FAIL   ${site} serves ${now}, and this checkout cannot tell whether it contains ${expected} (a shallow clone?): no verdict`);
-      }
-      stop(2, `FAIL   ${expected} was not live after ${timeoutMs / 60_000} min; ${site} still serves ${now}`);
+      // Only a commit read and known not to contain the expected one is a
+      // verdict; an unreadable site, a "local" stamp or "cannot tell" is not.
+      if (has === false) stop(2, `FAIL   ${expected} was not live after ${timeoutMs / 60_000} min; ${site} still serves ${now}`);
+      stop(3, `FAIL   after ${timeoutMs / 60_000} min ${site} serves ${now}, and whether that contains ${expected} cannot be told here (a shallow clone, a failed fetch, an unreadable page): no verdict`);
     }
     await sleep(POLL_MS);
   }
@@ -188,9 +207,9 @@ async function waitForCommit(expected) {
 /**
  * Opens the site in Chromium. `code` is 0 when the app started, 1 when the
  * page was reached but did not start cleanly, 3 when the check itself could
- * not run (no browser, no network path to the page).
+ * not run (no browser, no network path to the page, a browser that failed).
  */
-async function startsInBrowser(live) {
+async function startsInBrowser(expected) {
   const cannot = (error) => ({ code: 3, line: `FAIL   the browser check could not run: ${String(error?.message ?? error).split("\n")[0]}` });
   let browser;
   try {
@@ -220,8 +239,14 @@ async function startsInBrowser(live) {
     const origin = new URL(site).origin;
     page.on("response", (res) => {
       const u = new URL(res.url());
-      if (u.origin === origin && u.pathname.startsWith("/assets/") && res.status() >= 400) {
-        problems.push(`${res.status()} ${u.pathname}`);
+      if (u.origin !== origin || !u.pathname.startsWith("/assets/")) return;
+      // A missing file under /assets/ is not a 404 here: wrangler.jsonc's
+      // single-page-application fallback answers 200 with the app's HTML.
+      // For a script or a stylesheet that is a broken deploy; a missing
+      // texture is not (the app falls back to procedural surfaces by design).
+      const html = (res.headers()["content-type"] ?? "").includes("text/html");
+      if (res.status() >= 400 || (html && /\.(m?js|css)$/.test(u.pathname))) {
+        problems.push(`${u.pathname} answered ${res.status()} ${html ? "with the HTML fallback" : ""}`.trim());
       }
     });
     // A fresh browser is a first visit, and the welcome is modal; the test
@@ -231,10 +256,9 @@ async function startsInBrowser(live) {
     try {
       response = await page.goto(`${site}/`, { waitUntil: "domcontentloaded", timeout: 120_000 });
     } catch (error) {
-      // No network path from the browser is no verdict; a page the network
-      // reaches that never finishes arriving is a page that did not start.
-      if (/net::ERR_/.test(String(error?.message))) return cannot(error);
-      problems.push(`the page did not arrive within 120 s (${String(error?.message).split("\n")[0]})`);
+      const message = String(error?.message);
+      if (NO_PATH.test(message)) return cannot(error);
+      problems.push(`the page did not arrive (${message.split("\n")[0]})`);
     }
     if (response && response.status() >= 400) problems.push(`the page answered ${response.status()}`);
     if (!problems.length) {
@@ -250,8 +274,14 @@ async function startsInBrowser(live) {
         footer: document.querySelector("#build-stamp")?.textContent ?? "",
         project: document.querySelector("#scene-title")?.textContent.trim() ?? "",
       }));
-      if (live && seen.commit?.slice(0, 7) !== live) problems.push(`window.BOOTH_BUILD.commit is ${seen.commit}, not ${live}`);
-      if (seen.commit && !seen.footer.includes(seen.commit)) problems.push(`the footer does not name ${seen.commit}`);
+      // A later merge can land between the wait and this load; a commit that
+      // contains the expected one is still a pass, and one this checkout
+      // cannot place is no verdict rather than a broken page.
+      const commit = seen.commit?.slice(0, 7) ?? "";
+      const has = /^[0-9a-f]{7}$/.test(commit) ? contains(commit, expected) : null;
+      if (has === null) return cannot(`the page reports commit ${seen.commit}, which cannot be compared with ${expected} here`);
+      if (has === false) problems.push(`window.BOOTH_BUILD.commit is ${seen.commit}, which does not contain ${expected}`);
+      if (!seen.footer.includes(seen.commit)) problems.push(`the footer does not name ${seen.commit}`);
       if (!seen.project) problems.push("no project is open (the scene title is empty)");
       if (!problems.length) {
         const took = ((Date.now() - started) / 1000).toFixed(1);
@@ -261,8 +291,8 @@ async function startsInBrowser(live) {
     const took = ((Date.now() - started) / 1000).toFixed(1);
     return { code: 1, line: `FAIL   the page did not start cleanly (${took} s):\n  ${problems.join("\n  ")}` };
   } catch (error) {
-    // The browser itself failing mid-check (a crashed renderer, a closed
-    // target) is the tool's failure, not the deploy's.
+    // The browser failing mid-check (a crashed renderer, a closed target) is
+    // the tool's failure, not the deploy's.
     return cannot(error);
   } finally {
     await browser.close().catch(() => {});
@@ -281,14 +311,14 @@ if (checkOnly) {
     console.log(`live   ${site} serves ${now}`);
     process.exit(0);
   }
-  const has = now === expected || contains(now, expected);
+  const has = /^[0-9a-f]{7}$/.test(now) ? contains(now, expected) : null;
   const verdict = now === expected ? "as expected" : has === true ? `contains ${expected}` : has === null ? `cannot tell whether it contains ${expected}` : `expected ${expected}`;
   console.log(`live   ${site} serves ${now} (${verdict})`);
   process.exit(has === true ? 0 : has === null ? 3 : 2);
 }
-const live = await waitForCommit(expected);
+await waitForCommit(expected);
 if (!given["--no-browser"]) {
-  const result = await startsInBrowser(live);
+  const result = await startsInBrowser(expected);
   console.log(result.line);
   process.exit(result.code);
 }

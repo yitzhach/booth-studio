@@ -32,10 +32,15 @@ export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 notes=""
 note() { notes="${notes:+$notes; }$1"; }
 if [ ! -f node_modules/.package-lock.json ] || [ package-lock.json -nt node_modules/.package-lock.json ]; then
-  if timeout 540 npm ci --no-audit --no-fund --loglevel=error >/tmp/booth-studio-npm-ci.log 2>&1; then
+  # GNU timeout signals npm's whole process group, install scripts included.
+  timeout 540 npm ci --no-audit --no-fund --loglevel=error >/tmp/booth-studio-npm-ci.log 2>&1
+  status=$?
+  if [ "$status" -eq 0 ]; then
     note "npm ci done"
+  elif [ "$status" -eq 124 ]; then
+    note "npm ci STALLED and was stopped after 9 minutes (log: /tmp/booth-studio-npm-ci.log); run it by hand before testing"
   else
-    note "npm ci FAILED (log: /tmp/booth-studio-npm-ci.log), run it by hand before testing"
+    note "npm ci FAILED, exit $status (log: /tmp/booth-studio-npm-ci.log); run it by hand before testing"
   fi
 else
   note "node_modules up to date"
@@ -45,11 +50,17 @@ fi
 # written once, however often the session restarts (resume, compact).
 chromium=/opt/pw-browsers/chromium
 if [ -n "${BOOTH_TEST_CHROMIUM:-}" ]; then
-  note "BOOTH_TEST_CHROMIUM=$BOOTH_TEST_CHROMIUM (already set)"
-elif [ -x "$chromium" ] && [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+  if [ -x "$BOOTH_TEST_CHROMIUM" ]; then
+    note "BOOTH_TEST_CHROMIUM=$BOOTH_TEST_CHROMIUM (already set)"
+  else
+    note "BOOTH_TEST_CHROMIUM=$BOOTH_TEST_CHROMIUM is set but not executable: browser suites will not launch"
+  fi
+elif [ ! -x "$chromium" ]; then
+  note "no Chromium at $chromium: browser suites need BOOTH_TEST_CHROMIUM pointed at one"
+elif [ -n "${CLAUDE_ENV_FILE:-}" ]; then
   grep -qs "BOOTH_TEST_CHROMIUM=" "$CLAUDE_ENV_FILE" || echo "export BOOTH_TEST_CHROMIUM=$chromium" >>"$CLAUDE_ENV_FILE"
   note "BOOTH_TEST_CHROMIUM=$chromium"
-elif [ -x "$chromium" ]; then
+else
   note "no CLAUDE_ENV_FILE: prefix browser suites with BOOTH_TEST_CHROMIUM=$chromium"
 fi
 
