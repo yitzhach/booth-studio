@@ -7016,13 +7016,15 @@ async function boot() {
     // The assistant panel's 🖼: the booth as it is drawn now — clean, without
     // controls or outlines, in the window's own shape — as a PNG `long` px on
     // its long side, for the panel to shrink and send with the next message.
-    // Photo mode gives the photo composition, as Export PNG does. Null while
-    // another export holds the renderer.
+    // Photo mode gives the photo composition (photo.export takes a width).
+    // Null while an export or a previewed move holds the renderer.
     viewPicture: async (long) => {
-      if (busy || busyVideo) return null;
+      if (busy || busyVideo || busyPreview) return null;
       busy = true;
       try {
-        return p.mode === "photo" ? await photo.export(long) : ((await scene?.export(long)) ?? null);
+        if (p.mode !== "photo") return (await scene?.export(long)) ?? null;
+        const a = p.assets[p.photo.asset];
+        return await photo.export(a && a.height > a.width ? Math.round((long * a.width) / a.height) : long);
       } finally {
         busy = false;
       }

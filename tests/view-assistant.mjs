@@ -297,9 +297,14 @@ try {
   await launch.click();
   assert.equal(await viewBtn.isHidden(), false, 'the 🖼 where the app can draw the booth');
   chat = [{ type: 'text', text: 'Balanced. The big piece would sit better in the centre.' }, { type: 'end', reason: 'end_turn' }];
+  // Attached, the empty box suggests asking about it; taken off with ×, the usual hint is back.
   await viewBtn.click();
   await inPanel('.pic img').waitFor();
   assert.match(await inPanel('textarea').getAttribute('placeholder'), /Ask about this view/);
+  await inPanel('.pic button[aria-label="Remove picture 1"]').click();
+  assert.match(await inPanel('textarea').getAttribute('placeholder'), /^e\.g\. make this/);
+  // Asked at once, before the booth is drawn: the question waits for it and goes with it.
+  await viewBtn.click();
   await inPanel('textarea').fill('how does this look?');
   await inPanel('textarea').press('Enter');
   await inPanel('.msg.bot:text("Balanced. The big piece would sit better in the centre.")').waitFor();

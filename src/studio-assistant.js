@@ -586,7 +586,7 @@ class Panel extends HTMLElement {
   }
 
   /** Shrinks and previews picked pictures, up to MAX_PICTURES; each has a × to take it off. */
-  async addPictures(files) {
+  async addPictures(files, { view = false } = {}) {
     this.setNote("");
     for (const f of files) {
       if (this.pictures.length >= MAX_PICTURES) {
@@ -595,7 +595,7 @@ class Panel extends HTMLElement {
       }
       if (!/^image\//.test(f.type)) continue;
       try {
-        this.pictures.push(await shrinkPicture(f));
+        this.pictures.push({ ...(await shrinkPicture(f)), ...(view ? { view: true } : {}) });
       } catch {
         this.setNote("That picture couldn’t be opened. Try a JPEG or PNG.");
       }
@@ -604,26 +604,33 @@ class Panel extends HTMLElement {
     this.input.focus();
   }
 
-  /** The booth as it is drawn now, as one more picture with the next message. */
-  async addView() {
-    this.setNote("");
+  /**
+   * The booth as it is drawn now (host.viewPicture), as one more picture with
+   * the next message — through addPictures, so the cap and the tray are the
+   * 📷's. A message sent while it renders waits for it (send).
+   */
+  addView() {
     if (this.pictures.length >= MAX_PICTURES) return this.setNote(`Up to ${MAX_PICTURES} pictures with one message.`);
-    this.viewBtn.disabled = true;
-    try {
-      const shot = await this.host.viewPicture(PICTURE_EDGE);
-      if (!shot) throw new Error("No picture of the booth.");
-      this.pictures.push(await shrinkPicture(shot));
-      this.paintPictures();
-      if (!this.input.value.trim()) this.input.placeholder = VIEW_PLACEHOLDER;
-    } catch {
-      this.setNote("The booth couldn’t be pictured just now. A screenshot works too: 📷.");
-    } finally {
-      this.viewBtn.disabled = false;
-    }
-    this.input.focus();
+    this.viewing ||= (async () => {
+      this.setNote("");
+      this.viewBtn.disabled = true;
+      try {
+        const shot = await this.host.viewPicture(PICTURE_EDGE);
+        if (shot) await this.addPictures([shot], { view: true });
+        else this.setNote("An export is drawing the booth just now: try again when it has finished.");
+      } catch (err) {
+        this.setNote(err?.message || "The booth couldn’t be pictured just now. A screenshot works too: 📷.");
+      } finally {
+        this.viewBtn.disabled = false;
+        this.viewing = null;
+      }
+    })();
+    return this.viewing;
   }
 
   paintPictures() {
+    // With the booth attached, the empty box suggests asking about it.
+    this.input.placeholder = this.pictures.some((p) => p.view) ? VIEW_PLACEHOLDER : ASK_PLACEHOLDER;
     this.pics.textContent = "";
     this.pictures.forEach((p, i) => {
       const x = el("button", { class: "btn", type: "button", "aria-label": `Remove picture ${i + 1}`, text: "×" });
@@ -637,6 +644,8 @@ class Panel extends HTMLElement {
   }
 
   async send(text) {
+    // The booth still being pictured (🖼) goes with this message, not the next.
+    if (this.viewing) await this.viewing;
     text = String(text || "").trim();
     if ((!text && !this.pictures.length) || this.busy) return;
     this.setNote("");
@@ -660,7 +669,6 @@ class Panel extends HTMLElement {
     const pictures = this.pictures;
     this.pictures = [];
     this.paintPictures();
-    this.input.placeholder = ASK_PLACEHOLDER;
     const mine = this.say("me", text);
     for (const p of pictures.slice().reverse()) mine.prepend(el("img", { src: p.url, alt: "Picture sent" }));
     const bubble = this.say("bot thinking", "Thinking…");
