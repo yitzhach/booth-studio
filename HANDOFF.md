@@ -2858,13 +2858,16 @@ node tools/verify-deploy.mjs   # after a merge: waits for production to serve th
 lint` is ESLint's recommended rules (`eslint.config.js` says which two are
 loosened and why: an empty `catch {}`, and a name starting with `_`), over
 `src/` (not `src/vendor/`), `tests/`, `tools/` and `worker/`. Its first run
-found fourteen things, all dead code — unused imports and variables — and no
-undefined name; they are gone. `npm run typecheck` is TypeScript reading the
-JavaScript as it is (`checkJs`, no emit, not strict) from `src/scene-ops.js`
-and everything it imports — what studio-api runs — with the JSDoc as the
-types; its fifteen findings were all types inferred too narrowly from a
-default parameter, fixed in the JSDoc, and the scene bundle came out byte for
-byte the same. Both run first in CI's `core` job.
+found thirteen unused names — imports and variables — and a needless escape,
+and no undefined name; they are gone. `npm run typecheck` is TypeScript
+reading the JavaScript as it is (`checkJs`, no emit, not strict) from
+`src/scene-ops.js` and everything it imports — what studio-api runs — with
+the JSDoc as the types and a Worker's globals, not the page's (so a
+`document` in that code fails the check; the canvas half of the image edits
+moved to `src/image-paint.js` for it). Its fifteen findings were all types
+inferred too narrowly — from a default parameter or a destructured `[lo,
+hi]` — fixed in the JSDoc; the scene bundle came out byte for byte the
+same. Both run first in CI's `core` job.
 
 **`tests/view-wall-assets.mjs` (was `tests/wall-assets.mjs`) is green and
 in `npm run test:view` since 2026-10-20.** It had failed at line 120 since

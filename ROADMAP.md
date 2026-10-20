@@ -229,12 +229,14 @@ more small pull requests, each green on every suite before it merges.
       breaks the platform as well as the app. Then the other pure modules.
       *(2026-10-20: the first half is in — `npm run typecheck`
       (`tsconfig.json`) checks `src/scene-ops.js` and everything it imports,
-      in CI. Left: the other pure modules.)*
+      against a Worker's globals, in CI. Left: the other pure modules.)*
 - [x] **1.5 A linter in CI.** ESLint's flat config with its recommended
       rules plus `no-undef` and `no-unused-vars`. Fix what it finds in the
       same pull request, or turn the rule off with a reason.
-      *(2026-10-20: `npm run lint`, `eslint.config.js`; fourteen dead-code
-      findings fixed, none turned off.)*
+      *(2026-10-20: `npm run lint`, `eslint.config.js`; fourteen findings
+      fixed — thirteen unused names and a needless escape. No rule is off;
+      two are loosened, with the reasons in the config: an empty `catch {}`,
+      and unread parameters, caught errors and `_` names.)*
 - [ ] **1.6 A lighter first load.** Load on first use, not at start: video
       export, the timeline and the batch; the show floor and the 3D show;
       the print sheets (hanging guide, elevations, show pack, power, hall

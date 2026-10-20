@@ -7,7 +7,8 @@ import { SHADOW_GLSL, SHADOW_KINDS, shadowPlan, shadowSpec } from "./dropshadow.
 import { TextureCache } from "./texture-cache.js";
 import { EnvironmentLighting, artEnvIntensity, DEFAULT_FIDELITY, showFixtures } from "./lighting.js";
 import { GROUND_CONSUMER, TENT_CONSUMER, TENT_WEAVE, WALL_CONSUMER, WALL_SET, UV_METRE, SurfaceTextures } from "./surfaces.js";
-import { applyImageEdits, editedAspect, hasImageEdits } from "./image-edit.js";
+import { editedAspect, hasImageEdits } from "./image-edit.js";
+import { applyImageEdits } from "./image-paint.js";
 import { decodeAt, isPreflipped } from "./image-source.js";
 import { IN, PEDESTAL, FURNITURE, furnitureKind, boothPedestals, isShown, edgeColorOf, lightVisible, constrain, groundKind, groundUpload, constrainPanel, constrainPedestal, findPanel, findPedestal, isArtShow, lightBarSpec, isPanelKey, scalePanel, wallKeys, wallSpec } from "./model.js";
 import { lightBarBounce, lightBarFixtures, lightBarOptics, lightBarRail } from "./lightbar.js";

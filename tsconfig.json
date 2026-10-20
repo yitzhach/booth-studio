@@ -3,9 +3,11 @@
 // JSDoc already there as the types. It starts with what `npm run
 // bundle:scene` ships to studio-api — src/scene-ops.js and every module it
 // imports — because a mistake there breaks the platform as well as the app.
-// Add a module by importing it from one of these, or by adding it to
-// "files". Not strict: the aim is to catch a wrong call, not to annotate
-// every line.
+// That build runs in a Cloudflare Worker, so the globals are a Worker's
+// ("webworker"), not the page's: a `document`, `window` or `localStorage`
+// anywhere in those modules fails here, before it can fail in studio-api.
+// (That is why the canvas half of the image edits is src/image-paint.js.)
+// Not strict: the aim is to catch a wrong call, not to annotate every line.
 {
   "compilerOptions": {
     "allowJs": true,
@@ -14,7 +16,7 @@
     "target": "es2022",
     "module": "esnext",
     "moduleResolution": "bundler",
-    "lib": ["es2022", "dom"],
+    "lib": ["es2022", "webworker"],
     "skipLibCheck": true
   },
   "files": ["src/scene-ops.js"]

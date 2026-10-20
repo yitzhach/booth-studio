@@ -12,7 +12,8 @@ import { SIZES, DEFAULT_SIZE, FPS, DEFAULT_FPS, videoSupported, pickCodec } from
 import { FRAMES, DEFAULT_FRAME, DEFAULT_CLIP_FRAME, CUSTOM_FRAME, FRAME_MIN, FRAME_MAX, STILL_SIZES, frameSize, guideRect, placeRect, placeFromRect, normalPlace, DEFAULT_PLACE } from "./framing.js";
 import { SHADOW_FIELD, SHADOW_KINDS, SHADOW_MAX, globalAngle, normalAngle, shadowSpec } from "./dropshadow.js";
 import { MAX_SWATCHES, isColor, readPalette, savePalette, removeSwatch, rememberColor, previousColor } from "./swatches.js";
-import { applyImageEdits, DEFAULT_IMAGE_EDITS, normalizeImageEdits } from "./image-edit.js";
+import { DEFAULT_IMAGE_EDITS, normalizeImageEdits } from "./image-edit.js";
+import { applyImageEdits } from "./image-paint.js";
 import { PEOPLE, MAX_PEOPLE, flipFacing, MIN_HEIGHT, MAX_HEIGHT, MAX_LIFT, MIN_LIFT, LIFT_STEP, newPerson, personName } from "./people.js";
 import { FLARE_SOURCES, OVERHEAD } from "./flare.js";
 import {
@@ -234,8 +235,8 @@ import { FOOTPRINTS, SHOWS, STARTERS, fromTemplate, quickStart, templateOf } fro
 import { PhotoEditor } from "./photo.js";
 import { hangingGuide } from "./guide.js";
 import { showPack } from "./showpack.js";
-// `fold` is also the inspector's open/closed helper below, which hides this one inside
-// the app; text matching uses `foldText`.
+// Tool search's `fold` comes in as `foldText`: in this file `fold` is the
+// inspector's open/closed helper, below.
 import { SHORTCUTS, dedupe, fold as foldText, rankTools, shortcutOf } from "./toolsearch.js";
 import { PRO_FEATURES, TIERS, actionFeature, can, readTier, resolveTier, writeTier } from "./tier.js";
 import { HERO_CLIP, LOOKS, applyEnvPreset, applyLook, currentLook, heroShots, polish } from "./polish.js";
