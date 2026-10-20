@@ -49,9 +49,7 @@ async function post(url, body) {
   });
   const data = await res.json().catch(() => null);
   if (!res.ok) {
-    const e = new Error(data?.error?.message || `The studio answered ${res.status}`);
-    e.status = res.status;
-    throw e;
+    throw Object.assign(new Error(data?.error?.message || `The studio answered ${res.status}`), { status: res.status });
   }
   return data;
 }
@@ -916,6 +914,7 @@ export async function mount(bridge, host) {
     const r = await fetch("/assistant/status", { credentials: "same-origin" });
     available = r.ok && (await r.json())?.available === true;
   } catch {}
+  /** @type {any} the custom element defined above */
   let panel = document.querySelector("studio-assistant");
   if (!panel) {
     panel = document.createElement("studio-assistant");

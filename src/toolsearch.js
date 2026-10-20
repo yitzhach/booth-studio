@@ -118,7 +118,7 @@ export function shortcutOf(entry, shortcuts = SHORTCUTS) {
  * it lives; shorter labels win a tie, because "Height" searched for is more
  * likely the wall's height than "Target height".
  */
-export function rankTools(entries, query, limit = 12, shortcuts = SHORTCUTS) {
+export function rankTools(entries, query, limit = 12, /** @type {Record<string, { label: string, where: string, group?: string }>} */ shortcuts = SHORTCUTS) {
   const words = fold(query).split(" ").filter(Boolean);
   if (!words.length) return [];
   // A shortcut typed exactly puts its control first; whatever else the words

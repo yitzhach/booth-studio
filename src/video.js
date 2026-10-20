@@ -316,7 +316,7 @@ export async function pickCodec({ width, height, framerate, bitrate }) {
       // "avc" asks for length-prefixed samples and an avcC description, which
       // is exactly what the muxer wants. VP9 in MP4 has no equivalent knob:
       // its samples are already self-delimiting.
-      ...(kind === "avc" ? { avc: { format: "avc" } } : {}),
+      ...(kind === "avc" ? { avc: { format: /** @type {"avc"} */ ("avc") } } : {}),
     };
     try {
       const support = await VideoEncoder.isConfigSupported(config);
@@ -358,7 +358,7 @@ export async function recordMp4({
   // yielding. Optional, because on a machine that keeps up it is paying twice
   // for nothing.
   settleFrame = null,
-  onProgress = () => {},
+  onProgress = /** @type {(fraction: number) => void} */ (() => {}),
   signal,
 }) {
   const chosen = await pickCodec({ width, height, framerate: fps, bitrate });
@@ -376,6 +376,7 @@ export async function recordMp4({
     output: (chunk, metadata) => {
       // The decoder description arrives with the first chunk, not from
       // configure(), so it is captured rather than requested.
+      /** @type {any} an ArrayBuffer, or a view over one */
       const incoming = metadata?.decoderConfig?.description;
       if (incoming && !description)
         description = incoming instanceof ArrayBuffer ? new Uint8Array(incoming) : new Uint8Array(incoming.buffer ?? incoming, incoming.byteOffset ?? 0, incoming.byteLength ?? incoming.length);

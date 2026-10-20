@@ -117,6 +117,8 @@ export function describeShow(h, openNumber) {
 /**
  * The whole scene in words: the show when one is being looked at, then the
  * booth drawn in full (if any), then what the frame is.
+ * @param {object} p the project
+ * @param {{ show?: object | null, openNumber?: number | string }} [options]
  */
 export function describeScene(p, { show = null, openNumber } = {}) {
   const out = [];

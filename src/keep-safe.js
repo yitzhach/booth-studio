@@ -71,7 +71,7 @@ export function noteKeepSafe(storage, id, what, now = new Date()) {
 export function backupDue({ hasOwnImages, signedIn, backup, reminded, now = new Date(), days = REMIND_DAYS }) {
   if (signedIn || !hasOwnImages) return false;
   // A time more than a day ahead was written by a clock that was wrong: due.
-  const old = (d) => !d || now - d >= days * DAY || d - now > DAY;
+  const old = (d) => !d || +now - +d >= days * DAY || +d - +now > DAY;
   return old(backup) && old(reminded);
 }
 

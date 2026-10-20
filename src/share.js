@@ -143,7 +143,13 @@ export function forgetLink(id, store = globalThis.localStorage) {
   saveLinks(sentLinks(store).filter((l) => l.id !== id), store);
 }
 
-/** Fetch a share: the manifest, and the originals too when `full`. */
+/**
+ * Fetch a share: the manifest, and the originals too when `full`.
+ * @param {string} id
+ * @param {boolean} full
+ * @param {(done: number, total: number) => void} [progress]
+ * @param {typeof fetch} [f]
+ */
 export async function downloadShare(id, full, progress = () => {}, f = fetch) {
   const manifest = await (await answer(await f(`${API}/${encodeURIComponent(id)}`))).json();
   if (manifest?.kind !== SHARE_KIND) throw new Error("That link is not a booth.");

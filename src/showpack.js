@@ -30,7 +30,7 @@ export function inventory(p) {
   return p.art
     .filter((a) => !a.booth && (a.kind || "art") === "art" && onShownWall(p, a))
     .slice()
-    .sort((a, b) => order.indexOf(a.wall) - order.indexOf(b.wall) || (a.face === "outside") - (b.face === "outside") || a.x - b.x);
+    .sort((a, b) => order.indexOf(a.wall) - order.indexOf(b.wall) || Number(a.face === "outside") - Number(b.face === "outside") || a.x - b.x);
 }
 
 /**
