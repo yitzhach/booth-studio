@@ -41,6 +41,7 @@ import { MAX_HEIGHT, MAX_LIFT, MAX_PEOPLE, MIN_HEIGHT, MIN_LIFT, PERSON_KINDS, n
 // what those buttons do. Named apart from LOOKS below, which is which way a
 // figure faces.
 import { LOOKS as BOOTH_LOOKS, applyLook, polish } from "./polish.js";
+import { resolvePreset } from "./presets.js";
 
 export { FORMAT };
 export const SCENE_OPS_VERSION = 1;
@@ -131,8 +132,9 @@ export function fieldsOf(scene) {
 
 /**
  * What is in a booth, small enough for a model to read: the booth, its walls,
- * each work and each piece of furniture with its id and position. Never the
- * images, lights or camera.
+ * each work and each piece of furniture with its id and position, and the
+ * lighting as levels (where each spotlight hangs is the app's to work out).
+ * Never the images or the camera.
  */
 export function describe(scene, images = []) {
   const p = projectOf(scene, images);
@@ -174,8 +176,29 @@ export function describe(scene, images = []) {
       ...(x.lift ? { lift: x.lift } : {}), ...(x.hidden ? { hidden: true } : {}),
     })),
     ...(b.showPeople === false ? { peopleShown: false } : {}),
+    lighting: lightingSummary(p),
     floor: p.hall ? floorSummary(p.hall) : null,
     limits: { furniture: MAX_PEDESTALS, freeStandingWalls: MAX_PANELS, people: MAX_PEOPLE, floorPieces: MAX_ITEMS, ops: MAX_OPS },
+  };
+}
+
+/**
+ * The lighting as the Lighting tab shows it: the look it is in, if every
+ * value still matches one (a look stays editable, so after a change by hand
+ * it is in none), the environment, the room light and each spotlight's
+ * temperature and brightness.
+ */
+function lightingSummary(p) {
+  const env = resolvePreset(p.booth.envPreset);
+  const look = Object.keys(BOOTH_LOOKS).find((key) => {
+    const l = BOOTH_LOOKS[key];
+    return l.envPreset === env.id && l.ambient === p.ambient && p.lights.every((x) => x.kelvin === l.kelvin && x.power === l.power);
+  });
+  return {
+    look: look ?? null,
+    environment: env.label,
+    ambient: p.ambient,
+    spotlights: p.lights.map((l) => ({ kelvin: l.kelvin, power: l.power, ...(l.on === false ? { hidden: true } : {}) })),
   };
 }
 
@@ -356,6 +379,15 @@ export const OPS = [
     "make_beautiful",
     `Make it beautiful, the app's one-tap polish: the look for the venue (gallery indoors and at an art show, fair under a canopy) unless look is given; every wall of this booth hung evenly, each work centred on the ${HANG_LINE}″ line (a wall carrying a sign or label is left as it hangs); and the spotlights aimed at the work, up to four, any beyond what is hung taken down. Use it when asked to make the booth look good or finished, or ready for a jury photograph.`,
     { look: str("A look instead of the venue's, one of apply_look's", { enum: Object.keys(BOOTH_LOOKS) }) },
+  ),
+  op(
+    "set_lighting",
+    "Change the light by hand, as the Lighting tab's sliders do: the room light (ambient) and every spotlight's temperature and brightness at once. describe_booth lists the current values. For a whole look at once use apply_look; to aim the spotlights at the work, make_beautiful.",
+    {
+      ambient: num("Ambient illumination, the room light: 0–4, 1.25 to start with; under 1 is a dim room", { minimum: 0, maximum: 4 }),
+      kelvin: num("Every spotlight's temperature in kelvin: 2700 (warm, like a lamp) to 6500 (cool daylight); 4000 to start with", { minimum: 2700, maximum: 6500 }),
+      power: num("Every spotlight's brightness: 0–300, 75 to start with", { minimum: 0, maximum: 300 }),
+    },
   ),
 
   // ---- the show floor
@@ -814,6 +846,25 @@ function run(p, o, i, refs) {
       const parts = [BOOTH_LOOKS[done.look].label, done.walls ? `${done.walls} wall${done.walls === 1 ? "" : "s"} hung evenly` : "nothing hung to space"];
       if (done.lights) parts.push(`${done.lights} spotlight${done.lights === 1 ? "" : "s"} aimed at the work`);
       return `Make it beautiful: ${parts.join(", ")}${done.hallOff ? "; the white hall goes, under the photographed sky" : ""}`;
+    }
+    case "set_lighting": {
+      const said = [];
+      if (has(o, "ambient")) {
+        p.ambient = Math.round(o.ambient * 100) / 100;
+        said.push(`ambient ${p.ambient}`);
+      }
+      if (has(o, "kelvin") || has(o, "power")) {
+        if (!p.lights.length) throw new SceneOpError(`Op ${i + 1} (set_lighting): this booth has no spotlights; make_beautiful adds them, aimed at the work.`, i);
+        for (const l of p.lights) {
+          if (has(o, "kelvin")) l.kelvin = Math.round(o.kelvin);
+          if (has(o, "power")) l.power = Math.round(o.power);
+        }
+        const what = [has(o, "kelvin") ? `${Math.round(o.kelvin)} K` : "", has(o, "power") ? `brightness ${Math.round(o.power)}` : ""].filter(Boolean);
+        const n = p.lights.length;
+        said.push(`${n === 1 ? "the spotlight" : n === 2 ? "both spotlights" : `all ${n} spotlights`} at ${what.join(", ")}`);
+      }
+      if (!said.length) throw new SceneOpError(`Op ${i + 1} (set_lighting): say what to change.`, i);
+      return `Light it: ${said.join("; ")}`;
     }
     case "start_floor":
     case "set_floor":

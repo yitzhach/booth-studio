@@ -44,7 +44,7 @@ test("describe: the booth, its walls, each work and piece with its id and place 
 test("every op is in the catalog with a JSON Schema whose op is its own name", () => {
   assert.deepEqual(OP_NAMES, [
     "rename", "set_booth", "add_furniture", "change_furniture", "remove_furniture", "add_person", "change_person", "remove_person", "add_wall", "change_wall", "remove_wall", "change_art", "remove_art", "arrange_wall",
-    "apply_look", "make_beautiful",
+    "apply_look", "make_beautiful", "set_lighting",
     "start_floor", "set_floor", "add_booths", "add_floor_piece", "change_floor_piece", "remove_floor_piece", "set_exhibitor", "mark_my_booth", "fit_floor",
   ]);
   for (const o of OPS) {
@@ -405,4 +405,40 @@ test("a look and Make it beautiful, by name: what the Lighting tab's buttons do,
   const empty = sceneOf(blankProject());
   const { lines: l4 } = applyOps(empty, [{ op: "make_beautiful" }], []);
   assert.equal(l4[0], "Make it beautiful: Gallery white, nothing hung to space");
+});
+
+test("the lighting by hand: described as the Lighting tab shows it, set as its sliders set it", () => {
+  const { p, scene, images } = synced();
+  // A new booth is in no look: the neutral studio, with the room light and spotlights it starts with.
+  assert.deepEqual(describe(scene, images).lighting, {
+    look: null, environment: "Studio · neutral", ambient: 1.25,
+    spotlights: [{ kelvin: 4000, power: 75 }, { kelvin: 4000, power: 75 }],
+  });
+  // A look is named while every value still matches it, and in none once one is changed by hand.
+  const { scene: s1 } = applyOps(scene, [{ op: "apply_look", look: "evening" }], images);
+  assert.equal(describe(s1, images).lighting.look, "evening");
+  const { scene: s2, lines } = applyOps(s1, [{ op: "set_lighting", ambient: 0.6, kelvin: 2700 }], images);
+  assert.equal(lines[0], "Light it: ambient 0.6; both spotlights at 2700 K");
+  assert.equal(s2.ambient, 0.6);
+  assert.ok(s2.lights.every((l) => l.kelvin === 2700 && l.power === 120), "brightness left as it was");
+  assert.deepEqual(describe(s2, images).lighting, {
+    look: null, environment: "Home · interior", ambient: 0.6,
+    spotlights: [{ kelvin: 2700, power: 120 }, { kelvin: 2700, power: 120 }],
+  });
+  assert.doesNotThrow(() => opens(s2, p));
+  const { lines: l3 } = applyOps(s1, [{ op: "set_lighting", power: 150.4, kelvin: 3500 }], images);
+  assert.equal(l3[0], "Light it: both spotlights at 3500 K, brightness 150");
+
+  // A hidden spotlight is listed as hidden, and changed with the rest.
+  const one = { ...scene, lights: [{ ...scene.lights[0], on: false }] };
+  assert.deepEqual(describe(one, images).lighting.spotlights, [{ kelvin: 4000, power: 75, hidden: true }]);
+  assert.equal(applyOps(one, [{ op: "set_lighting", power: 90 }], images).lines[0], "Light it: the spotlight at brightness 90");
+
+  // Refused by name, and nothing written: nothing to change, past a slider's end, no spotlights to set.
+  assert.throws(() => applyOps(scene, [{ op: "set_lighting" }], images), /set_lighting\): say what to change/);
+  assert.throws(() => applyOps(scene, [{ op: "set_lighting", kelvin: 9000 }], images), /kelvin must be at most 6500/);
+  assert.throws(() => applyOps(scene, [{ op: "set_lighting", ambient: -1 }], images), /ambient must be at least 0/);
+  const dark = { ...scene, lights: [] };
+  assert.throws(() => applyOps(dark, [{ op: "set_lighting", power: 100 }], images), /no spotlights; make_beautiful adds them/);
+  assert.equal(applyOps(dark, [{ op: "set_lighting", ambient: 2 }], images).lines[0], "Light it: ambient 2");
 });

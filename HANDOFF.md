@@ -28,8 +28,16 @@ Extend it; do not rebuild it.
   it. Ships as a pair with Art-Talk-Back's branch of the same name (its
   vendored `booth-scene.js`); the assistant Worker reads the op catalog from
   studio-api's tool list, so no "Deploy production assistant" is needed.
-  Whether the model reaches for `make_beautiful` when asked in plain words is
-  the owner's to try in the chat.
+  The same pull request lets the assistant see and set the light by hand:
+  `describe` (the assistant's `describe_booth`) now carries a `lighting`
+  block — the look the booth is in while every value still matches one, the
+  environment, the ambient level and each spotlight's temperature and
+  brightness, never where a spotlight hangs — and `set_lighting` sets the
+  ambient level and every spotlight's temperature and brightness, as the
+  Lighting tab's sliders do ("Light it: ambient 0.6; both spotlights at
+  2700 K"). "Make it warmer" no longer has to throw the whole look over.
+  Whether the model reaches for `make_beautiful` or `set_lighting` when asked
+  in plain words is the owner's to try in the chat.
 - **2026-10-20: a permanent way of working — `docs/WORKFLOW.md`.** The owner
   asked for a project-level workflow for cloud sessions (assessment, research,
   roadmap, phased building, review in rounds, tests, a checked deploy, this
