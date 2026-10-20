@@ -8,6 +8,11 @@ The one earlier entry — two ground-texture sets, presets and a user library �
 is built; `GROUND_LIBRARY_PHASE.md` is the record of it. `HANDOFF.md` → Next
 is where the open work is.
 
+Since 2026-10-20 every idea below has a place in `ROADMAP.md`: the Show Hub
+is its phases 3–4, the attention map 2.9 and 3.9, AR labels and the
+sales-by-position log 2.6–2.8, AI renders 2.11. Plan from there; this file
+keeps the reasoning.
+
 ## Pro monthly-plan ideas (proposed 2026-09-25)
 
 Asked for as "original ideas that might constitute a premium monthly fee for

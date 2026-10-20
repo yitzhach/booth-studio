@@ -13,6 +13,17 @@ Extend it; do not rebuild it.
   the rules that bite. It does not need to be asked for again. That rule is
   about chat only: code comments, commit messages and this file stay in full
   prose, because a cold session has nothing else to read.
+- **2026-10-20: `ROADMAP.md` — the road to a product people pay for.** The
+  owner asked what would make this top-tier software that companies buy and
+  artists rely on, and for the phase-by-phase plan to get there. The file
+  answers both: where the app stands, the market (ArtPlacer, BoothFlow,
+  Eventeny, ExpoFP, ZAPP, Social Tables; prices from search, unverified),
+  the positioning (the show's official floor with every exhibitor's real
+  booth in it; organizers pay, artists come free through their shows), and
+  phases 0–6 with a gate each: prove it and decide (owner) alongside
+  foundations (code, offline, storage safety, CI), the artist's season, the
+  show's official floor (Rev 2 without payments), paid, exhibitions (Rev 3),
+  partners. No code changed. Tick its boxes as pull requests land.
 - **2026-10-19: Rev 1, part C — describe it to the assistant.** The
   welcome and the Workspace dialog (`describeBlock` in `src/main.js`) offer a
   second door: where the assistant is on (signed in, one connected:
@@ -2032,6 +2043,14 @@ Extend it; do not rebuild it.
    anything else. Then the Rev 1 gate: three artists and one promoter use it
    on their own devices; after that, Rev 2 (hosted Show Hub) needs the
    owner's yes on payments and server work.
+0. **`ROADMAP.md` (2026-10-20) is the plan from here.** Its phase 0 is the
+   checklist above plus five watched sessions, ten organizer conversations
+   and the owner's decisions (who pays first, the name — "Booth Studio" is
+   taken on the App Store — what stays free, error reports, payments, the
+   image service). Its phase 1 (foundations) needs none of those and can
+   start now: 1.1 splits this file, 1.2 and 1.3 split `main.js` and
+   `scene.js`, 1.7 makes the app installable and offline and asks the
+   browser to keep its storage.
 0. **Looks and the hero set (Rev 1 part B, 2026-10-19): the owner's to
    judge.** Do the four looks look right, and is Make it beautiful's hang
    and aim what you would have done by hand? Are the four hero pictures the
