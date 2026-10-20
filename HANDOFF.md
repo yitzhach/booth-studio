@@ -13,6 +13,18 @@ Extend it; do not rebuild it.
   the rules that bite. It does not need to be asked for again. That rule is
   about chat only: code comments, commit messages and this file stay in full
   prose, because a cold session has nothing else to read.
+- **2026-10-20: three.js loads as a file of its own (ROADMAP 1.6).** It was
+  half of the one 1.1 MB script, and every merge changed that script's name,
+  so every returning browser fetched all of it again. `vite.config.js`
+  (`manualChunks`) now puts three.js's core in `assets/three-<hash>.js`,
+  preloaded beside `assets/index-<hash>.js` (544 KB, the app). Its name and
+  bytes don't change from build to build while the dependency doesn't, and
+  the Worker serves assets with an ETag and `max-age=0, must-revalidate`, so
+  after a deploy a returning browser gets a 304 for three.js (140 KB
+  gzipped) and fetches only the app's 181 KB. The loaders and the exporter
+  (three/examples) stay in the chunks they load on demand with;
+  `tools/verify-deploy.mjs` still finds the index script by name. Measured
+  in ROADMAP 1.6: the rest of that item's target needs main.js split (1.2).
 - **2026-10-20: the assistant can see the booth (🖼).** Beside the panel's 📷
   is a 🖼, **Attach the booth as it looks now**: the view on screen, rendered
   clean through `scene.export` (no controls or outlines) in the window's own
