@@ -2843,14 +2843,28 @@ the picker became one list.
 
 ```sh
 npm ci
-npm test                 # 467 Node tests
+npm run lint             # ESLint, eslint.config.js: seconds; CI runs it first
+npm run typecheck        # TypeScript reading the scene bundle's JSDoc (tsconfig.json)
+npm test                 # 509 Node tests
 npm run build
-npm run test:view        # 42 suites (tools2, hub, share, roles, polish and wall-assets included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
+npm run test:view        # 44 suites (tools2, hub, share, roles, polish and wall-assets included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
 npm run test:browser     # 25 end-to-end checks
 STUDIO_PLATFORM=../Art-Talk-Back BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/two-devices.mjs   # 50 checks; after npm run build (see Studio platform)
 node tools/verify-deploy.mjs   # after a merge: waits for production to serve the commit, then checks the page starts
 ```
+
+**A linter and a type check since 2026-10-20 (ROADMAP 1.4, 1.5).** `npm run
+lint` is ESLint's recommended rules (`eslint.config.js` says which two are
+loosened and why: an empty `catch {}`, and a name starting with `_`), over
+`src/` (not `src/vendor/`), `tests/`, `tools/` and `worker/`. Its first run
+found fourteen things, all dead code — unused imports and variables — and no
+undefined name; they are gone. `npm run typecheck` is TypeScript reading the
+JavaScript as it is (`checkJs`, no emit, not strict) from `src/scene-ops.js`
+and everything it imports — what studio-api runs — with the JSDoc as the
+types; its fifteen findings were all types inferred too narrowly from a
+default parameter, fixed in the JSDoc, and the scene bundle came out byte for
+byte the same. Both run first in CI's `core` job.
 
 **`tests/view-wall-assets.mjs` (was `tests/wall-assets.mjs`) is green and
 in `npm run test:view` since 2026-10-20.** It had failed at line 120 since

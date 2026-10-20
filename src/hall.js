@@ -33,6 +33,7 @@ export function newHall() {
   return { rows: 2, perRow: 8, boothWidth: 120, boothDepth: 120, aisle: 120, backToBack: true, start: 101, price: 0, booths: {} };
 }
 
+/** @param {number} n @param {number[]} range [lowest, highest] */
 const inRange = (n, [lo, hi]) => Number.isFinite(n) && n >= lo && n <= hi;
 
 /** Whether a stored plan is one this version can open. */

@@ -79,6 +79,7 @@ export const SHAPES = [
 export const SHOW_LIMITS = { size: [2, 12000], pos: [-24000, 48000], floor: [120, 24000] };
 export const MAX_ITEMS = 2400;
 
+/** @param {number} n @param {number[]} range [lowest, highest] */
 const inRange = (n, [lo, hi]) => Number.isFinite(n) && n >= lo && n <= hi;
 
 /** Whether stored pieces and venue are ones this version can open. */
@@ -245,6 +246,9 @@ export function snapMove(moving, others, dx, dy, { grid = 12, range = 6 } = {}) 
  * between neighbours in a row, rows `aisle` apart — or, back to back, in
  * pairs sharing a back line with the aisle between pairs. Numbered on from
  * the plan's highest, top-left of the block at `x, y`.
+ *
+ * @param {object[]} items
+ * @param {{ count: number, perRow: number, w: number, d: number, gap?: number, aisle?: number, backToBack?: boolean, style?: string, x?: number, y?: number, start?: number }} block
  */
 export function boothBlock(items, { count, perRow, w, d, gap = 0, aisle = 120, backToBack = false, style, x = 0, y = 0, start = 101 }) {
   const all = [...items];

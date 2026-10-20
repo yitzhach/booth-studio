@@ -65,6 +65,9 @@ export const even = (n) => Math.max(2, Math.round(n / 2) * 2);
  *
  * Sides are forced even for both kinds of export: a PNG does not care, but
  * one function answering both is how the two cannot drift apart.
+ *
+ * @param {string} id
+ * @param {{ long?: number, viewport?: number, custom?: { width?: number, height?: number } }} [size]
  */
 export function frameSize(id, { long, viewport = 16 / 9, custom } = {}) {
   const frame = FRAMES[id] ? { id, ...FRAMES[id] } : { id: DEFAULT_FRAME, ...FRAMES[DEFAULT_FRAME] };

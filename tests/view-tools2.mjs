@@ -134,7 +134,6 @@ try {
   assert.ok(mb.width > 100 && mb.height > 100, `and it is the size of the drag (${Math.round(mb.width)}×${Math.round(mb.height)})`);
   await page.mouse.up({ button: 'right' });
   assert.equal(await marquee.isVisible(), false, 'and goes when it ends');
-  const picked = await page.evaluate(() => window.__booth.showEditor?.selection?.length ?? null);
   const status = await page.textContent('#inspector-content');
   assert.match(status, /\d+ selected/, 'the booths inside it are selected');
   assert.equal(await page.evaluate(() => document.querySelector('#show-floor svg').getAttribute('viewBox')), view0, 'a plain right-drag does not pan');

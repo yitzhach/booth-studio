@@ -17,7 +17,8 @@ subagent's report of success is not evidence; check the diff and run the suite.
 
 | The change touches | Run |
 | --- | --- |
-| anything | `npm test` (Node suites) and `npm run build` |
+| anything | `npm run lint`, `npm test` (Node suites) and `npm run build` |
+| `src/scene-ops.js` or anything it imports | also `npm run typecheck` |
 | a panel, the scene, export, the page | the view suites that cover it — `grep -l <feature> tests/view-*.mjs`; the whole `npm run test:view` before merging |
 | storage, sync, studio sign-in, `worker/` | `node tests/two-devices.mjs` with `STUDIO_PLATFORM=../Art-Talk-Back` (after `npm run build`; `pnpm install` there first) |
 | `src/scene-ops.js` or a module it bundles | `npm run bundle:scene`, then compare with Art-Talk-Back's `workers/studio-api/src/vendor/booth-scene.js` |

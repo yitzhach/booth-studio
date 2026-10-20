@@ -39,6 +39,8 @@ export const STARTERS = Object.keys(STARTER_PLACES);
  * Build the booth. `show` and `size` are keys of SHOWS and FOOTPRINTS,
  * `furniture` a list of STARTERS, `name` the project's name. Unknown keys
  * fall back to the first of each, so a stale choice never throws.
+ *
+ * @param {{ show?: string, size?: string, furniture?: string[], name?: string }} [choice]
  */
 export function quickStart({ show = "artfair", size = "10x10", furniture = [], name } = {}) {
   const spec = SHOWS[show] || SHOWS.artfair;

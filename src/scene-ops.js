@@ -1115,6 +1115,8 @@ export const BUILD_SCHEMA = {
 /**
  * A new booth: the quick start for that show and size, then `ops`. Returns
  * `{ scene, lines }` like applyOps; the scene has no images.
+ *
+ * @param {{ name?: string, show?: string, size?: string, ops?: object[] }} [spec]
  */
 export function build({ name, show = "artfair", size = "10x10", ops = [] } = {}) {
   if (show !== undefined && !SHOWS[show]) throw new SceneOpError(`show must be one of ${Object.keys(SHOWS).join(", ")}.`);
