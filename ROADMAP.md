@@ -258,7 +258,10 @@ more small pull requests, each green on every suite before it merges.
       parallel shards (the CI runner has more cores than this sandbox), so a
       pull request is checked in under 30 minutes. Fix the one known failure:
       `tests/wall-assets.mjs` line 120, a sideways scroll at 820 px on the
-      Artwork tab. Add site-qa (`yitzhach/site-qa`, as in art-show-tracker):
+      Artwork tab. *(2026-10-20: both done — four view shards and a
+      cancelled run for a superseded push; the overflow was every iPad width,
+      fixed, and the suite is in CI as `view-wall-assets.mjs`. Left: site-qa
+      and Dependabot.)* Add site-qa (`yitzhach/site-qa`, as in art-show-tracker):
       desktop, phone and dark-mode audits for page errors, broken links and
       accessibility, with today's findings as the baseline. Dependabot for
       npm and GitHub Actions.

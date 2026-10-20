@@ -7,6 +7,8 @@ const browser=await chromium.launch({headless:true,...(process.env.BOOTH_TEST_CH
   args:['--no-sandbox','--enable-unsafe-swiftshader','--use-angle=swiftshader','--use-gl=angle','--in-process-gpu','--single-process']});
 try {
  const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
+ // Past the first visit's welcome (src/roles.js); a workspace the suite picks later is kept.
+ await page.addInitScript(() => { if (!localStorage.getItem('booth.role')) localStorage.setItem('booth.role', 'all'); });
  page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://127.0.0.1:5187');await page.waitForFunction(()=>!!window.__booth?.scene);
  await page.locator('[data-tab="layout"]').click();
@@ -115,12 +117,39 @@ try {
  assert.equal(await page.evaluate(()=>window.__booth.project.booth.neighborGap),36);
  // Editor handles never leak into PNG exports.
  await page.evaluate(async()=>{const b=await window.__booth.scene.export(2048);if(!b.size)throw Error('Empty export');});
- for(const width of [820,390]){
+ // No sideways page scroll at any width: from 701 to 1200 px (every iPad)
+ // the inspector's eight tabs once pushed the page wider, Export half off
+ // the screen. The strip scrolls inside the inspector instead, and a tab
+ // opened by something other than a tap is scrolled into sight.
+ const exportInSight=()=>page.evaluate(()=>{
+   const strip=document.querySelector('.inspector-tabs').getBoundingClientRect();
+   const b=document.querySelector('.inspector-tabs [data-tab="export"]').getBoundingClientRect();
+   return b.left>=strip.left-1&&b.right<=strip.right+1&&b.right<=innerWidth+1;
+ });
+ for(const width of [1200,1024,820,768,701,390]){
    await page.setViewportSize({width,height:1000});await page.locator('[data-tab="art"]').click();
-   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`no sideways scroll at ${width} px`);
    await page.getByRole('button',{name:'Zoom in',exact:true}).click();
    await page.getByRole('button',{name:'Zoom out',exact:true}).click();
+   // Opened by the toolbar's Export, not by a tap on the tab, which may be
+   // scrolled out of the strip. (On a phone that button waits behind More tools.)
+   await page.evaluate(()=>document.querySelector('[data-action="export-tab"]').click());
+   assert.ok(await exportInSight(),`Export tab in sight at ${width} px`);
  }
+ // A redraw that keeps the same tab leaves a strip scrolled by hand where it
+ // was: the open tab is brought into sight only when the tab changes.
+ await page.setViewportSize({width:820,height:1000});
+ await page.evaluate(()=>{document.querySelector('.inspector-tabs').scrollLeft=0;document.querySelector('.inspector-tabs [data-tab="export"]').click();});
+ assert.equal(await page.evaluate(()=>document.querySelector('.inspector-tabs').scrollLeft),0,'a redraw on the same tab does not move the strip');
+ // A mouse wheel turned over the strip moves it sideways.
+ assert.ok(await page.evaluate(()=>{const s=document.querySelector('.inspector-tabs');s.dispatchEvent(new WheelEvent('wheel',{deltaY:120,bubbles:true,cancelable:true}));return s.scrollLeft>0;}),'the wheel scrolls the strip');
+ // A workspace with fewer tabs and More beside them fits too.
+ await page.evaluate(()=>localStorage.setItem('booth.role','artist'));
+ await page.reload();await page.waitForFunction(()=>!!window.__booth?.scene);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'no sideways scroll at 820 px in the Artist workspace');
+ await page.evaluate(()=>document.querySelector('[data-action="export-tab"]').click());
+ assert.ok(await exportInSight(),'Export tab in sight in the Artist workspace');
+ await page.setViewportSize({width:1440,height:1000});
  assert.deepEqual(errors,[]);
  console.log('PASS neighboring booths, reusable original copies, exterior signs, labels, select/scale, persistence, export and responsive zoom.');
 }finally{await browser.close();await server.close();}

@@ -3337,11 +3337,32 @@ async function boot() {
       label.parentElement.title = `Workspace: ${ROLES[resolveRole(role)].label} · which tabs and tools to show`;
     }
   }
+  /**
+   * Where the tab strip scrolls sideways (a phone, a tablet), the open tab is
+   * kept in sight when something other than a tap opens it: tool search, the
+   * assistant's "take me to", the toolbar's Export. Only the strip scrolls;
+   * scrollIntoView would move the page or the sheet as well. Only when the
+   * tab changes: a redraw for any other reason leaves a strip the artist
+   * scrolled by hand where they put it.
+   */
+  let tabInSight = null;
+  function keepTabInSight() {
+    if (tab === tabInSight) return;
+    tabInSight = tab;
+    const strip = document.querySelector(".inspector-tabs");
+    const on = strip?.querySelector(`[data-tab="${tab}"]`);
+    if (!on || strip.scrollWidth <= strip.clientWidth) return;
+    const s = strip.getBoundingClientRect();
+    const b = on.getBoundingClientRect();
+    if (b.left < s.left) strip.scrollLeft -= s.left - b.left;
+    else if (b.right > s.right) strip.scrollLeft += b.right - s.right;
+  }
   function renderInspector() {
     document
       .querySelectorAll("[data-tab]")
       .forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
     applyRole();
+    keepTabInSight();
     const root = document.querySelector("#inspector-content");
     root.innerHTML = inspectorHTML();
     applySectionTabs(root);
@@ -6598,7 +6619,9 @@ async function boot() {
     showSection(target);
     const control = target.matches("label") ? target.querySelector("input, select, textarea") : target.matches("button, select, input") ? target : null;
     const shown = target.matches("h3, h4") ? target.closest("section") || target : target;
-    shown.scrollIntoView({ block: "center", behavior: "smooth" });
+    // A tab is already in sight (keepTabInSight); scrolling it into view would
+    // move the page or a phone's sheet as well.
+    if (!target.matches(".inspector-tabs [data-tab]")) shown.scrollIntoView({ block: "center", behavior: "smooth" });
     control?.focus({ preventScroll: true });
     shown.classList.remove("found");
     void shown.offsetWidth;
@@ -6776,6 +6799,18 @@ async function boot() {
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) save(fromSnapshot(editingStart || snapshot())).catch(() => {});
   });
+  // Where the tab strip scrolls (a phone; 701–1200 px), a mouse wheel turned
+  // over it moves it sideways: a mouse has no other way along it.
+  const tabStrip = document.querySelector(".inspector-tabs");
+  tabStrip?.addEventListener(
+    "wheel",
+    (ev) => {
+      if (tabStrip.scrollWidth <= tabStrip.clientWidth || Math.abs(ev.deltaX) >= Math.abs(ev.deltaY)) return;
+      tabStrip.scrollLeft += ev.deltaY;
+      ev.preventDefault();
+    },
+    { passive: false },
+  );
   render();
   scheduleSave();
   // The first visit asks which workspace to show (src/roles.js) — not when a

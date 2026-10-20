@@ -95,6 +95,6 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 
 ## Verification
 
-Run `npm test` (162 tests) and `npm run build` for every change. When a WebGL-capable browser is available, also run `npm run test:browser`, `npm run test:view`, and `node tests/wall-assets.mjs` — all three are green. In the cloud sandbox, prefix them with `BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium`. Test desktop plus iPhone/iPad interaction and a 4096 export.
+Run `npm test` (162 tests) and `npm run build` for every change. When a WebGL-capable browser is available, also run `npm run test:browser` and `npm run test:view` — both are green. In the cloud sandbox, prefix them with `BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium`. Test desktop plus iPhone/iPad interaction and a 4096 export.
 
 For a new development chat, read only `HANDOFF.md` first; `ROADMAP.md` is the phase-by-phase plan for where the product is going, and `docs/WORKFLOW.md` is how sessions work here (skills, session-start hook, deploy check). Read this file when commands or architecture are needed. Read `PBR_PHASE.md` when working on HDRI lighting or PBR surfaces, `docs/HDRI-ASSETS.md` and `docs/TEXTURE-ASSETS.md` to add the asset files, and `AI_EXPORT_PHASE.md` only when implementing the paid AI export phase. `docs/ORIGINAL-HANDOFF.md` is historical reference, not current instructions.
