@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 // A deployed build must be identifiable at a glance, so the footer carries the
 // version, the UTC build time and the commit it came from. Cloudflare Workers
@@ -26,7 +27,26 @@ const { version } = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf8"),
 );
 
+// The service worker's list of the build's own files (public/sw.js keeps
+// them all when it installs, the chunks loaded on demand included, so the app
+// opens offline with everything it may load). Written once the bundle is on
+// disk, when every chunk, stylesheet and font is known: every file the build
+// writes to assets/, but the .woff fonts, which only a browser too old for
+// .woff2 asks for, and no browser that old runs a service worker.
+const swFiles = {
+  name: "sw-files",
+  apply: "build",
+  writeBundle(options, bundle) {
+    const files = Object.keys(bundle)
+      .filter((f) => f.startsWith("assets/") && !/\.(?:woff|map)$/.test(f))
+      .map((f) => `/${f}`)
+      .sort();
+    writeFileSync(join(options.dir, "sw-files.json"), JSON.stringify({ files }, null, 2) + "\n");
+  },
+};
+
 export default {
+  plugins: [swFiles],
   define: {
     __APP_VERSION__: JSON.stringify(version),
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),

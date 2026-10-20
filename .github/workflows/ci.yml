@@ -121,6 +121,9 @@ jobs:
         run: node tests/two-devices.mjs
       - name: End-to-end checks
         run: npm run test:browser
+      # The built app, through its service worker, with the network cut.
+      - name: Opens offline (public/sw.js, the built app)
+        run: npm run test:offline
 
   # ESLint's recommended rules and TypeScript reading the JSDoc of the modules
   # studio-api runs (eslint.config.js, tsconfig.json). A job of its own, so a

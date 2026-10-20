@@ -23,6 +23,7 @@ subagent's report of success is not evidence; check the diff and run the suite.
 | `src/scene-ops.js` or a module it bundles | `npm run typecheck`, then `npm run bundle:scene` and compare with Art-Talk-Back's `workers/studio-api/src/vendor/booth-scene.js` |
 | `worker/`, `wrangler.jsonc` | `npx wrangler deploy --dry-run --outdir /tmp/wd` (no credentials needed; lists the bindings) |
 | a flow across tabs, downloads | `npm run test:browser` |
+| `public/sw.js`, `index.html`, `vite.config.js`, how the app loads | `npm run build`, then `npm run test:offline` |
 | only documentation | nothing to run; say so |
 
 ## Run each one directly
