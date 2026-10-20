@@ -13,6 +13,18 @@ Extend it; do not rebuild it.
   the rules that bite. It does not need to be asked for again. That rule is
   about chat only: code comments, commit messages and this file stay in full
   prose, because a cold session has nothing else to read.
+- **2026-10-20: Report a problem (ROADMAP 1.9).** Export → Something wrong?
+  → **Copy a problem report** copies plain text to paste into a message: the
+  build (version, time, commit — compare it with `main` first, as
+  "Diagnosing" below says), the page without its query (a booth link's id
+  stays out), browser and screen, signed in or not, the project in counts and
+  settings only (no names, titles or images), each texture set's state from
+  `window.BOOTH_ASSETS`, and the page's last 20 uncaught errors and unhandled
+  rejections, which main.js records from its first line. Where the clipboard
+  is refused it opens in a dialog to copy by hand. Nothing is sent: a Worker
+  route for reports is the owner's call (ROADMAP phase 0). `src/report.js`
+  (`tests/report.test.js`), `tests/view-report.mjs`. When the owner reports a
+  bug, ask for this report first.
 - **2026-10-20: Keep your work says how safe the work is (ROADMAP 1.8).**
   Signed out, a booth lives only in this browser's IndexedDB, which a
   browser may clear by itself (low disk; Safari after a week without a
