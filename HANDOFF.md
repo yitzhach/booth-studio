@@ -13,6 +13,44 @@ Extend it; do not rebuild it.
   the rules that bite. It does not need to be asked for again. That rule is
   about chat only: code comments, commit messages and this file stay in full
   prose, because a cold session has nothing else to read.
+- **2026-10-20: Report a problem (ROADMAP 1.9).** Export → Something wrong?
+  → **Copy a problem report** copies plain text to paste into a message: the
+  build (version, time, commit — compare it with `main` first, as
+  "Diagnosing" below says), the page without its query (a booth link's id
+  stays out), browser and screen, signed in or not, the project in counts and
+  settings only (no names, titles or images), each texture set's state from
+  `window.BOOTH_ASSETS`, and the page's last 20 different uncaught errors and
+  unhandled rejections, which main.js records from its first line. The same
+  error again is counted on one line ("— 500 times since …"), so a broken
+  frame loop cannot push out the error that started it; quoted text and a
+  link's query are taken out of every message, since an error can quote what
+  someone typed. Stacks keep the frame that threw in Firefox and Safari too,
+  whose stacks have no message line. Where the clipboard
+  is refused it opens in a dialog to copy by hand. Nothing is sent: a Worker
+  route for reports is the owner's call (ROADMAP phase 0). `src/report.js`
+  (`tests/report.test.js`), `tests/view-report.mjs`. When the owner reports a
+  bug, ask for this report first.
+- **2026-10-20: Keep your work says how safe the work is (ROADMAP 1.8).**
+  Signed out, a booth lives only in this browser's IndexedDB, which a
+  browser may clear by itself (low disk; Safari after a week without a
+  visit). Export → Keep your work now says whether this browser keeps this
+  device's copy (`navigator.storage.persisted()`), the space it uses
+  (`estimate()`), when a backup was last downloaded here, and, signed in,
+  that the studio keeps it too. Where the browser may clear it, **Ask the
+  browser to keep it** calls `persist()` — only from that button, because
+  Firefox answers with a permission prompt. A booth holding the artist's own
+  images, never backed up or not for 30 days, gets one reminder toast at
+  start (12 s), at most once a month per project, never signed in, never
+  over the welcome; it counts as given only once it has stayed on screen 8
+  seconds, since another toast can cover it. What is remembered is per
+  browser and per project (`localStorage["booth.keepSafe"]`, the 50 projects
+  touched last), never in a project or a backup, and where site data is
+  blocked nothing is remembered and the start goes on. A redraw of the Export
+  tab draws the last answer straight back and asks the browser again at most
+  every 10 seconds. Sizes are in 1024s, as `share.js` counts them.
+  `src/keep-safe.js` is pure (`tests/keep-safe.test.js`);
+  `tests/view-keep-safe.mjs` stands in for `navigator.storage`. Whether
+  Safari on an iPad grants persistence is for a real iPad: HANDOFF → Next.
 - **2026-10-20: the assistant can apply a look and Make it beautiful
   (Art-Talk-Back D-081).** Two booth ops in `src/scene-ops.js`:
   `apply_look` (gallery, hall, fair, evening — `LOOKS` in `src/polish.js`)
@@ -2069,6 +2107,22 @@ Extend it; do not rebuild it.
 
 ## Next
 
+0. **2026-10-20: the owner's to try, on real devices (no session can).**
+   - On an iPad, portrait and landscape: the inspector's tabs scroll
+     sideways inside the right-hand panel now, instead of the whole page
+     (booth-studio#34). Is that findable, or should the labels go and leave
+     icons only?
+   - On the iPad, signed out, with a booth holding your own images: Export →
+     Keep your work. Does Safari grant **Ask the browser to keep it**, and is
+     the booth still there after a week without a visit? Does the backup
+     reminder come at a sensible moment?
+   - Signed in, in the assistant: "make my booth look good for a jury photo"
+     and "make it a bit warmer". Does it reach for `make_beautiful` and
+     `set_lighting` (Art-Talk-Back D-081), and do the cards read right?
+   - Lighting: the look the booth is in is now marked until a value is
+     changed by hand. Clear enough?
+   - When anything goes wrong: Export → Something wrong? → **Copy a problem
+     report**, and paste it into the message. It names the build first.
 0. **Rev 1 (parts A, B and C) is merged and live (2026-10-19), untested by
    a person.** The owner said merge now and test later. Start the next
    session here. His checklist, on the live site in a private window (a

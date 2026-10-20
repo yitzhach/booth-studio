@@ -2409,3 +2409,13 @@ section.sub-hidden {display:none;}
 .welcome-describe textarea {width:100%;resize:vertical;font:inherit;font-size:16px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:#11151a;color:inherit;}
 p.welcome-describe .text-button {display:inline;min-height:0;padding:0;border:0;background:none;color:var(--blue);text-decoration:underline;}
 p.welcome-describe .text-button svg {display:none;}
+
+/* Export → Keep your work: what this browser does with this device's copy
+   (src/keep-safe.js), between the backup buttons and Studio account. */
+.keep-safe {margin:10px 0 12px;}
+.keep-safe p {margin:4px 0;}
+.keep-safe button {margin-top:6px;}
+
+/* Report a problem (src/report.js): the report to copy by hand, where the
+   clipboard is refused. */
+.report-text {width:100%;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;background:#12161a;color:#d9dee3;border:1px solid var(--line);border-radius:6px;padding:10px;margin:8px 0 12px;resize:vertical;}

@@ -150,6 +150,15 @@ test("the session flag: absent unless signed in, and unreadable storage means si
   writeSession(null, storage);
   assert.equal(readSession(storage), null);
   assert.equal(readSession({ getItem: () => { throw new Error("blocked"); } }), null);
+  // Where site data is blocked, even reading the global throws: still null, never a throw.
+  const had = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, get() { throw new Error("SecurityError"); } });
+  try {
+    assert.equal(readSession(), null);
+  } finally {
+    if (had) Object.defineProperty(globalThis, "localStorage", had);
+    else delete globalThis.localStorage;
+  }
   store.set("booth.studio", "{nope");
   assert.equal(readSession(storage), null);
 });

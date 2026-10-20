@@ -6,9 +6,11 @@
 export const STUDIO_KEY = "booth.studio";
 
 /** { signedIn, email, studioId, expired?, local? } or null. */
-export function readSession(storage = globalThis.localStorage) {
+export function readSession(storage) {
+  // Read inside the try: where site data is blocked, even reading
+  // `localStorage` throws, and every caller wants null then.
   try {
-    const s = JSON.parse(storage.getItem(STUDIO_KEY) || "null");
+    const s = JSON.parse((storage ?? globalThis.localStorage).getItem(STUDIO_KEY) || "null");
     return s && s.signedIn ? s : null;
   } catch {
     return null;
