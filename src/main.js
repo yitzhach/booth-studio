@@ -64,13 +64,17 @@ window.BOOTH_BUILD = BUILD;
 // built app only — the dev server, which the view suites drive, never has
 // one — registered once the page has loaded, under the build's commit so
 // every deploy brings a new worker. OFFLINE false is the off switch: the
-// page then unregisters the worker, and with it goes what it kept.
+// page then unregisters the worker and deletes what it kept.
 const OFFLINE = true;
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   const offline = () =>
     (OFFLINE
       ? navigator.serviceWorker.register(`/sw.js?v=${encodeURIComponent(BUILD.commit)}`)
-      : navigator.serviceWorker.getRegistrations().then((all) => Promise.all(all.map((r) => r.unregister())))
+      : navigator.serviceWorker
+          .getRegistrations()
+          .then((all) => Promise.all(all.map((r) => r.unregister())))
+          .then(() => caches.keys())
+          .then((names) => Promise.all(names.filter((n) => n.startsWith("booth-")).map((n) => caches.delete(n))))
     ).catch((err) => console.warn("Service worker:", err));
   if (document.readyState === "complete") offline();
   else addEventListener("load", offline, { once: true });

@@ -1,17 +1,42 @@
 // Opens with no signal (public/sw.js, ROADMAP.md 1.7), in a real browser
 // against the built app — `npm run build` first; the dev server, which the
-// view suites drive, never registers the worker. Opened once with the
-// network, the booth renamed and saved on this device; then the network cut,
-// as on a show floor: the app must open again, with that booth as it was
-// saved, and a booth link must still get the app. The share itself needs the
-// network, and says so; that is not this suite's.
+// view suites drive, never registers the worker.
+//
+// Opened once with the network, given the Outdoor fair look (a grass floor
+// and a photographed sky, so a texture, an HDRI and a chunk loaded on demand)
+// and saved on this device; then the network cut, as on a show floor: the app
+// must open again with that booth, its floor and its sky, every file from the
+// worker. A booth link must still get the app. Back online, the page must come
+// from the network, not the copy; and on a network too slow to answer, the
+// kept page must stand in after the worker's wait.
 import { chromium } from "@playwright/test";
 import { preview } from "vite";
 import assert from "node:assert/strict";
 
 const root = new URL("..", import.meta.url).pathname;
 const PORT = 5263;
-const server = await preview({ root, logLevel: "warn", preview: { host: "127.0.0.1", port: PORT, strictPort: true } });
+// The server's side: how often the page itself was asked for, and a switch
+// that makes it answer slowly, like one bar of signal.
+let pageHits = 0;
+let slowPage = false;
+const server = await preview({
+  root,
+  logLevel: "warn",
+  preview: { host: "127.0.0.1", port: PORT, strictPort: true },
+  plugins: [
+    {
+      name: "page-counter",
+      configurePreviewServer(s) {
+        s.middlewares.use((req, _res, next) => {
+          if (req.method !== "GET" || !(req.url === "/" || req.url.startsWith("/?"))) return next();
+          pageHits++;
+          if (slowPage) setTimeout(next, 15000);
+          else next();
+        });
+      },
+    },
+  ],
+});
 const browser = await chromium.launch({
   headless: true,
   ...(process.env.BOOTH_TEST_CHROMIUM ? { executablePath: process.env.BOOTH_TEST_CHROMIUM } : {}),
@@ -24,47 +49,85 @@ try {
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.stack || e.message));
+  const grass = () => page.evaluate(() => window.BOOTH_ASSETS?.grass?.state || null);
 
   await page.goto(url);
   await page.waitForSelector("#scene canvas");
-  // The worker installs once the page has loaded, keeps the page and its
-  // files, and takes the page over.
+  // The worker installs once the page has loaded, keeps the page and every
+  // file of the build, and takes the page over.
   await page.waitForFunction(() => !!navigator.serviceWorker?.controller, null, { timeout: 60000 });
   const kept = await page.evaluate(async () => {
-    const names = await caches.keys();
     const out = {};
-    for (const n of names) out[n.replace(/-[^-]+$/, "")] = (await (await caches.open(n)).keys()).map((r) => new URL(r.url).pathname);
-    return { names, out, script: (await navigator.serviceWorker.getRegistration())?.active?.scriptURL };
+    for (const n of await caches.keys()) out[n] = (await (await caches.open(n)).keys()).map((r) => new URL(r.url).pathname);
+    return { out, script: (await navigator.serviceWorker.getRegistration())?.active?.scriptURL };
   });
   assert.match(kept.script, /\/sw\.js\?v=[\w]+$/, "registered under the build's commit");
   assert.deepEqual(kept.out["booth-shell"], ["/"], "the page is kept");
   const build = kept.out["booth-build"] || [];
-  assert.ok(build.some((p) => /^\/assets\/index-[\w-]+\.js$/.test(p)), `the app's script is kept: ${build.join(", ")}`);
-  assert.ok(build.some((p) => /^\/assets\/three-[\w-]+\.js$/.test(p)), "and three.js's");
-  assert.ok(build.some((p) => /\.css$/.test(p)), "and the stylesheet");
+  for (const re of [/^\/assets\/index-[\w-]+\.js$/, /^\/assets\/three-[\w-]+\.js$/, /\.css$/, /^\/assets\/HDRLoader-[\w-]+\.js$/, /^\/assets\/studio-[\w-]+\.js$/, /\.woff2$/])
+    assert.ok(build.some((p) => re.test(p)), `kept on install: ${re} — ${build.join(", ")}`);
 
-  // A booth of this device's own, saved.
+  // The Outdoor fair look: a grass floor and the art fair's photographed sky.
+  await page.click('[data-tab="lighting"]');
+  await page.click('[data-action="look-fair"]');
+  await page.waitForFunction(() => window.BOOTH_ASSETS?.grass?.state === "loaded", null, { timeout: 60000 });
   await page.fill("#project-name", "Offline booth");
   await page.press("#project-name", "Tab");
   await page.waitForFunction(() => /Saved on this device/.test(document.querySelector("#save-status")?.textContent || ""));
+  // The sky's files are kept as they are used.
+  await page.waitForFunction(async () => {
+    const media = (await (await caches.open("booth-media")).keys()).map((r) => new URL(r.url).pathname);
+    return media.some((p) => p.endsWith("/hdri/artfair/light.hdr")) && media.some((p) => p.includes("/textures/grass/"));
+  }, null, { timeout: 60000 });
 
-  // No signal: it opens again, with that booth.
+  // No signal: it opens again, with that booth, its floor and its sky, from the worker.
+  const offline = [];
+  const failed = [];
+  const watch = (r) => offline.push({ path: new URL(r.url()).pathname, status: r.status(), worker: r.fromServiceWorker() });
+  // The page's own GETs: Chromium reports every HEAD as aborted once it has
+  // answered 200 — with or without a worker, checked — and the 200s are
+  // checked below.
+  const fail = (r) => r.method() === "HEAD" || r.serviceWorker() || failed.push(new URL(r.url()).pathname);
+  page.on("response", watch);
+  page.on("requestfailed", fail);
   await context.setOffline(true);
   await page.reload();
   await page.waitForSelector("#scene canvas");
   await page.waitForFunction(() => document.querySelector("#project-name")?.value === "Offline booth", null, { timeout: 30000 });
+  await page.waitForFunction(() => window.BOOTH_ASSETS?.grass?.state === "loaded", null, { timeout: 60000 });
+  await page.waitForFunction(() => performance.getEntriesByType("resource").some((e) => e.name.endsWith("/hdri/artfair/light.hdr")), null, { timeout: 60000 });
+  await page.waitForTimeout(1000);
+  page.off("response", watch);
+  page.off("requestfailed", fail);
+  assert.equal(await grass(), "loaded", "the grass floor, offline");
+  for (const re of [/^\/$/, /^\/assets\/index-/, /^\/assets\/three-/, /^\/assets\/HDRLoader-/, /\/hdri\/artfair\/light\.hdr$/, /\/textures\/grass\//]) {
+    const hit = offline.find((r) => re.test(r.path));
+    assert.ok(hit && hit.status === 200 && hit.worker, `${re} from the worker, offline: ${JSON.stringify(hit)}`);
+  }
+  assert.deepEqual(failed.filter((p) => p.startsWith("/assets/")), [], "no file of the app failed offline");
+
   // A booth link, offline, still gets the app (its booth can't come without the network).
   await page.goto(`${url}?share=0123456789abcdef`);
   await page.waitForSelector("#scene canvas");
 
-  // With the network back, the page comes from the network again, not the copy.
+  // Back online: the page comes from the network, not the copy.
   await context.setOffline(false);
-  const fresh = await page.goto(url);
-  assert.equal(fresh.fromServiceWorker(), true, "pages go through the worker");
+  const before = pageHits;
+  await page.goto(url);
   await page.waitForSelector("#scene canvas");
+  assert.ok(pageHits > before, "online, the page is asked of the network");
+
+  // One bar of signal: the network takes 15 s; the kept page stands in after the worker's 4.
+  slowPage = true;
+  const started = Date.now();
+  await page.goto(url, { timeout: 30000 });
+  await page.waitForSelector("#scene canvas");
+  const took = Date.now() - started;
+  slowPage = false;
+  assert.ok(took < 12000, `opened in ${took} ms on a network that took 15 s`);
 
   assert.deepEqual(errors, [], "no page errors, online or off");
-  console.log("PASS The built app keeps its page, scripts and stylesheet in a service worker under the build's commit, and with the network cut it opens again with the booth saved here, and a booth link still gets the app.");
+  console.log(`PASS The built app keeps its page and every file of its build in a service worker under the build's commit; with the network cut it opens again with the booth saved here, its grass floor and its photographed sky, every file from the worker; a booth link still gets the app; online the page comes from the network; and on a network too slow to answer the kept page stands in (${took} ms).`);
 } finally {
   await browser.close();
   await server.close();

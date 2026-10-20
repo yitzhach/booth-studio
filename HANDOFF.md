@@ -18,26 +18,36 @@ Extend it; do not rebuild it.
   tab left open kept working, a new one didn't. `public/sw.js`, a service
   worker, now keeps the page and the build's own files, so once Booth Studio
   has been opened in a browser it opens there again offline, with the
-  booths saved on that device. Pages come from the network first (a
-  connected browser always gets the deployed app; the kept page only stands
-  in when there is none); the build's hashed files are kept the first time
-  and served from the worker after that; textures, HDRIs and the cut-out
-  people are kept as they are first used, never all 29 MB up front; `/api`,
-  `/v1` and `/assistant` are never touched; and nothing of type text/html is
-  ever kept for a file, because the Worker answers a missing file with the
-  page itself and the app's texture fallbacks depend on seeing that. It is
-  registered by `src/main.js` in a built app only (the dev server the view
-  suites drive never has one), after the page has loaded, as
-  `/sw.js?v=<build commit>`, so every deploy installs a new worker and drops
-  the old one's caches. **`OFFLINE` in `src/main.js` is the off switch:**
-  false, and the page unregisters the worker. `public/manifest.webmanifest`
+  booths saved on that device, their floors and skies included. Opening the
+  app (`/`, a booth link too) asks the network first, so a connected browser
+  always gets the deployed app; the kept page stands in when there is no
+  network, or after 4 seconds of a network too slow to answer (one bar at a
+  fair); any other page (the pitch deck) is never kept. On install it keeps
+  every file of the build — the chunks loaded on demand too, from the list
+  `vite.config.js` writes beside it (`dist/sw-files.json`) — and a failed
+  install fails whole, leaving the worker already there. Textures, HDRIs
+  and the cut-out people are kept as they are first used (never all 29 MB up
+  front) and kept across deploys; the app's HEAD check before each one is
+  answered from what is kept. `/api`, `/v1` and `/assistant` are never
+  touched, and nothing of type text/html is ever kept for a file, because
+  the Worker answers a missing file with the page itself and the app's
+  texture fallbacks depend on seeing that. It is registered by `src/main.js`
+  in a built app only (the dev server the view suites drive never has one),
+  after the page has loaded, as `/sw.js?v=<build commit>`, so every deploy
+  installs a new worker, which drops the old app's files and keeps the rest.
+  **`OFFLINE` in `src/main.js` is the off switch:** false, and the page
+  unregisters the worker and deletes what it kept. `public/manifest.webmanifest`
   and `public/icons/` (drawn from the favicon by `tools/make-icons.mjs`)
   make it installable: Add to Home Screen on an iPad or a phone, Install in
   Chrome. `npm run test:offline` (`tests/offline.mjs`, in CI after the
-  build) opens the built app, saves a booth, cuts the network and opens it
-  again — red without the worker, and red with the worker but no offline
-  page. Whether Safari on a real iPad keeps it, and how an installed app
-  feels, is the owner's to try: HANDOFF → Next.
+  build) opens the built app, gives a booth the Outdoor fair look, saves it,
+  cuts the network and opens it again — the grass floor, the HDRI and its
+  loader all from the worker — then checks a booth link offline, the
+  network first online, and the 4-second stand-in on a 15-second network.
+  Red without the worker, without its offline page, and without its HEAD
+  answer. (Chromium reports every HEAD as aborted after its 200, worker or
+  not: the suite ignores those.) Whether Safari on a real iPad keeps it, and
+  how an installed app feels, is the owner's to try: HANDOFF → Next.
 - **2026-10-20: three.js loads as a file of its own (ROADMAP 1.6).** It was
   half of the one 1.1 MB script, and every merge changed that script's name,
   so every returning browser fetched all of it again. `vite.config.js`

@@ -2,34 +2,46 @@
 // signal, as on a show floor, once it has been opened here once.
 //
 // Registered by src/main.js in a built app only, as /sw.js?v=<build commit>,
-// so every deploy installs a new worker and empties the old one's caches.
-// What it does with a request:
+// so every deploy installs a new worker. What it does with a request:
 //
-// - Opening the app (a navigation): the network first, so a connected
-//   browser always gets the deployed page; with no connection, the copy of
-//   the page kept the last time.
-// - The build's own files (/assets/<name>-<hash>.js, .css, fonts): kept the
-//   first time they are fetched, and served from here after that — their
-//   names change whenever their bytes do.
+// - Opening the app (a navigation to "/", a booth link's ?share=… too): the
+//   network first, so a connected browser gets the deployed page; the page
+//   kept last time stands in when there is no network, and after PAGE_WAIT
+//   when the network is too slow to answer (one bar at a fair). Any other
+//   page (the pitch deck) is the network's alone and is never kept.
+// - The build's own files (/assets/<name>-<hash>.js, .css, fonts): all of
+//   them kept when the worker installs — the chunks loaded on demand too,
+//   from the list vite.config.js writes beside this file (sw-files.json) —
+//   and served from here after that; their names change whenever their
+//   bytes do. Each new version keeps what it needs and lets the rest go.
 // - Textures, HDRIs, the cut-out people and the icons (/assets/<folder>/…):
-//   from here when kept, fetched again in the background to stay current,
-//   kept the first time they are used — never all 29 MB up front.
-// - Nothing else: the share links (/api), the studio (/v1, /assistant) and
-//   other sites go straight to the network, untouched.
+//   kept as they are first used (never all 29 MB up front) and across
+//   deploys, served from here, and fetched again in the background once in
+//   this worker's life. The app first asks for each with a HEAD (to tell a
+//   file from the page a missing file is answered with): a kept file
+//   answers that too.
+// - Nothing else: the share links (/api), the studio (/v1, /assistant),
+//   other sites and anything that is not a GET or that HEAD go straight to
+//   the network.
 //
 // A missing file is answered with the page itself by the Worker (a 200,
-// text/html), so nothing of type text/html is ever kept for a file: the app
-// checks for exactly that answer to fall back to its procedural textures,
-// and a kept fallback would hide a texture for good.
+// text/html), so nothing of type text/html is ever kept for a file: the
+// app's texture fallbacks depend on seeing that answer, and a kept one
+// would hide a texture for good.
 //
-// To turn all of this off, set OFFLINE in src/main.js to false: the page then
-// unregisters this worker and its caches go with the next version.
+// If installing fails anywhere (no page, a file that won't come), the whole
+// install fails and the worker already here stays, with what it kept.
+// To turn all of this off, set OFFLINE in src/main.js to false: the page
+// then unregisters this worker and deletes what it kept.
 
 const VERSION = new URL(self.location).searchParams.get("v") || "dev";
-const SHELL = `booth-shell-${VERSION}`;
-const BUILD = `booth-build-${VERSION}`;
-const MEDIA = `booth-media-${VERSION}`;
+const SHELL = "booth-shell";
+const BUILD = "booth-build";
+const MEDIA = "booth-media";
 const KEEP = [SHELL, BUILD, MEDIA];
+const LIST = "/sw-files.json";
+// How long opening the app waits for the network before the kept page stands in.
+const PAGE_WAIT = 4000;
 
 // /assets/index-B1x2y3z4.js, /assets/three-pUL6G2JY.js, a font: a name, a hash, an extension.
 const HASHED = /^\/assets\/[^/]+-[\w-]{8,}\.(?:js|css|woff2?|ttf|png|svg|jpe?g|webp)$/;
@@ -38,43 +50,48 @@ const NETWORK_ONLY = /^\/(?:api|v1|assistant)(?:\/|$)/;
 
 const isPage = (res) => (res.headers.get("content-type") || "").includes("text/html");
 const keepable = (res) => res && res.ok && res.type === "basic" && !isPage(res);
+const quietly = (promise) => promise.catch(() => {});
+// Media fetched again already in this worker's life.
+const refreshed = new Set();
 
-// On install, the page and everything it loads at start: the scripts and
-// stylesheets it names, and the fonts its stylesheets name.
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
+      const list = await fetch(`${LIST}?v=${encodeURIComponent(VERSION)}`, { cache: "no-cache" });
+      if (!list.ok || isPage(list)) throw new Error("No file list for this build.");
+      const { files } = await list.clone().json();
       const page = await fetch("/", { cache: "no-cache" });
-      if (!page.ok || !isPage(page)) return;
-      const html = await page.clone().text();
-      const shell = await caches.open(SHELL);
-      await shell.put("/", page);
-      const files = new Set([...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((m) => m[1]).filter((p) => HASHED.test(p)));
+      if (!page.ok || !isPage(page)) throw new Error("No page to keep.");
       const build = await caches.open(BUILD);
-      for (const css of [...files].filter((p) => p.endsWith(".css"))) {
-        try {
-          const text = await (await fetch(css)).text();
-          for (const m of text.matchAll(/url\((\/assets\/[^)]+\.woff2)\)/g)) files.add(m[1]);
-        } catch {}
-      }
+      const have = new Set((await build.keys()).map((r) => new URL(r.url).pathname));
       await Promise.all(
-        [...files].map(async (p) => {
-          try {
+        files
+          .filter((p) => !have.has(p))
+          .map(async (p) => {
             const res = await fetch(p);
-            if (keepable(res)) await build.put(p, res);
-          } catch {}
-        }),
+            if (!keepable(res)) throw new Error(`Could not keep ${p}.`);
+            await build.put(p, res);
+          }),
       );
+      await build.put(LIST, list);
+      await (await caches.open(SHELL)).put("/", page);
       await self.skipWaiting();
     })(),
   );
 });
 
-// The new version takes over at once, and the old versions' caches go.
+// The new version takes over at once. The build's files not on its list go
+// (the old app's scripts); the page and the textures stay.
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
       for (const name of await caches.keys()) if (name.startsWith("booth-") && !KEEP.includes(name)) await caches.delete(name);
+      const build = await caches.open(BUILD);
+      const list = await build.match(LIST);
+      if (list) {
+        const wanted = new Set([LIST, ...(await list.json()).files]);
+        for (const req of await build.keys()) if (!wanted.has(new URL(req.url).pathname)) await build.delete(req);
+      }
       await self.clients.claim();
     })(),
   );
@@ -82,23 +99,41 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-  if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin || NETWORK_ONLY.test(url.pathname)) return;
 
-  if (req.mode === "navigate") {
+  if (req.method === "HEAD" && MEDIA_PATH.test(url.pathname)) {
     event.respondWith(
       (async () => {
-        try {
-          const res = await fetch(req);
-          // The app's page, whatever the address (a booth link carries ?share=).
-          if (res.ok && isPage(res)) (await caches.open(SHELL)).put("/", res.clone());
-          return res;
-        } catch (err) {
-          const kept = await (await caches.open(SHELL)).match("/");
-          if (kept) return kept;
-          throw err;
-        }
+        const kept = await (await caches.open(MEDIA)).match(url.href);
+        if (!kept) return fetch(req);
+        // The kept file's answer without its body; its length would promise one.
+        const headers = new Headers(kept.headers);
+        headers.delete("content-length");
+        return new Response(null, { status: kept.status, statusText: kept.statusText, headers });
+      })(),
+    );
+    return;
+  }
+  if (req.method !== "GET") return;
+
+  if (req.mode === "navigate") {
+    if (url.pathname !== "/") return;
+    event.respondWith(
+      (async () => {
+        const shell = await caches.open(SHELL);
+        const network = fetch(req);
+        event.waitUntil(
+          quietly(
+            network.then((res) => {
+              if (res.ok && isPage(res)) return shell.put("/", res.clone());
+            }),
+          ),
+        );
+        const kept = await shell.match("/");
+        if (!kept) return network;
+        const slow = new Promise((done) => setTimeout(() => done(kept), PAGE_WAIT));
+        return Promise.race([network.catch(() => kept), slow]);
       })(),
     );
     return;
@@ -111,7 +146,7 @@ self.addEventListener("fetch", (event) => {
         const kept = await build.match(url.pathname);
         if (kept) return kept;
         const res = await fetch(req);
-        if (keepable(res)) build.put(url.pathname, res.clone());
+        if (keepable(res)) event.waitUntil(quietly(build.put(url.pathname, res.clone())));
         return res;
       })(),
     );
@@ -123,17 +158,22 @@ self.addEventListener("fetch", (event) => {
       (async () => {
         const media = await caches.open(MEDIA);
         const kept = await media.match(req);
-        const fresh = fetch(req)
-          .then((res) => {
-            if (keepable(res)) media.put(req, res.clone());
-            return res;
-          })
-          .catch(() => null);
         if (kept) {
-          event.waitUntil(fresh);
+          if (!refreshed.has(url.href)) {
+            refreshed.add(url.href);
+            event.waitUntil(
+              quietly(
+                fetch(req).then((res) => {
+                  if (keepable(res)) return media.put(req, res);
+                }),
+              ),
+            );
+          }
           return kept;
         }
-        return (await fresh) || Response.error();
+        const res = await fetch(req);
+        if (keepable(res)) event.waitUntil(quietly(media.put(req, res.clone())));
+        return res;
       })(),
     );
   }
