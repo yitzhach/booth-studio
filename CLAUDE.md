@@ -75,9 +75,19 @@ BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium npm run test:browser
 ```
 
 Sandbox has WebGL via swiftshader but the pinned Playwright wants a newer
-Chromium than is installed — hence `BOOTH_TEST_CHROMIUM`.
+Chromium than is installed — hence `BOOTH_TEST_CHROMIUM`. In a cloud session
+the session-start hook (`.claude/hooks/session-start.sh`) runs `npm ci` when
+needed and sets it. After a merge, `node tools/verify-deploy.mjs` waits for
+the live commit and checks the page starts.
+
+## Workflow
+
+`docs/WORKFLOW.md`: the strategy loop, the build loop, and the project skills
+in `.claude/skills/` — `plan-phase`, `verify-change`, `root-cause`,
+`review-loop`, `steward`, `product-strategy`.
 
 ## What no session can do
 
-Load the live site, reach polyhaven.com, or judge a render by eye. Anything
-resting on those goes to HANDOFF.md → Next, not into a guess.
+Reach polyhaven.com, or judge a render by eye. Anything resting on those goes
+to HANDOFF.md → Next, not into a guess. (Loading the live site and branch
+previews works since 2026-10-20; if `*.workers.dev` is blocked, say so.)

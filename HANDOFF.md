@@ -13,6 +13,24 @@ Extend it; do not rebuild it.
   the rules that bite. It does not need to be asked for again. That rule is
   about chat only: code comments, commit messages and this file stay in full
   prose, because a cold session has nothing else to read.
+- **2026-10-20: a permanent way of working — `docs/WORKFLOW.md`.** The owner
+  asked for a project-level workflow for cloud sessions (assessment, research,
+  roadmap, phased building, review in rounds, tests, a checked deploy, this
+  file updated), weighing obra/superpowers and jingzhao-l/iterate-skill. Six
+  project skills in `.claude/skills/`: `plan-phase`, `verify-change`,
+  `root-cause`, `review-loop`, `steward` (the harness reads it on PR events)
+  and `product-strategy`. Four adapt text from the two projects, pinned to
+  commits (`.claude/skills/THIRD_PARTY.md`); neither is installed, and none of
+  their code was run — WORKFLOW.md says why. A session-start hook runs
+  `npm ci` when needed and sets `BOOTH_TEST_CHROMIUM`.
+  `tools/verify-deploy.mjs` waits until production serves a commit, then
+  opens it in Chromium and checks the app starts: first run, production
+  serves `fe7305d` (Rev 1) and starts clean. That also means the sandbox now
+  reaches `*.workers.dev`; CLAUDE.md's "what no session can do" is updated.
+  `tests/claude-workflow.test.js` keeps the skills loadable (front matter,
+  names clear of Claude Code's own `verify`, `debug`, `plan` …), which
+  `claude plugin validate` does not check. The skills reach new sessions once
+  this is on `main`.
 - **2026-10-20: `ROADMAP.md` — the road to a product people pay for.** The
   owner asked what would make this top-tier software that companies buy and
   artists rely on, and for the phase-by-phase plan to get there. The file
@@ -2315,8 +2333,9 @@ Extend it; do not rebuild it.
      surprising. It is the last one *set*, which is not the same as the last
      one hung.
 2. **Look at the art-show booth on the live site and set Diffusion.** This is
-   the first thing to do and it needs a human, not a session: no agent can
-   load production. Open Art show, and judge in this order —
+   the first thing to do and it needs a human, not a session: a session can
+   load production now (2026-10-20) but cannot judge a render by eye. Open Art
+   show, and judge in this order —
    - **Diffusion** (Light bar, default 1.5 on a 0..3 scale) is the one number
      in the softening pass that was chosen rather than derived. It was 0.7 on
      a 0..1 scale, was judged still harsh at its old maximum, and the scale
@@ -2364,8 +2383,8 @@ Extend it; do not rebuild it.
      --credit "Burnt Warehouse (Poly Haven)"
    ```
    **No agent session can do this** — polyhaven.com is refused by the sandbox
-   egress proxy, as is the workers.dev production host. It needs a human with a
-   browser. `docs/HDRI-ASSETS.md` is step by step.
+   egress proxy (the workers.dev hosts, refused before, are reachable since
+   2026-10-20). It needs a human with a browser. `docs/HDRI-ASSETS.md` is step by step.
 5. **H.264 output is unverified on real hardware.** Open Chromium builds ship no
    H.264 *encoder*, so every sandbox run exercises the VP9 fallback instead.
    That does prove the whole encoder-to-muxer pipeline with real encoder bytes,
@@ -2373,7 +2392,7 @@ Extend it; do not rebuild it.
    `avc1`/`avcC` file from Chrome or Safari in QuickTime. If a clip will not
    play, start here.
 6. **Unverified on real hardware** — things no one has confirmed by eye,
-   because no agent session can load the live site:
+   because no agent session can judge them by eye:
    - **Nobody has looked at the Video tab, a batch export or the overhead
      lens flare.** The batch list is covered in a real browser (queue two
      clips, check each keeps its own settings, remove one, clear the list) and
@@ -2730,6 +2749,7 @@ BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what
 npm run test:browser     # 25 end-to-end checks
 STUDIO_PLATFORM=../Art-Talk-Back BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/two-devices.mjs   # 50 checks; after npm run build (see Studio platform)
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/wall-assets.mjs
+node tools/verify-deploy.mjs   # after a merge: waits for production to serve the commit, then checks the page starts
 ```
 
 **`tests/wall-assets.mjs` fails at line 120 (sideways scroll at 820 px on
