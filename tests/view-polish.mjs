@@ -56,6 +56,12 @@ try {
   assert.equal(p.booth.ground, 'grass');
   assert.equal(p.booth.horizon, 'open');
   assert.ok(p.lights.every((l) => l.kelvin === 5000));
+  // The look the booth is in is marked, and only until a value of it is changed by hand.
+  const marked = () => page.locator('#inspector-content .look-grid button.active').evaluateAll((els) => els.map((el) => el.dataset.action));
+  assert.deepEqual(await marked(), ['look-fair']);
+  await page.click('[data-action="warm"]');
+  await page.waitForTimeout(300);
+  assert.deepEqual(await marked(), [], 'Warm changes the light by hand: the booth is in no look');
 
   // --- The Environment picker (Layout) follows the same rule.
   await page.click('[data-tab="layout"]');

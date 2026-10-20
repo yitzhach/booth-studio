@@ -429,16 +429,32 @@ test("the lighting by hand: described as the Lighting tab shows it, set as its s
   const { lines: l3 } = applyOps(s1, [{ op: "set_lighting", power: 150.4, kelvin: 3500 }], images);
   assert.equal(l3[0], "Light it: both spotlights at 3500 K, brightness 150");
 
-  // A hidden spotlight is listed as hidden, and changed with the rest.
+  // A look is lost to any of its values changed by hand, the horizon as much as a light.
+  assert.equal(describe({ ...s1, booth: { ...s1.booth, horizon: "open" } }, images).lighting.look, null);
+
+  // A hidden spotlight is listed as hidden, changed with the rest, and the card says so.
   const one = { ...scene, lights: [{ ...scene.lights[0], on: false }] };
   assert.deepEqual(describe(one, images).lighting.spotlights, [{ kelvin: 4000, power: 75, hidden: true }]);
-  assert.equal(applyOps(one, [{ op: "set_lighting", power: 90 }], images).lines[0], "Light it: the spotlight at brightness 90");
+  assert.equal(applyOps(one, [{ op: "set_lighting", power: 90 }], images).lines[0], "Light it: the spotlight (hidden) at brightness 90");
+  const two = { ...scene, lights: [scene.lights[0], { ...scene.lights[1], on: false }] };
+  assert.equal(applyOps(two, [{ op: "set_lighting", kelvin: 2700 }], images).lines[0], "Light it: both spotlights (1 hidden) at 2700 K");
+
+  // An art-show booth's light bar: described on the tab's own scale, and set on it.
+  const { scene: show } = applyOps(scene, [{ op: "set_booth", venue: "artshow" }], images);
+  assert.deepEqual(describe(show, images).lighting.lightBar, { on: true, kelvin: 3500, brightness: 50 });
+  const { scene: s4, lines: l4 } = applyOps(show, [{ op: "set_lighting", barKelvin: 3000, barBrightness: 40 }], images);
+  assert.equal(l4[0], "Light it: the light bar at 3000 K, brightness 40");
+  assert.deepEqual([s4.booth.lightBar.kelvin, s4.booth.lightBar.power], [3000, 6.4]);
+  assert.deepEqual(describe(s4, images).lighting.lightBar, { on: true, kelvin: 3000, brightness: 40 });
+  assert.doesNotThrow(() => opens(s4, p));
+  assert.equal(describe(scene, images).lighting.lightBar, undefined, "an outdoor booth has no bar");
+  assert.throws(() => applyOps(scene, [{ op: "set_lighting", barKelvin: 3000 }], images), /no light bar; it comes with an art-show booth/);
 
   // Refused by name, and nothing written: nothing to change, past a slider's end, no spotlights to set.
   assert.throws(() => applyOps(scene, [{ op: "set_lighting" }], images), /set_lighting\): say what to change/);
   assert.throws(() => applyOps(scene, [{ op: "set_lighting", kelvin: 9000 }], images), /kelvin must be at most 6500/);
   assert.throws(() => applyOps(scene, [{ op: "set_lighting", ambient: -1 }], images), /ambient must be at least 0/);
   const dark = { ...scene, lights: [] };
-  assert.throws(() => applyOps(dark, [{ op: "set_lighting", power: 100 }], images), /no spotlights; make_beautiful adds them/);
+  assert.throws(() => applyOps(dark, [{ op: "set_lighting", power: 100 }], images), /no spotlights\. make_beautiful adds them, aimed at the work hanging on its walls/);
   assert.equal(applyOps(dark, [{ op: "set_lighting", ambient: 2 }], images).lines[0], "Light it: ambient 2");
 });

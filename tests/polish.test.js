@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { applyVenue, blankProject, demoProject, uid, validateProject } from "../src/model.js";
 import { ENV_PRESETS } from "../src/lighting.js";
 import { HANG_LINE } from "../src/arrange.js";
-import { LOOKS, aimLights, applyEnvPreset, applyLook, evenHang, lightTargets, lookFor, polish } from "../src/polish.js";
+import { LOOKS, aimLights, applyEnvPreset, applyLook, currentLook, evenHang, lightTargets, lookFor, polish } from "../src/polish.js";
 
 const work = (wall, x, y, w, h, extra = {}) => ({ id: uid(), asset: null, title: "w", wall, x, y, w, h, thickness: 1.5, offset: 0.75, ...extra });
 
@@ -146,4 +146,31 @@ test("hero shots: front, three-quarter, aisle, and a close-up of the fullest wal
   for (const s of shots) for (const v of [...s.pose.position, ...s.pose.target]) assert.ok(Number.isFinite(v) && Math.abs(v) < 1000);
   assert.equal(heroShots(blankProject()).length, 3, "no work, no close-up");
   assert.equal(HERO_CLIP.move, "orbit");
+});
+
+test("currentLook is applyLook read back: named while every value holds, null once one is changed by hand", () => {
+  assert.equal(currentLook(demoProject()), null, "a new booth is in no look");
+  for (const key of Object.keys(LOOKS)) {
+    const p = demoProject();
+    applyLook(p, key);
+    assert.equal(currentLook(p), key);
+  }
+  const changed = (edit) => {
+    const p = demoProject();
+    applyLook(p, "gallery");
+    edit(p);
+    return currentLook(p);
+  };
+  assert.equal(changed((p) => (p.booth.horizon = "open")), null, "the horizon");
+  assert.equal(changed((p) => (p.booth.ground = "grass")), null, "the floor");
+  assert.equal(changed((p) => (p.ambient = 1)), null, "the room light");
+  assert.equal(changed((p) => (p.lights[1].kelvin = 3000)), null, "one spotlight");
+  // Nothing to colour: the surroundings and room light are the look.
+  assert.equal(changed((p) => (p.lights = [])), "gallery");
+  // An art-show booth under a photographed sky is in it only while its white hall stays out.
+  const show = applyVenue(blankProject(), "artshow");
+  applyLook(show, "fair");
+  assert.equal(currentLook(show), "fair");
+  show.booth.hall = { ...show.booth.hall, on: true };
+  assert.equal(currentLook(show), null);
 });

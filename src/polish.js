@@ -15,7 +15,7 @@
 //
 // What a look *looks* like on screen is the owner's to judge; no session can.
 // The values are in this one table so that judgement is a one-line change.
-import { constrain, groundUpload, hallSpec, isArtShow, isShown, selectGround, uid, wallSpec } from "./model.js";
+import { constrain, groundKind, groundUpload, hallSpec, isArtShow, isShown, selectGround, uid, wallSpec } from "./model.js";
 import { hangAt, sameWall, spaceEvenly } from "./arrange.js";
 import { resolvePreset } from "./presets.js";
 
@@ -95,6 +95,28 @@ export function applyLook(p, key) {
     l.power = look.power;
   }
   return { look: key, hallOff };
+}
+
+/**
+ * The look a booth is in: the one whose every value it still holds — the
+ * environment with its floor and horizon (a photographed floor stays, as
+ * applyEnvPreset leaves it), an art-show hall a photographed sky put out,
+ * the room light, and every spotlight's colour and power — or null once any
+ * of them is changed by hand. The inverse of applyLook: a field a look gains
+ * there is checked here too. With no spotlights, a booth whose surroundings
+ * and room light match is in the look, because applying it would change
+ * nothing more.
+ */
+export function currentLook(p) {
+  const env = resolvePreset(p.booth.envPreset);
+  const lights = p.lights || [];
+  for (const [key, look] of Object.entries(LOOKS)) {
+    if (env.id !== look.envPreset || p.ambient !== look.ambient || p.booth.horizon !== env.horizon) continue;
+    if ((groundUpload(p) ? p.booth.groundPreset : groundKind(p)) !== env.ground) continue;
+    if (isArtShow(p) && env.hdri && hallSpec(p.booth).on) continue;
+    if (lights.every((l) => l.kelvin === look.kelvin && l.power === look.power)) return key;
+  }
+  return null;
 }
 
 // Signs and labels are placed beside a particular work, so a wall carrying
