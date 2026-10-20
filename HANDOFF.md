@@ -2107,6 +2107,22 @@ Extend it; do not rebuild it.
 
 ## Next
 
+0. **2026-10-20: the owner's to try, on real devices (no session can).**
+   - On an iPad, portrait and landscape: the inspector's tabs scroll
+     sideways inside the right-hand panel now, instead of the whole page
+     (booth-studio#34). Is that findable, or should the labels go and leave
+     icons only?
+   - On the iPad, signed out, with a booth holding your own images: Export →
+     Keep your work. Does Safari grant **Ask the browser to keep it**, and is
+     the booth still there after a week without a visit? Does the backup
+     reminder come at a sensible moment?
+   - Signed in, in the assistant: "make my booth look good for a jury photo"
+     and "make it a bit warmer". Does it reach for `make_beautiful` and
+     `set_lighting` (Art-Talk-Back D-081), and do the cards read right?
+   - Lighting: the look the booth is in is now marked until a value is
+     changed by hand. Clear enough?
+   - When anything goes wrong: Export → Something wrong? → **Copy a problem
+     report**, and paste it into the message. It names the build first.
 0. **Rev 1 (parts A, B and C) is merged and live (2026-10-19), untested by
    a person.** The owner said merge now and test later. Start the next
    session here. His checklist, on the live site in a private window (a
