@@ -7013,6 +7013,20 @@ async function boot() {
   }
   const studioHost = {
     project: () => p,
+    // The assistant panel's 🖼: the booth as it is drawn now — clean, without
+    // controls or outlines, in the window's own shape — as a PNG `long` px on
+    // its long side, for the panel to shrink and send with the next message.
+    // Photo mode gives the photo composition, as Export PNG does. Null while
+    // another export holds the renderer.
+    viewPicture: async (long) => {
+      if (busy || busyVideo) return null;
+      busy = true;
+      try {
+        return p.mode === "photo" ? await photo.export(long) : ((await scene?.export(long)) ?? null);
+      } finally {
+        busy = false;
+      }
+    },
     // For the assistant: every control the tool search knows, as "where: names",
     // so it can tell the artist which tab or bar and which button (Art-Talk-Back D-072).
     appMap: () => appMapText(toolIndex || (toolIndex = buildToolIndex())),
@@ -7058,6 +7072,7 @@ async function boot() {
     window.__booth = {
       // The assistant's "take me to …" on the real index, for tests/view-assistant.mjs.
       openPlace: (place, control) => studioHost.openPlace(place, control),
+      viewPicture: (long) => studioHost.viewPicture(long),
       get project() {
         return p;
       },

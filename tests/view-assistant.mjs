@@ -59,7 +59,7 @@ try {
 
   await page.goto('http://127.0.0.1:5241');
   await page.waitForFunction(() => !!window.__booth?.scene);
-  const mount = () => page.evaluate(async () => {
+  const mount = (view = false) => page.evaluate(async (view) => {
     window.__bridge = { synced: 0, opened: null, adopted: 0 };
     const bridge = {
       onStatus(fn) { window.__bridge.paint = fn; return () => {}; },
@@ -71,9 +71,11 @@ try {
       adopt: async () => { window.__bridge.adopted++; if (!window.__bridge.adoptFails) window.__bridge.status = 'synced'; },
     };
     const host = { project: () => window.__booth.project, appMap: () => 'Export · Keep your work: Download project backup', openPlace: (p, c) => window.__booth.openPlace(p, c) };
+    // The app's own 🖼 (main.js studioHost.viewPicture), when asked for.
+    if (view) host.viewPicture = (long) => window.__booth.viewPicture(long);
     const { mount } = await import('/src/studio-assistant.js');
     await mount(bridge, host);
-  });
+  }, view);
   const shown = () => page.evaluate(() => {
     const el = document.querySelector('studio-assistant');
     return !!el && !el.hidden && getComputedStyle(el).display !== 'none';
@@ -287,6 +289,39 @@ try {
   await inPanel('.note:text("Up to 3 pictures with one message.")').waitFor();
   assert.equal(await inPanel('.pic').count(), 3);
 
+  // ---- This view (🖼): the booth as drawn now, for the assistant to see ----
+  const viewBtn = inPanel('button[aria-label="Attach the booth as it looks now"]');
+  assert.equal(await viewBtn.isHidden(), true, 'no 🖼 where the app draws no view');
+  await page.evaluate(() => document.querySelector('studio-assistant').remove());
+  await mount(true);
+  await launch.click();
+  assert.equal(await viewBtn.isHidden(), false, 'the 🖼 where the app can draw the booth');
+  chat = [{ type: 'text', text: 'Balanced. The big piece would sit better in the centre.' }, { type: 'end', reason: 'end_turn' }];
+  await viewBtn.click();
+  await inPanel('.pic img').waitFor();
+  assert.match(await inPanel('textarea').getAttribute('placeholder'), /Ask about this view/);
+  await inPanel('textarea').fill('how does this look?');
+  await inPanel('textarea').press('Enter');
+  await inPanel('.msg.bot:text("Balanced. The big piece would sit better in the centre.")').waitFor();
+  const viewed = sent.at(-1);
+  assert.equal(viewed.message, 'how does this look?');
+  assert.equal(viewed.images.length, 1);
+  assert.equal(viewed.images[0].mediaType, 'image/jpeg');
+  // The booth itself, not an empty canvas: its size, and more than a handful of colours in it.
+  const look = await page.evaluate(async (data) => {
+    const b = await createImageBitmap(await (await fetch(`data:image/jpeg;base64,${data}`)).blob());
+    const c = new OffscreenCanvas(b.width, b.height);
+    const g = c.getContext('2d');
+    g.drawImage(b, 0, 0);
+    const px = g.getImageData(0, 0, b.width, b.height).data;
+    const colours = new Set();
+    for (let i = 0; i < px.length; i += 4 * 997) colours.add(`${px[i] >> 4},${px[i + 1] >> 4},${px[i + 2] >> 4}`);
+    return { w: b.width, h: b.height, colours: colours.size };
+  }, viewed.images[0].data);
+  assert.equal(Math.max(look.w, look.h), 1568, `the view at 1568 px on its long side: ${look.w}×${look.h}`);
+  assert.ok(look.colours > 20, `a drawn booth, not a blank: ${look.colours} colours`);
+  assert.match(await inPanel('textarea').getAttribute('placeholder'), /^e\.g\. make this/, 'the usual hint again once sent');
+
   // ---- On the page: Backspace, colours, moving it -------------------------
   // Backspace in the chat box deletes a letter, not the selected artwork (a key
   // in the shadow root reached main.js's shortcuts as <studio-assistant>).
@@ -361,7 +396,7 @@ try {
   assert.equal(await page.evaluate(() => document.querySelector('studio-assistant').panel.hidden), false, 'the panel is open');
 
   assert.deepEqual(errors, [], 'no page errors');
-  console.log('PASS the assistant shows only signed in where one is connected, sends the booth on screen with each message, shows a card in the studio\'s words, syncs after Confirm and Undo, opens a booth it made in one tap, sends pictures shrunk to 1568 px, lets Backspace type, is dark with the app, moves, resizes and shrinks, has a header button and a phone icon clear of the viewport\'s buttons, and says plainly when it isn\'t there; the Workspace dialog hands a described booth to it.');
+  console.log('PASS the assistant shows only signed in where one is connected, sends the booth on screen with each message, shows a card in the studio\'s words, syncs after Confirm and Undo, opens a booth it made in one tap, sends pictures shrunk to 1568 px and the booth as drawn now (🖼), lets Backspace type, is dark with the app, moves, resizes and shrinks, has a header button and a phone icon clear of the viewport\'s buttons, and says plainly when it isn\'t there; the Workspace dialog hands a described booth to it.');
 } finally {
   await browser.close();
   await server.close();

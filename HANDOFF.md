@@ -13,6 +13,19 @@ Extend it; do not rebuild it.
   the rules that bite. It does not need to be asked for again. That rule is
   about chat only: code comments, commit messages and this file stay in full
   prose, because a cold session has nothing else to read.
+- **2026-10-20: the assistant can see the booth (🖼).** Beside the panel's 📷
+  is a 🖼, **Attach the booth as it looks now**: the view on screen, rendered
+  clean as Export PNG renders it (no controls or outlines, the window's own
+  shape; Photo mode gives the photo composition), 1568 px on its long side,
+  goes with the next message as a picture, so "how does this look?" or "what
+  would make it better for a jury photo?" is answered about the booth itself
+  and not only its numbers — and the assistant can then change it with the
+  ops it already has. It rides the picture path the 📷 already uses (no
+  platform change, no new limit), shows only where the app gives the panel
+  `viewPicture` (main.js `studioHost`), and waits for any export holding
+  the renderer. `tests/view-assistant.mjs` sends one and checks it is the
+  drawn booth, not an empty canvas. Whether the model's critique is any good
+  is the owner's to judge.
 - **2026-10-20: Report a problem (ROADMAP 1.9).** Export → Something wrong?
   → **Copy a problem report** copies plain text to paste into a message: the
   build (version, time, commit — compare it with `main` first, as
@@ -2121,6 +2134,9 @@ Extend it; do not rebuild it.
      `set_lighting` (Art-Talk-Back D-081), and do the cards read right?
    - Lighting: the look the booth is in is now marked until a value is
      changed by hand. Clear enough?
+   - In the assistant, the 🖼 beside the 📷: attach the booth and ask "how
+     does this look for a jury photo?" Is the critique useful, and does it
+     offer to make the changes it suggests?
    - When anything goes wrong: Export → Something wrong? → **Copy a problem
      report**, and paste it into the message. It names the build first.
 0. **Rev 1 (parts A, B and C) is merged and live (2026-10-19), untested by

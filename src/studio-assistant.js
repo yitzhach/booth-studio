@@ -92,6 +92,8 @@ const SYNC_NOTES = {
 /** The long side the model reads a picture at full detail; larger is only slower to send. */
 export const PICTURE_EDGE = 1568;
 export const MAX_PICTURES = 3;
+const ASK_PLACEHOLDER = "e.g. make this a 10 × 15 art-show booth with a table and two chairs";
+const VIEW_PLACEHOLDER = "Ask about this view, e.g. what would make it look better?";
 
 /** Width and height that fit inside PICTURE_EDGE, keeping the shape; never enlarged. */
 export function fitPicture(w, h, edge = PICTURE_EDGE) {
@@ -266,11 +268,14 @@ class Panel extends HTMLElement {
     this.launch = el("button", { class: "launch", type: "button", "aria-expanded": "false", "aria-controls": "panel", text: "Ask the assistant" });
     this.log = el("div", { class: "log", role: "log", "aria-live": "polite" });
     this.picks = el("div", { class: "picks", hidden: true });
-    this.input = el("textarea", { rows: "2", "aria-label": "Message to the assistant", placeholder: "e.g. make this a 10 × 15 art-show booth with a table and two chairs" });
+    this.input = el("textarea", { rows: "2", "aria-label": "Message to the assistant", placeholder: ASK_PLACEHOLDER });
     this.sendBtn = el("button", { class: "btn primary", type: "submit", text: "Send" });
     // A photo, sketch or show map goes with the next message (10a).
     this.file = el("input", { type: "file", accept: "image/*", multiple: "", hidden: true });
     this.attachBtn = el("button", { class: "btn attach", type: "button", "aria-label": "Attach a picture", title: "Attach a photo, sketch or show map", text: "📷" });
+    // The booth as it is drawn now, for the assistant to look at ("how does
+    // this look?"): only where the app can draw one (host.viewPicture).
+    this.viewBtn = el("button", { class: "btn attach", type: "button", "aria-label": "Attach the booth as it looks now", title: "Attach the booth as it looks now, so the assistant can see it", text: "🖼", hidden: true });
     this.pics = el("div", { class: "pics", hidden: true });
     this.pictures = [];
     this.note = el("p", { class: "note", role: "status", hidden: true });
@@ -286,7 +291,7 @@ class Panel extends HTMLElement {
     ]);
     this.ghost = el("div", { class: "ghost", "aria-hidden": "true" });
     this.replies = el("div", { class: "replies", hidden: true });
-    const form = el("form", {}, [this.attachBtn, this.file, el("div", { class: "compose" }, [this.ghost, this.input]), this.sendBtn]);
+    const form = el("form", {}, [this.attachBtn, this.viewBtn, this.file, el("div", { class: "compose" }, [this.ghost, this.input]), this.sendBtn]);
     this.said = readSaid();
     this.names = [];
     this.panel = el("section", { class: "panel", id: "panel", role: "dialog", "aria-label": "Studio assistant", hidden: true }, [
@@ -331,6 +336,7 @@ class Panel extends HTMLElement {
     });
     this.input.addEventListener("input", () => this.hint());
     this.attachBtn.addEventListener("click", () => this.file.click());
+    this.viewBtn.addEventListener("click", () => this.addView());
     this.file.addEventListener("change", () => {
       const files = [...this.file.files];
       this.file.value = "";
@@ -345,6 +351,7 @@ class Panel extends HTMLElement {
     this.bridge = bridge;
     this.host = host;
     this.available = available;
+    this.viewBtn.hidden = typeof host?.viewPicture !== "function";
     bridge.onStatus(() => this.paint());
     this.paint();
   }
@@ -597,6 +604,25 @@ class Panel extends HTMLElement {
     this.input.focus();
   }
 
+  /** The booth as it is drawn now, as one more picture with the next message. */
+  async addView() {
+    this.setNote("");
+    if (this.pictures.length >= MAX_PICTURES) return this.setNote(`Up to ${MAX_PICTURES} pictures with one message.`);
+    this.viewBtn.disabled = true;
+    try {
+      const shot = await this.host.viewPicture(PICTURE_EDGE);
+      if (!shot) throw new Error("No picture of the booth.");
+      this.pictures.push(await shrinkPicture(shot));
+      this.paintPictures();
+      if (!this.input.value.trim()) this.input.placeholder = VIEW_PLACEHOLDER;
+    } catch {
+      this.setNote("The booth couldn’t be pictured just now. A screenshot works too: 📷.");
+    } finally {
+      this.viewBtn.disabled = false;
+    }
+    this.input.focus();
+  }
+
   paintPictures() {
     this.pics.textContent = "";
     this.pictures.forEach((p, i) => {
@@ -634,6 +660,7 @@ class Panel extends HTMLElement {
     const pictures = this.pictures;
     this.pictures = [];
     this.paintPictures();
+    this.input.placeholder = ASK_PLACEHOLDER;
     const mine = this.say("me", text);
     for (const p of pictures.slice().reverse()) mine.prepend(el("img", { src: p.url, alt: "Picture sent" }));
     const bubble = this.say("bot thinking", "Thinking…");
