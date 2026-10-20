@@ -7017,14 +7017,19 @@ async function boot() {
     // controls or outlines, in the window's own shape — as a PNG `long` px on
     // its long side, for the panel to shrink and send with the next message.
     // Photo mode gives the photo composition (photo.export takes a width).
-    // Null while an export or a previewed move holds the renderer.
+    // Null while an export or a previewed move holds the renderer; an error
+    // in the panel's words otherwise (the exports' own speak of a size menu
+    // the panel doesn't have).
     viewPicture: async (long) => {
       if (busy || busyVideo || busyPreview) return null;
+      const a = p.mode === "photo" ? p.assets[p.photo.asset] : null;
+      if (p.mode === "photo" && !a) throw new Error("Upload a booth photo first, or switch to 3D booth.");
+      if (p.mode !== "photo" && !scene) throw new Error("3D isn't available on this browser, so there is no view to send. A screenshot works too: 📷.");
       busy = true;
       try {
-        if (p.mode !== "photo") return (await scene?.export(long)) ?? null;
-        const a = p.assets[p.photo.asset];
-        return await photo.export(a && a.height > a.width ? Math.round((long * a.width) / a.height) : long);
+        return p.mode === "photo" ? await photo.export(a.height > a.width ? Math.round((long * a.width) / a.height) : long) : await scene.export(long);
+      } catch {
+        throw new Error("This device couldn't draw the booth just now. A screenshot works too: 📷.");
       } finally {
         busy = false;
       }

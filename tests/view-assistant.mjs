@@ -326,6 +326,27 @@ try {
   assert.equal(Math.max(look.w, look.h), 1568, `the view at 1568 px on its long side: ${look.w}×${look.h}`);
   assert.ok(look.colours > 20, `a drawn booth, not a blank: ${look.colours} colours`);
   assert.match(await inPanel('textarea').getAttribute('placeholder'), /^e\.g\. make this/, 'the usual hint again once sent');
+  // No picture comes (an export holds the renderer) while a question waits for it: the question
+  // stays in the box with the reason, unsent.
+  const sentBefore = sent.length;
+  await page.evaluate(() => {
+    window.__realView = window.__booth.viewPicture;
+    window.__booth.viewPicture = () => new Promise((done) => setTimeout(() => done(null), 1500));
+  });
+  await viewBtn.click();
+  await inPanel('textarea').fill('and now?');
+  await inPanel('textarea').press('Enter');
+  await inPanel('.note:text-matches("Something else is drawing the booth")').waitFor();
+  assert.equal(sent.length, sentBefore, 'nothing sent about a booth the assistant could not see');
+  assert.equal(await inPanel('textarea').inputValue(), 'and now?', 'the question kept');
+  // A host that throws at once is a note too, and the 🖼 still works after it.
+  await page.evaluate(() => { window.__booth.viewPicture = () => { throw new Error('Not drawn.'); }; });
+  await viewBtn.click();
+  await inPanel('.note:text("Not drawn.")').waitFor();
+  await page.evaluate(() => { window.__booth.viewPicture = window.__realView; });
+  await viewBtn.click();
+  await inPanel('.pic img').waitFor();
+  await inPanel('.pic button[aria-label="Remove picture 1"]').click();
 
   // ---- On the page: Backspace, colours, moving it -------------------------
   // Backspace in the chat box deletes a letter, not the selected artwork (a key

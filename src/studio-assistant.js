@@ -94,6 +94,10 @@ export const PICTURE_EDGE = 1568;
 export const MAX_PICTURES = 3;
 const ASK_PLACEHOLDER = "e.g. make this a 10 × 15 art-show booth with a table and two chairs";
 const VIEW_PLACEHOLDER = "Ask about this view, e.g. what would make it look better?";
+// How long the 🖼 waits for the app to draw the booth (it waits for textures
+// still loading first) before saying so.
+const VIEW_WAIT = 20000;
+const VIEW_TOO_SLOW = "The booth is taking too long to draw. Try again, or attach a screenshot with 📷.";
 
 /** Width and height that fit inside PICTURE_EDGE, keeping the shape; never enlarged. */
 export function fitPicture(w, h, edge = PICTURE_EDGE) {
@@ -607,20 +611,37 @@ class Panel extends HTMLElement {
   /**
    * The booth as it is drawn now (host.viewPicture), as one more picture with
    * the next message — through addPictures, so the cap and the tray are the
-   * 📷's. A message sent while it renders waits for it (send).
+   * 📷's. Resolves true once it is in the tray. A message sent while it is
+   * drawn waits for it, and stays unsent if it never comes (send).
    */
   addView() {
-    if (this.pictures.length >= MAX_PICTURES) return this.setNote(`Up to ${MAX_PICTURES} pictures with one message.`);
-    this.viewing ||= (async () => {
-      this.setNote("");
+    if (this.viewing) return this.viewing;
+    if (this.pictures.length >= MAX_PICTURES) {
+      this.setNote(`Up to ${MAX_PICTURES} pictures with one message.`);
+      return Promise.resolve(false);
+    }
+    this.viewing = (async () => {
+      // Past this line only once `this.viewing` holds this promise, so the
+      // finally below can never clear it before it is stored.
+      await 0;
+      this.setNote("Picturing the booth…");
       this.viewBtn.disabled = true;
+      let timer;
       try {
-        const shot = await this.host.viewPicture(PICTURE_EDGE);
-        if (shot) await this.addPictures([shot], { view: true });
-        else this.setNote("An export is drawing the booth just now: try again when it has finished.");
+        const late = new Promise((_, no) => (timer = setTimeout(() => no(new Error(VIEW_TOO_SLOW)), VIEW_WAIT)));
+        const shot = await Promise.race([this.host.viewPicture(PICTURE_EDGE), late]);
+        if (!shot) {
+          this.setNote("Something else is drawing the booth just now (an export or a preview): try again when it has finished.");
+          return false;
+        }
+        const had = this.pictures.length;
+        await this.addPictures([shot], { view: true });
+        return this.pictures.length > had;
       } catch (err) {
         this.setNote(err?.message || "The booth couldn’t be pictured just now. A screenshot works too: 📷.");
+        return false;
       } finally {
+        clearTimeout(timer);
         this.viewBtn.disabled = false;
         this.viewing = null;
       }
@@ -644,8 +665,15 @@ class Panel extends HTMLElement {
   }
 
   async send(text) {
-    // The booth still being pictured (🖼) goes with this message, not the next.
-    if (this.viewing) await this.viewing;
+    // The booth still being pictured (🖼) goes with this message, not the
+    // next; if it never comes, the message stays in the box with the reason,
+    // rather than going to the assistant about a booth it can't see.
+    if (this.viewing) {
+      this.sendBtn.disabled = true;
+      const ok = await this.viewing;
+      this.sendBtn.disabled = false;
+      if (!ok) return;
+    }
     text = String(text || "").trim();
     if ((!text && !this.pictures.length) || this.busy) return;
     this.setNote("");
