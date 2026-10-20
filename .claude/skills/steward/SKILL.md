@@ -77,8 +77,11 @@ those says so in its description and waits for the owner.
 ## After the merge
 
 1. `node tools/verify-deploy.mjs --commit <merge sha>` waits until the live
-   site serves that commit, then opens it in Chromium and checks that it
-   starts. Report what it printed, including a failure.
+   site serves that commit (or a later one containing it), then opens it in
+   Chromium and checks that it starts. Report what it printed, including a
+   failure. Exit 1 is a live page that did not start; exit 2, a deploy that
+   never arrived; exit 3 is no verdict at all (the site or the browser could
+   not be reached) — never roll back on a 3.
 2. Update `HANDOFF.md`: Now (what shipped, dated) and Next (what the owner
    must look at in person).
 3. A bad deploy: on GitHub, the merged pull request → **Revert** → merge the

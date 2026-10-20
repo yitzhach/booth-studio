@@ -10,7 +10,10 @@
 # rewrite package-lock.json and leave the tree dirty.
 #
 # Whatever happens, the session starts: a failed install is reported in one
-# line (it reaches the session as context) and the hook still exits 0.
+# line (it reaches the session as context) and the hook still exits 0. A cold
+# `npm ci` (wrangler, Playwright, Vite, three) can outlast the default hook
+# timeout, so .claude/settings.json gives it ten minutes; an install cut short
+# leaves no node_modules/.package-lock.json, so the next session runs it again.
 set -uo pipefail
 
 if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
@@ -36,9 +39,13 @@ else
   note "node_modules up to date"
 fi
 
+# A BOOTH_TEST_CHROMIUM the environment already sets is kept; the line is
+# written once, however often the session restarts (resume, compact).
 chromium=/opt/pw-browsers/chromium
-if [ -x "$chromium" ] && [ -n "${CLAUDE_ENV_FILE:-}" ]; then
-  echo "export BOOTH_TEST_CHROMIUM=$chromium" >>"$CLAUDE_ENV_FILE"
+if [ -n "${BOOTH_TEST_CHROMIUM:-}" ]; then
+  note "BOOTH_TEST_CHROMIUM=$BOOTH_TEST_CHROMIUM (already set)"
+elif [ -x "$chromium" ] && [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+  grep -qs "BOOTH_TEST_CHROMIUM=" "$CLAUDE_ENV_FILE" || echo "export BOOTH_TEST_CHROMIUM=$chromium" >>"$CLAUDE_ENV_FILE"
   note "BOOTH_TEST_CHROMIUM=$chromium"
 elif [ -x "$chromium" ]; then
   note "no CLAUDE_ENV_FILE: prefix browser suites with BOOTH_TEST_CHROMIUM=$chromium"

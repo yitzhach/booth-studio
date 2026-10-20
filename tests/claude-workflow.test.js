@@ -16,9 +16,12 @@ import path from "node:path";
 const root = path.resolve(import.meta.dirname, "..");
 const skillsDir = path.join(root, ".claude", "skills");
 
-// Claude Code's bundled skills and built-in commands that a project skill
-// must not reuse. The bundled list was read from the CLI (2.1.304); the
-// commands are the ones a session types most.
+// Claude Code's bundled skills and built-in commands, and the skills this
+// cloud environment adds, that a project skill must not reuse. The bundled
+// list was read from the CLI (2.1.304); the rest are the ones a session sees
+// most. It goes stale as Claude Code grows: add a name when one appears.
+// `site-qa` is left out on purpose: ROADMAP.md 1.10 brings yitzhach/site-qa's
+// own skill into this repository under that name.
 const TAKEN = new Set([
   "artifact-diagramming", "batch", "claude-code-docs", "code-review", "commit",
   "dataviz", "debug", "explain-usage", "fewer-permission-prompts",
@@ -26,7 +29,8 @@ const TAKEN = new Set([
   "simplify", "update-config", "verify", "workflow-authoring",
   "plan", "init", "review", "security-review", "run", "help", "clear",
   "compact", "config", "doctor", "memory", "model", "status", "hooks",
-  "session-start-hook", "skill-creator",
+  "session-start-hook", "skill-creator", "artifact-design",
+  "artifact-capabilities", "claude-api", "deep-research", "docs",
 ]);
 
 const skills = readdirSync(skillsDir).filter((d) =>
@@ -39,7 +43,7 @@ const skills = readdirSync(skillsDir).filter((d) =>
  * " #", nor start with a character that opens another YAML form.
  */
 function frontMatter(text) {
-  const m = /^---\n([\s\S]*?)\n---\n/.exec(text);
+  const m = /^---\n([\s\S]*?)\n---\n/.exec(text.replace(/\r\n/g, "\n"));
   assert.ok(m, "starts with a --- front-matter block");
   const fields = {};
   for (const line of m[1].split("\n")) {
@@ -68,7 +72,7 @@ for (const dir of skills) {
     assert.ok(!TAKEN.has(name), `${name} is not a Claude Code name`);
     assert.ok(description && description.length <= 1024, "description present, at most 1024 characters");
     // Every file a skill points at relative to itself exists.
-    for (const [, rel] of text.matchAll(/`(\.\.\/[^`]+)`/g)) {
+    for (const [, rel] of text.matchAll(/`(\.{1,2}\/[^`\s]+)`/g)) {
       assert.ok(existsSync(path.join(skillsDir, dir, rel)), `${dir} → ${rel} exists`);
     }
   });
