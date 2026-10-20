@@ -4741,7 +4741,7 @@ async function boot() {
       toast("Hanging guide downloaded. Open it to print or save as PDF.");
     },
     "export-image": async () => {
-      if (busy) return;
+      if (busy) return toast("Another export is still running: try again in a moment.");
       busy = true;
       const b = document.querySelector('[data-action="export-image"]');
       b.disabled = true;
@@ -7022,6 +7022,9 @@ async function boot() {
     // the panel doesn't have).
     viewPicture: async (long) => {
       if (busy || busyVideo || busyPreview) return null;
+      // The show floor's plan is drawn by the show editor, not the 3D scene;
+      // a render would be the booth hidden behind it.
+      if (showFloor && !show3d) throw new Error("The show floor's plan can't be pictured yet. Open The show in 3D, or attach a screenshot with 📷.");
       const a = p.mode === "photo" ? p.assets[p.photo.asset] : null;
       if (p.mode === "photo" && !a) throw new Error("Upload a booth photo first, or switch to 3D booth.");
       if (p.mode !== "photo" && !scene) throw new Error("3D isn't available on this browser, so there is no view to send. A screenshot works too: 📷.");

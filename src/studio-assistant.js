@@ -97,6 +97,7 @@ const VIEW_PLACEHOLDER = "Ask about this view, e.g. what would make it look bett
 // How long the 🖼 waits for the app to draw the booth (it waits for textures
 // still loading first) before saying so.
 const VIEW_WAIT = 20000;
+const CAP_NOTE = `Up to ${MAX_PICTURES} pictures with one message.`;
 const VIEW_TOO_SLOW = "The booth is taking too long to draw. Try again, or attach a screenshot with 📷.";
 
 /** Width and height that fit inside PICTURE_EDGE, keeping the shape; never enlarged. */
@@ -594,7 +595,7 @@ class Panel extends HTMLElement {
     this.setNote("");
     for (const f of files) {
       if (this.pictures.length >= MAX_PICTURES) {
-        this.setNote(`Up to ${MAX_PICTURES} pictures with one message.`);
+        this.setNote(CAP_NOTE);
         break;
       }
       if (!/^image\//.test(f.type)) continue;
@@ -617,7 +618,7 @@ class Panel extends HTMLElement {
   addView() {
     if (this.viewing) return this.viewing;
     if (this.pictures.length >= MAX_PICTURES) {
-      this.setNote(`Up to ${MAX_PICTURES} pictures with one message.`);
+      this.setNote(CAP_NOTE);
       return Promise.resolve(false);
     }
     this.viewing = (async () => {
@@ -626,10 +627,11 @@ class Panel extends HTMLElement {
       await 0;
       this.setNote("Picturing the booth…");
       this.viewBtn.disabled = true;
-      let timer;
+      let timer, drawing = null;
       try {
         const late = new Promise((_, no) => (timer = setTimeout(() => no(new Error(VIEW_TOO_SLOW)), VIEW_WAIT)));
-        const shot = await Promise.race([this.host.viewPicture(PICTURE_EDGE), late]);
+        drawing = Promise.resolve(this.host.viewPicture(PICTURE_EDGE));
+        const shot = await Promise.race([drawing, late]);
         if (!shot) {
           this.setNote("Something else is drawing the booth just now (an export or a preview): try again when it has finished.");
           return false;
@@ -642,8 +644,12 @@ class Panel extends HTMLElement {
         return false;
       } finally {
         clearTimeout(timer);
-        this.viewBtn.disabled = false;
         this.viewing = null;
+        // Past the timeout the app is still drawing, and holds its renderer
+        // until it is done: the 🖼 waits for that, so a retry doesn't blame an
+        // export that isn't running.
+        if (drawing) drawing.catch(() => {}).finally(() => (this.viewBtn.disabled = false));
+        else this.viewBtn.disabled = false;
       }
     })();
     return this.viewing;
@@ -671,8 +677,10 @@ class Panel extends HTMLElement {
     if (this.viewing) {
       this.sendBtn.disabled = true;
       const ok = await this.viewing;
-      this.sendBtn.disabled = false;
+      this.sendBtn.disabled = !!this.busy;
       if (!ok) return;
+      // Words typed while the booth was being drawn go too.
+      text = this.input.value;
     }
     text = String(text || "").trim();
     if ((!text && !this.pictures.length) || this.busy) return;

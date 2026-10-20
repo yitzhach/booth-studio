@@ -343,10 +343,18 @@ try {
   await page.evaluate(() => { window.__booth.viewPicture = () => { throw new Error('Not drawn.'); }; });
   await viewBtn.click();
   await inPanel('.note:text("Not drawn.")').waitFor();
-  await page.evaluate(() => { window.__booth.viewPicture = window.__realView; });
+  // Words typed while the booth is drawn go with the question.
+  chat = [{ type: 'text', text: 'Seen it.' }, { type: 'end', reason: 'end_turn' }];
+  await page.evaluate(() => { window.__booth.viewPicture = (long) => new Promise((done) => setTimeout(() => done(window.__realView(long)), 1500)); });
+  await inPanel('textarea').fill('');
   await viewBtn.click();
-  await inPanel('.pic img').waitFor();
-  await inPanel('.pic button[aria-label="Remove picture 1"]').click();
+  await inPanel('textarea').fill('how does');
+  await inPanel('textarea').press('Enter');
+  await inPanel('textarea').pressSequentially(' this look?');
+  await inPanel('.msg.bot:text("Seen it.")').waitFor();
+  assert.equal(sent.at(-1).message, 'how does this look?');
+  assert.equal(sent.at(-1).images.length, 1);
+  await page.evaluate(() => { window.__booth.viewPicture = window.__realView; });
 
   // ---- On the page: Backspace, colours, moving it -------------------------
   // Backspace in the chat box deletes a letter, not the selected artwork (a key
