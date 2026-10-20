@@ -28,7 +28,6 @@ export const easeOut = (t) => {
   return 1 - Math.pow(1 - x, 3);
 };
 
-const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
 // The orbit controls' own limits, restated: a move must not drive the camera
 // under the floor or through the up-vector flip, and it is cheaper to clamp

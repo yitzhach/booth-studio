@@ -56,7 +56,6 @@ try {
   assert.equal(await page.evaluate((id) => window.__booth.project.booth.pedestals.find((x) => x.id === id).height, drawn.id), 30, 'Pull up raises it');
   const top = await page.evaluate((id) => {
     const g = window.__booth.scene.pedestalFrames[id];
-    const box = new (window.__booth.scene.camera.position.constructor)();
     let max = 0;
     g.traverse((o) => { if (o.isMesh) { o.geometry.computeBoundingBox(); o.updateWorldMatrix(true, false); const b = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld); max = Math.max(max, b.max.y); } });
     return max;
@@ -104,7 +103,6 @@ try {
     const s = window.__booth.scene;
     const g = s.modelFrames[id];
     g.updateWorldMatrix(true, true);
-    const V = s.camera.position.constructor;
     let min = Infinity, max = -Infinity;
     g.traverse((o) => { if (o.isMesh) { o.geometry.computeBoundingBox(); const b = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld); min = Math.min(min, b.min.y); max = Math.max(max, b.max.y); } });
     return { min, max };

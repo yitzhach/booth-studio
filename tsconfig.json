@@ -1,0 +1,31 @@
+// Type checking without a build step (ROADMAP.md 1.4): `npm run typecheck`,
+// in CI. The JavaScript stays JavaScript; TypeScript only reads it, with the
+// JSDoc already there as the types. It starts with what `npm run
+// bundle:scene` ships to studio-api — src/scene-ops.js and every module it
+// imports — because a mistake there breaks the platform as well as the app.
+// That build runs in a Cloudflare Worker, so the globals are a worker's
+// ("webworker"), not the page's, and "types" keeps every @types package out
+// (eslint brings some): a `document`, `window` or `localStorage` anywhere in
+// those modules fails here, before it can fail in studio-api. (That is why
+// the canvas half of the image edits is src/image-paint.js.) A known gap: a
+// browser's worker has a few things a Cloudflare Worker doesn't (indexedDB,
+// OffscreenCanvas, createImageBitmap, XMLHttpRequest), and those would pass.
+// @cloudflare/workers-types would close it, but it declares `crypto` as a
+// const, which TypeScript leaves off `globalThis`, and model.js, placement.js
+// and row.js read `globalThis.crypto` — a change to them is a change to the
+// bundle studio-api vendors, so it waits for a pull request that pairs.
+// Not strict: the aim is to catch a wrong call, not to annotate every line.
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "es2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["es2022", "webworker"],
+    "types": [],
+    "skipLibCheck": true
+  },
+  "files": ["src/scene-ops.js"]
+}

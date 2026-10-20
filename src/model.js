@@ -3,7 +3,7 @@ import { validKit } from "./batch.js";
 import { validHall } from "./hall.js";
 import { editedAspect, validImageEdits } from "./image-edit.js";
 import { SHADOW_FIELD, SHADOW_MAX, shadowSpec } from "./dropshadow.js";
-import { hasRow, normalizeRow, rowLayout, MAX_SLOTS, MIN_SPACE, MAX_SPACE, MAX_GAP } from "./row.js";
+import { hasRow, rowLayout, MAX_SLOTS, MIN_SPACE, MAX_SPACE, MAX_GAP } from "./row.js";
 export const IN = 0.0254;
 export const uid = () => globalThis.crypto.randomUUID();
 export function blankProject() {

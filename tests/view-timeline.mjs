@@ -67,7 +67,6 @@ try {
   await page.waitForFunction(() => document.querySelectorAll('.key-card').length === 3);
 
   const captured = await page.evaluate(() => {
-    const view = window.__booth.scene;
     // The panel keeps the timeline; the scene is asked to sample it, which is
     // the same call the recorder makes.
     return window.__booth.timeline?.() || null;
