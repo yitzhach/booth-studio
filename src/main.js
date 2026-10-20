@@ -59,7 +59,9 @@ BUILD.stamp = (() => {
 })();
 window.BOOTH_BUILD = BUILD;
 // Report a problem (src/report.js): the page's uncaught errors are kept from
-// here on, so one thrown while the app starts is in the report too.
+// here on, so one thrown while the app starts (boot, below) is in the report
+// too. The imports above this run before it; one of them throwing would stop
+// the page before there were a report to copy.
 addEventListener("error", (ev) => recordError(errorEntry(ev)));
 addEventListener("unhandledrejection", (ev) => recordError(errorEntry(ev)));
 import {
@@ -3356,8 +3358,11 @@ async function boot() {
    * scrolled by hand where they put it.
    */
   let tabInSight = null;
-  // Keep your work's last answer, drawn straight back on a redraw (paintKeepSafe).
+  // Keep your work's last answer, drawn straight back on a redraw, and when the
+  // browser was last asked (paintKeepSafe).
   let keepSafeShown = null;
+  let keepSafeAsked = null;
+  let keepSafeAsking = 0;
   // Where site data is blocked, even reading `localStorage` throws: null then,
   // which src/keep-safe.js reads as nothing remembered.
   const deviceStore = () => {
@@ -3401,8 +3406,12 @@ async function boot() {
    */
   async function paintKeepSafe(force = false) {
     const id = p.id;
-    if (!force && keepSafeShown?.id === id && Date.now() - keepSafeShown.asked < 10000) return;
-    const asked = Date.now();
+    // Asked, or being asked, in the last 10 seconds: what is drawn stands.
+    if (!force && keepSafeAsked?.id === id && Date.now() - keepSafeAsked.at < 10000) return;
+    keepSafeAsked = { id, at: Date.now() };
+    // Only the newest question's answer is drawn: an older one finishing
+    // after a persist() must not put "may clear" back.
+    const asking = ++keepSafeAsking;
     let persisted = null;
     let usage;
     let quota;
@@ -3412,9 +3421,9 @@ async function boot() {
     try {
       if (navigator.storage?.estimate) ({ usage, quota } = await navigator.storage.estimate());
     } catch {}
-    if (p.id !== id) return;
+    if (p.id !== id || asking !== keepSafeAsking) return;
     const { lines, ask } = keepSafeLines({ persisted, usage, quota, backup: keepSafeOf(deviceStore(), id).backup, signedIn: !!readSession() });
-    keepSafeShown = { id, asked, html: lines.map((line) => `<p class="muted">${e(line)}</p>`).join("") + (ask ? btn("keep-device-copy", "Ask the browser to keep it", "shield-check", "wide") : "") };
+    keepSafeShown = { id, html: lines.map((line) => `<p class="muted">${e(line)}</p>`).join("") + (ask ? btn("keep-device-copy", "Ask the browser to keep it", "shield-check", "wide") : "") };
     const el = document.querySelector("#keep-safe");
     if (!el) return;
     el.innerHTML = keepSafeShown.html;
@@ -3439,7 +3448,8 @@ async function boot() {
         // counts as given only once it has stayed on screen for 8 seconds,
         // or it comes back at the next start rather than in a month.
         setTimeout(() => {
-          if (document.querySelector("#toast")?.textContent === said) noteKeepSafe(deviceStore(), id, "reminded");
+          const t = document.querySelector("#toast");
+          if (t?.textContent === said && t.classList.contains("show")) noteKeepSafe(deviceStore(), id, "reminded");
         }, 8000);
       }, 4000);
     } catch {
@@ -4326,13 +4336,14 @@ async function boot() {
     // prompt, so it waits for this button (src/keep-safe.js).
     "keep-device-copy": async () => {
       let granted = false;
+      const askable = typeof navigator.storage?.persist === "function";
       try {
-        granted = !!(await navigator.storage?.persist?.());
+        if (askable) granted = !!(await navigator.storage.persist());
       } catch {}
       toast(
         granted
           ? "This browser will keep this device's copy until you clear it yourself."
-          : "This browser said no. Download a backup now and then, or sign in to keep your booths in your studio.",
+          : `${askable ? "This browser said no." : "This browser can't be asked to keep it."} Download a backup now and then, or sign in to keep your booths in your studio.`,
         !granted,
       );
       paintKeepSafe(true);

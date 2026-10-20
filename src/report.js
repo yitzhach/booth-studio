@@ -23,19 +23,27 @@ const clip = (text, n) => {
   const s = String(text ?? "").replace(/\s+/g, " ").trim();
   return s.length > n ? `${s.slice(0, n - 1)}…` : s;
 };
-// What someone typed stays out: double-quoted text (JSON.parse quotes its
-// input) and a link's query or fragment (a booth link's id).
-const redact = (s) => s.replace(/"[^"]{2,}"/g, '"…"').replace(/(\bhttps?:\/\/[^\s?#)]+)[?#][^\s)]*/g, "$1");
+// What someone typed stays out. Double-quoted text goes from the first quote
+// to the last, since what JSON.parse quotes of its input can hold quotes of
+// its own. Single-quoted text, first quote to last, goes when it holds a
+// space, which a property name or token the code quotes ('length', 'x') never
+// does and a typed name usually does. A link keeps its address and loses its
+// query or fragment (a booth link's id).
+const redact = (s) =>
+  s
+    .replace(/"[\s\S]*"/, '"…"')
+    .replace(/'[\s\S]*'/, (quoted) => (/\s/.test(quoted) ? "'…'" : quoted))
+    .replace(/(\bhttps?:\/\/[^\s?#)]+)[?#][^\s)]*/g, "$1");
 
 /**
- * The first two frames of a stack. V8 opens a stack with the message line;
- * Firefox and Safari start at the frame that threw (`fn@url:line:col`), so a
- * first line is dropped only when it is not a frame.
+ * The first two frames of a stack. V8 opens a stack with the message, which
+ * can run to several lines, and writes each frame as `at …`; Firefox and
+ * Safari start at the frame that threw and write `fn@url:line:col`. Only the
+ * lines that are frames are kept.
  */
 function frames(stack) {
-  const lines = stack.split("\n").map((l) => l.trim()).filter(Boolean);
-  if (lines.length && !/^at\s/.test(lines[0]) && !/@\S*:\d+/.test(lines[0])) lines.shift();
-  return lines.slice(0, 2).join(" ← ");
+  const isFrame = (l) => /^at\s/.test(l) || /@\S*:\d+/.test(l);
+  return stack.split("\n").map((l) => l.trim()).filter(isFrame).slice(0, 2).join(" ← ");
 }
 
 /**

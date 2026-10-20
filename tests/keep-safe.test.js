@@ -55,12 +55,21 @@ test("only the 50 projects touched last are remembered: every Alternative is a n
   assert.ok(all.p59 && all.p10 && !all.p9, "the oldest ten forgotten");
 });
 
+test("an entry that is not ours is replaced, never spread into junk keys", () => {
+  const storage = memory();
+  storage.setItem(KEEP_SAFE_KEY, JSON.stringify({ abc: "2026-01-01" }));
+  noteKeepSafe(storage, "abc", "backup", new Date("2026-10-20T00:00:00Z"));
+  assert.deepEqual(JSON.parse(storage.getItem(KEEP_SAFE_KEY)), { abc: { backup: "2026-10-20T00:00:00.000Z" } });
+});
+
 test("sizes read the way a person says them, in the 1024s the rest of the app counts in", () => {
   assert.equal(formatBytes(512 * 1024), "512 KB");
   assert.equal(formatBytes(37.4 * 1024 ** 2), "37 MB");
   assert.equal(formatBytes(2.14 * 1024 ** 3), "2.1 GB");
   assert.equal(formatBytes(199_229_440), "190 MB", "as share.js counts it against its 200 MB");
-  assert.equal(formatBytes(10), "1 KB");
+  assert.equal(formatBytes(600), "1 KB");
+  assert.equal(formatBytes(10), "under 1 KB");
+  assert.equal(formatBytes(0), "0 KB", "an empty origin uses nothing");
   assert.equal(formatBytes(undefined), "");
   assert.equal(formatBytes(-1), "");
 });

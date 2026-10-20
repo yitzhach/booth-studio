@@ -53,7 +53,8 @@ export function keepSafeOf(storage, id) {
 export function noteKeepSafe(storage, id, what, now = new Date()) {
   if (!id || (what !== "backup" && what !== "reminded")) return;
   const all = readAll(storage);
-  all[id] = { ...(all[id] || {}), [what]: now.toISOString() };
+  const was = all[id] && typeof all[id] === "object" && !Array.isArray(all[id]) ? all[id] : {};
+  all[id] = { ...was, [what]: now.toISOString() };
   // Every Alternative and quick start is a new project id: keep the newest.
   const last = (e) => Math.max(asDate(e?.backup)?.getTime() || 0, asDate(e?.reminded)?.getTime() || 0);
   const ids = Object.keys(all).sort((a, b) => last(all[b]) - last(all[a]));
@@ -79,7 +80,8 @@ export function formatBytes(n) {
   if (!Number.isFinite(n) || n < 0) return "";
   if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(1)} GB`;
   if (n >= 1024 ** 2) return `${Math.round(n / 1024 ** 2)} MB`;
-  return `${Math.max(1, Math.round(n / 1024))} KB`;
+  if (n === 0) return "0 KB";
+  return n < 512 ? "under 1 KB" : `${Math.round(n / 1024)} KB`;
 }
 
 const day = (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });

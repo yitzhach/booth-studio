@@ -35,6 +35,18 @@ test("what someone typed stays out of an error: quoted text and a link's query",
   assert.ok(!JSON.stringify(e).includes("My Booth") && !JSON.stringify(e).includes("secretid"));
   assert.equal(errorEntry({ type: "unhandledrejection", reason: new Error("GET https://x.dev/api/shares?id=secretid failed") }).message, "Unhandled rejection: GET https://x.dev/api/shares failed");
   assert.equal(errorEntry({ type: "error", message: "Script error.", filename: "https://x.dev/assets/index-abc.js?share=secretid", lineno: 1, colno: 2 }).where, "index-abc.js:1:2");
+  // What JSON.parse quotes can hold quotes of its own: everything between the first and the last goes.
+  const nested = errorEntry({ type: "error", message: `Unexpected token 'x', "{"name": "Jane Doe"... is not valid JSON` });
+  assert.equal(nested.message, `Unexpected token 'x', "…"... is not valid JSON`);
+  // Single-quoted text goes when it holds a space, as a typed name does; a quoted property name stays.
+  assert.equal(errorEntry({ type: "error", message: "Failed to execute 'querySelector' on 'Document': '#Jane's booth' is not a valid selector." }).message, "Failed to execute '…' is not a valid selector.");
+  assert.equal(errorEntry({ type: "error", message: "Cannot read properties of undefined (reading 'length')" }).message, "Cannot read properties of undefined (reading 'length')");
+});
+
+test("a V8 message over several lines is not taken for the frames", () => {
+  const err = new Error("line1\nline2\nline3");
+  err.stack = "Error: line1\nline2\nline3\n    at paint (main.js:120:4)\n    at render (main.js:90:2)";
+  assert.equal(errorEntry({ type: "error", error: err }).where, "at paint (main.js:120:4) ← at render (main.js:90:2)");
 });
 
 test("the ring keeps the last MAX_ERRORS, newest first", () => {
