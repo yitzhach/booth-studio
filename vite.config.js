@@ -30,13 +30,15 @@ const { version } = JSON.parse(
 // The service worker's list of the build's own files (public/sw.js keeps
 // them all when it installs, the chunks loaded on demand included, so the app
 // opens offline with everything it may load). Written once the bundle is on
-// disk, when every chunk, stylesheet and font is known.
+// disk, when every chunk, stylesheet and font is known: every file the build
+// writes to assets/, but the .woff fonts, which only a browser too old for
+// .woff2 asks for, and no browser that old runs a service worker.
 const swFiles = {
   name: "sw-files",
   apply: "build",
   writeBundle(options, bundle) {
     const files = Object.keys(bundle)
-      .filter((f) => f.startsWith("assets/") && /\.(?:js|css|woff2)$/.test(f))
+      .filter((f) => f.startsWith("assets/") && !/\.(?:woff|map)$/.test(f))
       .map((f) => `/${f}`)
       .sort();
     writeFileSync(join(options.dir, "sw-files.json"), JSON.stringify({ files }, null, 2) + "\n");

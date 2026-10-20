@@ -7,8 +7,9 @@
 // and saved on this device; then the network cut, as on a show floor: the app
 // must open again with that booth, its floor and its sky, every file from the
 // worker. A booth link must still get the app. Back online, the page must come
-// from the network, not the copy, and a redirect must be followed; and when
-// the network answers with an error, or too slowly, the kept page must stand in.
+// from the network, not the copy, and a redirect must be followed; a kept
+// texture a day old is looked at again by its ETag; and when the network
+// answers with an error, or too slowly, the kept page must stand in.
 import { chromium } from "@playwright/test";
 import { preview } from "vite";
 import assert from "node:assert/strict";
@@ -22,6 +23,8 @@ let pageHits = 0;
 let slowPage = false;
 let failPage = false;
 let movedPage = false;
+// And every texture asked of it: whether "changed since?" with an ETag, and its answer.
+const looks = [];
 const server = await preview({
   root,
   logLevel: "warn",
@@ -30,6 +33,11 @@ const server = await preview({
     {
       name: "page-counter",
       configurePreviewServer(s) {
+        s.middlewares.use((req, res, next) => {
+          if (req.url.startsWith("/assets/textures/"))
+            res.on("finish", () => looks.push({ path: req.url.split("?")[0], etag: req.headers["if-none-match"] || null, status: res.statusCode }));
+          next();
+        });
         s.middlewares.use((req, res, next) => {
           if (req.method !== "GET" || !(req.url === "/" || req.url.startsWith("/?"))) return next();
           pageHits++;
@@ -128,6 +136,27 @@ try {
   await page.waitForSelector("#scene canvas");
   assert.ok(pageHits > before, "online, the page is asked of the network");
 
+  // A day on, a kept texture is looked at again by its ETag: unchanged, the
+  // site answers 304, and the kept copy is good for another day. The
+  // browser's own cache would ask that by itself while it still holds the
+  // file, so it is emptied first (what the worker kept stays), as a phone's
+  // soon is.
+  await (await context.newCDPSession(page)).send("Network.clearBrowserCache");
+  const aged = await page.evaluate(async () => {
+    const media = await caches.open("booth-media");
+    const req = (await media.keys()).find((r) => r.url.includes("/textures/grass/"));
+    const kept = await media.match(req);
+    const headers = new Headers(kept.headers);
+    headers.set("x-booth-kept", "0");
+    await media.put(req, new Response(await kept.blob(), { status: kept.status, headers }));
+    return new URL(req.url).pathname;
+  });
+  looks.length = 0;
+  await page.evaluate((p) => fetch(p).then((r) => r.blob()), aged);
+  await page.waitForFunction(async (p) => Number((await (await caches.open("booth-media")).match(p))?.headers.get("x-booth-kept")) > 0, aged, { timeout: 30000 });
+  const look = looks.find((l) => l.path === aged);
+  assert.ok(look?.etag && look.status === 304, `${aged} looked at by its ETag and found unchanged: ${JSON.stringify(looks)}`);
+
   // The network answers with an error (a 503 from the edge): the kept page at
   // once — not the error, and not after the slow network's wait.
   // Timed from a blank page to the page's answer ("commit"): putting this
@@ -162,7 +191,7 @@ try {
   assert.ok(took < 12000, `opened in ${took} ms on a network that took 15 s`);
 
   assert.deepEqual(errors, [], "no page errors, online or off");
-  console.log(`PASS The built app keeps its page and every file of its build in a service worker under the build's commit; with the network cut it opens again with the booth saved here, its grass floor and its photographed sky, every file from the worker; a booth link still gets the app; online the page comes from the network and a redirect is followed; and on a network that answers with an error, or too slowly, the kept page stands in (${took} ms).`);
+  console.log(`PASS The built app keeps its page and every file of its build in a service worker under the build's commit; with the network cut it opens again with the booth saved here, its grass floor and its photographed sky, every file from the worker; a booth link still gets the app; online the page comes from the network, a redirect is followed and a day-old texture is looked at again by its ETag (a 304); and on a network that answers with an error, or too slowly, the kept page stands in (${took} ms).`);
 } finally {
   await browser.close();
   await server.close();

@@ -8,6 +8,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { createHash } from "node:crypto";
 
 const source = readFileSync(new URL("../public/sw.js", import.meta.url), "utf8");
 const ORIGIN = "https://booth.test";
@@ -17,9 +18,10 @@ const PREVIOUS = "/sw-files.previous.json";
 
 // One deploy of the app: its page, the files of its build and the list of
 // them that vite.config.js writes. three.js is the same file in every one,
-// as it is while the three version doesn't change.
+// as it is while the three version doesn't change; the picture is a file the
+// build writes beside its scripts, as Vite does for an image a script imports.
 const deploy = (tag) => {
-  const files = [`/assets/index-${tag}aaaaaa.js`, "/assets/three-T3t3t3t3.js", `/assets/index-${tag}cccccc.css`, `/assets/studio-${tag}ssssss.js`];
+  const files = [`/assets/index-${tag}aaaaaa.js`, "/assets/three-T3t3t3t3.js", `/assets/index-${tag}cccccc.css`, `/assets/studio-${tag}ssssss.js`, `/assets/badge-${tag}pppppp.png`];
   const page = `<!doctype html><script type="module" src="${files[0]}"></script><link rel="modulepreload" href="${files[1]}"><link rel="stylesheet" href="${files[2]}"><title>${tag}</title>`;
   return { tag, files, page };
 };
@@ -30,29 +32,35 @@ const C = deploy("C3");
 const siteOf = (d) => ({
   "/": { type: "text/html", body: d.page },
   [LIST]: { type: "application/json", body: JSON.stringify({ files: d.files }) },
-  ...Object.fromEntries(d.files.map((p) => [p, { type: p.endsWith(".css") ? "text/css" : "text/javascript", body: `/* ${p} */` }])),
+  ...Object.fromEntries(d.files.map((p) => [p, { type: { css: "text/css", png: "image/png" }[p.split(".").pop()] || "text/javascript", body: `/* ${p} */` }])),
 });
+const etagOf = (body) => `"${createHash("sha1").update(body).digest("hex").slice(0, 12)}"`;
 
 // A pretend browser, shared by every version of the worker installed in it.
 function browser(files) {
   const b = { clock: Date.UTC(2026, 9, 20, 12), timers: [], stores: new Map() };
   // The network, as the Worker answers: a file it has, else the page itself
-  // with a 200 (the single-page fallback). `offline`, `hang` and `answer`
-  // stand in for no signal, one bar and an edge that answers on its own.
+  // with a 200 (the single-page fallback); an ETag on each, and a 304 when
+  // asked "changed since?" with it. `offline`, `hang` and `answer` stand in
+  // for no signal, one bar and an edge that answers on its own.
   b.net = { files: { ...files }, offline: false, hang: false, answer: null, calls: [] };
   b.fetch = async (input, init = {}) => {
     const url = new URL(typeof input === "string" ? input : input.url, ORIGIN);
     const method = init.method || input.method || "GET";
-    b.net.calls.push({ path: url.pathname + url.search, method, cache: init.cache });
+    const call = { path: url.pathname + url.search, method, cache: init.cache };
+    b.net.calls.push(call);
     if (b.net.offline) throw new TypeError("Failed to fetch");
     if (b.net.hang) return new Promise(() => {});
     const special = b.net.answer?.(url.pathname);
     if (special) return special;
     const file = b.net.files[url.pathname] || { ...b.net.files["/"], type: "text/html" };
     const body = file.body ?? "";
-    const res = new Response(method === "HEAD" ? null : body, {
-      status: file.status || 200,
-      headers: { "content-type": file.type, "content-length": String(Buffer.byteLength(body)) },
+    const etag = etagOf(body);
+    const unchanged = new Headers(init.headers).get("if-none-match") === etag;
+    call.status = unchanged ? 304 : file.status || 200;
+    const res = new Response(method === "HEAD" || unchanged ? null : body, {
+      status: call.status,
+      headers: { "content-type": file.type, "content-length": String(Buffer.byteLength(body)), "content-encoding": "br", etag },
     });
     Object.defineProperty(res, "type", { value: "basic" });
     return res;
@@ -184,6 +192,15 @@ test("an install fails whole, and the version already here keeps what it had", a
   await fails(unlisted, /No file list/);
   b.net.answer = (p) => p === "/" && new Response("Service unavailable", { status: 503, headers: { "content-type": "text/html" } });
   await fails(siteOf(B), /No page to keep/);
+  // A sign-in in front of the site: the page came by a redirect, and the
+  // browser would refuse it as the answer to opening the app.
+  b.net.answer = (p) => {
+    if (p !== "/") return null;
+    const signIn = new Response("<!doctype html><title>Sign in</title>", { headers: { "content-type": "text/html" } });
+    Object.defineProperties(signIn, { type: { value: "basic" }, redirected: { value: true } });
+    return signIn;
+  };
+  await fails(siteOf(B), /No page to keep/);
 });
 
 test("each version keeps its own files and the previous version's, for a tab still open on it; older ones go", async () => {
@@ -201,7 +218,19 @@ test("each version keeps its own files and the previous version's, for a tab sti
   assert.equal(b.net.calls.filter((c) => c.path === "/assets/three-T3t3t3t3.js").length, 1, "three.js, the same in every build, came once");
 });
 
-test("opening the app: the network's page when it answers; the kept one with no network, an error, or after 4 s; a redirect is followed", async () => {
+test("the same list installed again (a deploy that landed mid-install) keeps the real previous one", async () => {
+  const b = browser({});
+  await installed(b, A);
+  await installed(b, B);
+  b.net.files = siteOf(B);
+  const again = b.worker("B2-again");
+  await again.install();
+  await again.activate();
+  assert.deepEqual(JSON.parse(await b.text("booth-build", PREVIOUS)).files, A.files, "A's, for a tab still open on it");
+  for (const p of A.files) assert.ok(b.paths("booth-build").includes(p), `${p} still kept`);
+});
+
+test("opening the app: the network's answer; the kept page with no network, a 5xx or after 4 s; a redirect, a 403 or a 404 is the site's", async () => {
   const b = browser({});
   const w = await installed(b, A);
   b.net.files = siteOf(B); // a new deploy is live
@@ -212,8 +241,14 @@ test("opening the app: the network's page when it answers; the kept one with no 
   assert.equal(await (await open()).text(), A.page, "no network: the kept page");
   assert.equal(await (await open("/?share=0123456789abcdef")).text(), A.page, "a booth link too");
   b.net.offline = false;
-  b.net.answer = (p) => p === "/" && new Response("Service unavailable", { status: 503 });
-  assert.equal(await (await open()).text(), A.page, "an error from the edge: the kept page");
+  for (const status of [500, 503, 522]) {
+    b.net.answer = (p) => p === "/" && new Response("Down", { status });
+    assert.equal(await (await open()).text(), A.page, `a ${status} from the edge or the Worker: the kept page`);
+  }
+  for (const status of [403, 404]) {
+    b.net.answer = (p) => p === "/" && new Response("No", { status });
+    assert.equal((await open()).status, status, `a ${status} is the site's answer, shown`);
+  }
   const moved = { type: "opaqueredirect", ok: false, status: 0 };
   b.net.answer = (p) => p === "/" && moved;
   assert.equal(await open(), moved, "a redirect is the site's answer, not covered");
@@ -257,7 +292,8 @@ test("the build's files come from what the install kept, else the network, and n
   const b = browser({});
   const w = await installed(b, A);
   const asked = b.net.calls.length;
-  assert.equal(await (await w.request(A.files[3])).text(), `/* ${A.files[3]} */`);
+  // A chunk loaded on demand, and a picture the build wrote beside it.
+  for (const p of [A.files[3], A.files[4]]) assert.equal(await (await w.request(p)).text(), `/* ${p} */`, p);
   assert.equal(b.net.calls.length, asked, "not asked of the network");
   b.net.files["/assets/other-Zz9zz9zz.js"] = { type: "text/javascript", body: "other" };
   assert.equal(await (await w.request("/assets/other-Zz9zz9zz.js")).text(), "other");
@@ -282,6 +318,14 @@ test("a texture is kept as it is first used, answered from here, looked at again
   assert.equal(await b.text("booth-media", grass), "grass 2", "and its answer kept for next time");
   await w.request(grass);
   assert.equal(askedFor(), 2, "then not again for a day");
+  // Unchanged a day on: a 304, and the kept copy good for another day.
+  b.clock += DAY + 1;
+  await w.request(grass);
+  assert.equal(askedFor(), 3);
+  assert.equal(b.net.calls.at(-1).status, 304, "asked with its ETag: not the file again");
+  assert.equal(await b.text("booth-media", grass), "grass 2");
+  await w.request(grass);
+  assert.equal(askedFor(), 3, "and not asked again for a day");
   // No signal on the day's look: the kept one stays.
   b.clock += DAY + 1;
   b.net.offline = true;
@@ -300,6 +344,20 @@ test("a texture is kept as it is first used, answered from here, looked at again
   b.clock += DAY + 1;
   await w.request(sky);
   assert.equal(await b.text("booth-media", sky), null);
+});
+
+test("anything in a folder under /assets is kept as it is first used, and the kept copy describes its own body", async () => {
+  const b = browser({});
+  const w = await installed(b, A);
+  const chair = "/assets/furniture/chair/model.glb";
+  b.net.files[chair] = { type: "model/gltf-binary", body: "chair" };
+  await w.request(chair);
+  b.net.offline = true;
+  const res = await w.request(chair);
+  assert.equal(await res.text(), "chair", "a folder that came later, offline too");
+  assert.equal(res.headers.get("content-length"), null, "the network's length was for its encoded body");
+  assert.equal(res.headers.get("content-encoding"), null, "and the body is kept decoded");
+  assert.equal(res.headers.get("etag"), etagOf("chair"), "its ETag stays, for the daily look");
 });
 
 test("a texture the site doesn't have reaches the app as the page, and is never kept", async () => {
@@ -323,13 +381,14 @@ test("the app's HEAD before a texture is answered from what is kept, with no len
   assert.equal(head.status, 200);
   assert.equal(head.headers.get("content-type"), "image/jpeg");
   assert.equal(head.headers.get("content-length"), null, "a length would promise a body");
+  assert.equal(head.headers.get("content-encoding"), null);
   assert.equal(await head.text(), "");
   assert.equal(b.net.calls.length, asked, "not asked of the network");
   b.net.offline = false;
   const sky = "/assets/hdri/artfair/light.hdr";
   b.net.files[sky] = { type: "application/octet-stream", body: "sky" };
   assert.equal((await w.request(sky, { method: "HEAD" })).status, 200);
-  assert.deepEqual(b.net.calls.at(-1), { path: sky, method: "HEAD", cache: undefined }, "not kept: the network's");
+  assert.deepEqual(b.net.calls.at(-1), { path: sky, method: "HEAD", cache: undefined, status: 200 }, "not kept: the network's");
 });
 
 test("the manifest and the icons: the network first, the kept copy with no signal", async () => {

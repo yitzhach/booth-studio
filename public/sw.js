@@ -14,9 +14,9 @@
 //   and lets older ones go.
 // - Textures, HDRIs and the cut-out people (/assets/<folder>/…) are kept as
 //   they are first used — never all 29 MB up front — and across deploys.
-//   Served from here; looked at again in the background once a day, through
-//   the browser's own cache (a 304 when unchanged), and let go once the site
-//   no longer has the file, so the app's fallback shows. The app first asks
+//   Served from here; looked at again in the background once a day (a 304
+//   when unchanged, by its ETag), and let go once the site no longer has the
+//   file, so the app's fallback shows. The app first asks
 //   for each with a HEAD, to tell a file from the page a missing file is
 //   answered with: a kept file answers that too.
 // - The manifest, the favicon and the icons: the network first, the kept
@@ -27,9 +27,9 @@
 // - Opening the app (a navigation to "/", a booth link's ?share=… too): the
 //   network first, so a connected browser gets the deployed page (and
 //   follows a redirect); the kept page when there is no network, when the
-//   network answers with an error, or after PAGE_WAIT of a network too slow
-//   to answer (one bar at a fair). Any other page (the pitch deck) is the
-//   network's alone.
+//   network answers with a server error (5xx), or after PAGE_WAIT of a
+//   network too slow to answer (one bar at a fair). Any other page (the
+//   pitch deck) is the network's alone.
 // - The build's files: from here, else the network.
 // - Nothing else: the share links (/api), the studio (/v1, /assistant),
 //   other sites and anything but a GET (or that HEAD) go straight to the
@@ -55,9 +55,11 @@ const PAGE_WAIT = 4000;
 const LOOK_AGAIN = 24 * 60 * 60 * 1000;
 const KEPT_AT = "x-booth-kept";
 
-// /assets/index-B1x2y3z4.js, /assets/three-pUL6G2JY.js, a font: a name, a hash, an extension.
-const HASHED = /^\/assets\/[^/]+-[\w-]{8,}\.(?:js|css|woff2?|ttf|png|svg|jpe?g|webp)$/;
-const MEDIA_PATH = /^\/assets\/(?:hdri|textures|people)\//;
+// The build's own files sit flat in /assets/, each name with its hash
+// (/assets/index-B1x2y3z4.js); the textures, HDRIs and people are in folders
+// under it (/assets/hdri/artfair/light.hdr), whatever folders come later too.
+const BUILT = /^\/assets\/[^/]+$/;
+const MEDIA_PATH = /^\/assets\/[^/]+\/./;
 const SMALL_PATH = /^\/(?:icons\/|favicon\.svg$|manifest\.webmanifest$)/;
 
 const isPage = (res) => (res.headers.get("content-type") || "").includes("text/html");
@@ -65,9 +67,15 @@ const keepable = (res) => res && res.ok && res.type === "basic" && !isPage(res);
 const quietly = (promise) => promise.catch(() => {});
 const listOf = async (res) => (res ? (await res.clone().json()).files || [] : []);
 
-/** Keeps a response with the time it was kept, so it is looked at again only once a day. */
+/**
+ * Keeps a response with the time it was kept, so it is looked at again only
+ * once a day. The body arrives decoded, so the network's length and encoding
+ * would describe a different one: they go.
+ */
 async function keep(cache, req, res) {
   const headers = new Headers(res.headers);
+  headers.delete("content-length");
+  headers.delete("content-encoding");
   headers.set(KEPT_AT, String(Date.now()));
   await cache.put(req, new Response(await res.blob(), { status: res.status, statusText: res.statusText, headers }));
 }
@@ -79,11 +87,13 @@ self.addEventListener("install", (event) => {
       if (!list.ok || isPage(list)) throw new Error("No file list for this build.");
       const files = await listOf(list);
       const page = await fetch("/", { cache: "no-cache" });
-      if (!page.ok || !isPage(page)) throw new Error("No page to keep.");
+      // A redirected page (a sign-in in front of the site) can't answer a
+      // navigation later: the browser refuses it.
+      if (!page.ok || page.redirected || !isPage(page)) throw new Error("No page to keep.");
       // The page and the list must be one deploy's: one rolling out could
       // pair a new page with the old list, and the kept page would name
       // files that were never kept.
-      const named = ((await page.clone().text()).match(/\/assets\/[^"'?#\s]+/g) || []).filter((p) => HASHED.test(p));
+      const named = ((await page.clone().text()).match(/\/assets\/[^"'?#\s]+/g) || []).filter((p) => BUILT.test(p));
       const unlisted = named.filter((p) => !files.includes(p));
       if (unlisted.length) throw new Error(`The page names files its list does not: ${unlisted.join(", ")}.`);
       const build = await caches.open(BUILD);
@@ -97,10 +107,10 @@ self.addEventListener("install", (event) => {
             await build.put(p, res);
           }),
       );
-      // Every file is in: now the list (the last one becomes the previous)
-      // and the page, together.
+      // Every file is in: now the list (the last one becomes the previous,
+      // unless it is this same list again) and the page, together.
       const last = await build.match(LIST);
-      if (last) await build.put(PREVIOUS, last);
+      if (last && JSON.stringify(await listOf(last)) !== JSON.stringify(files)) await build.put(PREVIOUS, last);
       await build.put(LIST, list);
       await (await caches.open(SHELL)).put("/", page);
       await self.skipWaiting();
@@ -137,10 +147,8 @@ self.addEventListener("fetch", (event) => {
       (async () => {
         const kept = await (await caches.open(MEDIA)).match(url.href);
         if (!kept) return fetch(req);
-        // The kept file's answer without its body; its length would promise one.
-        const headers = new Headers(kept.headers);
-        headers.delete("content-length");
-        return new Response(null, { status: kept.status, statusText: kept.statusText, headers });
+        // The kept file's answer without its body (keep() dropped its length).
+        return new Response(null, { status: kept.status, statusText: kept.statusText, headers: kept.headers });
       })(),
     );
     return;
@@ -155,9 +163,10 @@ self.addEventListener("fetch", (event) => {
         const kept = await (await caches.open(SHELL)).match("/");
         const network = fetch(req);
         if (!kept) return network;
-        // A redirect is the site's answer too (a new address, a sign-in): it
-        // is followed, never covered with the kept page.
-        const answer = (res) => (res.ok || res.type === "opaqueredirect" ? res : kept);
+        // Only an outage (a 5xx from the edge or the Worker) is covered with
+        // the kept page. Anything else is the site's answer and is shown: a
+        // redirect (a new address, a sign-in) is followed, a 403 or a 404 seen.
+        const answer = (res) => (res.status >= 500 ? kept : res);
         const slow = new Promise((done) => setTimeout(() => done(kept), PAGE_WAIT));
         return Promise.race([network.then(answer, () => kept), slow]);
       })(),
@@ -165,7 +174,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (HASHED.test(url.pathname)) {
+  if (BUILT.test(url.pathname)) {
     event.respondWith(
       (async () => (await (await caches.open(BUILD)).match(url.pathname)) || fetch(req))(),
     );
@@ -196,16 +205,22 @@ self.addEventListener("fetch", (event) => {
         const media = await caches.open(MEDIA);
         const kept = await media.match(req);
         if (kept) {
-          if (Date.now() - Number(kept.headers.get(KEPT_AT) || 0) > LOOK_AGAIN)
+          if (Date.now() - Number(kept.headers.get(KEPT_AT) || 0) > LOOK_AGAIN) {
+            // "Changed since?" with the kept file's ETag, so an unchanged file
+            // costs a 304 on a show floor's signal, not the file again.
+            const etag = kept.headers.get("etag");
+            const same = kept.clone();
             event.waitUntil(
               quietly(
-                fetch(req).then((res) => {
+                fetch(req.url, etag ? { headers: { "if-none-match": etag } } : {}).then((res) => {
+                  if (res.status === 304) return keep(media, req, same);
                   if (keepable(res)) return keep(media, req, res);
                   // Gone from the site (the page answers for it, or a 404): let it go.
                   if (isPage(res) || res.status === 404) return media.delete(req);
                 }),
               ),
             );
+          }
           return kept;
         }
         const res = await fetch(req);

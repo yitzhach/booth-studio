@@ -21,21 +21,25 @@ Extend it; do not rebuild it.
   booths saved on that device, their floors and skies included. Opening the
   app (`/`, a booth link too) asks the network first, so a connected browser
   always gets the deployed app, and follows a redirect; the kept page stands
-  in when there is no network, when the network answers with an error (a
-  503 from the edge), or after 4 seconds of a network too slow to answer
-  (one bar at a fair). Any other page (the pitch deck) is never kept. Only
+  in when there is no network, when the network answers with a server error
+  (a 5xx from the edge or the Worker), or after 4 seconds of a network too
+  slow to answer (one bar at a fair). Anything else is the site's answer and
+  is shown, a 403 or a 404 included. Any other page (the pitch deck) is
+  never kept. Only
   the install keeps the page and the build's files — every chunk, the ones
   loaded on demand too, from the list `vite.config.js` writes beside it
   (`dist/sw-files.json`) — and it keeps them together, so the kept page
-  always names files that are kept: an install that can't keep a file, or
-  that finds a page and a list from two deploys (one still rolling out),
-  fails whole and leaves the worker already there with what it had. Each
-  version keeps its own files and the previous version's, for a tab still
-  open on that one, and lets older ones go. Textures, HDRIs and the cut-out
-  people are kept as they are first used (never all 29 MB up front) and
-  across deploys: answered from what is kept, looked at again in the
-  background once a day, and let go once the site no longer has them, so
-  the app's fallback shows. The app's HEAD check before each one is
+  always names files that are kept: an install that can't keep a file, that
+  finds a page and a list from two deploys (one still rolling out), or whose
+  page came by a redirect (a sign-in in front of the site) fails whole and
+  leaves the worker already there with what it had. Each version keeps its
+  own files and the previous version's, for a tab still open on that one,
+  and lets older ones go. Textures, HDRIs, the cut-out people and anything
+  else in a folder under `/assets/` are kept as they are first used (never
+  all 29 MB up front) and across deploys: answered from what is kept, looked
+  at again in the background once a day by their ETag (an unchanged file
+  costs a 304, not the file again), and let go once the site no longer has
+  them, so the app's fallback shows. The app's HEAD check before each one is
   answered from what is kept too. The manifest and the icons come from the
   network first. `/api`, `/v1`, `/assistant` and other sites are never
   touched, and nothing of type text/html is ever kept for a file, because
@@ -44,23 +48,30 @@ Extend it; do not rebuild it.
   in a built app only (the dev server the view suites drive never has one),
   after the page has loaded, as `/sw.js?v=<build commit>`, so every deploy
   installs a new worker. **`OFFLINE` in `src/main.js` is the off switch:**
-  false, and the page unregisters the worker and deletes what it kept.
-  `public/manifest.webmanifest` and `public/icons/` (drawn from the favicon
+  false, and the page unregisters the worker and deletes what it kept. It
+  takes hold at the first open whose page comes from the network (within
+  the 4 seconds); a tab already open keeps its worker until it closes, and
+  the next open deletes whatever that worker kept meanwhile. For the
+  emergency that can't wait for that, Diagnosing has a worker that removes
+  itself. `public/manifest.webmanifest` and `public/icons/` (drawn from the favicon
   by `tools/make-icons.mjs`) make it installable: Add to Home Screen on an
   iPad or a phone, Install in Chrome. Two suites prove it.
   `tests/sw.test.js` (in `npm test`) runs the worker in node against a
   pretend browser — its caches, its network and its clock — for the rules
   that take deploys and days to show: what each version keeps and lets go,
-  the daily look, the HEAD answer, what is never touched; sixteen deliberate
+  the daily look, the HEAD answer, what is never touched; 24 deliberate
   breaks of `sw.js`, one at a time, each turn it red. `npm run test:offline`
   (`tests/offline.mjs`, in CI after the build) opens the built app in
   Chromium, gives a booth the Outdoor fair look, saves it, cuts the network
   and opens it again — the grass floor, the HDRI and its loader all from the
   worker — then checks a booth link offline, the network first online, a
-  503 answered at once with the kept page, a redirect followed, and the
-  4-second stand-in on a 15-second network. Red without the worker, without
-  its offline page, without its HEAD answer, with the 503 passed through,
-  with the 503 waiting out the 4 seconds, and with the redirect covered.
+  day-old texture looked at again by its ETag (a 304; the browser's own
+  cache is emptied first, because while it still holds the file it asks
+  that by itself), a 503 answered at once with the kept page, a redirect
+  followed, and the 4-second stand-in on a 15-second network. Red without
+  the worker, without its offline page, without its HEAD answer, with the
+  daily look asking without the ETag, with the 503 passed through, with the
+  503 waiting out the 4 seconds, and with the redirect covered.
   (Chromium reports every HEAD as aborted after its 200, worker or not: the
   suite ignores those. And it times the 503 from a blank page, because
   putting this WebGL page away takes seconds of its own under swiftshader.)
@@ -2844,7 +2855,27 @@ then reload. To let go of what it kept, Application → Cache storage →
 delete `booth-media`; the booths saved on the device are in IndexedDB and
 stay (never "Clear site data", which deletes them too). Or set `OFFLINE` to
 false in `src/main.js` for everyone: the page then unregisters the worker
-and deletes only what it kept.
+and deletes only what it kept, at each browser's next open that reaches the
+network.
+
+If the worker must go at once, everywhere — a browser being shown the kept
+page included — replace `public/sw.js` with this and deploy it, with
+`OFFLINE` set to false in the same deploy (or the page registers it again).
+A browser looks for a changed `sw.js` each time the app is opened, kept page
+or not, so this reaches every browser that has the worker; it deletes what
+the worker kept (never the booths, which are in IndexedDB) and unregisters:
+
+```js
+self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", (event) =>
+  event.waitUntil(
+    (async () => {
+      for (const name of await caches.keys()) if (name.startsWith("booth-")) await caches.delete(name);
+      await self.registration.unregister();
+    })(),
+  ),
+);
+```
 
 **`window.BOOTH_ASSETS`** works in production and records, per texture set,
 whether it loaded and what it found. `window.BOOTH_BUILD` gives the deployed
@@ -2938,7 +2969,7 @@ the picker became one list.
 npm ci
 npm run lint             # ESLint, eslint.config.js: seconds; CI runs it first
 npm run typecheck        # TypeScript reading the scene bundle's JSDoc (tsconfig.json)
-npm test                 # 520 Node tests
+npm test                 # 522 Node tests
 npm run build
 npm run test:view        # 44 suites (tools2, hub, share, roles, polish and wall-assets included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
