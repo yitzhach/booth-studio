@@ -7,18 +7,21 @@
 // and saved on this device; then the network cut, as on a show floor: the app
 // must open again with that booth, its floor and its sky, every file from the
 // worker. A booth link must still get the app. Back online, the page must come
-// from the network, not the copy; and on a network too slow to answer, the
-// kept page must stand in after the worker's wait.
+// from the network, not the copy, and a redirect must be followed; and when
+// the network answers with an error, or too slowly, the kept page must stand in.
 import { chromium } from "@playwright/test";
 import { preview } from "vite";
 import assert from "node:assert/strict";
 
 const root = new URL("..", import.meta.url).pathname;
 const PORT = 5263;
-// The server's side: how often the page itself was asked for, and a switch
-// that makes it answer slowly, like one bar of signal.
+// The server's side: how often the page itself was asked for, and switches
+// that make it answer slowly, like one bar of signal, with an error, or with
+// a redirect.
 let pageHits = 0;
 let slowPage = false;
+let failPage = false;
+let movedPage = false;
 const server = await preview({
   root,
   logLevel: "warn",
@@ -27,10 +30,17 @@ const server = await preview({
     {
       name: "page-counter",
       configurePreviewServer(s) {
-        s.middlewares.use((req, _res, next) => {
+        s.middlewares.use((req, res, next) => {
           if (req.method !== "GET" || !(req.url === "/" || req.url.startsWith("/?"))) return next();
           pageHits++;
-          if (slowPage) setTimeout(next, 15000);
+          if (failPage) {
+            res.statusCode = 503;
+            res.end("Service unavailable");
+          } else if (movedPage) {
+            res.statusCode = 302;
+            res.setHeader("Location", "/manifest.webmanifest");
+            res.end();
+          } else if (slowPage) setTimeout(next, 15000);
           else next();
         });
       },
@@ -45,7 +55,8 @@ const browser = await chromium.launch({
 const url = `http://127.0.0.1:${PORT}/`;
 try {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await context.addInitScript(() => localStorage.setItem("booth.role", "all")); // past the first visit's welcome (src/roles.js)
+  // Past the first visit's welcome (src/roles.js); about:blank has no storage.
+  await context.addInitScript(() => location.protocol === "http:" && localStorage.setItem("booth.role", "all"));
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.stack || e.message));
@@ -117,7 +128,31 @@ try {
   await page.waitForSelector("#scene canvas");
   assert.ok(pageHits > before, "online, the page is asked of the network");
 
+  // The network answers with an error (a 503 from the edge): the kept page at
+  // once — not the error, and not after the slow network's wait.
+  // Timed from a blank page to the page's answer ("commit"): putting this
+  // WebGL page away takes seconds of its own under swiftshader.
+  await page.goto("about:blank");
+  failPage = true;
+  const asked = pageHits;
+  const erred = Date.now();
+  const answered = await page.goto(url, { waitUntil: "commit" });
+  const tookErr = Date.now() - erred;
+  failPage = false;
+  assert.ok(pageHits > asked, "the network was asked, and answered 503");
+  assert.equal(answered.status(), 200, "the kept page, not the 503");
+  assert.ok(tookErr < 2000, `at once, not after the worker's 4 s wait: ${tookErr} ms`);
+  await page.waitForSelector("#scene canvas");
+
+  // The site sends the page elsewhere (a new address, a sign-in): followed,
+  // not covered with the kept page.
+  movedPage = true;
+  await page.goto(url, { waitUntil: "commit" });
+  movedPage = false;
+  assert.equal(new URL(page.url()).pathname, "/manifest.webmanifest", "the redirect, not the kept page");
+
   // One bar of signal: the network takes 15 s; the kept page stands in after the worker's 4.
+  // (Last: the slow answer is still on its way when the suite ends.)
   slowPage = true;
   const started = Date.now();
   await page.goto(url, { timeout: 30000 });
@@ -127,7 +162,7 @@ try {
   assert.ok(took < 12000, `opened in ${took} ms on a network that took 15 s`);
 
   assert.deepEqual(errors, [], "no page errors, online or off");
-  console.log(`PASS The built app keeps its page and every file of its build in a service worker under the build's commit; with the network cut it opens again with the booth saved here, its grass floor and its photographed sky, every file from the worker; a booth link still gets the app; online the page comes from the network; and on a network too slow to answer the kept page stands in (${took} ms).`);
+  console.log(`PASS The built app keeps its page and every file of its build in a service worker under the build's commit; with the network cut it opens again with the booth saved here, its grass floor and its photographed sky, every file from the worker; a booth link still gets the app; online the page comes from the network and a redirect is followed; and on a network that answers with an error, or too slowly, the kept page stands in (${took} ms).`);
 } finally {
   await browser.close();
   await server.close();
