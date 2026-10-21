@@ -7,8 +7,9 @@ Some carry the owner's answer in italics and are kept for their reasoning.
 None needs a session: each is a judgement only a person can make. The
 current list, with the items from these rounds that need a human with a
 browser (the soft backdrops, H.264 on real hardware, a `home` HDRI), is
-`HANDOFF.md` → Next. The item numbers are the ones these had there, and
-"see Now" means `docs/HISTORY.md`.
+`HANDOFF.md` → Next. The item numbers are the ones these had there — items
+4, 5 and 7 (the soft backdrops, H.264, a `home` HDRI) are the ones that
+stayed behind — and "see Now" means `docs/HISTORY.md`.
 
 0. **Looks and the hero set (Rev 1 part B, 2026-10-19): the owner's to
    judge.** Do the four looks look right, and is Make it beautiful's hang

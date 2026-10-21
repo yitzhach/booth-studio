@@ -6,8 +6,8 @@ dated, and with where it was built. Gathered on 2026-10-21 (ROADMAP 1.1) from
 the rounds in `docs/HISTORY.md` and the answers the old Next recorded (now
 `docs/OPEN-CHECKS.md`), each with a few words quoted from where it is written,
 so it can be found there by searching for them; the quotes were checked
-against the text. From now on a round adds its own here, at the end, with the
-next number. A number is never reused or changed: a decision the owner later
+against the text. From now on a round adds its own at the end of Decisions,
+before Still open, with the next number. A number is never reused or changed: a decision the owner later
 reverses gets a new number that says which one it replaces.
 
 Platform decisions are Art-Talk-Back's own (its DECISIONS.md, D-001
@@ -436,8 +436,10 @@ naming who asked, where the context makes it the owner's.
   artists, show promoters and directors, and people running larger
   exhibitions" — *docs/HISTORY.md: 2026-10-19: Rev 1, part A — workspaces.*
 - **B-096** · 2026-10-19 · Merge Rev 1 (parts A, B and C) now, and test later.
-  — "The owner said merge now and test later." — *HANDOFF.md → Next: Rev 1
-  (parts A, B and C) is merged and live (2026-10-19), untested by a person.*
+  — "The owner said merge now and test later." — *recorded only in
+  HANDOFF.md → Next, in the Rev 1 item ("Rev 1 (parts A, B and C) is merged
+  and live (2026-10-19), untested by a person"), until that item closes; this
+  entry keeps it.*
 - **B-097** · 2026-10-20 · What would make this top-tier software that
   companies buy and artists rely on, and a phase-by-phase plan to get there:
   `ROADMAP.md`, phases 0–6. — "The owner asked what would make this top-tier
@@ -451,10 +453,9 @@ naming who asked, where the context makes it the owner's.
   `docs/WORKFLOW.md`.*
 - **B-099** · undated · Reports in chat are extremely concise: grammar
   sacrificed, abbreviations and symbols welcome. Chat only; code comments,
-  commit messages and the handoff stay in full prose. — "reports in chat are
-  extremely concise, grammar sacrificed for concision, abbreviations and
-  symbols welcome" — *HANDOFF.md → Now, first bullet; CLAUDE.md → How to
-  report to me.*
+  commit messages and the handoff stay in full prose. — "**B extremely
+  concise.** Sacrifice grammar for concision." — *CLAUDE.md → How to report
+  to me.*
 
 ## Still open
 

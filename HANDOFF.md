@@ -1,6 +1,8 @@
 # Booth Studio — handoff
 
-Start a new chat with **this file only**. It is written to be enough on its own.
+Start a new chat with **this file**. It is enough to start from: what is
+true now, what is next, the rules, and which file in `docs/` to read before
+touching what it covers.
 
 Artist OS Booth Studio: measured 3D art-show booth planning in the browser.
 Extend it; do not rebuild it.

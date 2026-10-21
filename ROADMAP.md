@@ -154,7 +154,7 @@ has made the decisions that every later phase waits on.
 conversations and five watched sessions cost a few days and can save months
 of building the wrong thing.
 
-- [ ] **The owner's Rev 1 checklist** (`HANDOFF.md` → Next, item 2) on the
+- [ ] **The owner's Rev 1 checklist** (`HANDOFF.md` → Next, the Rev 1 checklist) on the
       live site, in a private window, then on a phone.
 - [ ] **Five watched sessions** — three artists, one show organizer, one
       gallery or university-gallery person — each on their own device, with
@@ -209,12 +209,12 @@ more small pull requests, each green on every suite before it merges.
       `docs/DECISIONS.md` (the owner's answers, numbered B-001…, dated, each
       linking to where it was built). Mechanical: nothing deleted, only moved.
       Every session pays for the current length before doing anything.
-      *(2026-10-21: done — 3,496 lines to 490. The rounds are in
+      *(2026-10-21: done — 3,496 lines to 492. The rounds are in
       `docs/HISTORY.md`, the old Next's by-eye checks in `docs/OPEN-CHECKS.md`,
       the reference sections in `docs/STUDIO-PLATFORM.md`, `docs/DIAGNOSING.md`
       and `docs/LESSONS.md`; `docs/DECISIONS.md` holds 99 answers, B-001 to
       B-099, and the 28 calls still open. `tests/handoff.test.js` keeps it
-      under 500 lines and its pointers whole.)*
+      under 600 lines and its pointers whole.)*
 - [ ] **1.2 Split `src/main.js` along the seams it already has.** Almost all
       of its 6,961 lines are inside `boot()`. Move, without changing
       behaviour: the panel builders (`*Section`, `*HTML`, `*Fields`) into

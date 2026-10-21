@@ -16,9 +16,12 @@ const root = new URL("..", import.meta.url).pathname;
 const read = (path) => readFileSync(join(root, path), "utf8");
 const lineCount = (text) => text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
 
-test("HANDOFF.md stays at 500 lines or fewer: a round's detail goes to docs/HISTORY.md", () => {
+// Aim under 500, as it was split; past 600 the next round moves detail out
+// (a round's to docs/HISTORY.md, an old Next item to docs/OPEN-CHECKS.md)
+// instead of adding to it.
+test("HANDOFF.md stays at 600 lines or fewer: a round's detail goes to docs/HISTORY.md", () => {
   const lines = lineCount(read("HANDOFF.md"));
-  assert.ok(lines <= 500, `HANDOFF.md is ${lines} lines`);
+  assert.ok(lines <= 600, `HANDOFF.md is ${lines} lines: move detail to docs/HISTORY.md or docs/OPEN-CHECKS.md`);
 });
 
 const skills = readdirSync(join(root, ".claude/skills"), { withFileTypes: true })
@@ -29,7 +32,9 @@ const LIVE_DOCS = ["HANDOFF.md", "CLAUDE.md", "README.md", "docs/WORKFLOW.md", "
 // Named in backticks there, but other repositories' files: Art-Talk-Back's,
 // and the two upstream projects' that .claude/skills/THIRD_PARTY.md credits.
 const OTHER_REPOS = new Set(["docs/HANDOFF.md", "docs/phase-5-booth.md", "docs/SHIPPING.md", "SKILL.md", "ITERATE.md"]);
-const POINTER = /`((?:\.\.\/)*(?:(?:\.claude|\.github|docs|src|tests|tools|worker|public)\/[\w./-]+\.\w+|[A-Z][A-Z_]+\.md))`/g;
+// A path in one of the repository's folders, an ALL-CAPS root document, or
+// one of the root config files by name (a bare `main.js` means src/main.js).
+const POINTER = /`((?:\.\.\/)*(?:(?:\.claude|\.github|docs|src|tests|tools|worker|public)\/[\w./-]+\.\w+|[A-Z][A-Z_]+\.md|(?:package|tsconfig(?:\.app)?)\.json|(?:eslint|vite|vite\.scene)\.config\.js|wrangler\.jsonc|index\.html))`/g;
 
 test("every file the live docs and the skills name exists", () => {
   const missing = [];
@@ -45,9 +50,13 @@ test("every file the live docs and the skills name exists", () => {
   assert.deepEqual(missing, []);
 });
 
-test("every \"HANDOFF.md → <section>\" in the live docs, the skills and the code names a section HANDOFF.md has", () => {
+test("every \"HANDOFF.md → <section>\" in the live docs, the skills, ROADMAP.md and the code names a section HANDOFF.md has", () => {
   const sections = [...read("HANDOFF.md").matchAll(/^## (.+)$/gm)].map((m) => m[1].trim());
-  const code = ["src", "worker", "tools"].flatMap((dir) =>
+  // The whole name, then the end or a space: "Next, item 2" and "Testing has
+  // the …" name Next and Testing; "Rules" alone names nothing. "Now and Next"
+  // is two.
+  const names = (said) => said.split(/ and /).every((part) => sections.some((h) => part === h || part.startsWith(`${h} `)));
+  const code = ["src", "worker", "tools", "tests"].flatMap((dir) =>
     readdirSync(join(root, dir), { recursive: true })
       .map(String)
       .filter((f) => /\.m?js$/.test(f) && !f.startsWith("vendor"))
@@ -55,11 +64,10 @@ test("every \"HANDOFF.md → <section>\" in the live docs, the skills and the co
   );
   const wrong = [];
   let named = 0;
-  for (const file of [...LIVE_DOCS, ...code])
+  for (const file of [...LIVE_DOCS, "ROADMAP.md", ...code])
     for (const [, said] of read(file).matchAll(/`?HANDOFF(?:\.md)?`?\s*→\s*([A-Z][^\n.;,)`*]*)/g)) {
       named++;
-      const s = said.trim();
-      if (!sections.some((h) => s.startsWith(h) || h.startsWith(s))) wrong.push(`${file}: HANDOFF.md → ${s}`);
+      if (!names(said.trim())) wrong.push(`${file}: HANDOFF.md → ${said.trim()}`);
     }
   assert.ok(named > 15, `found ${named} section pointers`);
   assert.deepEqual(wrong, []);

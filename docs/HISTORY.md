@@ -1,7 +1,9 @@
 # Booth Studio — history
 
 Every round, newest first: what was built, why, how it was tested, and what
-the owner said about it. Moved here verbatim from `HANDOFF.md` → Now on
+the owner said about it. (The order is the old Now's: a few bullets from
+2026-09-19 to 2026-09-26 sit out of date order, so go by the date each
+bullet starts with.) Moved here verbatim from `HANDOFF.md` → Now on
 2026-10-21 (ROADMAP 1.1), with the two notes that had sat in `HANDOFF.md` →
 Testing (the linter and the type check, and the iPad tabs) put back in date
 order as bullets of their own. `HANDOFF.md` is what is true now; this is how
@@ -32,8 +34,8 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
   by a subagent and checked against the text. From now on a round adds its
   bullet here at the top, the owner's answers there, and changes `HANDOFF.md`
   only where what is true has changed (the `steward` skill,
-  `docs/WORKFLOW.md`). `tests/handoff.test.js` keeps `HANDOFF.md` at 500
-  lines or fewer and every pointer in the live files whole: each file named
+  `docs/WORKFLOW.md`). `tests/handoff.test.js` keeps `HANDOFF.md` at 600
+  lines or fewer (it was split to under 500) and every pointer in the live files whole: each file named
   in backticks exists, and each "HANDOFF.md → <section>" names a section it
   has.
 - **2026-10-20: opens with no signal, and installs (ROADMAP 1.7).** A show
