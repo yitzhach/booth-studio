@@ -2,7 +2,7 @@
 
 The owner's by-eye checks from the rounds before 2026-10-19 — what to look
 at on the real machine or a phone, and what to change if it reads wrong —
-moved here verbatim from `HANDOFF.md` → Next on 2026-10-20 (ROADMAP 1.1).
+moved here verbatim from `HANDOFF.md` → Next on 2026-10-21 (ROADMAP 1.1).
 Some carry the owner's answer in italics and are kept for their reasoning.
 None needs a session: each is a judgement only a person can make. The
 current list, with the items from these rounds that need a human with a

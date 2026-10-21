@@ -1,6 +1,6 @@
 # Things learned the hard way
 
-Moved verbatim from `HANDOFF.md` on 2026-10-20 (ROADMAP 1.1). Each is a
+Moved verbatim from `HANDOFF.md` on 2026-10-21 (ROADMAP 1.1). Each is a
 mistake made once, or nearly, in this code, and the reason the code is the
 way it is. Read the ones near what you are changing; the rules they became
 are in `HANDOFF.md` → Rules that are easy to break.

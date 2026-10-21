@@ -2,7 +2,7 @@
 
 Every round, newest first: what was built, why, how it was tested, and what
 the owner said about it. Moved here verbatim from `HANDOFF.md` → Now on
-2026-10-20 (ROADMAP 1.1), with the two notes that had sat in `HANDOFF.md` →
+2026-10-21 (ROADMAP 1.1), with the two notes that had sat in `HANDOFF.md` →
 Testing (the linter and the type check, and the iPad tabs) put back in date
 order as bullets of their own. `HANDOFF.md` is what is true now; this is how
 it got that way. A round adds its bullet at the top. The owner's answers
@@ -15,6 +15,27 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-21: the handoff split (ROADMAP 1.1).** Every session reads
+  `HANDOFF.md` whole before doing anything, and it had grown to 3,496 lines
+  because each round appended to it. It is under 500 now — what is true now,
+  rewritten as a summary of the app as it stands; Next; deployment, testing,
+  the rules and the read map — and the rest moved here verbatim: this file
+  (the old Now, every round), `docs/OPEN-CHECKS.md` (the old Next's by-eye
+  checks from before 2026-10-19), `docs/STUDIO-PLATFORM.md`,
+  `docs/DIAGNOSING.md` and `docs/LESSONS.md`. A script checked that every
+  line of the old file is in one of the new ones; the only changes are two
+  headings that became titles, pointers to the moved sections, the roadmap
+  item in Next brought up to date, and the old "no accounts, sync or AI
+  calls" rule, which now says what CLAUDE.md has said since 2026-10-05. New:
+  `docs/DECISIONS.md`, the owner's 99 answers as B-001 to B-099, each dated
+  and quoted from where it is written, and the 28 calls still open, gathered
+  by a subagent and checked against the text. From now on a round adds its
+  bullet here at the top, the owner's answers there, and changes `HANDOFF.md`
+  only where what is true has changed (the `steward` skill,
+  `docs/WORKFLOW.md`). `tests/handoff.test.js` keeps `HANDOFF.md` at 500
+  lines or fewer and every pointer in the live files whole: each file named
+  in backticks exists, and each "HANDOFF.md → <section>" names a section it
+  has.
 - **2026-10-20: opens with no signal, and installs (ROADMAP 1.7).** A show
   floor often has no signal, and until now the app opened only with one: a
   tab left open kept working, a new one didn't. `public/sw.js`, a service

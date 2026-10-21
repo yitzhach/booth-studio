@@ -1,7 +1,7 @@
 # Booth Studio on the studio platform
 
-Moved verbatim from `HANDOFF.md` → Studio platform on 2026-10-20 (ROADMAP
-1.1). "Next" in it means `HANDOFF.md` → Next.
+Moved verbatim on 2026-10-21 (ROADMAP 1.1) from what was the Studio platform
+section of HANDOFF.md. "Next" in it means `HANDOFF.md` → Next.
 
 Booth Studio is an app on the studio platform (owner-approved 2026-10-05).
 The platform — `studio-api`, its database, the SDK, and later the assistant —

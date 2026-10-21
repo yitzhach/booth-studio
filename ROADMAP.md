@@ -209,7 +209,7 @@ more small pull requests, each green on every suite before it merges.
       `docs/DECISIONS.md` (the owner's answers, numbered B-001…, dated, each
       linking to where it was built). Mechanical: nothing deleted, only moved.
       Every session pays for the current length before doing anything.
-      *(2026-10-21: done — 3,496 lines to 488. The rounds are in
+      *(2026-10-21: done — 3,496 lines to 490. The rounds are in
       `docs/HISTORY.md`, the old Next's by-eye checks in `docs/OPEN-CHECKS.md`,
       the reference sections in `docs/STUDIO-PLATFORM.md`, `docs/DIAGNOSING.md`
       and `docs/LESSONS.md`; `docs/DECISIONS.md` holds 99 answers, B-001 to

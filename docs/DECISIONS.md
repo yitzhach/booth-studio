@@ -2,7 +2,7 @@
 
 Every answer the owner has given about this app — a choice between options, an
 approval, a "keep it as it is", or an ask that set its direction — numbered,
-dated, and with where it was built. Gathered on 2026-10-20 (ROADMAP 1.1) from
+dated, and with where it was built. Gathered on 2026-10-21 (ROADMAP 1.1) from
 the rounds in `docs/HISTORY.md` and the answers the old Next recorded (now
 `docs/OPEN-CHECKS.md`), each with a few words quoted from where it is written,
 so it can be found there by searching for them; the quotes were checked
@@ -10,7 +10,7 @@ against the text. From now on a round adds its own here, at the end, with the
 next number. A number is never reused or changed: a decision the owner later
 reverses gets a new number that says which one it replaces.
 
-Platform decisions are Art-Talk-Back's own (its `DECISIONS.md`, D-001
+Platform decisions are Art-Talk-Back's own (its DECISIONS.md, D-001
 onwards); one the owner made there that shaped this app is listed here too,
 with its D-number. † marks an ask the text records as "asked for" without
 naming who asked, where the context makes it the owner's.
@@ -402,7 +402,7 @@ naming who asked, where the context makes it the owner's.
   (Art-Talk-Back D-074): asked for "a second man, looking to the left, 7 feet
   tall", it had said the app has no person figure. Built as `add_person`,
   `change_person` and `remove_person` in `src/scene-ops.js`. — "a second man,
-  looking to the left, 7 feet tall" — *Art-Talk-Back `DECISIONS.md` → D-074
+  looking to the left, 7 feet tall" — *Art-Talk-Back's DECISIONS.md → D-074
   (not in the handoff's rounds).*
 - **B-089** · 2026-10-07 · The assistant takes the artist to a place in the
   app: asked to open the Layout tab, it couldn't. Built as "Take me to …"

@@ -5,7 +5,7 @@ Start a new chat with **this file only**. It is written to be enough on its own.
 Artist OS Booth Studio: measured 3D art-show booth planning in the browser.
 Extend it; do not rebuild it.
 
-This file is what is true now, what is next, and the rules. Since 2026-10-20
+This file is what is true now, what is next, and the rules. Since 2026-10-21
 (ROADMAP 1.1) everything else it used to hold lives beside it in `docs/`,
 moved there verbatim: `docs/HISTORY.md` is every round, newest first — what
 was built, why, and how it was tested; `docs/DECISIONS.md` is the owner's
@@ -251,7 +251,7 @@ look at and what to change if it reads wrong.
 npm ci
 npm run lint             # ESLint, eslint.config.js: seconds; CI runs it first
 npm run typecheck        # TypeScript reading the scene bundle's JSDoc (tsconfig.json)
-npm test                 # 524 Node tests
+npm test                 # 525 Node tests
 npm run build
 npm run test:view        # 44 suites (tools2, hub, share, roles, polish and wall-assets included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
@@ -459,8 +459,9 @@ anything else in a browser until it is done.
   (`setShow` / `stageShow` / `setShowView` in `src/scene.js` draw it);
   `src/linked.js` — opening one floor booth as a full design, and why the
   storage is shaped as it is; `FLOOR_TEMPLATES` in `src/show.js`;
-  `worker/index.js` — the one backend: booth share links on `/api/*`, R2
-  `booth-studio-shares`; `src/share.js` — its browser half;
+  `worker/index.js` — the Worker: booth share links on `/api/*` (R2
+  `booth-studio-shares`; `src/share.js` is their browser half), and `/v1/*`
+  and `/assistant/*` forwarded to the studio (`docs/STUDIO-PLATFORM.md`);
   `src/booth-file.js` — Show Hub v0: one booth design as a file, sent by
   an exhibitor and imported onto a floor booth by the promoter;
   `public/pitchdeck/index.html` — the Pro pitch deck, served at
@@ -476,7 +477,8 @@ anything else in a browser until it is done.
   `startWalk` / `walk` / `stopWalk` in `src/scene.js` do the work.
 - `src/guides.js` — smart guides' snapping arithmetic; `showSnap` in
   `src/scene.js` draws it. `src/align.js` — align and distribute.
-- `FUTURE_BUILD.md` — requested, deliberately not started. Currently empty.
+- `FUTURE_BUILD.md` — ideas asked for and deliberately not started, each now
+  placed in `ROADMAP.md`; Show Hub's v0 and phase 1 came from it and are built.
 - `docs/HDRI-ASSETS.md`, `docs/TEXTURE-ASSETS.md` — adding asset files.
 - `AI_EXPORT_PHASE.md` — the paid AI export's server side, still design
   only; its client half (the passes, the protected artwork) is

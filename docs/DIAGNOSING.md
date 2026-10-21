@@ -1,7 +1,7 @@
 # Diagnosing Booth Studio
 
 Two reports that came back and were guessed at before anyone measured,
-moved verbatim from `HANDOFF.md` on 2026-10-20 (ROADMAP 1.1). Before either,
+moved verbatim from `HANDOFF.md` on 2026-10-21 (ROADMAP 1.1). Before either,
 get `window.BOOTH_BUILD` (the deployed commit) and, for anything drawn,
 `window.BOOTH_ASSETS` from the browser that sees it — or ask for Export →
 Something wrong? → Copy a problem report, which carries both. The
