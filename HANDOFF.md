@@ -136,8 +136,8 @@ look at and what to change if it reads wrong.
      turn on airplane mode and open it again — does it come up with your
      booths? Then Share → Add to Home Screen, and open it from there.
 2. **Rev 1 (parts A, B and C) is merged and live (2026-10-19), untested by
-   a person.** The owner said merge now and test later. Start the next
-   session here. His checklist, on the live site in a private window (a
+   a person.** The owner said merge now and test later. This and item 1
+   are where the next session with the owner starts. His checklist, on the live site in a private window (a
    fresh browser is a first visit):
    - The welcome: do the three cards read right? Pick My booth: does Quick
      start follow, and are Artwork, Layout, Walls, Lighting, Export the right
@@ -253,7 +253,7 @@ look at and what to change if it reads wrong.
 npm ci
 npm run lint             # ESLint, eslint.config.js: seconds; CI runs it first
 npm run typecheck        # TypeScript reading the scene bundle's JSDoc (tsconfig.json)
-npm test                 # 525 Node tests
+npm test                 # 526 Node tests
 npm run build
 npm run test:view        # 44 suites (tools2, hub, share, roles, polish and wall-assets included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers

@@ -17,8 +17,8 @@ appeared to do nothing, and the only way back was Remove ground texture.
 
 It is also, by `docs/DIAGNOSING.md`'s own count, one of the two known causes behind
 every "the ground selector is broken" report, of which there have been three.
-Removing the behaviour removes the diagnosis, which is why that section of the
-handoff is shorter now.
+Removing the behaviour removes the diagnosis, which is why that section (now in
+`docs/DIAGNOSING.md`) is shorter.
 
 ## What was built
 
