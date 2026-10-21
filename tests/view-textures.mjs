@@ -93,6 +93,16 @@ const tentState = (page) => page.evaluate(() => {
   return { panels, frame };
 });
 
+// How long a photographed set gets to reach its mesh. This browser draws with
+// swiftshader, on the CPU: a frame of this page at 1440×1000 with shadows
+// takes about 0.75 s, and the steps below are paced by frames: Playwright's
+// own checks before a click, the images' load callbacks between renders, and
+// waitForFunction's polling. Measured 2026-10-21 for the tent canvas: about
+// 8 s from the click to the maps on a quiet machine, 13 s under load, which a
+// 15 s budget lost three times in CI. Nothing here is slow on a real GPU, so
+// a wait this long costs only the time a run really needs.
+const SET_WAIT = 60000;
+
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   await page.addInitScript(() => localStorage.setItem('booth.role', 'all')); // past the first visit's welcome (src/roles.js)
@@ -111,14 +121,14 @@ try {
   // the studio floor further down, which ships no set at all.
   assert.equal((await page.request.head('http://127.0.0.1:5192/assets/textures/grass/color.jpg')).status(), 200);
   await page.selectOption('select[aria-label="Ground"]', 'grass');
-  await page.waitForFunction(() => !!window.__booth.scene.group.getObjectByName('environment-ground').material.normalMap, null, { timeout: 15000 });
+  await page.waitForFunction(() => !!window.__booth.scene.group.getObjectByName('environment-ground').material.normalMap, null, { timeout: SET_WAIT });
   const grass = await groundState(page);
   assert.equal(grass.bump, false, 'the procedural bump would fight a real normal map');
   assert.equal(grass.map.repeat, 90, 'a 2 m tile repeats 90 times across 180 m');
 
   // Concrete has files, so the real set must land on the real mesh.
   await page.selectOption('select[aria-label="Ground"]', 'concrete');
-  await page.waitForFunction(() => !!window.__booth.scene.group.getObjectByName('environment-ground').material.normalMap, null, { timeout: 15000 });
+  await page.waitForFunction(() => !!window.__booth.scene.group.getObjectByName('environment-ground').material.normalMap, null, { timeout: SET_WAIT });
   const concrete = await groundState(page);
   assert.equal(concrete.color, 'ffffff', 'a photographed surface is not tinted');
   assert.equal(concrete.bump, false, 'the procedural bump would fight the normal map');
@@ -142,7 +152,7 @@ try {
   await page.waitForFunction(() => {
     const floor = window.__booth.scene.group.getObjectByName('environment-ground');
     return !!(floor && floor.material.map && floor.material.normalMap);
-  }, null, { timeout: 15000 });
+  }, null, { timeout: SET_WAIT });
   const rebuilt = await groundState(page);
   assert.ok(rebuilt.map && rebuilt.normal, 'the set survives a scene rebuild');
   assert.equal(rebuilt.map.repeat, 90, 'repeat survives a scene rebuild');
@@ -160,7 +170,7 @@ try {
     let found = false;
     window.__booth.scene.group.traverse((o) => { if (o.userData?.fabric && o.material.map) found = true; });
     return found;
-  }, null, { timeout: 15000 });
+  }, null, { timeout: SET_WAIT });
   const tent = await tentState(page);
   assert.ok(tent.panels.length >= 5, 'a roof and four valances at least');
   for (const panel of tent.panels) {
@@ -218,7 +228,7 @@ try {
     let ok = false;
     window.__booth.scene.group.traverse((o) => { if (o.userData?.wall && o.material.normalMap) ok = true; });
     return ok;
-  }, null, { timeout: 15000 });
+  }, null, { timeout: SET_WAIT });
   const fabric = await walls();
   assert.equal(fabric.length, 3, 'three panels');
   for (const w of fabric) {
@@ -236,7 +246,7 @@ try {
     let scale = null;
     window.__booth.scene.group.traverse((o) => { if (o.userData?.wall && o.material.normalMap) scale = o.material.normalScale.x; });
     return scale !== null && Math.abs(scale - 0.2) < 1e-6;
-  }, null, { timeout: 15000 });
+  }, null, { timeout: SET_WAIT });
 
   await page.selectOption('select[aria-label="Panel surface"]', 'smooth');
   await page.waitForTimeout(600);

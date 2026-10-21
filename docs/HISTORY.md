@@ -17,6 +17,19 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-21: `view-textures`' tent wait, root-caused.** The suite timed
+  out three times in CI at the tent canvas (`main`'s run 83, #42, #43), each
+  green on re-run. Measured, not guessed: the browser the suites use draws
+  with swiftshader on the CPU, a frame of the page at 1440×1000 with shadows
+  takes about 0.75 s, and every step of that wait is paced by frames —
+  Playwright's checks before the click, the four images' load callbacks
+  between renders, `waitForFunction`'s polling. From the click to the maps
+  on the tent was about 8 s on a quiet machine and 13 s with the CPU busy,
+  against a 15 s budget; reproduced locally 1 run in 6 that way. The maps
+  always arrived (the canvas set loaded, was claimed and applied to all five
+  panels), so nothing in the app was wrong. The six set-loading waits in
+  that suite now share one 60 s budget, `SET_WAIT`, with the measurement in
+  a comment; other suites already give heavy loads 30–60 s.
 - **2026-10-21: the rest of `src/` type-checked (ROADMAP 1.4), and
   `main.js`'s first seam (ROADMAP 1.2).** `tsconfig.app.json` checks every
   module in `src/` that `tsconfig.json` does not, against a browser's
