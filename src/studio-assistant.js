@@ -914,10 +914,9 @@ export async function mount(bridge, host) {
     const r = await fetch("/assistant/status", { credentials: "same-origin" });
     available = r.ok && (await r.json())?.available === true;
   } catch {}
-  /** @type {any} the custom element defined above */
-  let panel = document.querySelector("studio-assistant");
+  let panel = /** @type {Panel | null} */ (document.querySelector("studio-assistant"));
   if (!panel) {
-    panel = document.createElement("studio-assistant");
+    panel = /** @type {Panel} */ (document.createElement("studio-assistant"));
     document.body.appendChild(panel);
   }
   panel.attach(bridge, host, available);

@@ -125,10 +125,11 @@ jobs:
       - name: Opens offline (public/sw.js, the built app)
         run: npm run test:offline
 
-  # ESLint's recommended rules and TypeScript reading the JSDoc of the modules
-  # studio-api runs (eslint.config.js, tsconfig.json). A job of its own, so a
-  # lint error is reported in a minute and never stops the suites from
-  # reporting theirs.
+  # ESLint's recommended rules, and TypeScript reading the JSDoc: of the
+  # modules studio-api runs, against a Worker's globals (tsconfig.json), and
+  # of the page's other modules, against a browser's (tsconfig.app.json).
+  # A job of its own, so a lint error is reported in a minute and never stops
+  # the suites from reporting theirs.
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 10
