@@ -17,6 +17,22 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-21: the rest of `src/` type-checked (ROADMAP 1.4), and
+  `main.js`'s first seam (ROADMAP 1.2).** `tsconfig.app.json` checks every
+  module in `src/` that `tsconfig.json` does not, against a browser's
+  globals, but `main.js` and `scene.js` (493 findings between them, waiting
+  for their split) and `studio.js` (it imports the vendored SDK, which has
+  no types); `npm run typecheck` reports both configs in one run, and what
+  it found was fixed with behaviour-preserving coercions and casts
+  (booth-studio#42, merged and verified live at `4a4dd3c`). Then seam 1 of
+  `MAIN_SPLIT_PHASE.md`: the seven share-link functions moved out of
+  `boot()` into `src/ui/share-dialogs.js` unchanged but for `ctx.`, with
+  `tests/main-size.test.js` as the ratchet (7,098 lines, from 7,209). The
+  modules the split makes wait for the type check with `main.js`, so each
+  move stays byte for byte reviewable. On the way: `tests/view-textures.mjs`
+  times out now and then in CI waiting for the tent's photographed canvas
+  (line 159; once on `main`'s run 83, once on #42, green on re-run and every
+  time here) — not yet root-caused.
 - **2026-10-21: the handoff split (ROADMAP 1.1).** Every session reads
   `HANDOFF.md` whole before doing anything, and it had grown to 3,496 lines
   because each round appended to it. It is under 500 now — what is true now,

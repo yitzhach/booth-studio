@@ -161,9 +161,12 @@ look at and what to change if it reads wrong.
    and the owner's decisions (who pays first, the name — "Booth Studio" is
    taken on the App Store — what stays free, error reports, payments, the
    image service). Its phase 1 (foundations) needs none of those. Done: 1.1
-   (this file's split), 1.5, 1.7, 1.8 and 1.9; half done: 1.4 and 1.6. Left
-   for sessions: 1.2 and 1.3 (split `main.js` and `scene.js`, which phase 2
-   waits on) and the rest of 1.4. 1.10's site-qa and Dependabot, 1.11 (the
+   (this file's split), 1.5, 1.7, 1.8 and 1.9; half done: 1.4 (every module
+   in `src/` is type-checked but `main.js`, `scene.js`, `studio.js` and what
+   the split moves out of `main.js`) and 1.6; begun: 1.2 (seam 1 of
+   `MAIN_SPLIT_PHASE.md`, the share dialogs). Left for sessions: the rest of
+   1.2 and 1.3 (split `main.js` and `scene.js`, which phase 2 waits on, seam
+   by seam as that plan lists them) and the rest of 1.4, after them. 1.10's site-qa and Dependabot, 1.11 (the
    custom domain) and 1.12 (security headers, which change what the Worker
    sends) want the owner's yes first.
 4. **The assistant panel on a phone (2026-10-07): built — see `docs/HISTORY.md`.** The
