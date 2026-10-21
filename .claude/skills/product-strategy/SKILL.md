@@ -53,8 +53,9 @@ Not for every pull request: that is the build loop (docs/WORKFLOW.md).
      agreement, support with a stated reply time, invoices.
 6. **Write it down in place.** Edit ROADMAP.md: reorder within a phase, add or
    drop items, refresh the market table, sharpen the gates. A decision that is
-   the owner's goes in the phase as **Owner:** with a default. Add a dated line
-   to HANDOFF.md → Now saying what changed in the roadmap and why.
+   the owner's goes in the phase as **Owner:** with a default. Add a dated
+   bullet at the top of `docs/HISTORY.md` saying what changed in the roadmap
+   and why, and each answer the owner gave to `docs/DECISIONS.md`.
 
 ## Rules that do not move
 

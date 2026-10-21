@@ -27,8 +27,10 @@ Ex:
 ## The app
 
 Artist OS Booth Studio: measured 3D art-show booth planning in the browser.
-**Extend it; do not rebuild it.** Read `HANDOFF.md` first — it is written to be
-enough on its own & is the record of what was decided & why.
+**Extend it; do not rebuild it.** Read `HANDOFF.md` first — enough to start
+from, & it says which `docs/` file to read before touching what it covers.
+`docs/HISTORY.md` (every round) & `docs/DECISIONS.md` (the owner's answers)
+are the record of what was decided & why.
 
 ## Rules that bite
 

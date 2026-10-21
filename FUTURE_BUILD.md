@@ -34,7 +34,7 @@ Every idea marked *server* needs the owner to lift the local-first rule.
    **The v0 needs no server:** "Send my booth to the promoter" writes one
    booth design as a file, and "Import into booth #N" on the floor parks it
    on that number — a test of demand that breaks no rule.
-   **v0 is built (2026-09-25, eighth round — see `HANDOFF.md` → Now);**
+   **v0 is built (2026-09-25, eighth round — see `docs/HISTORY.md`);**
    the hosted Hub is what is left here. **Phase 1 is built too (ninth
    round): a booth sent as a link**, stored by the Worker in R2; what is
    left is accounts, real Pro gating and the promoter's published floor.

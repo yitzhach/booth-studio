@@ -3,7 +3,8 @@
 Set up 2026-10-20 at the owner's request: a permanent way of working for
 Claude Code cloud sessions on this repository — product assessment,
 competitive research, a commercial roadmap, phased building, review in rounds,
-tests, a checked deploy, and an updated HANDOFF.md. Two loops carry it, six
+tests, a checked deploy, and the round recorded (docs/HISTORY.md, and HANDOFF.md
+where what is true changed). Two loops carry it, six
 project skills hold the method, a session-start hook makes the tests runnable,
 and one script checks a deploy. Nothing here changes the app.
 
@@ -55,8 +56,9 @@ market research per change would cost much and change little.
 6. **Check the deploy**: `node tools/verify-deploy.mjs` waits until the live
    site serves the merge commit, then opens it in Chromium and checks that the
    app starts.
-7. **Hand off**: HANDOFF.md → Now (what shipped) and Next (what the owner must
-   see in person).
+7. **Hand off**: what shipped, dated, at the top of `docs/HISTORY.md`; the
+   owner's answers in `docs/DECISIONS.md`; HANDOFF.md → Now where what is
+   true changed, and Next (what the owner must see in person).
 
 Whenever something fails along the way: `root-cause` before any fix.
 
