@@ -239,7 +239,8 @@ more small pull requests, each green on every suite before it merges.
       every other module in `src/` against a browser's, but three: `main.js`
       and `scene.js` wait for their split (1.2, 1.3) — 493 findings between
       them on the day — and `studio.js` imports the vendored SDK, which has
-      no types of its own. Left: those three.)*
+      no types of its own (the route: Art-Talk-Back's SDK bundle step writing
+      a `.d.ts` beside it). Left: those three.)*
 - [x] **1.5 A linter in CI.** ESLint's flat config with its recommended
       rules plus `no-undef` and `no-unused-vars`. Fix what it finds in the
       same pull request, or turn the rule off with a reason.
