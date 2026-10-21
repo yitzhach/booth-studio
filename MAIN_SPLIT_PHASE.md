@@ -127,3 +127,10 @@ wrong.)
   which is not checked either.
 - **2026-10-21, seam 1: the ratchet is added with it.** `tests/main-size.test.js`
   holds `main.js` at 7,098 lines: red on `main` (7,209), green with the seam.
+- **2026-10-21, seam 2: a moved function only the module calls stays inside
+  it.** `describeBlock` is called only by `openWelcome`, so `createWelcome`
+  does not return it; `main.js` takes back the six it calls. The ratchet is
+  6,990 (red on `main`'s 7,098). `ctx` gains `role`, `welcomeFirst`,
+  `tabsMore`, `selectedPanel` and `selectedPedestal`, each with a setter
+  (the module assigns them all), and `applyRole`, `icon`, `readTemplates`
+  and `refreshIcons`.
