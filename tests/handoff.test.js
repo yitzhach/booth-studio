@@ -18,7 +18,7 @@ test("HANDOFF.md stays under 500 lines: a round's detail goes to docs/HISTORY.md
 });
 
 // Named in backticks there, but Art-Talk-Back's files, not this repository's.
-const PLATFORM_PATHS = new Set(["docs/HANDOFF.md", "docs/phase-5-booth.md", "docs/SHIPPING.md"]);
+const PLATFORM_PATHS = new Set(["DECISIONS.md", "docs/HANDOFF.md", "docs/phase-5-booth.md", "docs/SHIPPING.md"]);
 const POINTER = /`((?:\.claude|\.github|docs|src|tests|tools|worker|public)\/[\w./-]+\.\w+|[A-Z][A-Z_]+\.md)`/g;
 
 test("every file HANDOFF.md, CLAUDE.md, the reference docs and the skills name exists", () => {

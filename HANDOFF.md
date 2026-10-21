@@ -251,7 +251,7 @@ look at and what to change if it reads wrong.
 npm ci
 npm run lint             # ESLint, eslint.config.js: seconds; CI runs it first
 npm run typecheck        # TypeScript reading the scene bundle's JSDoc (tsconfig.json)
-npm test                 # 522 Node tests
+npm test                 # 524 Node tests
 npm run build
 npm run test:view        # 44 suites (tools2, hub, share, roles, polish and wall-assets included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
 BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers

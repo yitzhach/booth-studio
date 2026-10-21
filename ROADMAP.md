@@ -203,12 +203,18 @@ except what keeps their work safe.
 **Runs alongside phase 0.** All of it is agent work. Each item is one or
 more small pull requests, each green on every suite before it merges.
 
-- [ ] **1.1 Make the handoff fast to read.** Split `HANDOFF.md` (3,208 lines)
+- [x] **1.1 Make the handoff fast to read.** Split `HANDOFF.md` (3,208 lines)
       into `HANDOFF.md` — what is true now, the rules, Next; aim under 500
       lines — plus `docs/HISTORY.md` (every round, moved verbatim) and
       `docs/DECISIONS.md` (the owner's answers, numbered B-001…, dated, each
       linking to where it was built). Mechanical: nothing deleted, only moved.
       Every session pays for the current length before doing anything.
+      *(2026-10-21: done — 3,496 lines to 488. The rounds are in
+      `docs/HISTORY.md`, the old Next's by-eye checks in `docs/OPEN-CHECKS.md`,
+      the reference sections in `docs/STUDIO-PLATFORM.md`, `docs/DIAGNOSING.md`
+      and `docs/LESSONS.md`; `docs/DECISIONS.md` holds 99 answers, B-001 to
+      B-099, and the 28 calls still open. `tests/handoff.test.js` keeps it
+      under 500 lines and its pointers whole.)*
 - [ ] **1.2 Split `src/main.js` along the seams it already has.** Almost all
       of its 6,961 lines are inside `boot()`. Move, without changing
       behaviour: the panel builders (`*Section`, `*HTML`, `*Fields`) into
