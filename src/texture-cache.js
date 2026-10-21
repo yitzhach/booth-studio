@@ -10,6 +10,14 @@ export class TextureCache {
     const entry = this.entries.get(this.key(id, edits));
     return entry?.data === data ? entry.texture : undefined;
   }
+  /**
+   * The texture for an image and its edits, made once by `create` (a texture,
+   * or a promise of one) and shared until the image or its edits change.
+   * @param {string} id
+   * @param {object} edits
+   * @param {string} data
+   * @param {() => any} create
+   */
   get(id, edits, data, create) {
     const key = this.key(id, edits);
     let entry = this.entries.get(key);

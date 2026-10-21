@@ -90,6 +90,9 @@ export const needsWelcome = ({ role, hadProject }) => !role && !hadProject;
  * shows, whatever the workspace, so a tab reached by tool search, the
  * assistant or a link is never a page with no tab lit; `more` (the More
  * button pressed) shows every tab.
+ * @param {string | null} role
+ * @param {string[]} all
+ * @param {{ active?: string, more?: boolean, artShow?: boolean }} [options]
  */
 export function visibleTabs(role, all, { active, more = false, artShow = false } = {}) {
   const spec = ROLES[resolveRole(role)];

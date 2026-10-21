@@ -35,6 +35,8 @@ const r1 = (n) => Math.round(n * 10) / 10;
  * pieces while the board is open), `edit(fn)` makes a change to it as one undo
  * step, `onSelect(ids)` hears every change of selection, `grid()` is the snap
  * grid in inches (0 for none).
+ * @param {HTMLElement} host
+ * @param {{ hall: () => any, edit: (fn: (hall: any) => void) => void, onSelect?: (ids: string[]) => void, grid?: () => number, panTool?: () => boolean }} options
  */
 export function createShowEditor(host, { hall, edit, onSelect = () => {}, grid = () => 12, panTool = () => false }) {
   host.innerHTML = `<svg class="show-svg" xmlns="${NS}" tabindex="0" aria-label="Show floor plan"><g class="sf-floor"></g><g class="sf-pieces"></g><g class="sf-guides"></g><rect class="sf-marquee" hidden fill="rgba(47,125,225,0.10)" stroke="#2f7de1" stroke-width="1.5" stroke-dasharray="6 4" vector-effect="non-scaling-stroke"/><g class="sf-handles"></g></svg><div class="sf-ghost" hidden></div>`;
@@ -45,7 +47,7 @@ export function createShowEditor(host, { hall, edit, onSelect = () => {}, grid =
   // expando and the attribute stays, which the page's [hidden] rule obeys —
   // so the box is shown and hidden by its attribute.
   const showMarquee = (on) => marquee.toggleAttribute("hidden", !on);
-  const ghost = host.querySelector(".sf-ghost");
+  const ghost = /** @type {HTMLElement} */ (host.querySelector(".sf-ghost"));
   let view = null; // { x, y, s }: the top-left corner in inches and pixels per inch
   let selection = new Set();
   let gesture = null;
@@ -133,10 +135,10 @@ export function createShowEditor(host, { hall, edit, onSelect = () => {}, grid =
     for (const [sx, sy] of HANDLES) {
       if (it.kind === "column" && (sx === 0 || sy === 0)) continue;
       const hnd = document.createElementNS(NS, "rect");
-      hnd.setAttribute("x", r1((sx * it.w) / 2 - px / 2));
-      hnd.setAttribute("y", r1((sy * it.d) / 2 - px / 2));
-      hnd.setAttribute("width", r1(px));
-      hnd.setAttribute("height", r1(px));
+      hnd.setAttribute("x", String(r1((sx * it.w) / 2 - px / 2)));
+      hnd.setAttribute("y", String(r1((sy * it.d) / 2 - px / 2)));
+      hnd.setAttribute("width", String(r1(px)));
+      hnd.setAttribute("height", String(r1(px)));
       hnd.setAttribute("class", "sf-handle");
       hnd.dataset.handle = `${sx},${sy}`;
       g.appendChild(hnd);
@@ -262,10 +264,10 @@ export function createShowEditor(host, { hall, edit, onSelect = () => {}, grid =
       const t = Math.min(at.y, gesture.at.y);
       gesture.box = { l, t, r: Math.max(at.x, gesture.at.x), b: Math.max(at.y, gesture.at.y) };
       showMarquee(true);
-      marquee.setAttribute("x", l);
-      marquee.setAttribute("y", t);
-      marquee.setAttribute("width", gesture.box.r - l);
-      marquee.setAttribute("height", gesture.box.b - t);
+      marquee.setAttribute("x", String(l));
+      marquee.setAttribute("y", String(t));
+      marquee.setAttribute("width", String(gesture.box.r - l));
+      marquee.setAttribute("height", String(gesture.box.b - t));
     }
   }
   function up(ev) {

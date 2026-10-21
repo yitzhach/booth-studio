@@ -252,7 +252,7 @@ look at and what to change if it reads wrong.
 ```sh
 npm ci
 npm run lint             # ESLint, eslint.config.js: seconds; CI runs it first
-npm run typecheck        # TypeScript reading the scene bundle's JSDoc (tsconfig.json)
+npm run typecheck        # TypeScript reading the JSDoc: the scene bundle (tsconfig.json), the page (tsconfig.app.json)
 npm test                 # 526 Node tests
 npm run build
 npm run test:view        # 44 suites (tools2, hub, share, roles, polish and wall-assets included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
@@ -268,7 +268,11 @@ node tools/verify-deploy.mjs   # after a merge: waits for production to serve th
 loosened and why. `npm run typecheck` is TypeScript reading the JavaScript
 as it is (`checkJs`, no emit, not strict) from `src/scene-ops.js` and
 everything it imports — what studio-api runs — with the JSDoc as the types
-and a Worker's globals, so a `document` in that code fails it. Both run in
+and a Worker's globals, so a `document` in that code fails it; then, with
+`tsconfig.app.json`, every other module in `src/` against a browser's
+globals, but `main.js` and `scene.js` (until their split, ROADMAP 1.2 and
+1.3) and `studio.js` (it imports the vendored SDK, which has no types). One
+run reports both configs' findings. Both run in
 CI's `lint` job. The view suites run in CI as four shards at once (`views`),
 `tests/view-wall-assets.mjs` among them; `booth` is green only when every
 job is. How each came to be is in `docs/HISTORY.md`, 2026-10-20.
