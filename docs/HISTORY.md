@@ -17,6 +17,14 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-21: `main.js`'s second seam (ROADMAP 1.2).** The welcome and
+  Quick start — `openWelcome`, `describeBlock`, `describeToAssistant`,
+  `welcomeDismissed`, `chooseRole`, `openQuickStart`, `runQuickStart` —
+  moved out of `boot()` into `src/ui/welcome.js` unchanged but for `ctx.`
+  (checked line for line against the removed code). `main.js` is 6,990
+  lines (from 7,098); the ratchet holds it there. view-roles,
+  view-quickstart and view-assistant reach every assignment the module
+  makes.
 - **2026-10-21: `view-textures`' tent wait, root-caused.** The suite timed
   out three times in CI at the tent canvas (`main`'s run 83, #42, #43), each
   green on re-run. Measured, not guessed: the browser the suites use draws
