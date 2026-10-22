@@ -73,7 +73,7 @@ pushing.
 | 10 | the Layout and Artwork tabs' builders | `src/panels/layout.js`, `src/panels/artwork.js` | ~240 | view-row, view-people, view-ground-library, view-views, view-plan, view-measure, view-guides, view-finish, view-wall-assets, view-showpack, view-hdri, view-responsive, view-panels, e2e |
 | 11 | the Video, Export and Show floor tabs' builders | `src/panels/video.js`, `src/panels/export.js`, `src/panels/hall.js` | ~110 | view-video, view-timeline, view-frame, view-batch, view-round13, view-ai, view-hall, view-show, view-show3d, view-floor2, view-linked, view-tier, e2e |
 | 12 | the Artwork tab's actions | `src/actions/artwork.js` | ~140 | the whole chain |
-| 13 | the Video tab's actions: the clip, the timeline, the batch, auto-pan | `src/actions/video.js` | ~360 | the whole chain |
+| 13 | the Video tab's actions: the clip, the timeline, the batch, auto-pan | `src/actions/video.js` | ~340 | the whole chain |
 | 14 | Export's and the show floor's actions | `src/actions/export.js`, `src/actions/show.js` | ~350 | the whole chain |
 | 15 | the rest: the booth, the viewport, the project and the app | `src/actions/*.js` | ~350 | the whole chain |
 | 16 | what is left over 1,500 | — | — | the whole chain |
@@ -358,3 +358,24 @@ wrong.)
   their own once the split is done. Eight
   imports `main.js` no longer uses went with the code. The ratchet is
   5,017 (red on `main`'s 5,159).
+- **2026-10-22, seam 13: the Video tab's actions.** Its 43 entries —
+  recording and cancelling a clip, the timeline dialog's buttons and its
+  preview, auto pan, the batch list and its saved presets, and the two
+  frame resets — moved into `src/actions/video.js`, merged in beside
+  Artwork's in the same `Object.assign`. They set nine pieces of the video
+  state that had getters only (`busyPreview`, `customFrame`,
+  `tlBeforeAuto`, `videoFps`, `videoFrameShape`, `videoMove`,
+  `videoSeconds`, `videoSettle`, `videoSize`), which gain setters, and
+  `autoPanRunning`, which gains both; they read `autoPanSettings` and
+  `videoAbort` (getters). The timeline's and the batch's functions they
+  call (`addJobs`, `clipJob`, `currentClip`, `currentPose`,
+  `followPlayhead`, `grabThumb`, `keyName`, `placeSettled`, `setKit`,
+  `setPlace`, `showKey`, `stillJob`) are wrapped: each is only ever called
+  here, never read for a property or handed on (checked, after seam 12's
+  `.timer`). `syncAutoPan` is passed as it is. `pan`, the viewport's pan
+  tool, sits beside auto pan's rows but is the toolbar's, and waits for
+  seam 15. Eleven imports `main.js` no longer uses went with the code.
+  The ratchet is 4,678 (red on `main`'s 5,017). The chain for this seam
+  ran in a second worktree while seam 12's pull request was in CI, on
+  seam 12's head with this seam on top — the tree `main` has once seam 12
+  merges, so the run holds for the pull request.

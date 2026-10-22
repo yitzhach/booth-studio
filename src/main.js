@@ -3,12 +3,12 @@ import { typingIn } from "./typing.js";
 import { ENV_PRESETS, ART_FIDELITY, DEFAULT_PRESET, DEFAULT_FIDELITY, FIXTURE_MODES, DEFAULT_FIXTURES, isIndoor, showFixtures } from "./lighting.js";
 import { MOVES, DEFAULT_MOVE, CUSTOM_MOVE, resolveMove, frameTimes } from "./camera-path.js";
 import {
-  MAX_KEYS, MIN_KEYS, MIN_SECONDS, MAX_SECONDS,
-  keyFrom, normalizeTimeline, timelineSeconds,
-  keySchedule, keyTAt, easeFn, autoTime, neighbourKey, autoPanTimeline,
+  MAX_KEYS, MIN_SECONDS, MAX_SECONDS,
+  normalizeTimeline, timelineSeconds,
+  keySchedule, keyTAt,
 } from "./timeline.js";
-import { cleanSettings, resolveJob, tweak, applyPreset, removePreset, jobSlug, MAX_PRESETS, CUSTOM as KIT_CUSTOM } from "./batch.js";
-import { SIZES, DEFAULT_SIZE, DEFAULT_FPS, videoSupported, pickCodec } from "./video.js";
+import { cleanSettings, tweak, jobSlug, CUSTOM as KIT_CUSTOM } from "./batch.js";
+import { SIZES, DEFAULT_SIZE, DEFAULT_FPS, pickCodec } from "./video.js";
 import { FRAMES, DEFAULT_FRAME, DEFAULT_CLIP_FRAME, CUSTOM_FRAME, FRAME_MIN, FRAME_MAX, STILL_SIZES, placeRect, placeFromRect, normalPlace, DEFAULT_PLACE } from "./framing.js";
 import { SHADOW_FIELD, SHADOW_KINDS, SHADOW_MAX, globalAngle, normalAngle, shadowSpec } from "./dropshadow.js";
 import { MAX_SWATCHES, isColor, readPalette, removeSwatch, rememberColor, previousColor } from "./swatches.js";
@@ -256,6 +256,7 @@ import { createVideoPanel } from "./panels/video.js";
 import { createExportPanel } from "./panels/export.js";
 import { createHallPanel } from "./panels/hall.js";
 import { createArtworkActions } from "./actions/artwork.js";
+import { createVideoActions } from "./actions/video.js";
 import { MAX_FLOOR_TEMPLATES, MAX_TEMPLATES, readFloorTemplates, readTemplates, writeFloorTemplates, writeTemplates } from "./ui/templates.js";
 import { OWN, assetInDesigns, hasDesign, liveNumber, openBooth, setMine } from "./linked.js";
 import { powerHTML } from "./power.js";
@@ -589,20 +590,29 @@ async function boot() {
     get walking() { return walking; },
     get PAN_KEY() { return PAN_KEY; },
     get busyPreview() { return busyPreview; },
+    set busyPreview(v) { busyPreview = v; },
     get customFrame() { return customFrame; },
+    set customFrame(v) { customFrame = v; },
     get exportFrame() { return exportFrame; },
     get exportLong() { return exportLong; },
     get framePlace() { return framePlace; },
     get livePlace() { return livePlace; },
     set livePlace(v) { livePlace = v; },
     get tlBeforeAuto() { return tlBeforeAuto; },
+    set tlBeforeAuto(v) { tlBeforeAuto = v; },
     get videoBatchAt() { return videoBatchAt; },
     get videoFps() { return videoFps; },
+    set videoFps(v) { videoFps = v; },
     get videoFrameShape() { return videoFrameShape; },
+    set videoFrameShape(v) { videoFrameShape = v; },
     get videoMove() { return videoMove; },
+    set videoMove(v) { videoMove = v; },
     get videoSeconds() { return videoSeconds; },
+    set videoSeconds(v) { videoSeconds = v; },
     get videoSettle() { return videoSettle; },
+    set videoSettle(v) { videoSettle = v; },
     get videoSize() { return videoSize; },
+    set videoSize(v) { videoSize = v; },
     get videoTimeline() { return videoTimeline; },
     set videoTimeline(v) { videoTimeline = v; },
     get tlSelected() { return tlSelected; },
@@ -629,6 +639,10 @@ async function boot() {
     // The image editor's own function, not a wrapper: the Artwork actions read a
     // property of it (`scheduleEditedPreview.timer`).
     get scheduleEditedPreview() { return scheduleEditedPreview; },
+    get autoPanRunning() { return autoPanRunning; },
+    set autoPanRunning(v) { autoPanRunning = v; },
+    get autoPanSettings() { return autoPanSettings; },
+    get videoAbort() { return videoAbort; },
     get actions() { return actions; },
     activeSlot,
     addWallAsset,
@@ -668,6 +682,7 @@ async function boot() {
     setShow3d,
     setWalking,
     snapshot,
+    syncAutoPan,
     toast,
     // Declared after ctx (consts, or a module's functions), so wrapped.
     batchSection: () => batchSection(),
@@ -689,6 +704,18 @@ async function boot() {
     drawImageEditorPreview: (...args) => drawImageEditorPreview(...args),
     renderImageEditor: () => renderImageEditor(),
     updateEditorEdits: (...args) => updateEditorEdits(...args),
+    addJobs: (...args) => addJobs(...args),
+    clipJob: (...args) => clipJob(...args),
+    currentClip: (...args) => currentClip(...args),
+    currentPose: (...args) => currentPose(...args),
+    followPlayhead: (...args) => followPlayhead(...args),
+    grabThumb: (...args) => grabThumb(...args),
+    keyName: (...args) => keyName(...args),
+    placeSettled: (...args) => placeSettled(...args),
+    setKit: (...args) => setKit(...args),
+    setPlace: (...args) => setPlace(...args),
+    showKey: (...args) => showKey(...args),
+    stillJob: (...args) => stillJob(...args),
     range,
     scheduleSave,
     updateFrameGuide,
@@ -2624,43 +2651,6 @@ async function boot() {
       paintKeepSafe(true);
     },
     pan: () => setPanTool(!panTool),
-    "autopan-menu": () => {
-      const menu = document.querySelector(".autopan-menu");
-      if (!menu) return;
-      menu.hidden = !menu.hidden;
-      if (!menu.hidden) syncAutoPan();
-    },
-    "autopan-record": async () => {
-      if (busy || busyVideo) return;
-      if (!scene) return toast("3D is not available, so there is no view to record.", true);
-      if (!videoSupported()) return toast("This browser cannot encode video. Chrome, Edge or Safari can.", true);
-      scene.stopAutoPan();
-      const a = autoPanSettings, want = a.dist / a.speed;
-      const tl = autoPanTimeline(scene.pose(), scene.panRight(), a.dist * 12 * 0.0254, want, a.dir, a.ease);
-      if (Math.abs(tl.seconds - want) > 0.05) toast(`A clip runs ${MIN_SECONDS}–${MAX_SECONDS} s, so this one is ${tl.seconds} s: the same ${+a.dist.toFixed(2)}′ at ${+(a.dist / tl.seconds).toFixed(2)} ft/s.`);
-      await runClips([{ ...currentClip(), move: CUSTOM_MOVE, timeline: tl, seconds: tl.seconds, fileTag: "auto-pan" }]);
-    },
-    // The same pan, queued: a clip whose timeline is the pan from the view
-    // now, frozen at the panel's settings like "Clip · as set now".
-    "batch-add-autopan": () => {
-      if (!scene) return toast("3D is not available, so there is no view to pan.", true);
-      const a = autoPanSettings, want = a.dist / a.speed;
-      const tl = autoPanTimeline(scene.pose(), scene.panRight(), a.dist * 12 * 0.0254, want, a.dir, a.ease);
-      addJobs([{ ...clipJob(true), move: KIT_CUSTOM, timeline: tl, seconds: tl.seconds, name: `Auto pan · ${+a.dist.toFixed(2)}′ ${a.dir < 0 ? "right to left" : "left to right"}` }]);
-      if (Math.abs(tl.seconds - want) > 0.05) toast(`Queued at ${tl.seconds} s: a clip runs ${MIN_SECONDS}–${MAX_SECONDS} s.`);
-    },
-    "autopan-go": () => {
-      if (!scene) return toast("3D is not available, so there is no view to pan.", true);
-      if (autoPanRunning) return scene.stopAutoPan();
-      const a = autoPanSettings;
-      autoPanRunning = true;
-      syncAutoPan();
-      scene.autoPan({ inches: a.dist * 12, seconds: a.dist / a.speed, dir: a.dir, ease: easeFn(a.ease) }, (finished) => {
-        autoPanRunning = false;
-        syncAutoPan();
-        if (!finished) toast("Auto pan stopped.");
-      });
-    },
     "clear-tapes": () => scene?.clearTapes(),
     select: () => {
       if (panTool) setPanTool(false);
@@ -3015,149 +3005,6 @@ async function boot() {
         busy = false;
       }
     },
-    "export-video": async () => {
-      if (busy || busyVideo) return;
-      if (!scene) return toast("3D is not available, so there is no view to record.", true);
-      // One clip is a batch of one. Everything below it — the progress
-      // reporting, the codec warning, the camera coming back — is the same
-      // work either way, so it is written once.
-      await runClips([currentClip()]);
-    },
-    "batch-add": () => addJobs([clipJob(true)]),
-    "batch-add-general": () => addJobs([clipJob(false)]),
-    "batch-add-still": () => addJobs([stillJob(true)]),
-    "batch-add-still-general": () => addJobs([stillJob(false)]),
-    // One still per keyframe, each from that keyframe's own view — and its
-    // own frame, when the frame is keyframed.
-    "batch-add-key-stills": () => {
-      const tl = timeline();
-      addJobs(
-        tl.keys.map((k, i) => ({
-          ...stillJob(false, k, k.place ? cleanSettings({ frame: videoFrameShape, custom: customFrame, place: k.place }) : {}),
-          name: keyName(i, tl.keys.length),
-        })),
-      );
-    },
-    "batch-remove": (button) => {
-      if (busyVideo) return;
-      const id = button?.closest("[data-job]")?.dataset.job;
-      const k = kit();
-      setKit({ ...k, queue: k.queue.filter((job) => job.id !== id) });
-    },
-    "batch-clear": () => {
-      if (busyVideo) return;
-      setKit({ ...kit(), queue: [] });
-    },
-    "job-up": (button) => {
-      if (busyVideo) return;
-      const k = kit();
-      const i = k.queue.findIndex((j) => j.id === button?.closest("[data-job]")?.dataset.job);
-      if (i < 1) return;
-      const queue = [...k.queue];
-      [queue[i - 1], queue[i]] = [queue[i], queue[i - 1]];
-      setKit({ ...k, queue });
-    },
-    // Puts a queued clip's settings back in the panel, which is how you check
-    // what you queued — and how you edit a queued timeline: load it, change it,
-    // remove the old row and add it again.
-    "batch-use": (button) => {
-      const k = kit();
-      const job = k.queue.find((x) => x.id === button?.closest("[data-job]")?.dataset.job);
-      if (!job || job.kind !== "clip") return;
-      const r = resolveJob(job, k);
-      videoMove = r.move;
-      videoSeconds = r.seconds;
-      videoFps = r.fps;
-      videoSize = r.size;
-      if (FRAMES[r.frame]) videoFrameShape = r.frame;
-      framePlace.video = normalPlace(r.place);
-      customFrame = { ...r.custom };
-      videoSettle = r.settle;
-      saveViewPrefs();
-      if (r.timeline) videoTimeline = normalizeTimeline(structuredClone(r.timeline));
-      probeCodec();
-      refreshPanels();
-      toast("Settings loaded into the panel.");
-    },
-    "job-show": (button) => {
-      const job = kit().queue.find((x) => x.id === button?.closest("[data-job]")?.dataset.job);
-      if (job?.pose) scene?.applyPose(job.pose);
-    },
-    // The frame the panel is set to, onto one item: the Video tab's for a
-    // clip, the Export tab's for a still.
-    "job-take-frame": (button) => {
-      const k = kit();
-      const id = button?.closest("[data-job]")?.dataset.job;
-      setKit({
-        ...k,
-        queue: k.queue.map((j) => {
-          if (j.id !== id) return j;
-          const still = j.kind === "still";
-          const from = { frame: still ? exportFrame : videoFrameShape, custom: customFrame, place: still ? framePlace.export : framePlace.video };
-          return Object.entries(from).reduce((job, [key, v]) => tweak(job, key, v), j);
-        }),
-      });
-    },
-    "job-general-frame": (button) => {
-      const k = kit();
-      const id = button?.closest("[data-job]")?.dataset.job;
-      setKit({ ...k, queue: k.queue.map((j) => (j.id === id ? ["frame", "custom", "place"].reduce((job, key) => tweak(job, key, undefined), j) : j)) });
-    },
-    "job-general": (button) => {
-      const k = kit();
-      const id = button?.closest("[data-job]")?.dataset.job;
-      setKit({ ...k, queue: k.queue.map((j) => (j.id === id ? { ...j, set: {} } : j)) });
-    },
-    "kit-take-frame": () => {
-      const k = kit();
-      setKit({ ...k, defaults: { ...k.defaults, ...cleanSettings({ frame: videoFrameShape, custom: customFrame, place: framePlace.video }) } });
-      toast("The general frame is now the Video tab's.");
-    },
-    "preset-save": (button) => {
-      const k = kit();
-      if (k.presets.length >= MAX_PRESETS) return toast(`${MAX_PRESETS} presets is the limit.`, true);
-      const input = button?.closest("section, .preset-new")?.querySelector("[data-preset-name]");
-      const name = (input?.value || "").trim().slice(0, 120) || `Timeline ${k.presets.length + 1}`;
-      setKit({ ...k, presets: [...k.presets, { id: uid(), name, timeline: structuredClone(timeline()) }] });
-      toast(`Saved the timeline as “${name}”.`);
-    },
-    "preset-load": (button) => {
-      const preset = kit().presets.find((x) => x.id === button?.closest("[data-preset]")?.dataset.preset);
-      if (!preset) return;
-      videoTimeline = normalizeTimeline(structuredClone(preset.timeline));
-      videoMove = CUSTOM_MOVE;
-      tlBeforeAuto = null;
-      refreshPanels();
-      toast(`“${preset.name}” loaded into the timeline.`);
-    },
-    "preset-overwrite": (button) => {
-      const k = kit();
-      const id = button?.closest("[data-preset]")?.dataset.preset;
-      setKit({ ...k, presets: k.presets.map((x) => (x.id === id ? { ...x, timeline: structuredClone(timeline()) } : x)) });
-      toast("Preset updated. Every clip using it follows.");
-    },
-    "preset-apply": (button) => {
-      const k = kit();
-      const id = button?.closest("[data-preset]")?.dataset.preset;
-      const clips = k.queue.filter((j) => j.kind === "clip").length;
-      if (!clips) return toast("There are no clips in the batch to give it to. Add one first.", true);
-      setKit(applyPreset(k, id));
-      toast(`${clips} ${clips === 1 ? "clip uses" : "clips use"} the preset now.`);
-    },
-    "preset-delete": (button) => {
-      const k = kit();
-      setKit(removePreset(k, button?.closest("[data-preset]")?.dataset.preset));
-    },
-    "batch-export": async () => {
-      if (busy || busyVideo) return;
-      if (!scene) return toast("3D is not available, so there is no view to record.", true);
-      const k = kit();
-      if (!k.queue.length) return toast("The batch list is empty.", true);
-      // A clip on a preset is named after it in its file name, unless it has
-      // a name of its own.
-      const named = (job) => job.name || (job.preset && k.presets.find((x) => x.id === job.preset)?.name) || undefined;
-      await runClips(k.queue.map((job) => ({ ...resolveJob(job, k), name: named(job) })), { batch: true });
-    },
     "add-woman": () => addPerson("woman"),
     "add-man": () => addPerson("man"),
     "add-child": () => addPerson("child"),
@@ -3175,192 +3022,6 @@ async function boot() {
     "delete-person": (button) => {
       const id = button?.closest("[data-person]")?.dataset.person;
       mutate(() => (p.booth.people = (p.booth.people || []).filter((x) => x.id !== id)));
-    },
-    "cancel-video": () => videoAbort?.abort(),
-    "edit-timeline": () => {
-      if (!scene) return toast("3D is not available, so there is no view to keyframe.", true);
-      // Offered whatever move is chosen, not only once Custom is picked from
-      // the menu: opening the timeline is choosing Custom.
-      if (videoMove !== CUSTOM_MOVE) {
-        videoMove = CUSTOM_MOVE;
-        renderInspector();
-      }
-      timeline();
-      renderTimelineDialog();
-      // show(), not showModal(). A modal would block the viewport, and the
-      // viewport is where keyframes come from: the whole loop is compose a
-      // shot, press Add, orbit, press Add again.
-      const panel = document.querySelector("#timeline-dialog");
-      if (!panel.open) panel.show();
-      updateFrameGuide();
-    },
-    "close-timeline": () => {
-      document.querySelector("#timeline-dialog").close();
-      scene?.clearMoment();
-      livePlace = null;
-      // Emptied, so the batch and frame controls it repeats are not in the
-      // page twice while it is closed.
-      document.querySelector("#timeline-content").innerHTML = "";
-      renderInspector();
-    },
-    "timeline-add": () => {
-      const tl = timeline();
-      if (tl.keys.length >= MAX_KEYS) return toast(`${MAX_KEYS} keyframes is the limit.`, true);
-      const [position, target] = currentPose();
-      // A new key lands halfway between the last one and the end, which is
-      // where someone building a move in order wants it — and never on top of
-      // the end key, which would be a zero-length segment.
-      const previous = tl.keys.at(-2).t;
-      // Between the last two keys, wherever the end has been slid to.
-      const added = { ...keyFrom(position, target), t: (previous + tl.keys.at(-1).t) / 2 };
-      // A keyframed frame: the new key takes the frame as it is shown now.
-      if (tl.frameKeys) added.place = { ...getPlace("video") };
-      videoTimeline = normalizeTimeline({ ...tl, keys: [...tl.keys, added] });
-      keyThumbs.set(added.id, grabThumb(added.place || getPlace("video")));
-      tlSelected = added.id;
-      livePlace = added.place || null;
-      tlPlayhead = keySchedule(videoTimeline).find((x) => x.id === added.id)?.arrive ?? tlPlayhead;
-      renderTimelineDialog();
-      toast(`Keyframe ${videoTimeline.keys.length - 1} captured from this view.`);
-    },
-    "timeline-select": (button) => {
-      const tl = timeline();
-      const index = tl.keys.findIndex((k) => k.id === button?.closest("[data-key]")?.dataset.key);
-      if (index < 0) return;
-      showKey(index);
-    },
-    // Previous / next keyframe from the playhead: "have a next or prev
-    // keyframe arrows to jump to the next keyframe".
-    "timeline-prev": () => {
-      const i = neighbourKey(timeline(), tlPlayhead, -1);
-      if (i >= 0) showKey(i);
-    },
-    "timeline-next": () => {
-      const i = neighbourKey(timeline(), tlPlayhead, 1);
-      if (i >= 0) showKey(i);
-    },
-    "timeline-auto": () => {
-      tlBeforeAuto = timeline().keys.map((k) => ({ id: k.id, t: k.t }));
-      videoTimeline = autoTime(timeline());
-      renderTimelineDialog();
-      toast("Keyframes respaced for an even speed.");
-    },
-    // Auto timing's own undo: the key times from just before it, matched by
-    // id so a key added or deleted since is left alone. The timeline is view
-    // state outside the project's undo history, so it needs this one.
-    "timeline-auto-undo": () => {
-      if (!tlBeforeAuto) return;
-      const was = new Map(tlBeforeAuto.map((k) => [k.id, k.t]));
-      const tl = timeline();
-      videoTimeline = normalizeTimeline({ ...tl, keys: tl.keys.map((k) => (was.has(k.id) ? { ...k, t: was.get(k.id) } : k)) });
-      tlBeforeAuto = null;
-      renderTimelineDialog();
-    },
-    "timeline-go": (button) => {
-      const index = timeline().keys.findIndex((k) => k.id === button?.closest("[data-key]")?.dataset.key);
-      if (index >= 0) showKey(index);
-    },
-    "timeline-recapture": (button) => {
-      const id = button?.closest("[data-key]")?.dataset.key;
-      const [position, target] = currentPose();
-      videoTimeline = normalizeTimeline({
-        ...timeline(),
-        keys: timeline().keys.map((k) => (k.id === id ? { ...k, position, target } : k)),
-      });
-      keyThumbs.set(id, grabThumb(timeline().keys.find((k) => k.id === id)?.place || getPlace("video")));
-      renderTimelineDialog();
-      toast("Keyframe replaced with this view.");
-    },
-    "timeline-delete": (button) => {
-      const id = button?.closest("[data-key]")?.dataset.key;
-      const tl = timeline();
-      if (tl.keys.length <= MIN_KEYS) return toast("A move needs a start and an end.", true);
-      videoTimeline = normalizeTimeline({ ...tl, keys: tl.keys.filter((k) => k.id !== id) });
-      renderTimelineDialog();
-    },
-    "preview-move": async () => {
-      if (busy || busyVideo || busyPreview) return;
-      if (!scene) return toast("3D is not available, so there is no view to preview.", true);
-      busyPreview = true;
-      renderInspector();
-      try {
-        const custom = videoMove === CUSTOM_MOVE ? timeline() : null;
-        const { cancelled } = await scene.previewMove({
-          move: custom || videoMove,
-          seconds: custom ? custom.seconds : videoSeconds,
-          // The timeline's playhead rides along with a custom preview.
-          onProgress: custom
-            ? (t) => {
-                tlPlayhead = t * custom.seconds;
-                followPlayhead(custom, t);
-                const head = document.querySelector("#timeline-content .tl-playhead");
-                if (head) {
-                  head.style.left = `${(t * 100).toFixed(3)}%`;
-                  head.firstElementChild.textContent = `${tlPlayhead.toFixed(1)}s`;
-                }
-              }
-            : undefined,
-        });
-        if (!cancelled) toast("That is the move. Export MP4 renders it.");
-      } catch (err) {
-        toast(err.message, true);
-      } finally {
-        busyPreview = false;
-        if (!timelineOpen()) livePlace = null;
-        renderInspector();
-      }
-    },
-    "stop-preview": () => scene?.stopPreview?.(),
-    // The timeline's own transport: Play runs the clip from the playhead (from
-    // the start when the playhead is at the end), Pause stops it where it is —
-    // camera, playhead and fade all left on that moment — so the next Play
-    // carries on from there.
-    "timeline-play": async () => {
-      if (busy || busyVideo || busyPreview || !scene) return;
-      const tl = timeline();
-      videoMove = CUSTOM_MOVE;
-      const from = tlPlayhead >= tl.seconds - 0.05 ? 0 : tlPlayhead / tl.seconds;
-      busyPreview = true;
-      renderInspector();
-      renderTimelineDialog();
-      try {
-        const { cancelled, t } = await scene.previewMove({
-          move: tl,
-          seconds: tl.seconds,
-          from,
-          onProgress: (t) => {
-            tlPlayhead = t * tl.seconds;
-            followPlayhead(tl, t);
-            const head = document.querySelector("#timeline-content .tl-playhead");
-            if (head) {
-              head.style.left = `${(t * 100).toFixed(3)}%`;
-              head.firstElementChild.textContent = `${tlPlayhead.toFixed(1)}s`;
-            }
-          },
-        });
-        tlPlayhead = (cancelled ? t : 1) * tl.seconds;
-      } catch (err) {
-        toast(err.message, true);
-      } finally {
-        busyPreview = false;
-        renderInspector();
-        if (document.querySelector("#timeline-dialog")?.open) {
-          renderTimelineDialog();
-          scene.showMoment(tl, tlPlayhead / tl.seconds);
-          followPlayhead(tl, tlPlayhead / tl.seconds);
-        }
-      }
-    },
-    "timeline-pause": () => scene?.stopPreview?.({ keep: true }),
-    "frame-reset-video": () => {
-      setPlace("video", { ...DEFAULT_PLACE });
-      saveViewPrefs();
-      placeSettled();
-    },
-    "frame-reset-export": () => {
-      framePlace.export = { ...DEFAULT_PLACE };
-      saveViewPrefs();
-      renderInspector();
     },
     help: () => {
       const d = document.querySelector("#dialog");
@@ -3641,7 +3302,7 @@ async function boot() {
         );
       }),
   };
-  Object.assign(actions, createArtworkActions(ctx));
+  Object.assign(actions, createArtworkActions(ctx), createVideoActions(ctx));
   // Removing a pedestal takes nothing with it: nothing hangs on one.
   function deletePedestal(id) {
     mutate(() => {
