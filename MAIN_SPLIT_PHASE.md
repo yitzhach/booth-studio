@@ -71,7 +71,7 @@ pushing.
 | 8 | upload and import | `src/ui/upload.js` | ~210 | view-wall-assets, view-textures, e2e |
 | 9 | the Walls, Lighting and Art show tabs' builders | `src/panels/walls.js`, `src/panels/lighting.js`, `src/panels/art-show.js` | ~150 | view-panels, view-furniture, view-box, view-artshow, view-finish, view-lighting, view-responsive, view-tier, view-polish |
 | 10 | the Layout and Artwork tabs' builders | `src/panels/layout.js`, `src/panels/artwork.js` | ~240 | view-row, view-people, view-ground-library, view-views, view-plan, view-measure, view-guides, view-finish, view-wall-assets, view-showpack, view-hdri, view-responsive, view-panels, e2e |
-| 11 | the Video, Export and Show floor tabs' builders | `src/panels/*.js` | ~130 | each tab's suites |
+| 11 | the Video, Export and Show floor tabs' builders | `src/panels/video.js`, `src/panels/export.js`, `src/panels/hall.js` | ~110 | view-video, view-timeline, view-frame, view-batch, view-round13, view-ai, view-hall, view-show, view-show3d, view-floor2, view-linked, view-tier, e2e |
 | 12–15 | the action table, by area | `src/actions/*.js` | ~1,250 | the whole chain |
 | 16 | what is left over 1,500 | — | — | the whole chain |
 
@@ -284,3 +284,36 @@ wrong.)
   carries 55 pieces of state and 42 helpers: seam 11's builders read
   little more, so the one-object question is settled after it, before the
   action table starts.
+- **2026-10-22, seam 11: the last of the panel builders, and where the
+  shared frame fields went.** `videoSection` and `videoCodecLine` moved into
+  `src/panels/video.js`; `frameFields`, `frameNote`, `aiSection` and
+  `powerSection` into `src/panels/export.js`; `hallPanel` into
+  `src/panels/hall.js` (named for the tab's key, `hall`, so it is not
+  mistaken for `src/ui/show-floor-panel.js`, the show floor's own panel,
+  which `hallPanel` hands over to when the floor is open). The frame fields
+  are drawn by Video and by Export alike; they went with Export, whose
+  "Image size" they head, and Video reaches them through `ctx`. Because
+  they are now a factory's `const`, `ctx`'s `frameFields` and `frameNote`
+  became wrappers (`src/ui/timeline-dialog.js` takes them from `ctx` as
+  before). The timeline's `getPlace`, `frameKeyed`, `selectedKeyName` and
+  `timelineSummary`, and the show floor's `showFloorPanel`, reach the new
+  modules through `ctx` too, wrapped; `probeCodec` stays in `main.js` (the
+  action table calls it). `hallPanel` sets `hallSelected`, which had its
+  setter already; `ctx` gains getters for `aiLong`, `powerOutlets` and
+  `videoCodec`. Fourteen imports `main.js` no longer uses went with the
+  code. The ratchet is 5,159 (red on `main`'s 5,270).
+- **2026-10-22, after seam 11: `ctx` keeps a getter per piece of state.**
+  The decision above collapses the state into one object at about 60
+  names; `ctx` now has 58 pieces of state and 48 helpers, 134 lines of
+  `main.js`. Collapsing means rewriting every read and write of `p`,
+  `selected`, `tab` and the rest across the whole of `main.js` — thousands
+  of lines, in the action table that seams 12–15 are about to move — which
+  is the opposite of a move a reviewer can check line by line, and the
+  action table's own move would then have to be reviewed against that
+  rewrite rather than against `main`. So the getters stay through seams
+  12–15, and the action table gets the state it needs the same way. What
+  is left in `main.js` at seam 16 is small enough to make one state object
+  then, in a pull request of its own, if the getters are still worth
+  removing. *Cost if wrong:* `ctx` grows by a getter per piece of state the
+  action table reads (perhaps 40 more lines in `main.js`), and the gate
+  counts them.

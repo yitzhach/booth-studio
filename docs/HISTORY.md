@@ -17,6 +17,16 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-22: `main.js`'s eleventh seam (ROADMAP 1.2).** The last panel
+  builders: the Video tab's clip settings into `src/panels/video.js`; the
+  frame fields, the AI render's section and power and rentals into
+  `src/panels/export.js`; the Show floor tab's hall planner into
+  `src/panels/hall.js`. Unchanged but for `ctx.`, checked line for line.
+  `main.js` is 5,159 lines (from 5,270). `ctx` keeps a getter per piece of
+  state through the action table's seams (`MAIN_SPLIT_PHASE.md`,
+  Rulings). Lint, type check, 527 node tests and build green; the
+  thirteen suites that drive the three tabs (row 11) are run one at a
+  time before its pull request, which reports them.
 - **2026-10-22: `main.js`'s tenth seam (ROADMAP 1.2).** The Layout tab's
   builders (the ground, the booth row, the surroundings, the figures,
   drawing speed, saved views, tags, the underlay, the clearance checks)
