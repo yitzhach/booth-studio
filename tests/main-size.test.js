@@ -7,8 +7,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-// After seam 4, the looks and hero set and the image editor (src/ui/polish-panel.js, src/ui/image-editor.js).
-const MAX = 6764;
+// After seam 5, the timeline dialog and the batch (src/ui/timeline-dialog.js, src/ui/batch.js).
+const MAX = 6348;
 
 test(`src/main.js stays at ${MAX} lines or fewer: a seam moves code out, nothing moves back`, () => {
   const text = readFileSync(fileURLToPath(new URL("../src/main.js", import.meta.url)), "utf8");
