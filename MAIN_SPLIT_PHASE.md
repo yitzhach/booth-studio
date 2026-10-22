@@ -206,3 +206,13 @@ wrong.)
   of `src/toolsearch.js` moved too, with its note on why `fold` comes in
   as `foldText`, reworded for its new file. The ratchet is 5,816 (red on
   `main`'s 6,008).
+- **2026-10-22, seam 8: a module nothing calls returns nothing.** Upload and
+  import only wire the file inputs and the 2D floor's drop; no line left in
+  `main.js` calls `upload` or `importDesignFile`, so `createUpload(ctx)` is
+  called for its effect and returns nothing. It runs where the code stood,
+  so the inputs are wired in the same order as before. `ctx` gains getters
+  and setters for `designTarget`, `lightIndex`, `photoLightIndex` and
+  `photoSelected` (it assigns them all), and `backfillThumbnails` and
+  `tagAssetRoles`. view-linked joins the suites run here, because a design
+  dropped on a floor booth comes through this code. The ratchet is 5,657
+  (red on `main`'s 5,816).

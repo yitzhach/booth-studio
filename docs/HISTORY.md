@@ -17,6 +17,13 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-22: `main.js`'s eighth seam (ROADMAP 1.2).** Upload and
+  import — `upload`, the file inputs, a booth design chosen or dropped on
+  the 2D floor, `importDesignFile` and opening a backup — moved into
+  `src/ui/upload.js`. Unchanged but for `ctx.` (rewritten with a parser,
+  then checked line for line against the removed code). `main.js` is 5,657
+  lines (from 5,816). view-wall-assets, e2e, view-linked and view-textures
+  green, and 527 node tests.
 - **2026-10-22: `main.js`'s seventh seam (ROADMAP 1.2).** Find a tool —
   the index built from what each tab draws, the hits, the shortcut help,
   the app map's text for the assistant, `placeHit` and `openTool`, and the
