@@ -75,8 +75,13 @@ pushing.
 | 12 | the Artwork tab's actions | `src/actions/artwork.js` | ~140 | the whole chain |
 | 13 | the Video tab's actions: the clip, the timeline, the batch, auto-pan | `src/actions/video.js` | ~340 | the whole chain |
 | 14 | Export's and the show floor's actions | `src/actions/export.js`, `src/actions/show.js` | ~330 | the whole chain |
-| 15 | the rest: the booth, the viewport, the project and the app | `src/actions/*.js` | ~350 | the whole chain |
-| 16 | what is left over 1,500 | — | — | the whole chain |
+| 15 | the rest: the booth, the viewport, the project and the app | `src/actions/booth.js`, `src/actions/app.js` | ~340 | the whole chain |
+| 16 | the `change`, `input` and `pointerdown` listeners on the panels | `src/ui/inputs.js` | ~570 | the whole chain |
+| 17 | the `click` dispatch and the keyboard | `src/ui/events.js` | ~280 | the whole chain |
+| 18 | the scene's callbacks, the studio host and `window.__booth` | `src/ui/scene-wiring.js`, `src/ui/test-hooks.js` | ~350 | the whole chain |
+| 19 | `render`, `renderStatus`, `inspectorHTML` and the section chips | `src/ui/render.js` | ~400 | the whole chain |
+| 20 | the library and placement, the view prefs, the tool sync | `src/ui/library.js`, `src/ui/view-prefs.js` | ~400 | the whole chain |
+| 21 | what is left over 1,500 (the icon table first) | — | — | the whole chain |
 
 ## Each seam, step by step
 
@@ -410,3 +415,33 @@ wrong.)
   ratchet is 4,346 (red on `main`'s 4,678). As in
   seam 13, the chain ran in the second worktree, on seam 13's head with
   this seam on top.
+- **2026-10-22, seam 15: the last of the action table, and what is left.**
+  The booth's 35 entries (the surroundings, the ground and the backdrop,
+  the booth row, the light presets and spotlights, the light bar's
+  default, the figures, free-standing walls and pedestals, the Box tool,
+  3D models, the underlay, saved views) moved into
+  `src/actions/booth.js`, and the app's 43 (the project and its backups,
+  templates and Quick start, the toolbar's tools and the view, undo and
+  redo, the modes, the welcome, help, the assistant's doors, the workspace
+  and its roles, the looks, Find a tool, the plan and the phone's panel)
+  into `src/actions/app.js`. That empties the literal, so the table is now
+  `const actions = {}` with a two-line comment saying where its areas are,
+  filled by one `Object.assign` of the six factories; across them its 196
+  written keys, and the looks' and align's computed ones (206 in all at
+  run time), are all distinct (checked with a parser and by loading the
+  factories). `backup` is a row that is
+  the function itself (`backup,`), which `ctx` already passed as it is.
+  `ctx` gains a getter for `draftPolicy`, the function declarations these
+  call, and the welcome's, the looks', Find a tool's and the row's
+  `rowCount` wrapped. One comment moved with its meaning: the note on
+  `bar-default` had sat over `tier-pro`, forty lines up the old table,
+  which the split would have left in another file, so it now heads
+  `bar-default` in `booth.js`. Eleven imports went. The ratchet is 4,003 (red on
+  `main`'s 4,346). With the table gone, `main.js` is still 4,003 lines,
+  2,500 over the gate: one row 16 "what is left" was never going to be
+  one pull request, so the table above now measures it as six — the panels'
+  listeners (the `change` handler alone is 410 lines), the click dispatch
+  and the keyboard, the scene's callbacks and the test hooks, `render` and
+  `inspectorHTML`, the library and placement, and then the rest. What
+  stays for good is the state's declarations (~160 lines), `ctx` (~225)
+  and the module's top (~250): about 650, under the gate with room.
