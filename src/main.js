@@ -248,7 +248,7 @@ import { MAX_VIEWS, STEP, STRIDE, TAGS, newView } from "./views.js";
 import { ACCESSIBLE, checkClearance } from "./clearance.js";
 import { elevationsHTML } from "./elevations.js";
 import { HALL_LIMITS, MAX_HALL_BOOTHS, STATUSES, boothOf, hallCSV, hallHTML, hallLayout, hallSVG, hallTotals, moveSale, newHall, orphanSales } from "./hall.js";
-import { BOOTH_STYLES, DEFAULT_DRAPE, DRAPES, FLOOR_TEMPLATES, KINDS, floorTemplateOf, growToFit, offFloor, validFloorTemplate, SHAPES, VENUES as SHOW_VENUES, boothBlock, boundsOf, copyPieces, feet, floorOf, mirrorPieces, renumber, showBooths, showItems, showSVG, spacePieces, toFloor } from "./show.js";
+import { BOOTH_STYLES, DEFAULT_DRAPE, DRAPES, FLOOR_TEMPLATES, KINDS, floorTemplateOf, growToFit, offFloor, SHAPES, VENUES as SHOW_VENUES, boothBlock, boundsOf, copyPieces, feet, floorOf, mirrorPieces, renumber, showBooths, showItems, showSVG, spacePieces, toFloor } from "./show.js";
 import { createShowEditor } from "./show-editor.js";
 import { showWalkthrough } from "./show-scene.js";
 import { PACK_LONG, PACK_SIZES, SURFACES, describeScene, protectPass, provider as aiProvider, render as aiRender, renderPack } from "./ai-render.js";
@@ -256,6 +256,8 @@ import { designFile, importDesign, readDesignFile } from "./booth-file.js";
 import { SHARE_PARAM, rememberLink, sentLinks, shareLink, uploadShare } from "./share.js";
 import { createShareDialogs } from "./ui/share-dialogs.js";
 import { createWelcome } from "./ui/welcome.js";
+import { createKeepSafePanel } from "./ui/keep-safe-panel.js";
+import { MAX_FLOOR_TEMPLATES, MAX_TEMPLATES, mergeFloorTemplates, readFloorTemplates, readTemplates, writeFloorTemplates, writeTemplates } from "./ui/templates.js";
 import { MAX_DESIGNS, OWN, assetInDesigns, deleteEffect, hasDesign, liveNumber, openBooth, renumberDesigns, setMine, setOpen } from "./linked.js";
 import { CIRCUIT_WATTS, powerHTML, powerLines, powerTotals } from "./power.js";
 import { templateOf } from "./quickstart.js";
@@ -268,7 +270,7 @@ import { SHORTCUTS, dedupe, fold as foldText, rankTools, shortcutOf } from "./to
 import { PRO_FEATURES, TIERS, actionFeature, can, readTier, resolveTier, writeTier } from "./tier.js";
 import { HERO_CLIP, LOOKS, applyEnvPreset, applyLook, currentLook, heroShots, polish } from "./polish.js";
 import { ROLES, hasMoreTabs, hiddenActions, needsWelcome, readRole, resolveRole, visibleTabs } from "./roles.js";
-import { backupDue, keepSafeLines, keepSafeOf, noteKeepSafe } from "./keep-safe.js";
+import { noteKeepSafe } from "./keep-safe.js";
 import { errorEntry, recentErrors, recordError, reportText } from "./report.js";
 async function boot() {
   const icons = {
@@ -566,6 +568,7 @@ async function boot() {
     backup,
     btn,
     confirmAction,
+    deviceStore: () => deviceStore(),
     icon,
     mutate,
     readTemplates,
@@ -3427,10 +3430,6 @@ async function boot() {
    * scrolled by hand where they put it.
    */
   let tabInSight = null;
-  // What the browser last said about keeping this project (paintKeepSafe),
-  // and which question is the newest.
-  let keepSafeAnswer = null;
-  let keepSafeAsking = 0;
   // Where site data is blocked, even reading `localStorage` throws: null then,
   // which src/keep-safe.js reads as nothing remembered.
   const deviceStore = () => {
@@ -3464,73 +3463,7 @@ async function boot() {
     updateFrameGuide();
     if (tab === "export") paintKeepSafe();
   }
-  /**
-   * Export → Keep your work: whether this browser keeps this device's copy,
-   * how much room it takes, and when a backup was last downloaded here
-   * (src/keep-safe.js). The Export tab redraws on every edit made in it, so
-   * the browser's last answer is kept (`keepSafeAnswer`) and the lines are
-   * drawn from it straight away, with what this page knows itself — the
-   * last backup, signed in or not — read fresh each time. The browser is
-   * asked again when its answer is 10 seconds old, or at once after a backup
-   * or a persist(); the questions are cheap and prompt nobody.
-   */
-  function keepSafeHTML() {
-    if (keepSafeAnswer?.id !== p.id) return '<p class="muted">Checking how this browser keeps your work…</p>';
-    const { persisted, usage, quota } = keepSafeAnswer;
-    const { lines, ask } = keepSafeLines({ persisted, usage, quota, backup: keepSafeOf(deviceStore(), p.id).backup, signedIn: !!readSession() });
-    return lines.map((line) => `<p class="muted">${e(line)}</p>`).join("") + (ask ? btn("keep-device-copy", "Ask the browser to keep it", "shield-check", "wide") : "");
-  }
-  async function paintKeepSafe(force = false) {
-    const id = p.id;
-    if (!force && keepSafeAnswer?.id === id && Date.now() - keepSafeAnswer.at < 10000) return;
-    // Only the newest question's answer is drawn: an older one finishing
-    // after a persist() must not put "may clear" back.
-    const asking = ++keepSafeAsking;
-    let persisted = null;
-    let usage;
-    let quota;
-    try {
-      if (navigator.storage?.persisted) persisted = await navigator.storage.persisted();
-    } catch {}
-    try {
-      if (navigator.storage?.estimate) ({ usage, quota } = await navigator.storage.estimate());
-    } catch {}
-    if (p.id !== id || asking !== keepSafeAsking) return;
-    keepSafeAnswer = { id, at: Date.now(), persisted, usage, quota };
-    const el = document.querySelector("#keep-safe");
-    if (!el) return;
-    el.innerHTML = keepSafeHTML();
-    refreshIcons();
-  }
-  /**
-   * A booth that holds the artist's own images and lives only in this
-   * browser is worth a reminder to download a backup — at most once a month
-   * per project (src/keep-safe.js decides). Not over the welcome, and a few
-   * seconds after opening, so it is not lost under the start's own toasts.
-   */
-  function remindBackup() {
-    try {
-      const { backup, reminded } = keepSafeOf(deviceStore(), p.id);
-      if (!backupDue({ hasOwnImages: Object.keys(p.assets || {}).length > 0, signedIn: !!readSession(), backup, reminded })) return;
-      const id = p.id;
-      const said = "This booth and its images live only in this browser. Download a backup now and then: Export → Keep your work.";
-      const seen = () => document.visibilityState !== "hidden";
-      setTimeout(() => {
-        if (document.querySelector("dialog[open]") || p.id !== id || !seen()) return;
-        toast(said, false, 12000);
-        // There is one toast, and the start has toasts of its own: a reminder
-        // counts as given only once it has stayed on screen for 8 seconds,
-        // in a tab someone is looking at, or it comes back at the next start
-        // rather than in a month.
-        setTimeout(() => {
-          const t = document.querySelector("#toast");
-          if (t?.textContent === said && t.classList.contains("show") && seen()) noteKeepSafe(deviceStore(), id, "reminded");
-        }, 8000);
-      }, 4000);
-    } catch {
-      // A reminder is never worth stopping the start for.
-    }
-  }
+  const { keepSafeHTML, paintKeepSafe, remindBackup } = createKeepSafePanel(ctx);
   /**
    * The frame guide: the chosen export frame outlined over the viewport, with
    * everything outside it dimmed. Shown while the Video or Export tab is open,
@@ -3745,53 +3678,6 @@ async function boot() {
       run();
     };
     d.showModal();
-  }
-  // The user's own floor templates (show.js floorTemplateOf), per browser.
-  const FLOOR_TEMPLATE_KEY = "booth.floorTemplates", MAX_FLOOR_TEMPLATES = 12;
-  function readFloorTemplates() {
-    try {
-      const list = JSON.parse(localStorage.getItem(FLOOR_TEMPLATE_KEY) || "[]");
-      return Array.isArray(list) ? list.filter(validFloorTemplate) : [];
-    } catch {
-      return [];
-    }
-  }
-  function writeFloorTemplates(list) {
-    try {
-      localStorage.setItem(FLOOR_TEMPLATE_KEY, JSON.stringify(list.slice(0, MAX_FLOOR_TEMPLATES)));
-      return true;
-    } catch {
-      return false;
-    }
-  }
-  /**
-   * Floor templates carried in a backup, added to this browser's list: the
-   * valid ones whose id is not here already, after the ones here, up to the
-   * limit. Returns how many were added.
-   */
-  function mergeFloorTemplates(carried) {
-    const list = readFloorTemplates();
-    const have = new Set(list.map((t) => t.id));
-    const fresh = carried.filter((t) => validFloorTemplate(t) && !have.has(t.id)).slice(0, Math.max(0, MAX_FLOOR_TEMPLATES - list.length));
-    return fresh.length && writeFloorTemplates([...list, ...fresh]) ? fresh.length : 0;
-  }
-  // The user's own booth templates: the booth without its work, per browser.
-  const TEMPLATE_KEY = "booth.templates", MAX_TEMPLATES = 12;
-  function readTemplates() {
-    try {
-      const list = JSON.parse(localStorage.getItem(TEMPLATE_KEY) || "[]");
-      return Array.isArray(list) ? list.filter((t) => t && t.id && t.booth && typeof t.label === "string") : [];
-    } catch {
-      return [];
-    }
-  }
-  function writeTemplates(list) {
-    try {
-      localStorage.setItem(TEMPLATE_KEY, JSON.stringify(list.slice(0, MAX_TEMPLATES)));
-      return true;
-    } catch {
-      return false;
-    }
   }
   // Looks and Make it beautiful (src/polish.js).
   function looksSection() {

@@ -134,3 +134,15 @@ wrong.)
   `tabsMore`, `selectedPanel` and `selectedPedestal`, each with a setter
   (the module assigns them all), and `applyRole`, `icon`, `readTemplates`
   and `refreshIcons`.
+- **2026-10-22, seam 3: code that reads none of boot's state is plain
+  exports, not a factory.** The templates' read and write (the booth
+  templates and the floor templates, with their keys and limits, and
+  `mergeFloorTemplates`) touch only `localStorage`, so `src/ui/templates.js`
+  exports them and `main.js` imports them at the top like any module; `ctx`
+  keeps passing `readTemplates` to the welcome unchanged. Keep your work's
+  own state (`keepSafeAnswer`, `keepSafeAsking`) was read by nothing else,
+  so it moved inside `createKeepSafePanel`. `ctx` gains `deviceStore`,
+  wrapped, because its `const` is declared after `ctx`. The ratchet is
+  6,876 (red on `main`'s 6,990). The module assigns no state of boot's, so
+  there is no setter to reach. *Cost if wrong:* none found; a later seam
+  whose code needs state turns its plain module into a factory.

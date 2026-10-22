@@ -17,6 +17,15 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-22: `main.js`'s third seam (ROADMAP 1.2).** Export → Keep your
+  work — `keepSafeHTML`, `paintKeepSafe`, `remindBackup` and the browser's
+  last answer they share — moved out of `boot()` into
+  `src/ui/keep-safe-panel.js`, and the booth and floor templates' read and
+  write into `src/ui/templates.js` (plain exports: they read no state of
+  boot's). Unchanged but for `ctx.` and `export`, checked line for line
+  against the removed code. `main.js` is 6,876 lines (from 6,990); the
+  ratchet holds it there. view-keep-safe, view-report, view-quickstart and
+  view-floor2 green, and 527 node tests.
 - **2026-10-21: `main.js`'s second seam (ROADMAP 1.2).** The welcome and
   Quick start — `openWelcome`, `describeBlock`, `describeToAssistant`,
   `welcomeDismissed`, `chooseRole`, `openQuickStart`, `runQuickStart` —
