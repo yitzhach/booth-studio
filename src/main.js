@@ -257,6 +257,7 @@ import { createImageEditor } from "./ui/image-editor.js";
 import { createTimelineDialog } from "./ui/timeline-dialog.js";
 import { createBatch } from "./ui/batch.js";
 import { createShowFloorPanel } from "./ui/show-floor-panel.js";
+import { createFindTool } from "./ui/find-tool.js";
 import { MAX_FLOOR_TEMPLATES, MAX_TEMPLATES, mergeFloorTemplates, readFloorTemplates, readTemplates, writeFloorTemplates, writeTemplates } from "./ui/templates.js";
 import { OWN, assetInDesigns, hasDesign, liveNumber, openBooth, setMine } from "./linked.js";
 import { CIRCUIT_WATTS, powerHTML, powerLines, powerTotals } from "./power.js";
@@ -264,9 +265,6 @@ import { templateOf } from "./quickstart.js";
 import { PhotoEditor } from "./photo.js";
 import { hangingGuide } from "./guide.js";
 import { showPack } from "./showpack.js";
-// Tool search's `fold` comes in as `foldText`: in this file `fold` is the
-// inspector's open/closed helper, below.
-import { SHORTCUTS, dedupe, fold as foldText, rankTools, shortcutOf } from "./toolsearch.js";
 import { PRO_FEATURES, TIERS, actionFeature, can, readTier, resolveTier, writeTier } from "./tier.js";
 import { LOOKS, applyEnvPreset } from "./polish.js";
 import { ROLES, hasMoreTabs, hiddenActions, needsWelcome, readRole, resolveRole, visibleTabs } from "./roles.js";
@@ -565,6 +563,12 @@ async function boot() {
     get busyVideo() { return busyVideo; },
     get editingStart() { return editingStart; },
     get scene() { return scene; },
+    get toolIndex() { return toolIndex; },
+    set toolIndex(v) { toolIndex = v; },
+    get toolHits() { return toolHits; },
+    set toolHits(v) { toolHits = v; },
+    get toolAt() { return toolAt; },
+    set toolAt(v) { toolAt = v; },
     get show3d() { return show3d; },
     get showBlock() { return showBlock; },
     get showClipboard() { return showClipboard; },
@@ -609,6 +613,7 @@ async function boot() {
     currentArtwork,
     deviceStore: () => deviceStore(),
     icon,
+    inspectorHTML,
     kit: () => kit(),
     mutate,
     readTemplates,
@@ -616,6 +621,7 @@ async function boot() {
     renderInspector,
     runClips,
     setPanTool,
+    showSection,
     setShow3d,
     setWalking,
     toast,
@@ -5452,210 +5458,12 @@ async function boot() {
     dial.addEventListener("pointercancel", done);
     aim(ev);
   });
-  // Tool search, in the header. The index is read from what each tab would
-  // draw right now — the same markup the inspector renders — so a control
-  // added to a panel is findable without anyone adding it to a list, and a
-  // control the current booth does not show (the light bar on a pop-up) is
-  // not offered. It is built when the box is focused and dropped on blur.
-  const TAB_NAMES = { art: "Artwork", layout: "Layout", show: "Art show", walls: "Walls", lighting: "Lighting", video: "Video", hall: "Show floor", export: "Export" };
-  const FINDABLE = "h3, h4, label, button[data-action]";
+  // Find a tool's index, its hits and the one picked (src/ui/find-tool.js);
+  // the assistant's app map reads and fills the index too.
   let toolIndex = null,
     toolHits = [],
     toolAt = 0;
-  /** What a heading, label or button is called, without the values beside it. */
-  function findableName(el) {
-    if (el.matches("button")) return el.getAttribute("aria-label") || el.textContent;
-    const copy = el.cloneNode(true);
-    copy.querySelectorAll("select, output, input, textarea, button, small, span.badge").forEach((x) => x.remove());
-    if (el.matches("h3")) copy.querySelectorAll("span").forEach((x) => x.remove());
-    const text = copy.textContent.replace(/\s+/g, " ").trim();
-    if (text) return text;
-    return el.querySelector("[aria-label]")?.getAttribute("aria-label") || "";
-  }
-  /** Help's table of tool shortcuts, grouped as `SHORTCUTS` groups them. */
-  function shortcutHelp() {
-    const groups = {};
-    for (const [name, sc] of Object.entries(SHORTCUTS)) (groups[sc.group] ||= []).push(`<li><kbd>${e(name)}</kbd> ${e(sc.label)}</li>`);
-    return `<h3>Tool shortcuts</h3><p class="muted">Type one in the search box and press Enter.</p><div class="shortcut-help">${Object.entries(groups).map(([g, items]) => `<section><h4>${e(g)}</h4><ul>${items.join("")}</ul></section>`).join("")}</div>`;
-  }
-  function buildToolIndex() {
-    const list = [];
-    for (const [t, name] of Object.entries(TAB_NAMES)) list.push({ label: name, where: "Inspector tab", tab: t });
-    const outside = [
-      [".toolbar [data-action]", "Toolbar"],
-      ["#view-switch [data-view]", "View"],
-      [".zoom-controls [data-action]", "View"],
-      ["header [data-action]", "Header"],
-    ];
-    for (const [sel, where] of outside)
-      for (const el of document.querySelectorAll(sel)) list.push({ label: findableName(el), where, el });
-    list.push({ label: "Preview quality", where: "Status bar", el: document.querySelector("#quality-quick") });
-    const keep = tab,
-      tpl = document.createElement("template");
-    try {
-      for (const [t, name] of Object.entries(TAB_NAMES)) {
-        tab = t;
-        tpl.innerHTML = inspectorHTML();
-        tpl.content.querySelectorAll(FINDABLE).forEach((el, index) => {
-          const section = el.closest("section")?.querySelector("h3");
-          const heading = section && section !== el ? findableName(section) : "";
-          list.push({ label: findableName(el), where: heading ? `${name} · ${heading}` : name, tab: t, index });
-        });
-      }
-    } finally {
-      tab = keep;
-    }
-    return dedupe(list);
-  }
-  /** The tool index as lines grouped by place, e.g. "Export · Keep your work: Studio account, Import…". */
-  function appMapText(list) {
-    const byWhere = new Map();
-    for (const x of list) {
-      const label = String(x.label || "").replace(/\s+/g, " ").trim();
-      if (!label) continue;
-      const where = x.where === "Inspector tab" ? "Inspector tabs (bottom bar on a phone, side panel on a computer)" : x.where;
-      const names = byWhere.get(where) || [];
-      if (!names.includes(label)) names.push(label);
-      byWhere.set(where, names);
-    }
-    return [...byWhere].map(([where, names]) => `${where}: ${names.join(", ")}`).join("\n").slice(0, 15000);
-  }
-  function renderToolHits() {
-    const box = document.querySelector("#tool-search"),
-      ul = document.querySelector("#tool-results");
-    const q = box.value;
-    toolHits = q.trim() ? rankTools(toolIndex || (toolIndex = buildToolIndex()), q) : [];
-    toolAt = Math.min(toolAt, Math.max(0, toolHits.length - 1));
-    const open = document.activeElement === box && !!q.trim();
-    ul.hidden = !open;
-    box.setAttribute("aria-expanded", String(open));
-    ul.innerHTML = !open
-      ? ""
-      : toolHits.length
-        ? toolHits.map((x, i) => `<li role="option" id="tool-hit-${i}" data-hit="${i}" aria-selected="${i === toolAt}" class="${i === toolAt ? "active" : ""}"><strong>${e(x.label)}${shortcutOf(x) ? `<kbd>${e(shortcutOf(x))}</kbd>` : ""}</strong><span>${e(x.where)}</span></li>`).join("")
-        : `<li class="none">Nothing called “${e(q.trim())}”</li>`;
-    if (toolHits.length) box.setAttribute("aria-activedescendant", "tool-hit-" + toolAt);
-    else box.removeAttribute("aria-activedescendant");
-    ul.querySelector("li.active")?.scrollIntoView({ block: "nearest" });
-  }
-  /** Take the user to a found tool: its tab, scrolled to, focused and flashed. */
-  /** The tool index entry for a place in appMapText's words ("Layout · People for scale", "Add man"), or the closest by name. */
-  function placeHit(place, control) {
-    const list = toolIndex || (toolIndex = buildToolIndex());
-    const where = (x) => foldText(x.where === "Inspector tab" ? "Inspector tabs (bottom bar on a phone, side panel on a computer)" : x.where);
-    const p = foldText(place || ""),
-      c = foldText(control || "");
-    const here = list.filter((x) => where(x) === p);
-    return (
-      (c && here.find((x) => foldText(x.label) === c)) ||
-      (c && rankTools(here, control, 1)[0]) ||
-      here[0] ||
-      rankTools(list, control || place, 1)[0] ||
-      null
-    );
-  }
-  function openTool(hit, { press = true } = {}) {
-    const box = document.querySelector("#tool-search");
-    box.value = "";
-    box.blur();
-    let target = hit.el || null;
-    if (hit.tab) {
-      tab = hit.tab;
-      renderInspector();
-      if (hit.index !== undefined) {
-        const root = document.querySelector("#inspector-content");
-        const all = [...root.querySelectorAll(FINDABLE)];
-        target = all[hit.index];
-        // The inspector redrew; if it came out different, find it by name.
-        if (!target || foldText(findableName(target)) !== foldText(hit.label))
-          target = all.find((el) => foldText(findableName(el)) === foldText(hit.label)) || null;
-      } else target = document.querySelector(`.inspector-tabs [data-tab="${hit.tab}"]`);
-    }
-    if (!target) return;
-    // A toolbar button is a tool in itself, so finding it uses it; anything in
-    // the inspector is only shown and focused, because "Remove" found is not
-    // "Remove" meant.
-    if (press && !hit.tab && target.matches("button")) {
-      target.click();
-      return;
-    }
-    showSection(target);
-    const control = target.matches("label") ? target.querySelector("input, select, textarea") : target.matches("button, select, input") ? target : null;
-    const shown = target.matches("h3, h4") ? target.closest("section") || target : target;
-    // A tab is already in sight (keepTabInSight); scrolling it into view would
-    // move the page or a phone's sheet as well.
-    if (!target.matches(".inspector-tabs [data-tab]")) shown.scrollIntoView({ block: "center", behavior: "smooth" });
-    control?.focus({ preventScroll: true });
-    shown.classList.remove("found");
-    void shown.offsetWidth;
-    shown.classList.add("found");
-    setTimeout(() => shown.classList.remove("found"), 1800);
-  }
-  {
-    const box = document.querySelector("#tool-search"),
-      ul = document.querySelector("#tool-results");
-    // Its own events stop here: the page's input and change handlers read
-    // every field in the document as booth settings.
-    for (const type of ["input", "change"]) box.addEventListener(type, (ev) => ev.stopPropagation());
-    // Keep every tape: a view setting on the scene, not a booth field, so its
-    // events stop here like the search box's.
-    const keep = document.querySelector("#keep-tapes");
-    keep.addEventListener("input", (ev) => ev.stopPropagation());
-    keep.addEventListener("change", (ev) => {
-      ev.stopPropagation();
-      scene?.setKeepTapes(keep.checked);
-    });
-    box.addEventListener("input", () => {
-      toolAt = 0;
-      renderToolHits();
-    });
-    box.addEventListener("focus", () => {
-      toolIndex = null;
-      renderToolHits();
-    });
-    box.addEventListener("blur", () => {
-      toolIndex = null;
-      ul.hidden = true;
-      box.setAttribute("aria-expanded", "false");
-    });
-    box.addEventListener("keydown", (ev) => {
-      if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
-        ev.preventDefault();
-        if (!toolHits.length) return;
-        toolAt = (toolAt + (ev.key === "ArrowDown" ? 1 : -1) + toolHits.length) % toolHits.length;
-        renderToolHits();
-      } else if (ev.key === "Enter") {
-        ev.preventDefault();
-        if (toolHits[toolAt]) openTool(toolHits[toolAt]);
-      } else if (ev.key === "Escape") {
-        ev.preventDefault();
-        if (box.value) {
-          box.value = "";
-          renderToolHits();
-        } else box.blur();
-      }
-      ev.stopPropagation();
-    });
-    // mousedown, not click: a click would blur the box first and the list
-    // would be gone before it landed.
-    ul.addEventListener("mousedown", (ev) => {
-      const li = ev.target.closest("[data-hit]");
-      ev.preventDefault();
-      if (li) openTool(toolHits[Number(li.dataset.hit)]);
-    });
-    // "/" jumps to the box from anywhere that is not already typing, and so
-    // does Ctrl/⌘-K, the other place people look for it.
-    document.addEventListener("keydown", (ev) => {
-      const typing = typingIn(ev);
-      const k = (ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "k";
-      if ((ev.key === "/" && !typing && !ev.ctrlKey && !ev.metaKey && !ev.altKey) || k) {
-        if (document.querySelector("dialog[open]")) return;
-        ev.preventDefault();
-        box.focus();
-        box.select();
-      }
-    });
-  }
+  const { findableName, shortcutHelp, buildToolIndex, appMapText, placeHit, openTool } = createFindTool(ctx);
   document.addEventListener("keydown", (ev) => {
     if (document.querySelector("#image-editor").open) {
       if (ev.key === "Escape") {

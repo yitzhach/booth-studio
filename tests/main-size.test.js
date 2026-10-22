@@ -7,8 +7,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-// After seam 6, the show-floor panel (src/ui/show-floor-panel.js).
-const MAX = 6008;
+// After seam 7, Find a tool and the app map (src/ui/find-tool.js).
+const MAX = 5816;
 
 test(`src/main.js stays at ${MAX} lines or fewer: a seam moves code out, nothing moves back`, () => {
   const text = readFileSync(fileURLToPath(new URL("../src/main.js", import.meta.url)), "utf8");

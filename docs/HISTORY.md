@@ -17,6 +17,13 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-22: `main.js`'s seventh seam (ROADMAP 1.2).** Find a tool —
+  the index built from what each tab draws, the hits, the shortcut help,
+  the app map's text for the assistant, `placeHit` and `openTool`, and the
+  search box's handlers — moved into `src/ui/find-tool.js`. Unchanged but
+  for `ctx.` (rewritten with a parser, then checked line for line against
+  the removed code). `main.js` is 5,816 lines (from 6,008).
+  view-toolsearch and view-assistant green, and 527 node tests.
 - **2026-10-22: `main.js`'s sixth seam (ROADMAP 1.2).** The show floor's
   panel — the selection's moves, templates, orphaned sales, the keys,
   `showChange`, the shape library, the linked designs and
