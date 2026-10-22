@@ -17,6 +17,14 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-22: `main.js`'s fifth seam (ROADMAP 1.2).** The Custom move's
+  timeline and its dialog (the track, the keyframe pictures, scrubbing,
+  the frame routed to the selected key) moved into
+  `src/ui/timeline-dialog.js`, and the batch queue into `src/ui/batch.js`;
+  `runClips`, the render loop, stays. Unchanged but for `ctx.` (rewritten
+  with a parser, then checked line for line against the removed code).
+  `main.js` is 6,348 lines (from 6,764). view-timeline, view-batch,
+  view-video, view-frame and view-polish green, and 527 node tests.
 - **2026-10-22: `main.js`'s fourth seam (ROADMAP 1.2).** The looks, Make it
   beautiful and the hero set — `looksSection`, `heroSection`, `runHeroSet`,
   `runLook`, `runPolish` and their two notes — moved into

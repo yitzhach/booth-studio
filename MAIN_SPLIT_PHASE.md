@@ -65,7 +65,7 @@ pushing.
 | 2 | `openWelcome`, `describeBlock`, `describeToAssistant`, `welcomeDismissed`, `chooseRole`, `openQuickStart`, `runQuickStart` | `src/ui/welcome.js` | ~120 | view-roles, view-quickstart, view-assistant |
 | 3 | `keepSafeHTML`, `paintKeepSafe`, `remindBackup`, the templates' read and write | `src/ui/keep-safe-panel.js`, `src/ui/templates.js` | ~160 | view-keep-safe, view-report, view-quickstart, view-floor2 |
 | 4 | `looksSection`, `heroSection`, `runHeroSet`, `runLook`, `runPolish`; the image editor | `src/ui/polish-panel.js`, `src/ui/image-editor.js` | ~130 | view-polish, view-finish, view-wall-assets |
-| 5 | the timeline dialog and the batch | `src/ui/timeline-dialog.js`, `src/ui/batch.js` | ~580 | view-timeline, view-batch, view-video, view-frame |
+| 5 | the timeline dialog and the batch | `src/ui/timeline-dialog.js`, `src/ui/batch.js` | ~580 | view-timeline, view-batch, view-video, view-frame, view-polish |
 | 6 | the show-floor panel | `src/ui/show-floor-panel.js` | ~380 | view-show, view-show3d, view-hall, view-linked, view-floor2 |
 | 7 | Find a tool and the app map | `src/ui/find-tool.js` | ~150 | view-toolsearch, view-assistant |
 | 8 | upload and import | `src/ui/upload.js` | ~210 | view-wall-assets, view-textures, e2e |
@@ -164,3 +164,23 @@ wrong.)
   only: nothing here assigns them), `currentArtwork`, `runClips` and
   `kit` (wrapped: its `const` comes after `ctx`). The ratchet is 6,764
   (red on `main`'s 6,876).
+- **2026-10-22, seam 5: state the rest of `main.js` assigns stays declared
+  there.** `tlSelected` and `tlPlayhead` sat in the middle of the timeline's
+  code, but the action table and the preview set them too, so their `let`
+  (and `keyThumbs`, which the table fills) stays in `main.js` between the
+  two factory calls, with its comment; the timeline reads and sets them
+  through `ctx`. Every other name the two modules declare and `main.js`
+  uses is returned. The two modules call each other (the timeline draws
+  `batchSection` and calls `refreshPanels`; the batch reads `timeline`),
+  so each reaches the other through `ctx`, wrapped, as do `progressHTML`
+  and the rest declared after `ctx`; none of them is called with
+  arguments. `runClips`, the render loop, stays in `main.js`: the hero
+  set and the Video tab call it too, and it is the export, not the
+  queue. The `ctx.` rewrite was done with a parser (`eslint-scope`'s
+  unresolved references), not by hand or by pattern, because this seam
+  reads 21 pieces of boot's state; `ctx` gains a getter for each and a
+  setter for the four the timeline assigns (`videoTimeline`, `livePlace`,
+  `tlSelected`, `tlPlayhead`). One comment line, a bare `//` that had
+  separated the dialog's description from the state left behind, is
+  dropped. view-polish joins the row, because the hero set renders
+  through the batch's `kit`. The ratchet is 6,348 (red on `main`'s 6,764).
