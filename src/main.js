@@ -203,17 +203,12 @@ import {
   wallKeys,
   wallLabel,
   wallSpec,
-  DIFFUSION_MAX,
   LIGHT_BAR,
-  LIGHT_BAR_POWER_SLIDER_MAX,
-  LIGHT_BAR_POWER_STEP,
   MAX_PEDESTALS,
-  PEDESTAL,
   FURNITURE,
   BOX_LIMITS,
   MAX_MODELS,
   furnitureKind,
-  VENUES,
   applyVenue,
   artShowPanel,
   boothPedestals,
@@ -221,10 +216,9 @@ import {
   hallSpec,
   isArtShow,
   lightBarSpec,
-  panelCount,
   relinkArtShowWalls,
 } from "./model.js";
-import { fixtureShare, lightBarFixtures } from "./lightbar.js";
+import { lightBarFixtures } from "./lightbar.js";
 import { load, save, download, readImage, thumbnailOf, THUMB_MAX } from "./storage.js";
 import { decodeAt } from "./image-source.js";
 import { accountLabel, readSession } from "./studio-session.js";
@@ -259,6 +253,9 @@ import { createBatch } from "./ui/batch.js";
 import { createShowFloorPanel } from "./ui/show-floor-panel.js";
 import { createFindTool } from "./ui/find-tool.js";
 import { createUpload } from "./ui/upload.js";
+import { createWallsPanel } from "./panels/walls.js";
+import { createLightingPanel } from "./panels/lighting.js";
+import { createArtShowPanel } from "./panels/art-show.js";
 import { MAX_FLOOR_TEMPLATES, MAX_TEMPLATES, readFloorTemplates, readTemplates, writeFloorTemplates, writeTemplates } from "./ui/templates.js";
 import { OWN, assetInDesigns, hasDesign, liveNumber, openBooth, setMine } from "./linked.js";
 import { CIRCUIT_WATTS, powerHTML, powerLines, powerTotals } from "./power.js";
@@ -612,16 +609,19 @@ async function boot() {
     get tlPlayhead() { return tlPlayhead; },
     set tlPlayhead(v) { tlPlayhead = v; },
     get keyThumbs() { return keyThumbs; },
+    get furnitureChoice() { return furnitureChoice; },
     get actions() { return actions; },
     allowed: (feature) => allowed(feature),
     applyRole,
     backfillThumbnails,
     backup,
     btn,
+    colorField,
     confirmAction,
     field,
     currentArtwork,
     deviceStore: () => deviceStore(),
+    hideEye,
     icon,
     inspectorHTML,
     kit: () => kit(),
@@ -644,6 +644,7 @@ async function boot() {
     timeline: () => timeline(),
     timelineOpen: () => timelineOpen(),
     gated: (...args) => gated(...args),
+    lightBarLevels: (...args) => lightBarLevels(...args),
     frameFields,
     frameNote,
     range,
@@ -1433,17 +1434,6 @@ async function boot() {
       }
     return rows.join("");
   }
-  // A position slider's travel is the booth's own footprint, so the whole
-  // length of it is somewhere a wall can usefully stand. A panel already
-  // outside that — typed, or in an older backup, both of which the schema
-  // allows — widens its own slider instead of being dragged back in the
-  // moment these controls are drawn.
-  function panelSlider(panel, name, key, label) {
-    const reach = Math.max(panelRange(p)[key], Math.abs(panel[key])),
-      min = -Math.ceil(reach),
-      max = Math.ceil(reach);
-    return `<label class="range"><span>${label}<output>${Number(panel[key].toFixed(2))}in</output></span><input type="range" data-field="${key}" data-scope="panel-${e(panel.id)}" aria-label="${e(name + " " + label + " slider")}" min="${min}" max="${max}" step="1" value="${panel[key]}"/></label>`;
-  }
   // A slider beside the typed edge, for the two placements a work has on its
   // wall. The travel is the wall it hangs on, less the work's own size, so
   // the far end of the slider is the work flush with the far edge rather than
@@ -1513,17 +1503,7 @@ async function boot() {
     syncClearance();
     toast(tier === "pro" ? "Pro: every tool is unlocked." : "Lite: Pro tools show a lock. Anything already in this booth still draws.");
   }
-  function panelFields() {
-    const panels = boothPanels(p);
-    return `<section><h3>Free-standing walls</h3><p class="muted">Interior panels you can stand anywhere in the booth and hang art on either side. Position is measured in inches from the centre of the floor: X is right, Z is toward the entrance. They do not change the booth footprint.</p><p class="muted">Click a free-standing wall in the booth to select it, then drag it across the floor or use the sliders. Snap keeps a drag on whole inches.</p>${panels.map((panel, i) => {
-      const name = panel.name || "Panel " + (i + 1),
-        scope = "panel-" + panel.id,
-        chosen = selectedPanel === panelKey(panel.id),
-        f = (label, key, value, min, max, step, unit) =>
-          field(label, key, value, min, max, step, unit, scope, name + " " + label);
-      return `<div class="wall-setting${chosen ? " selected" : ""}${isShown(panel) ? "" : " is-hidden"}" data-panel="${e(panel.id)}"><div class="panel-heading"><h4>${e(name)}${chosen ? ' <span class="badge">Selected</span>' : ""}${isShown(panel) ? "" : ' <span class="badge">Hidden</span>'}</h4><span class="piece-actions">${hideEye("panel", panel.id, name, isShown(panel))}${btn("delete-panel-" + panel.id, "Remove " + name, "trash-2", "icon-only")}</span></div>${f("Width", "width", panel.width, 12, 360, 1, "in")}${f("Height", "height", panel.height, 24, 144, 1, "in")}${f("Position X", "x", panel.x, -360, 360, 1, "in")}${panelSlider(panel, name, "x", "Slide left / right")}${f("Position Z", "z", panel.z, -360, 360, 1, "in")}${panelSlider(panel, name, "z", "Slide front / back")}${f("Rotation", "rotation", panel.rotation, -180, 180, 5, "°")}</div>`;
-    }).join("")}${panels.length < MAX_PANELS ? btn("add-panel", "Add free-standing wall", "plus", "wide") : `<p class="muted">${MAX_PANELS} free-standing walls is the limit.</p>`}</section>`;
-  }
+  const { panelFields, pedestalFields, modelsSection } = createWallsPanel(ctx);
   // One panel's X and Z, in both controls at once. A drag in the viewport and
   // a pull on either slider are the same edit, so whichever one is not being
   // touched has to follow rather than sit at a stale number.
@@ -1577,68 +1557,8 @@ async function boot() {
     if (!selectedPedestal) return;
     reveal(document.querySelector(`.wall-setting[data-pedestal="${CSS.escape(selectedPedestal)}"]`));
   }
-  /** A position slider for a pedestal. Same travel rule a free-standing wall's gets. */
-  function pedestalSlider(ped, name, key, label) {
-    const reach = Math.max(panelRange(p)[key], Math.abs(ped[key])),
-      min = -Math.ceil(reach),
-      max = Math.ceil(reach);
-    return `<label class="range"><span>${label}<output>${Number(ped[key].toFixed(2))}in</output></span><input type="range" data-field="${key}" data-scope="pedestal-${e(ped.id)}" aria-label="${e(name + " " + label + " slider")}" min="${min}" max="${max}" step="1" value="${ped[key]}"/></label>`;
-  }
-  function pedestalFields() {
-    const list = boothPedestals(p);
-    return `<section><h3>Pedestals and furniture</h3><p class="muted">Pedestals, tables in their cloths, a counter, seating, a print bin, gridwall, a banner stand and a screen. Double-click one in the booth to pick it up, then drag it across the floor or use the sliders. Position is inches from the centre of the floor: X is right, Z is toward the entrance. Plan view shows the clear floor around the one selected.</p>${list.map((ped, i) => {
-      const name = ped.name || "Pedestal " + (i + 1),
-        scope = "pedestal-" + ped.id,
-        chosen = selectedPedestal === ped.id,
-        f = (label, key, value, min, max, step, unit) =>
-          field(label, key, value, min, max, step, unit, scope, name + " " + label);
-      return `<div class="wall-setting${chosen ? " selected" : ""}${isShown(ped) ? "" : " is-hidden"}" data-pedestal="${e(ped.id)}"><div class="panel-heading"><h4>${e(name)}${chosen ? ' <span class="badge">Selected</span>' : ""}${isShown(ped) ? "" : ' <span class="badge">Hidden</span>'}${ped.locked ? ' <span class="badge">Locked</span>' : ""}</h4><span class="piece-actions"><button data-lock-pedestal="${e(ped.id)}" class="eye" title="${ped.locked ? "Unlock" : "Lock"} ${e(name)}" aria-label="${ped.locked ? "Unlock" : "Lock"} ${e(name)}" aria-pressed="${!!ped.locked}">${icon(ped.locked ? "lock" : "lock-open")}</button>${hideEye("pedestal", ped.id, name, isShown(ped))}${btn("delete-pedestal-" + ped.id, "Remove " + name, "trash-2", "icon-only")}</span></div>${furnitureKind(ped) === "box" ? `${f("Height", "height", ped.height, ...BOX_LIMITS.height, 1, "in")}${range("Pull up", "height", ped.height, BOX_LIMITS.height[0], Math.max(96, Math.ceil(ped.height)), 1, scope, "in")}${f("Width", "width", ped.width, ...BOX_LIMITS.width, 1, "in")}${f("Depth", "depth", ped.depth, ...BOX_LIMITS.depth, 1, "in")}` : `${f("Height", "height", ped.height, 6, 96, 1, "in")}${f("Width", "width", ped.width, 4, 96, 1, "in")}${f("Depth", "depth", ped.depth, 4, 96, 1, "in")}`}${colorField("Finish", "color", scope, ped.color || PEDESTAL.color, name + " finish")}${f("Position X", "x", ped.x, -360, 360, 1, "in")}${pedestalSlider(ped, name, "x", "Slide left / right")}${f("Position Z", "z", ped.z, -360, 360, 1, "in")}${pedestalSlider(ped, name, "z", "Slide front / back")}${f("Rotation", "rotation", ped.rotation, -180, 180, 5, "°")}</div>`;
-    }).join("")}${list.length < MAX_PEDESTALS ? `<label class="setting-label">Add to the floor<select id="furniture-kind" aria-label="Furniture to add">${Object.entries(FURNITURE).filter(([k]) => k !== "box" || allowed("box")).map(([k, f]) => `<option value="${k}" ${k === furnitureChoice ? "selected" : ""}>${e(f.label)} · ${f.width}×${f.depth}″</option>`).join("")}</select></label>${btn("add-pedestal", "Add " + FURNITURE[furnitureChoice].label.toLowerCase(), "plus", "wide")}` : `<p class="muted">${MAX_PEDESTALS} pieces is the limit.</p>`}</section>`;
-  }
-  /**
-   * The art-show tool. Everything an indoor convention booth is measured by,
-   * in one place, so the Layout tab stays the outdoor booth's own list rather
-   * than growing a second booth inside it.
-   */
-  function artShowHTML() {
-    const b = p.booth,
-      show = isArtShow(p),
-      module = artShowPanel(b),
-      bar = lightBarSpec(b),
-      hall = hallSpec(b),
-      share = fixtureShare(bar.count);
-    const venue = `<section><h3>Booth type</h3><label class="setting-label">Venue<select aria-label="Venue" data-field="venue" data-scope="booth">${Object.entries(VENUES).map(([k, v]) => `<option value="${k}" ${(b.venue || "outdoor") === k ? "selected" : ""}>${e(v)}</option>`).join("")}</select></label><p class="muted">${show ? "An indoor art-show booth: seamless white walls, no canopy, and a light bar across the front. Switching venue rewrites the footprint, the walls and the finish to this venue's defaults — every one of them is still yours to change below." : "The outdoor pop-up: a canopy, seam posts every 30″ and the surroundings in Layout. Choose the art show to plan an indoor convention booth instead."}</p></section>`;
-    if (!show)
-      return `<div class="panel-heading"><h2>Art show booth</h2>${icon("building-2")}</div>${venue}<div class="empty-inspector"><h2>Not an art-show booth yet.</h2><p>Choose <strong>Art show · indoor booth</strong> above to plan 144″ white walls, a nine-head light bar and an exhibition hall around you. Nothing in this project is thrown away — the artwork keeps its walls.</p></div>`;
-    const wallRow = (key, label) => {
-      const max = key === "back" ? b.width : b.depth;
-      return `<div class="wall-setting"><label class="check-field"><input type="checkbox" data-field="enabled" data-scope="wall-${key}" ${b.walls[key].enabled ? "checked" : ""}/>${label}</label>${field("Width", "width", b.walls[key].width, 12, max, 1, "in", "wall-" + key, label + " width")}${field("Height", "height", b.walls[key].height, 24, 144, 1, "in", "wall-" + key, label + " height")}<p class="muted">${panelCount(p, key)} × ${Number(module.width.toFixed(2))}″ panels</p></div>`;
-    };
-    return `<div class="panel-heading"><h2>Art show booth</h2>${icon("building-2")}</div>${venue}<section><h3>Booth dimensions <span>inches</span></h3><p class="muted">The whole footprint, yours to type. The side walls run along the depth; the back wall runs along the width.</p>${field("Booth width", "width", b.width, 48, 360, 1, "in", "booth", "Booth width")}${field("Booth depth", "depth", b.depth, 48, 360, 1, "in", "booth", "Booth depth")}${field("Booth height", "height", b.height, 48, 144, 1, "in", "booth", "Booth height")}<p class="muted">Changing the booth height sets all three walls to match. A wall wider than the side it stands on is clamped to fit.</p></section><section><h3>Walls</h3><p class="muted">Seamless white panels: no seam posts, no feet and no cap rail, because that is what a pro-panel art-show wall is.</p>${colorField("Wall finish", "color", "booth", b.color, "Wall finish")}<div class="swatches">${["#f4f3f0", "#ffffff", "#e8e6e0", "#d8d4ca"].map((c) => `<button data-color="${c}" style="background:${c}" aria-label="Wall finish ${c}"></button>`).join("")}</div>${wallRow("back", "Back wall")}${wallRow("left", "Left wall")}${wallRow("right", "Right wall")}</section><section><h3>Individual panel</h3><p class="muted">The display panel a wall is built from. Set its size here, then rebuild the walls from it — or leave the walls at their own measurements and use this as the module you are counting.</p>${field("Panel width", "width", module.width, 6, 360, 0.5, "in", "artShow", "Panel width")}${field("Panel height", "height", module.height, 24, 144, 1, "in", "artShow", "Panel height")}<p class="muted">Back ${panelCount(p, "back")} · left ${panelCount(p, "left")} · right ${panelCount(p, "right")} panels at this width.</p><label class="check-field"><input type="checkbox" data-field="linked" data-scope="artShow" ${module.linked ? "checked" : ""}/>Keep the walls built from this panel</label>${btn("relink-walls", "Rebuild walls from this panel", "ruler", "wide")}<p class="muted">Each wall keeps the number of panels it is nearest to now and takes this width and height. The footprint follows the walls.</p></section><section><h3>Light bar</h3><label class="check-field"><input type="checkbox" data-field="on" data-scope="lightBar" ${bar.on ? "checked" : ""}/>Light bar across the booth</label>${bar.on ? `${field("Fixtures", "count", bar.count, 1, 24, 1, "", "lightBar", "Light bar fixtures")}${field("Bar height", "height", bar.height, 24, 240, 1, "in", "lightBar", "Light bar height")}${lightBarLevels(bar)}<p class="muted">Fixture brightness is a percentage of a bar judged to read right: 50 is the default, 100 is twice it. Diffusion stands in for the frost over each head and the bounce off a white hall: it opens the beams until they overlap into a wash, fades their edges, fills the shadows behind pedestals and art instead of stacking nine hard ones, and trims the fixtures back as they widen. 0 is a bare source; 1 is a fully frosted head; past that the hall takes over and the bounce off its white walls does most of the lighting.</p><p class="muted">${bar.count} head${bar.count === 1 ? "" : "s"} spotting the walls: ${share.left} left, ${share.back} back, ${share.right} right. Each is aimed at its own section of wall from the booth's own measurements, so they re-aim when a wall moves. A hidden wall takes none.</p>` : `<p class="muted">No bar. The spotlights in Lighting still light this booth.</p>`}</section><section><h3>Exhibition hall</h3><label class="check-field"><input type="checkbox" data-field="on" data-scope="hall" ${hall.on ? "checked" : ""}/>Stand this booth in a white exhibition hall</label>${hall.on ? `${field("Ceiling height", "ceiling", hall.ceiling, 96, 720, 12, "in", "hall", "Hall ceiling height")}<label class="check-field"><input type="checkbox" data-field="showCeiling" data-scope="hall" ${hall.showCeiling ? "checked" : ""}/>Draw the ceiling</label><p class="muted">${Number((hall.ceiling / 12).toFixed(1))} ft. The ceiling is off by default: at this height it is almost always out of frame, and drawing it puts a grey wash over the booth.</p>` : ""}<label class="check-field"><input type="checkbox" data-field="neighbors" data-scope="booth" ${b.neighbors ? "checked" : ""}/>Surround with other booths</label>${b.neighbors ? `<p class="muted">Indoors the neighbouring booths are the same white walls as yours, without canopies. Their spacing is in Layout → Surroundings.</p>` : ""}</section><section><h3>Walls and pedestals</h3><p class="muted">Free-standing walls and pedestals have a tool of their own, so neither list has to live in here.</p>${btn("open-walls", "Open the Walls tool", "columns-2", "wide")}</section>`;
-  }
-  // The three light-bar levels that are worth reaching for while looking at the
-  // booth. They appear in two panels — Art show, next to the bar's geometry,
-  // and Lighting, next to the spotlights — and used to be written out twice.
-  // Two copies of a slider is two ranges to widen and one of them will be
-  // missed, which is the whole reason this is a function.
-  function lightBarLevels(bar) {
-    // Fixture brightness is shown as a percentage of a bar that reads right —
-    // 50 is the default, 100 is twice it — while the stored value stays the
-    // light's own power. A booth saved brighter than the slider offers widens
-    // its own slider rather than being dragged down the moment these controls
-    // are drawn. Same move as `panelSlider` and `artSlider`, same reason.
-    const power = Math.max(
-      LIGHT_BAR_POWER_SLIDER_MAX,
-      Math.ceil(bar.power / LIGHT_BAR_POWER_STEP),
-    );
-    // A booth composed before the slider was a percentage carries the old
-    // default, 60 stored units, which is 375 on this scale — a bar nobody
-    // would now choose, on a slider stretched to reach it. Rather than
-    // rewriting a stored number behind the owner's back, say where it is and
-    // offer the one drag back.
-    const over = bar.power > LIGHT_BAR_POWER_SLIDER_MAX * LIGHT_BAR_POWER_STEP;
-    return `${range("Fixture brightness", "power", bar.power, 0, power, 1, "lightBar", "", LIGHT_BAR_POWER_STEP)}${over ? `<div class="warning">This booth's bar is stored above the scale, so the slider is stretched to ${power} to reach it. 50 is the default.${btn("bar-default", "Set brightness to 50", null, "wide")}</div>` : ""}${range("Temperature", "kelvin", bar.kelvin, 2700, 6500, 100, "lightBar", " K")}${range("Diffusion", "diffusion", Math.min(DIFFUSION_MAX, bar.diffusion), 0, DIFFUSION_MAX, 0.1, "lightBar")}`;
-  }
+  const { lightBarLevels, shadowSection, dialSVG } = createLightingPanel(ctx);
+  const { artShowHTML } = createArtShowPanel(ctx);
   /**
    * A colour control, with the saved palette under it.
    *
@@ -1731,57 +1651,6 @@ async function boot() {
         : frameSize(exportFrame, { long: exportLong, viewport, custom: customFrame });
     const chosen = which === "video" ? videoFrameShape : exportFrame;
     return `${shape.width} × ${shape.height} px${chosen === "view" ? ", the shape of this window" : ""}. ${chosen === "view" ? "" : "The viewport outlines it while this tab is open: what is inside the outline is what the file shows."}`;
-  }
-  /**
-   * The two drawn shadows, laid out the way Photoshop's Drop Shadow dialog is
-   * — asked for with a screenshot of it: Opacity, Angle with its dial and
-   * Use Global Light, Distance, Spread and Size, each a slider with the
-   * number typed beside it. The eye in each heading shows or hides that
-   * shadow without losing its settings. They live in Lighting because they
-   * are light, even though they are drawn rather than cast; see
-   * src/dropshadow.js for why.
-   *
-   * The sliders, the typed numbers and the dial move the shadows live
-   * (`shadowGesture`, below) and take one undo step per gesture. The eye and
-   * Use Global Light are ordinary edits.
-   */
-  function shadowSection(kind) {
-    const s = shadowSpec(p.booth, kind),
-      scope = SHADOW_FIELD[kind],
-      name = kind === "behind" ? "Drop shadow" : "Under shadow";
-    const heading =
-      kind === "behind"
-        ? `Drop shadow <span>behind the work</span>`
-        : `Second shadow <span>under &amp; to the side</span>`;
-    const eye = `<button data-shadow-eye="${kind}" class="eye${s.on ? "" : " off"}" title="${s.on ? "Hide" : "Show"} this shadow" aria-label="${s.on ? "Hide" : "Show"} ${e(name.toLowerCase())}" aria-pressed="${s.on}">${icon(s.on ? "eye" : "eye-off")}</button>`;
-    const note =
-      kind === "behind"
-        ? `Photoshop's drop shadow, on the wall behind every hung work. Angle is where the light comes from; Distance and Size are inches on the wall, so a shadow reads the same at every export size. ${s.on ? "" : "Hidden: its settings are kept, and the eye brings it back."}`
-        : `A stronger shadow thrown down and to the side, for weight on the wall. It draws over the one above, so the two read as a tight contact shadow and a soft cast one. ${s.on ? "" : "Hidden until the eye is switched on; set it up first if you like."}`;
-    return `<section class="fx${s.on ? "" : " fx-off"}" data-fx="${kind}"><div class="fx-head"><h3>${heading}</h3>${eye}</div>${fxRow(name, "Opacity", "opacity", s.opacity, 0, 100, 1, scope, "%")}${angleRow(name, s, scope)}${fxRow(name, "Distance", "distance", s.distance, 0, SHADOW_MAX, 0.05, scope, "in", 6)}${fxRow(name, "Spread", "spread", s.spread, 0, 100, 1, scope, "%")}${fxRow(name, "Size", "size", s.size, 0, SHADOW_MAX, 0.05, scope, "in", 6)}<p class="muted">${note}</p></section>`;
-  }
-  /**
-   * One Photoshop-style row: the label, a slider, the number and its unit.
-   * Both inputs are the same field, so either can be used and the other
-   * follows. A slider's travel stops at `reach` where the typed number may
-   * go further — fine control over the first few inches matters more than
-   * dragging to a foot — unless the value is already past it.
-   */
-  function fxRow(name, label, key, value, min, max, step, scope, unit, reach = max) {
-    const top = Math.max(reach, value);
-    const shown = Number(value.toFixed(2));
-    return `<div class="fx-row"><span class="fx-label">${label}</span><input type="range" data-field="${key}" data-scope="${scope}" data-fx-live aria-label="${e(name + " " + label.toLowerCase())}" min="${min}" max="${top}" step="${step}" value="${shown}"/><input type="number" data-field="${key}" data-scope="${scope}" data-fx-live aria-label="${e(name + " " + label.toLowerCase() + " value")}" min="${min}" max="${max}" step="${step}" value="${shown}"/><span class="fx-unit">${unit === "in" ? "″" : unit}</span></div>`;
-  }
-  /** Photoshop's angle row: a dial to drag, the degrees, and Use Global Light. */
-  function angleRow(name, s, scope) {
-    return `<div class="fx-row fx-angle"><span class="fx-label">Angle</span><span class="fx-dial" data-dial="${scope}" role="slider" tabindex="0" aria-label="${e(name)} angle dial" aria-valuemin="-180" aria-valuemax="180" aria-valuenow="${s.angle}">${dialSVG(s.angle)}</span><input type="number" data-field="angle" data-scope="${scope}" data-fx-live aria-label="${e(name)} angle value" min="-180" max="180" step="1" value="${Math.round(s.angle)}"/><span class="fx-unit">°</span></div><label class="check-field fx-global"><input type="checkbox" data-field="global" data-scope="${scope}" ${s.global ? "checked" : ""}/>Use global light</label>`;
-  }
-  /** The dial's face: a line from the centre toward the light. */
-  function dialSVG(angle) {
-    const r = (angle * Math.PI) / 180,
-      x = 12 + 8.5 * Math.cos(r),
-      y = 12 - 8.5 * Math.sin(r);
-    return `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10.5"/><line x1="12" y1="12" x2="${x.toFixed(2)}" y2="${y.toFixed(2)}"/><circle class="hub" cx="12" cy="12" r="1.5"/></svg>`;
   }
   /**
    * Every shadow control on the page, set from the booth — after a live
@@ -2269,23 +2138,6 @@ async function boot() {
   function powerSection() {
     const totals = powerTotals(powerLines(p, { outlets: powerOutlets }));
     return `<section><h3>Power and rentals</h3><p class="muted">What to order from the show: <strong>${totals.watts} W · ${totals.amps} A · ${totals.circuits} circuit${totals.circuits === 1 ? "" : "s"}</strong> of 120 V / 15 A, worked out from the lights, screens and outlets in this booth (circuits loaded to ${CIRCUIT_WATTS} W), and every table, chair and riser on its floor with carpet for it.</p><label class="field"><span>General outlets</span><div><input type="number" id="power-outlets" min="0" max="20" step="1" value="${powerOutlets}" aria-label="General outlets"/><small>ea</small></div></label>${btn("power-sheet", "Download power and rentals sheet", "plug", "wide")}</section>`;
-  }
-  /**
-   * Walls → 3D models (Pro): a .glb brought in from SketchUp, Blender or a
-   * maker's own scan — a sculpture, a custom display — stood on the floor at
-   * a typed height. Kept in the booth like an image, so a backup carries it.
-   */
-  function modelsSection() {
-    const models = p.booth.models || [];
-    const rows = models
-      .map((m, i) => {
-        const name = m.name || "Model " + (i + 1),
-          scope = "model-" + m.id,
-          f = (label, key, value, min, max, step, unit) => field(label, key, value, min, max, step, unit, scope, name + " " + label);
-        return `<div class="wall-setting${isShown(m) ? "" : " is-hidden"}" data-model="${e(m.id)}"><div class="panel-heading"><h4>${e(name)}${isShown(m) ? "" : ' <span class="badge">Hidden</span>'}</h4><span class="piece-actions">${hideEye("model", m.id, name, isShown(m))}${btn("delete-model-" + m.id, "Remove " + name, "trash-2", "icon-only")}</span></div>${f("Height", "height", m.height, 1, 240, 0.5, "in")}<div class="field-pair">${f("Left / right", "x", m.x, -600, 600, 1, "in")}${f("Front / back", "z", m.z, -600, 600, 1, "in")}</div>${f("Rotation", "rotation", m.rotation, -360, 360, 5, "°")}</div>`;
-      })
-      .join("");
-    return gated("glb", `<section><h3>3D models <span>${models.length} / ${MAX_MODELS}</span></h3><p class="muted">Bring in a .glb from SketchUp, Blender or a 3D scan — a sculpture, a custom display — and stand it on the floor. It is scaled to the height you type, so its own units do not matter. Saved in the booth and its backups.</p>${rows}${models.length < MAX_MODELS ? btn("upload-model", "Import .glb model", "upload", "wide") : `<p class="muted">${MAX_MODELS} models is the limit.</p>`}</section>`, "Bring in .glb models from SketchUp, Blender or a scan, and export the booth as .glb. Part of Booth Studio Pro.");
   }
   /**
    * Layout → Floor plan underlay (Pro): the venue's plan, as an image, laid

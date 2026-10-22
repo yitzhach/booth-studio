@@ -17,6 +17,16 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-22: `main.js`'s ninth seam (ROADMAP 1.2).** The first panel
+  builders: the Walls tab's (free-standing walls, pedestals and furniture,
+  3D models), the Lighting tab's (the light bar's levels, the two drop
+  shadows and their dial) and the Art show tab's, into `src/panels/`.
+  Unchanged but for `ctx.` and one comment's "below". `main.js` is 5,509
+  lines (from 5,657). `tests/icons.test.js` now reads the modules split out
+  of `main.js` as well as `main.js`, which it had stopped covering. Lint,
+  type check, 527 node tests, build, and view-panels, view-furniture,
+  view-box, view-artshow, view-finish, view-lighting, view-responsive,
+  view-tier and view-polish green, each run on its own.
 - **2026-10-22: `main.js`'s eighth seam (ROADMAP 1.2).** Upload and
   import — `upload`, the file inputs, a booth design chosen or dropped on
   the 2D floor, `importDesignFile` and opening a backup — moved into
