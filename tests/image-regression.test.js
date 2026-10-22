@@ -86,7 +86,9 @@ test("image editor uses the browser Image loader, not the imported icon", () => 
 });
 
 test("the image editor decodes at the size it shows, not the original's", async () => {
-  const source = readFileSync(new URL("../src/main.js", import.meta.url), "utf8");
+  // Moved with the image editor out of main.js (MAIN_SPLIT_PHASE.md, seam 4),
+  // where it reads the project as `ctx.p`.
+  const source = readFileSync(new URL("../src/ui/image-editor.js", import.meta.url), "utf8");
   const preview = source.slice(source.indexOf("  function drawImageEditorPreview"), source.indexOf("  function editRange"));
   let draws = 0;
   const ctx = { drawImage: () => draws++, fillRect() {} };
@@ -99,10 +101,10 @@ test("the image editor decodes at the size it shows, not the original's", async 
     asked.push({ data, width, height, maxEdge });
     return { width: 600, height: 400 };
   };
-  const run = new Function("document", "decodeAt", "applyImageEdits", "p", "devicePixelRatio",
+  const run = new Function("document", "decodeAt", "applyImageEdits", "ctx", "devicePixelRatio",
     "let editPreviewRevision=0; const editPreviewSources=new WeakMap(); const toast=()=>{};" +
     preview + "; return drawImageEditorPreview;");
-  run(document, decodeAt, s => s, { assets: { a: { data: "fixture", width: 6000, height: 4000 } } }, 1)({ asset: "a" });
+  run(document, decodeAt, s => s, { p: { assets: { a: { data: "fixture", width: 6000, height: 4000 } } } }, 1)({ asset: "a" });
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(asked, [{ data: "fixture", width: 6000, height: 4000, maxEdge: 720 }],
     "a 24 megapixel original is not unpacked whole for a 600 px dialog");

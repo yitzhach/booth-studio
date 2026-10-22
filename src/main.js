@@ -13,7 +13,6 @@ import { FRAMES, DEFAULT_FRAME, DEFAULT_CLIP_FRAME, CUSTOM_FRAME, FRAME_MIN, FRA
 import { SHADOW_FIELD, SHADOW_KINDS, SHADOW_MAX, globalAngle, normalAngle, shadowSpec } from "./dropshadow.js";
 import { MAX_SWATCHES, isColor, readPalette, savePalette, removeSwatch, rememberColor, previousColor } from "./swatches.js";
 import { DEFAULT_IMAGE_EDITS, normalizeImageEdits } from "./image-edit.js";
-import { applyImageEdits } from "./image-paint.js";
 import { PEOPLE, MAX_PEOPLE, flipFacing, MIN_HEIGHT, MAX_HEIGHT, MAX_LIFT, MIN_LIFT, LIFT_STEP, newPerson, personName } from "./people.js";
 import { FLARE_SOURCES, OVERHEAD } from "./flare.js";
 import {
@@ -237,9 +236,6 @@ function accountButton() {
   return `<button class="avatar${a.signedIn ? "" : " sign-in"}" data-action="studio-account" title="${e(a.title)}" aria-label="${e(a.signedIn ? a.title : "Sign in")}">${e(a.text)}</button>`;
 }
 import { BoothScene, BACKDROP_FRAMING } from "./scene.js";
-// Make it beautiful's promise, said beside its button wherever it appears.
-const POLISH_NOTE = "The look for this venue, every wall hung evenly on the 60″ line, and the spotlights aimed at the work. One undo puts it all back.";
-const HALL_OFF_NOTE = "Exhibition hall switched off: this booth now stands in the photographed environment. Art show → Exhibition hall brings it back.";
 import { AUTO_QUALITY, startScale } from "./adaptive.js";
 import { distanceInches, formatLength } from "./measure.js";
 import { hangAt, nudge, sameWall, spaceEvenly } from "./arrange.js";
@@ -257,6 +253,8 @@ import { SHARE_PARAM, rememberLink, sentLinks, shareLink, uploadShare } from "./
 import { createShareDialogs } from "./ui/share-dialogs.js";
 import { createWelcome } from "./ui/welcome.js";
 import { createKeepSafePanel } from "./ui/keep-safe-panel.js";
+import { HALL_OFF_NOTE, createPolishPanel } from "./ui/polish-panel.js";
+import { createImageEditor } from "./ui/image-editor.js";
 import { MAX_FLOOR_TEMPLATES, MAX_TEMPLATES, mergeFloorTemplates, readFloorTemplates, readTemplates, writeFloorTemplates, writeTemplates } from "./ui/templates.js";
 import { MAX_DESIGNS, OWN, assetInDesigns, deleteEffect, hasDesign, liveNumber, openBooth, renumberDesigns, setMine, setOpen } from "./linked.js";
 import { CIRCUIT_WATTS, powerHTML, powerLines, powerTotals } from "./power.js";
@@ -268,7 +266,7 @@ import { showPack } from "./showpack.js";
 // inspector's open/closed helper, below.
 import { SHORTCUTS, dedupe, fold as foldText, rankTools, shortcutOf } from "./toolsearch.js";
 import { PRO_FEATURES, TIERS, actionFeature, can, readTier, resolveTier, writeTier } from "./tier.js";
-import { HERO_CLIP, LOOKS, applyEnvPreset, applyLook, currentLook, heroShots, polish } from "./polish.js";
+import { LOOKS, applyEnvPreset } from "./polish.js";
 import { ROLES, hasMoreTabs, hiddenActions, needsWelcome, readRole, resolveRole, visibleTabs } from "./roles.js";
 import { noteKeepSafe } from "./keep-safe.js";
 import { errorEntry, recentErrors, recordError, reportText } from "./report.js";
@@ -561,6 +559,9 @@ async function boot() {
     set tabsMore(v) { tabsMore = v; },
     get welcomeFirst() { return welcomeFirst; },
     set welcomeFirst(v) { welcomeFirst = v; },
+    get busy() { return busy; },
+    get busyVideo() { return busyVideo; },
+    get editingStart() { return editingStart; },
     get scene() { return scene; },
     get actions() { return actions; },
     allowed: (feature) => allowed(feature),
@@ -568,12 +569,15 @@ async function boot() {
     backup,
     btn,
     confirmAction,
+    currentArtwork,
     deviceStore: () => deviceStore(),
     icon,
+    kit: () => kit(),
     mutate,
     readTemplates,
     refreshIcons,
     renderInspector,
+    runClips,
     toast,
   };
   try {
@@ -3679,43 +3683,7 @@ async function boot() {
     };
     d.showModal();
   }
-  // Looks and Make it beautiful (src/polish.js).
-  function looksSection() {
-    // The look the booth is in stays marked until a value of it is changed by hand.
-    const now = currentLook(p);
-    return `<section><h3>Looks</h3>${btn("polish", "Make it beautiful", "sparkles", "primary wide")}<p class="muted">${e(POLISH_NOTE)}</p><div class="look-grid">${Object.entries(LOOKS).map(([k, l]) => `<button type="button" data-action="look-${k}" title="${e(l.blurb)}" aria-label="Look: ${e(l.label)}${k === now ? " (this booth's look now)" : ""}"${k === now ? ' class="active" aria-current="true"' : ""}><strong>${e(l.label)}</strong><span>${e(l.blurb)}</span></button>`).join("")}</div><p class="muted">A look sets the environment, the room light and the spotlights' colour and power together. Every value stays editable below.</p></section>`;
-  }
-  /** Export's first section: polish, then the hero set in one press. */
-  function heroSection() {
-    const names = heroShots(p).map((s) => s.name);
-    const clip = allowed("video") && videoSupported();
-    return `<section><h3>Hero set</h3>${btn("polish", "Make it beautiful", "sparkles", "wide")}<p class="muted">${e(POLISH_NOTE)}</p>${busyVideo ? btn("cancel-video", "Cancel export", "x", "wide") : btn("hero-export", "Export the hero set", "images", "primary wide")}<div class="video-progress"></div><p class="muted">${names.length} PNGs at 4096 px, widescreen — ${e(names.join(", "))}${clip ? ` — and a ${HERO_CLIP.seconds} s orbit as MP4` : ""}. The pictures a jury, a promoter or a post asks for, each from its own camera; the view on screen is not moved.</p></section>`;
-  }
-  async function runHeroSet() {
-    if (busy || busyVideo) return;
-    if (!scene || p.mode !== "3d") return toast("3D is not available, so there is no view to export.", true);
-    const k = kit();
-    // The export cuts its frame out of the viewport, so the shots are fitted to its shape.
-    const host = document.querySelector("#scene");
-    const aspect = host?.clientWidth && host?.clientHeight ? host.clientWidth / host.clientHeight : 16 / 9;
-    const stills = heroShots(p, { aspect }).map((s) => ({ ...resolveJob({ kind: "still", pose: s.pose, set: { long: 4096, frame: "desktop" } }, k), name: s.name }));
-    const clip = allowed("video") && videoSupported() ? [{ ...resolveJob({ kind: "clip", move: HERO_CLIP.move, seconds: HERO_CLIP.seconds, set: { frame: "desktop" } }, k), name: "Orbit" }] : [];
-    await runClips([...stills, ...clip], { batch: true });
-  }
-  function runLook(key) {
-    if (p.mode !== "3d") return;
-    let r;
-    mutate(() => (r = applyLook(p, key)));
-    if (r) toast(`${LOOKS[r.look].label}.${r.hallOff ? ` ${HALL_OFF_NOTE}` : ""} Undo puts the last look back.`);
-  }
-  function runPolish() {
-    if (p.mode !== "3d") return;
-    let r;
-    mutate(() => (r = polish(p)));
-    actions["reset-view"]();
-    const n = (k, one) => `${k} ${one}${k === 1 ? "" : "s"}`;
-    toast(`${LOOKS[r.look].label} · ${n(r.walls, "wall")} hung evenly · ${n(r.lights, "spotlight")} aimed at the work.${r.hallOff ? ` ${HALL_OFF_NOTE}` : ""} Undo puts it all back.`);
-  }
+  const { looksSection, heroSection, runHeroSet, runLook, runPolish } = createPolishPanel(ctx);
   const { openWelcome, describeToAssistant, welcomeDismissed, chooseRole, openQuickStart, runQuickStart } = createWelcome(ctx);
   function backup() {
     // The floor templates saved on this browser ride along, so they survive
@@ -3806,90 +3774,10 @@ async function boot() {
     renderInspector();
     scheduleSave();
   }
-  let editPreviewRevision = 0;
-  const editPreviewSources = new WeakMap();
   function currentArtwork() {
     return p.art.find((item) => item.id === selected);
   }
-  function drawImageEditorPreview(a) {
-    const preview = document.querySelector("#image-edit-preview");
-    const asset = p.assets[a.asset];
-    if (!preview || !asset) return;
-    const revision = ++editPreviewRevision;
-    const paint = (source) => {
-      if (revision !== editPreviewRevision || !document.querySelector("#image-editor").open) return;
-      const edited = applyImageEdits(source, a.edits);
-      const box = preview.getBoundingClientRect();
-      const pixelRatio = Math.min(devicePixelRatio, 2);
-      preview.width = Math.max(1, Math.round(box.width * pixelRatio));
-      preview.height = Math.max(1, Math.round(box.height * pixelRatio));
-      const ctx = preview.getContext("2d");
-      ctx.fillStyle = "#11161b";
-      ctx.fillRect(0, 0, preview.width, preview.height);
-      const fit = Math.min(preview.width / edited.width, preview.height / edited.height) * 0.92;
-      const width = edited.width * fit, height = edited.height * fit;
-      ctx.drawImage(edited, (preview.width - width) / 2, (preview.height - height) / 2, width, height);
-    };
-    const cached = editPreviewSources.get(asset);
-    if (cached) { paint(cached); return; }
-    // 720 px is what this dialog shows; decoding the original at that size is
-    // the browser's job, not a full unpack followed by a canvas shrink.
-    decodeAt(asset.data, asset.width, asset.height, 720).then(
-      (source) => {
-        editPreviewSources.set(asset, source);
-        paint(source);
-      },
-      () => {
-        if (revision === editPreviewRevision)
-          toast("Could not load the editor preview. Your original is still saved.", true);
-      },
-    );
-  }
-  function editRange(label, key, value, min, max, step, unit = "") {
-    return `<label class="range"><span>${label}<output>${Number(value.toFixed(2))}${unit}</output></span><input type="range" data-edit="${key}" aria-label="${label}" min="${min}" max="${max}" step="${step}" value="${value}"/></label>`;
-  }
-  function renderImageEditor() {
-    const a = currentArtwork();
-    const dialog = document.querySelector("#image-editor");
-    if (!a?.asset) {
-      dialog.close();
-      return;
-    }
-    a.edits = normalizeImageEdits(a.edits);
-    const edits = a.edits;
-    document.querySelector("#image-editor-content").innerHTML = `
-      <div class="image-editor-heading"><div><span class="eyebrow">NON-DESTRUCTIVE</span><h2>Edit ${e(a.title)}</h2></div><button data-action="editor-cancel" class="icon-only" aria-label="Cancel image edits">${icon("x")}<span>Cancel</span></button></div>
-      <div class="image-editor-grid">
-        <div class="image-preview-wrap"><canvas id="image-edit-preview" aria-label="Edited image preview"></canvas><p>The uploaded original is preserved. These adjustments apply only to this wall placement.</p></div>
-        <div class="image-adjustments">
-          <section><h3>Orientation</h3><div class="button-row"><button data-action="rotate-left" aria-label="Rotate 90° counterclockwise">↶ 90°</button><button data-action="rotate-right" aria-label="Rotate 90° clockwise">↷ 90°</button></div><div class="button-row"><button data-action="flip-horizontal" class="${edits.flipX ? "active" : ""}">Flip horizontal</button><button data-action="flip-vertical" class="${edits.flipY ? "active" : ""}">Flip vertical</button></div></section>
-          <section><h3>Light and color</h3>
-            ${editRange("Exposure","exposure",edits.exposure,-2,2,.05," EV")}
-            ${editRange("Contrast","contrast",edits.contrast,-100,100,1)}
-            ${editRange("Saturation","saturation",edits.saturation,-100,100,1)}
-            ${editRange("Temperature","temperature",edits.temperature,-100,100,1)}
-            ${editRange("Tint","tint",edits.tint,-100,100,1)}
-          </section>
-          <button data-action="reset-image-edits" class="wide">Reset adjustments</button>
-        </div>
-      </div>
-      <div class="image-editor-footer"><button data-action="editor-cancel">Cancel</button><button data-action="editor-save" class="primary">Save edits</button></div>`;
-    refreshIcons();
-    requestAnimationFrame(() => drawImageEditorPreview(a));
-  }
-  function scheduleEditedPreview() {
-    const a = currentArtwork();
-    if (!a) return;
-    cancelAnimationFrame(scheduleEditedPreview.frame);
-    scheduleEditedPreview.frame = requestAnimationFrame(() => drawImageEditorPreview(a));
-  }
-  function updateEditorEdits(run) {
-    const a = currentArtwork();
-    if (!editingStart || !a?.asset) return;
-    a.edits = normalizeImageEdits(a.edits);
-    run(a.edits);
-    renderImageEditor();
-  }
+  const { drawImageEditorPreview, renderImageEditor, scheduleEditedPreview, updateEditorEdits } = createImageEditor(ctx);
   const actions = {
     // Saving the colour a control is showing into the palette. Reading it off
     // the model rather than off the input is what makes the button honest
