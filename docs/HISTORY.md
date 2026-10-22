@@ -17,6 +17,14 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-22: `main.js`'s thirteenth seam (ROADMAP 1.2).** The Video
+  tab's 43 buttons — recording and cancelling a clip, the timeline dialog,
+  auto pan, the batch list and its presets, the frame resets — into
+  `src/actions/video.js`, merged back into the one action table.
+  Unchanged but for `ctx.`, checked line for line. `main.js` is 4,678
+  lines (from 5,017). Lint, type check, 527 node tests and build green;
+  the whole chain is run one suite at a time before its pull request,
+  which reports it.
 - **2026-10-22: `main.js`'s twelfth seam (ROADMAP 1.2).** The first piece
   of the action table: the Artwork tab's 35 buttons (the saved colours, the
   image editor's, signs and labels, upload and replace, duplicate and
