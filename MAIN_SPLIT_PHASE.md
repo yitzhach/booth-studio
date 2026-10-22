@@ -70,7 +70,7 @@ pushing.
 | 7 | Find a tool and the app map | `src/ui/find-tool.js` | ~150 | view-toolsearch, view-assistant |
 | 8 | upload and import | `src/ui/upload.js` | ~210 | view-wall-assets, view-textures, e2e |
 | 9 | the Walls, Lighting and Art show tabs' builders | `src/panels/walls.js`, `src/panels/lighting.js`, `src/panels/art-show.js` | ~150 | view-panels, view-furniture, view-box, view-artshow, view-finish, view-lighting, view-responsive, view-tier, view-polish |
-| 10 | the Layout and Artwork tabs' builders | `src/panels/layout.js`, `src/panels/artwork.js` | ~250 | each tab's suites |
+| 10 | the Layout and Artwork tabs' builders | `src/panels/layout.js`, `src/panels/artwork.js` | ~240 | view-row, view-people, view-ground-library, view-views, view-plan, view-measure, view-guides, view-finish, view-wall-assets, view-showpack, view-hdri, view-responsive, view-panels, e2e |
 | 11 | the Video, Export and Show floor tabs' builders | `src/panels/*.js` | ~130 | each tab's suites |
 | 12–15 | the action table, by area | `src/actions/*.js` | ~1,250 | the whole chain |
 | 16 | what is left over 1,500 | — | — | the whole chain |
@@ -258,3 +258,29 @@ wrong.)
   also reads every module in `src/ui/`, `src/panels/` and `src/actions/`;
   its assertions are unchanged, and a made-up icon name in
   `src/panels/art-show.js` turns it red.
+- **2026-10-22, seam 10: two tabs, two factories, and the state they
+  read.** Layout's builders (`groundFields`, `rowSection`,
+  `surroundingsFields`, `personSlider`, `draftSection`, `viewsSection`,
+  `tagsSection`, `underlaySection`, `clearanceSection`, `peopleSection`)
+  moved into `src/panels/layout.js`, and Artwork's (`multiSection`,
+  `locationOptions`, `artSlider`, `edgeColorFields`, `artThumb`,
+  `libraryHTML`, `signFields`) into `src/panels/artwork.js`; each factory
+  is called where its first function stood. Every one of them but
+  `personSlider`, which only `peopleSection` draws, is returned:
+  `inspectorHTML` calls them, and `renderLibrary` calls `libraryHTML`. The
+  comment that opens the figures ("Figures for scale…") sat over
+  `personSlider` and moved with it, because it says why the figures are in
+  this panel. What the builders lean on but the action table calls too —
+  `libraryItems`, `activeSlot`, `proLock`, `pickedWorks` — stays in
+  `main.js` and reaches them through `ctx` (`pickedWorks` wrapped: its
+  `const` comes after `ctx`), with new getters for `hiddenTags`, `picked`,
+  `search` and `selectedPerson`; neither module assigns state. Layout
+  imports `BACKDROP_FRAMING` from `src/scene.js`, as `main.js` does, which
+  changes nothing in the build; but when the typing pass reaches
+  `layout.js` it pulls `scene.js` in with it (`tsconfig.app.json`'s note),
+  so by then that constant should come from wherever ROADMAP 1.3's split
+  of `scene.js` puts it, not through `ctx` to dodge the check. Sixteen imports `main.js` no longer uses
+  went with the code. The ratchet is 5,270 (red on `main`'s 5,509). `ctx`
+  carries 55 pieces of state and 42 helpers: seam 11's builders read
+  little more, so the one-object question is settled after it, before the
+  action table starts.

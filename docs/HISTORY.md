@@ -17,6 +17,16 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-22: `main.js`'s tenth seam (ROADMAP 1.2).** The Layout tab's
+  builders (the ground, the booth row, the surroundings, the figures,
+  drawing speed, saved views, tags, the underlay, the clearance checks)
+  into `src/panels/layout.js`, and the Artwork tab's (the library and its
+  thumbnails, the sign and label fields, location and sliders, the edge
+  colour, the several-works bar) into `src/panels/artwork.js`. Unchanged
+  but for `ctx.`, checked line for line. `main.js` is 5,270 lines (from
+  5,509). Lint, type check, 527 node tests, build, and the fourteen suites
+  that drive the two tabs (MAIN_SPLIT_PHASE.md, row 10) green, each run
+  on its own.
 - **2026-10-22: `main.js`'s ninth seam (ROADMAP 1.2).** The first panel
   builders: the Walls tab's (free-standing walls, pedestals and furniture,
   3D models), the Lighting tab's (the light bar's levels, the two drop
