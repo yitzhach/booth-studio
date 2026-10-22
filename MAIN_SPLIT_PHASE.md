@@ -184,3 +184,16 @@ wrong.)
   separated the dialog's description from the state left behind, is
   dropped. view-polish joins the row, because the hero set renders
   through the batch's `kit`. The ratchet is 6,348 (red on `main`'s 6,764).
+- **2026-10-22, seam 6: the show floor's banner stays where it was.** The
+  `// ---- The show floor ----` line still marks the place in `main.js`,
+  now over the one factory call; the module's header says the rest. The
+  code from it down to `showFloorPanel` moved (`hallPanel` above it is the
+  Art show tab's builder and waits for seams 9–11; `setShow3d` and the
+  walk below it are the viewport's). Rewritten with the same parser as
+  seam 5. `ctx` gains getters for `show3d`, `showBlock`, `showEditor`,
+  `panTool`, `walking` and `PAN_KEY`, getters and setters for
+  `showClipboard`, `showGap` and `showGrid` (the module assigns them, as
+  it does `hallSelected`, which had both already), and `field`, `gated`
+  (wrapped, a `const` after `ctx`, passing its arguments on), `setPanTool`,
+  `setShow3d` and `setWalking`. The ratchet is 6,008 (red on `main`'s
+  6,348).
