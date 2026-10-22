@@ -72,7 +72,10 @@ pushing.
 | 9 | the Walls, Lighting and Art show tabs' builders | `src/panels/walls.js`, `src/panels/lighting.js`, `src/panels/art-show.js` | ~150 | view-panels, view-furniture, view-box, view-artshow, view-finish, view-lighting, view-responsive, view-tier, view-polish |
 | 10 | the Layout and Artwork tabs' builders | `src/panels/layout.js`, `src/panels/artwork.js` | ~240 | view-row, view-people, view-ground-library, view-views, view-plan, view-measure, view-guides, view-finish, view-wall-assets, view-showpack, view-hdri, view-responsive, view-panels, e2e |
 | 11 | the Video, Export and Show floor tabs' builders | `src/panels/video.js`, `src/panels/export.js`, `src/panels/hall.js` | ~110 | view-video, view-timeline, view-frame, view-batch, view-round13, view-ai, view-hall, view-show, view-show3d, view-floor2, view-linked, view-tier, e2e |
-| 12–15 | the action table, by area | `src/actions/*.js` | ~1,250 | the whole chain |
+| 12 | the Artwork tab's actions | `src/actions/artwork.js` | ~140 | the whole chain |
+| 13 | the Video tab's actions: the clip, the timeline, the batch, auto-pan | `src/actions/video.js` | ~360 | the whole chain |
+| 14 | Export's and the show floor's actions | `src/actions/export.js`, `src/actions/show.js` | ~350 | the whole chain |
+| 15 | the rest: the booth, the viewport, the project and the app | `src/actions/*.js` | ~350 | the whole chain |
 | 16 | what is left over 1,500 | — | — | the whole chain |
 
 ## Each seam, step by step
@@ -317,3 +320,41 @@ wrong.)
   removing. *Cost if wrong:* `ctx` grows by a getter per piece of state the
   action table reads (perhaps 40 more lines in `main.js`), and the gate
   counts them.
+- **2026-10-22, seam 12: the action table splits into four by area, and
+  stays one object.** Measured, the table's 1,243 lines are Artwork's
+  (~170), Video's (the clip, the timeline, the batch and auto-pan, ~360),
+  Export's (~160) and the show floor's (~195), and the rest (the booth,
+  the viewport, the project and the app, ~355); the table above now has a
+  row for each, counting what `main.js` loses, which is a little less
+  than what moves (Artwork: 167 lines moved, 142 lost, because `ctx`
+  grows by the state and helpers the moved code reads). An area is a factory that returns its entries exactly as
+  they stood in the literal, and `main.js` merges it in with
+  `Object.assign(actions, createArtworkActions(ctx))` right after the
+  literal closes, so `actions` stays the one object everything already
+  reaches: the dispatch (`actions[action]?.(b)`), the table's own
+  `actions["…"]()` calls (in moved code, `ctx.actions[…]`), `ctx`'s getter
+  and the keyboard. The moved keys now come last; nothing iterates the
+  table — every use is a lookup by key — so nothing can tell. The table's
+  two computed rows (`...Object.fromEntries(…)` for the looks and for
+  align) move as rows too; align's went with Artwork, beside distribute.
+  Artwork's 35 entries assign `addMode`, `editingStart`, `future`,
+  `palette` and `picked`, which gain setters (and getters where they had
+  none); `history` is pushed and shifted, never reassigned, so it has a
+  getter only. Its helpers are passed as they are (`addWallAsset`,
+  `arrangePicked`, `arrangeWall`, `fieldTarget`, `fromSnapshot`, `render`,
+  `renderSelection`, `saveViewPrefs`, `scaleSelected`, `snapshot`, all
+  function declarations) or wrapped (the image editor's
+  `drawImageEditorPreview`, `renderImageEditor`, `updateEditorEdits`). One
+  exception to the wrapping: `editor-cancel` reads
+  `scheduleEditedPreview.timer`, a property of the function itself, and a
+  wrapper has no such property, so `ctx` hands the function over through a
+  getter. (Nothing ever sets `.timer` — the editor keeps its pending frame
+  in `.frame` — so that `clearTimeout` has never cancelled anything; it is
+  harmless, since the dialog is closing, and is left exactly as it was: a
+  move does not fix. Noted for whoever next works on the editor.) The
+  review found one more of the same kind: `duplicate-art` checks the
+  200-panel limit inside `mutate()`, so at the limit the refusal still
+  leaves an undo step with no change behind it. Both are for a fix of
+  their own once the split is done. Eight
+  imports `main.js` no longer uses went with the code. The ratchet is
+  5,017 (red on `main`'s 5,159).
