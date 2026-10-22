@@ -221,9 +221,9 @@ export const DIFFUSION_MAX = 3;
 //
 // A booth saved brighter than 100 keeps its value and widens its own slider
 // rather than being dragged down the moment the panel is drawn; see
-// `lightBarLevels` in main.js. That is why this is a slider maximum and not a
-// clamp, and it is the same move as `panelSlider`, `artSlider` and the
-// diffusion scale above.
+// `lightBarLevels` in src/panels/lighting.js. That is why this is a slider
+// maximum and not a clamp, and it is the same move as `panelSlider`,
+// `artSlider` and the diffusion scale above.
 export const LIGHT_BAR_POWER_SLIDER_MAX = 100;
 export const LIGHT_BAR_POWER_STEP = 0.16;
 export const LIGHT_BAR = {

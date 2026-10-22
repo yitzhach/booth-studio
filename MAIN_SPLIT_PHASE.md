@@ -69,7 +69,9 @@ pushing.
 | 6 | the show-floor panel | `src/ui/show-floor-panel.js` | ~380 | view-show, view-show3d, view-hall, view-linked, view-floor2 |
 | 7 | Find a tool and the app map | `src/ui/find-tool.js` | ~150 | view-toolsearch, view-assistant |
 | 8 | upload and import | `src/ui/upload.js` | ~210 | view-wall-assets, view-textures, e2e |
-| 9–11 | the panel builders, a tab or two each | `src/panels/*.js` | ~800 | each tab's suites |
+| 9 | the Walls, Lighting and Art show tabs' builders | `src/panels/walls.js`, `src/panels/lighting.js`, `src/panels/art-show.js` | ~150 | view-panels, view-furniture, view-box, view-artshow, view-finish, view-lighting, view-responsive, view-tier, view-polish |
+| 10 | the Layout and Artwork tabs' builders | `src/panels/layout.js`, `src/panels/artwork.js` | ~250 | each tab's suites |
+| 11 | the Video, Export and Show floor tabs' builders | `src/panels/*.js` | ~130 | each tab's suites |
 | 12–15 | the action table, by area | `src/actions/*.js` | ~1,250 | the whole chain |
 | 16 | what is left over 1,500 | — | — | the whole chain |
 
@@ -216,3 +218,43 @@ wrong.)
   `tagAssetRoles`. view-linked joins the suites run here, because a design
   dropped on a floor booth comes through this code. The ratchet is 5,657
   (red on `main`'s 5,816).
+- **2026-10-22, seam 9: the panel builders are three seams, grouped by
+  what they share.** Seam 9 takes Walls, Lighting and Art show into
+  `src/panels/walls.js`, `src/panels/lighting.js` and
+  `src/panels/art-show.js`: `lightBarLevels` is drawn in both the Art show
+  and the Lighting tab, so those two go together, and Walls is the smallest
+  and most separate. Seam 10 is Layout and Artwork, seam 11 Video, Export
+  and the Show floor's `hallPanel` (the table above now says so, each row's
+  lines counted from the code as it stands). Only the builders move: what their
+  controls do (`syncPanelInputs`, `revealPanelFields`, `syncShadowInputs`,
+  `setShadowLive` and the rest) belongs to the action table and the
+  viewport, and goes with them in seams 12–15. `inspectorHTML`, which
+  composes every tab, and the field builders every tab shares (`field`,
+  `range`, `colorField`, `hideEye`, `gated`) stay in `main.js` and reach the
+  panels through `ctx`, since the action table and `src/ui/` use them too;
+  seam 16 decides where they end up. Each panel is a factory (seam 2's
+  rule): Walls reads `selectedPanel`, `selectedPedestal` and
+  `furnitureChoice` (a new getter); none of the three assigns state, so
+  nothing gains a setter. `dialSVG` and `lightBarLevels` are returned
+  because `main.js` still calls them (`syncShadowInputs`, and the Lighting
+  branch of `inspectorHTML`); `fxRow`, `angleRow`, `panelSlider` and
+  `pedestalSlider` are not. Walls' factory call stands where `panelFields`
+  did; Lighting's and then Art show's where `artShowHTML` and
+  `lightBarLevels` did, Lighting first, so the function Art show draws
+  with exists before it does. A stale "in main.js" in `src/model.js`'s
+  note on `LIGHT_BAR_POWER_SLIDER_MAX` now names `src/panels/lighting.js`
+  (a comment: the scene bundle drops it, so studio-api's copy is
+  unchanged). `ctx`
+  gains `colorField`, `hideEye` and `lightBarLevels` (wrapped: its `const`
+  comes after `ctx`). One comment changed with its move: `shadowSection`'s
+  "(`shadowGesture`, below)" now says "in main.js". The ratchet is 5,509
+  (red on `main`'s 5,657). `ctx` now carries 51 pieces of state and 38
+  helpers; the decision above collapses the state into one object at about
+  60, so seam 10 or 11 is where that pull request is weighed.
+- **2026-10-22, seam 9: the icon test reads the moved modules too.**
+  `tests/icons.test.js` took the icon names only from `main.js`'s source,
+  so each seam had quietly taken its buttons out of the check. None was
+  missing (seams 1–8's modules were checked when this was found). It now
+  also reads every module in `src/ui/`, `src/panels/` and `src/actions/`;
+  its assertions are unchanged, and a made-up icon name in
+  `src/panels/art-show.js` turns it red.
