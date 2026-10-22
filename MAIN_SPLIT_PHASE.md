@@ -74,7 +74,7 @@ pushing.
 | 11 | the Video, Export and Show floor tabs' builders | `src/panels/video.js`, `src/panels/export.js`, `src/panels/hall.js` | ~110 | view-video, view-timeline, view-frame, view-batch, view-round13, view-ai, view-hall, view-show, view-show3d, view-floor2, view-linked, view-tier, e2e |
 | 12 | the Artwork tab's actions | `src/actions/artwork.js` | ~140 | the whole chain |
 | 13 | the Video tab's actions: the clip, the timeline, the batch, auto-pan | `src/actions/video.js` | ~340 | the whole chain |
-| 14 | Export's and the show floor's actions | `src/actions/export.js`, `src/actions/show.js` | ~350 | the whole chain |
+| 14 | Export's and the show floor's actions | `src/actions/export.js`, `src/actions/show.js` | ~330 | the whole chain |
 | 15 | the rest: the booth, the viewport, the project and the app | `src/actions/*.js` | ~350 | the whole chain |
 | 16 | what is left over 1,500 | — | — | the whole chain |
 
@@ -379,3 +379,34 @@ wrong.)
   ran in a second worktree while seam 12's pull request was in CI, on
   seam 12's head with this seam on top — the tree `main` has once seam 12
   merges, so the run holds for the pull request.
+- **2026-10-22, seam 14: Export's and the show floor's actions.** Export's
+  11 entries (Copy a problem report, Ask the browser to keep it, the show
+  pack, the hanging guide, the PNG, the AI render's pack and its render,
+  the hero set, the `.glb`, elevations, the saved views as PNGs) moved
+  into `src/actions/export.js`, and the show floor's 31 (opening and
+  leaving it, the 3D show and its walk, the drawing board's selection,
+  floor templates, the hall planner, a floor booth opened as a design,
+  designs sent and imported, the map, the CSV and the power sheet) into
+  `src/actions/show.js`, both merged in the same `Object.assign`.
+  `show-pack` is Export's — the van's paperwork — whatever its prefix
+  says. Two names come from outside `boot()`'s state: `BUILD`, the module's
+  own build stamp at the top of `main.js`, and `photo`, the photo editor
+  `boot()` makes after `ctx`; both reach the new module through getters
+  (importing `BUILD` from `main.js` would be a circular import of the
+  page's entry). Export's entries set `busy`, which gains a setter; the
+  show floor's set only state that had setters already. The show-floor
+  panel's functions (`renumberBooths`, `showAlign`, `showDelete`,
+  `showDuplicate`, `showMirror`, `showPieces`, `showRotate`), the share
+  dialogs' (`shareFile`, `showShareLink`), Keep your work's `paintKeepSafe`
+  and the hero set's `runHeroSet` are wrapped; `makeAiPack` and `safeName`
+  are passed as they are. Twenty-seven imports `main.js` no longer uses
+  went with the code. The review found two more bugs older than the move,
+  left as they were for the fix after the split (beside seam 12's two):
+  the show floor's "Renumber these" is offered for any selection of
+  several pieces, so two pieces that are not booths renumber nothing from
+  `Infinity` — the toast says so — and leave an empty undo step; and the
+  Video tab's "Export PNG · 4096 px" exports at Export's remembered Detail
+  size, not 4096 px, as its own comment (moved with it, twice) says. The
+  ratchet is 4,346 (red on `main`'s 4,678). As in
+  seam 13, the chain ran in the second worktree, on seam 13's head with
+  this seam on top.

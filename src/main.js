@@ -3,7 +3,7 @@ import { typingIn } from "./typing.js";
 import { ENV_PRESETS, ART_FIDELITY, DEFAULT_PRESET, DEFAULT_FIDELITY, FIXTURE_MODES, DEFAULT_FIXTURES, isIndoor, showFixtures } from "./lighting.js";
 import { MOVES, DEFAULT_MOVE, CUSTOM_MOVE, resolveMove, frameTimes } from "./camera-path.js";
 import {
-  MAX_KEYS, MIN_SECONDS, MAX_SECONDS,
+  MIN_SECONDS, MAX_SECONDS,
   normalizeTimeline, timelineSeconds,
   keySchedule, keyTAt,
 } from "./timeline.js";
@@ -229,14 +229,11 @@ import { distanceInches, formatLength } from "./measure.js";
 import { nudge, sameWall } from "./arrange.js";
 import { MAX_VIEWS, STEP, STRIDE, newView } from "./views.js";
 import { checkClearance } from "./clearance.js";
-import { elevationsHTML } from "./elevations.js";
-import { MAX_HALL_BOOTHS, hallCSV, hallHTML, moveSale, newHall } from "./hall.js";
-import { floorTemplateOf, growToFit, SHAPES, VENUES as SHOW_VENUES, boothBlock, boundsOf, feet, floorOf, renumber, showItems, spacePieces, toFloor } from "./show.js";
+import { MAX_HALL_BOOTHS, moveSale } from "./hall.js";
+import { SHAPES, VENUES as SHOW_VENUES, feet, floorOf, showItems, toFloor } from "./show.js";
 import { createShowEditor } from "./show-editor.js";
-import { showWalkthrough } from "./show-scene.js";
-import { PACK_LONG, describeScene, protectPass, provider as aiProvider, render as aiRender, renderPack } from "./ai-render.js";
-import { designFile } from "./booth-file.js";
-import { SHARE_PARAM, rememberLink, sentLinks, shareLink, uploadShare } from "./share.js";
+import { PACK_LONG, describeScene, protectPass, renderPack } from "./ai-render.js";
+import { SHARE_PARAM, sentLinks, shareLink } from "./share.js";
 import { createShareDialogs } from "./ui/share-dialogs.js";
 import { createWelcome } from "./ui/welcome.js";
 import { createKeepSafePanel } from "./ui/keep-safe-panel.js";
@@ -257,18 +254,17 @@ import { createExportPanel } from "./panels/export.js";
 import { createHallPanel } from "./panels/hall.js";
 import { createArtworkActions } from "./actions/artwork.js";
 import { createVideoActions } from "./actions/video.js";
-import { MAX_FLOOR_TEMPLATES, MAX_TEMPLATES, readFloorTemplates, readTemplates, writeFloorTemplates, writeTemplates } from "./ui/templates.js";
-import { OWN, assetInDesigns, hasDesign, liveNumber, openBooth, setMine } from "./linked.js";
-import { powerHTML } from "./power.js";
+import { createExportActions } from "./actions/export.js";
+import { createShowActions } from "./actions/show.js";
+import { MAX_TEMPLATES, readFloorTemplates, readTemplates, writeFloorTemplates, writeTemplates } from "./ui/templates.js";
+import { assetInDesigns, liveNumber } from "./linked.js";
 import { templateOf } from "./quickstart.js";
 import { PhotoEditor } from "./photo.js";
-import { hangingGuide } from "./guide.js";
-import { showPack } from "./showpack.js";
 import { PRO_FEATURES, TIERS, actionFeature, can, readTier, resolveTier, writeTier } from "./tier.js";
 import { LOOKS, applyEnvPreset } from "./polish.js";
 import { ROLES, hasMoreTabs, hiddenActions, needsWelcome, readRole, resolveRole, visibleTabs } from "./roles.js";
 import { noteKeepSafe } from "./keep-safe.js";
-import { errorEntry, recentErrors, recordError, reportText } from "./report.js";
+import { errorEntry, recordError } from "./report.js";
 async function boot() {
   const icons = {
     ShieldCheck,
@@ -559,6 +555,7 @@ async function boot() {
     get welcomeFirst() { return welcomeFirst; },
     set welcomeFirst(v) { welcomeFirst = v; },
     get busy() { return busy; },
+    set busy(v) { busy = v; },
     get busyVideo() { return busyVideo; },
     get editingStart() { return editingStart; },
     set editingStart(v) { editingStart = v; },
@@ -643,6 +640,8 @@ async function boot() {
     set autoPanRunning(v) { autoPanRunning = v; },
     get autoPanSettings() { return autoPanSettings; },
     get videoAbort() { return videoAbort; },
+    get BUILD() { return BUILD; },
+    get photo() { return photo; },
     get actions() { return actions; },
     activeSlot,
     addWallAsset,
@@ -664,6 +663,7 @@ async function boot() {
     icon,
     inspectorHTML,
     kit: () => kit(),
+    makeAiPack,
     libraryItems,
     mutate,
     probeCodec,
@@ -674,6 +674,7 @@ async function boot() {
     renderInspector,
     renderSelection,
     runClips,
+    safeName,
     saveViewPrefs,
     scaleSelected,
     setPanTool,
@@ -716,6 +717,17 @@ async function boot() {
     setPlace: (...args) => setPlace(...args),
     showKey: (...args) => showKey(...args),
     stillJob: (...args) => stillJob(...args),
+    paintKeepSafe: (...args) => paintKeepSafe(...args),
+    runHeroSet: (...args) => runHeroSet(...args),
+    renumberBooths: (...args) => renumberBooths(...args),
+    showAlign: (...args) => showAlign(...args),
+    showDelete: (...args) => showDelete(...args),
+    showDuplicate: (...args) => showDuplicate(...args),
+    showMirror: (...args) => showMirror(...args),
+    showPieces: (...args) => showPieces(...args),
+    showRotate: (...args) => showRotate(...args),
+    shareFile: (...args) => shareFile(...args),
+    showShareLink: (...args) => showShareLink(...args),
     range,
     scheduleSave,
     updateFrameGuide,
@@ -2609,47 +2621,6 @@ async function boot() {
     "backdrop-reset": () => mutate(()=>{p.booth.backdropFraming=BACKDROP_FRAMING;p.booth.surroundRotation=0;p.booth.backdropTilt=0;}),
     import: () => document.querySelector("#backup-input").click(),
     backup,
-    // Report a problem (src/report.js): copied, never sent. Where the
-    // clipboard is refused, the report opens in a dialog to copy by hand.
-    "copy-report": async () => {
-      const text = reportText({
-        build: BUILD,
-        href: location.href,
-        userAgent: navigator.userAgent,
-        viewport: `${innerWidth}×${innerHeight} @${devicePixelRatio}x`,
-        signedIn: !!readSession(),
-        project: p,
-        assets: window.BOOTH_ASSETS,
-        errors: recentErrors(),
-      });
-      try {
-        await navigator.clipboard.writeText(text);
-        toast("Problem report copied. Paste it into a message to whoever looks after Booth Studio.");
-      } catch {
-        const d = document.querySelector("#dialog");
-        document.querySelector("#dialog-content").innerHTML =
-          `<h2>Problem report</h2><p class="muted">Select it all and copy it into a message. Nothing has been sent.</p><textarea class="report-text" readonly rows="14" aria-label="Problem report">${e(text)}</textarea><div class="button-row"><button class="primary" id="report-close">Done</button></div>`;
-        document.querySelector("#report-close").onclick = () => d.close();
-        d.showModal();
-        document.querySelector(".report-text")?.select();
-      }
-    },
-    // The one place persist() is asked: Firefox answers with a permission
-    // prompt, so it waits for this button (src/keep-safe.js).
-    "keep-device-copy": async () => {
-      let granted = false;
-      const askable = typeof navigator.storage?.persist === "function";
-      try {
-        if (askable) granted = !!(await navigator.storage.persist());
-      } catch {}
-      toast(
-        granted
-          ? "This browser will keep this device's copy until you clear it yourself."
-          : `${askable ? "This browser said no." : "This browser can't be asked to keep it."} Download a backup now and then, or sign in to keep your booths in your studio.`,
-        !granted,
-      );
-      paintKeepSafe(true);
-    },
     pan: () => setPanTool(!panTool),
     "clear-tapes": () => scene?.clearTapes(),
     select: () => {
@@ -2705,107 +2676,6 @@ async function boot() {
       if (show3d) setShow3d(false);
       showFloor = false;
       mutate(() => (p.mode = "3d"));
-    },
-    "mode-show": () => {
-      if (!allowed("hall")) {
-        tab = "hall";
-        return render();
-      }
-      if (!p.hall || !p.hall.items) {
-        mutate(() => {
-          p.hall = toFloor(p.hall || newHall());
-        });
-      }
-      showFloor = true;
-      tab = "hall";
-      hallSelected = null;
-      render();
-      showEditor?.fit();
-    },
-    "show-exit": () => actions["mode-3d"](),
-    "show-3d": () => setShow3d(!show3d),
-    "show-walk": () => setWalking(!walking),
-    "show-walkthrough": () => {
-      if (!show3d) setShow3d(true);
-      if (!scene || !show3d) return;
-      videoTimeline = normalizeTimeline(showWalkthrough(p.hall, { maxKeys: MAX_KEYS, minSeconds: MIN_SECONDS, maxSeconds: MAX_SECONDS }));
-      tlSelected = null;
-      tlPlayhead = 0;
-      tlBeforeAuto = null;
-      actions["edit-timeline"]();
-      toast(`A ${videoTimeline.seconds}-second walk through the aisles, ${videoTimeline.keys.length} keyframes. Play it, change any keyframe, then Export MP4.`);
-    },
-    "show-fit": () => showEditor?.fit(),
-    "show-grow": () => {
-      let grew = false;
-      mutate(() => (grew = growToFit(p.hall)));
-      if (!show3d) showEditor?.fit();
-      const f = floorOf(p.hall);
-      toast(grew ? `The floor is ${Math.round(f.width / 12)}′ × ${Math.round(f.depth / 12)}′ now, with every piece on it. Undo puts it back.` : "Every piece is already on the floor.");
-    },
-    "show-save-template": () => {
-      const t = floorTemplateOf(JSON.parse(JSON.stringify(p.hall)), p.name || "My floor");
-      const list = readFloorTemplates();
-      const next = [t, ...list.filter((x) => x.label !== t.label)];
-      if (writeFloorTemplates(next)) {
-        renderInspector();
-        toast(`Saved “${t.label}” as a floor template${next.length > MAX_FLOOR_TEMPLATES ? `; the oldest of ${MAX_FLOOR_TEMPLATES} was dropped` : ""}. Start from a template offers it on any floor.`);
-      } else toast("This browser would not store the floor template. It may be too big; download a project backup instead.", true);
-    },
-    "show-rotate": () => showRotate(90),
-    "show-flip-x": () => showMirror("x"),
-    "show-flip-y": () => showMirror("y"),
-    "show-duplicate": () => showDuplicate(),
-    "show-delete": () => showDelete(),
-    "show-deselect": () => showEditor?.select([]),
-    "show-space": () => {
-      const pieces = showPieces();
-      const moves = spacePieces(pieces, showGap);
-      if (!moves.length) return toast("Select two or more pieces to space them.");
-      mutate(() => {
-        for (const m of moves) Object.assign(p.hall.items.find((i) => i.id === m.id), { x: m.x, y: m.y });
-      });
-      toast(`${pieces.length} pieces spaced ${showGap}″ apart.`);
-    },
-    "show-align-top": () => showAlign("t"),
-    "show-align-left": () => showAlign("l"),
-    "show-renumber": () => {
-      const pieces = showPieces().length > 1 ? showPieces() : toFloor(p.hall).items;
-      const from = Math.min(...pieces.filter((i) => i.kind === "booth").map((i) => i.number));
-      const start = pieces === p.hall.items ? p.hall.start : from;
-      const next = renumber(pieces, start);
-      // A new number already taken by a booth outside the renumbered ones would
-      // be two booths with one number.
-      const moving = new Set(next.map((n) => n.id));
-      const clash = p.hall.items.some((i) => i.kind === "booth" && !moving.has(i.id) && next.some((n) => n.number === i.number));
-      if (clash) return toast("Those numbers are taken by other booths. Renumber the whole floor with nothing selected.", true);
-      mutate(() => renumberBooths(next));
-      toast(`${next.length} booths renumbered from ${start}, row by row from the back.`);
-    },
-    "show-add-block": () => {
-      const b = showBlock;
-      const c = showEditor?.center() || { x: 0, y: 0 };
-      const rows = Math.ceil(b.count / Math.max(1, b.perRow));
-      const width = Math.min(b.count, b.perRow) * (b.w + b.gap) - b.gap;
-      const depth = b.backToBack ? Math.ceil(rows / 2) * (2 * b.d + b.aisle) - b.aisle : rows * (b.d + b.aisle) - b.aisle;
-      let ids = [], grew = false;
-      mutate(() => {
-        const h = toFloor(p.hall);
-        // Below everything already on the floor, an aisle away, so a new block
-        // never lands on top of booths already sold; an empty floor centres it.
-        const box = boundsOf(h.items);
-        const at = box ? { x: box.l, y: box.b + b.aisle } : { x: c.x - width / 2, y: c.y - depth / 2 };
-        const block = boothBlock(h.items, { ...b, x: Math.round(at.x / 12) * 12, y: Math.round(at.y / 12) * 12, start: h.start });
-        h.items.push(...block);
-        ids = block.map((i) => i.id);
-        // A block laid below the rest can run past the floor's edge; the floor
-        // grows to take it, in the same step, so one Undo takes both back.
-        grew = growToFit(h);
-      });
-      showEditor?.fit();
-      showEditor?.select(ids);
-      const f = floorOf(p.hall);
-      toast(`${ids.length} booths added below the rest and selected — drag them into place.${grew ? ` The floor grew to ${Math.round(f.width / 12)}′ × ${Math.round(f.depth / 12)}′ to take them.` : ""}`);
     },
     "mode-photo": () =>
       (show3d && setShow3d(false), mutate(() => {
@@ -2930,81 +2800,6 @@ async function boot() {
           lightIndex = 0;
         }
       }),
-    "show-pack": () => {
-      download(
-        new Blob([showPack(p)], { type: "text/html" }),
-        safeName() + "-show-pack.html",
-      );
-      toast("Show pack downloaded: floor plan, inventory and packing list. Open it to print or save as PDF.");
-    },
-    guide: () => {
-      download(
-        new Blob([hangingGuide(p)], { type: "text/html" }),
-        safeName() + "-hanging-guide.html",
-      );
-      toast("Hanging guide downloaded. Open it to print or save as PDF.");
-    },
-    "export-image": async () => {
-      if (busy) return toast("Another export is still running: try again in a moment.");
-      busy = true;
-      const b = document.querySelector('[data-action="export-image"]');
-      b.disabled = true;
-      b.textContent = "Rendering…";
-      try {
-        // The Video tab offers the same PNG without the size menu beside it,
-        // so the menu is read when it is there and the high setting assumed
-        // when it is not.
-        // The Video tab offers the same PNG without the size menu beside it,
-        // so the menu is read when it is there and the remembered setting
-        // used when it is not.
-        const long = Number(document.querySelector("#export-size")?.value) || exportLong,
-          // A photograph has a shape of its own — its own pixels — and a
-          // frame here would crop or letterbox it, so the frame is the 3D
-          // booth's alone and photo mode keeps taking a width.
-          blob = await (p.mode === "photo"
-            ? photo.export(long)
-            : scene?.export(long, { frame: exportFrame, custom: customFrame, place: framePlace.export }));
-        if (!blob)
-          throw new Error(
-            "3D is not available. Photo exports and guides still work.",
-          );
-        download(blob, safeName() + "-" + p.mode + ".png");
-        toast(`${long} px PNG exported.`);
-      } catch (err) {
-        toast(err.message, true);
-      } finally {
-        busy = false;
-        renderInspector();
-      }
-    },
-    "ai-pack": async () => {
-      if (busy) return;
-      busy = true;
-      try {
-        const pack = await makeAiPack();
-        download(new Blob([JSON.stringify(pack)], { type: "application/json" }), safeName() + "-ai-render.json");
-        toast(`AI render pack downloaded: ${pack.width} × ${pack.height} frame, depth and mask, and the scene in words.`);
-      } catch (err) {
-        toast(err.message, true);
-      } finally {
-        busy = false;
-      }
-    },
-    "ai-render": async () => {
-      if (busy) return;
-      busy = true;
-      try {
-        // With no provider this is where it stops, and says why — before
-        // three passes are rendered for nothing; with one, its image comes
-        // back as a download.
-        const out = await aiRender(aiProvider ? await makeAiPack() : null);
-        download(out, safeName() + "-ai.png");
-      } catch (err) {
-        toast(err.message, true);
-      } finally {
-        busy = false;
-      }
-    },
     "add-woman": () => addPerson("woman"),
     "add-man": () => addPerson("man"),
     "add-child": () => addPerson("child"),
@@ -3044,7 +2839,6 @@ async function boot() {
     },
     workspace: () => openWelcome(),
     polish: () => runPolish(),
-    "hero-export": () => runHeroSet(),
     ...Object.fromEntries(Object.keys(LOOKS).map((k) => [`look-${k}`, () => runLook(k)])),
     "role-artist": () => chooseRole("artist"),
     "role-organizer": () => chooseRole("organizer"),
@@ -3122,109 +2916,8 @@ async function boot() {
     // slider point, because the stored unit is what the light reads.
     "tier-pro": () => setTier("pro"),
     walk: () => setWalking(!walking),
-    "hall-start": () => {
-      mutate(() => {
-        p.hall = newHall();
-        tab = "hall";
-      });
-      if (showFloor) return actions["mode-show"]();
-      toast("Hall plan started: two back-to-back rows of eight 10 × 10s. Change the layout below; tap a booth to sell it.");
-    },
-    "hall-delete": () =>
-      confirmAction("Delete the hall plan?", "Every booth's exhibitor, status and price goes with it, and every booth design opened from it except the one open now. Undo brings it back.", () => {
-        mutate(() => delete p.hall);
-        hallSelected = null;
-      }),
-    "hall-deselect": () => {
-      hallSelected = null;
-      renderInspector();
-    },
-    "hall-mine": () =>
-      mutate(() => setMine(p.hall, p.hall.mine === hallSelected ? undefined : hallSelected)),
-    "show-open-booth": () => {
-      const n = hallSelected;
-      if (!p.hall || !Number.isInteger(n)) return;
-      if (liveNumber(p.hall) === n) return actions["mode-3d"]();
-      let err = null;
-      const fresh = !hasDesign(p.hall, n);
-      if (show3d) setShow3d(false);
-      mutate(() => {
-        err = openBooth(p, n);
-        if (err) return;
-        showFloor = false;
-        p.mode = "3d";
-        selected = null;
-        tab = "layout";
-      });
-      if (err) return toast(err, true);
-      toast(fresh ? `Booth ${n} opened as a new design, sized from the floor. The booth you had open is kept with its booth; Show floor → any booth opens it again.` : `Booth ${n}'s design is open. The one you had open is kept with its booth.`);
-    },
-    "share-design": async () => {
-      if (sharing) return;
-      sharing = true;
-      try {
-        const file = await shareFile();
-        toast("Uploading your booth…");
-        const { id, key } = await uploadShare(file, (done, total) => total && toast(`Uploading your booth… ${done} of ${total} images`));
-        rememberLink({ id, key, name: p.name });
-        renderInspector();
-        showShareLink(shareLink(id));
-      } catch (err) {
-        toast(`The booth could not be shared: ${err.message}`, true);
-      } finally {
-        sharing = false;
-      }
-    },
-    "send-design": () => {
-      download(new Blob([JSON.stringify(designFile(p))], { type: "application/json" }), safeName() + ".booth-design.json");
-      toast("Booth design downloaded. Send the file to the show's promoter; they import it onto your booth number.");
-    },
-    "import-design": () => {
-      if (!p.hall || !Number.isInteger(hallSelected)) return;
-      designTarget = hallSelected;
-      document.querySelector("#design-input").click();
-    },
-    "show-open-own": () => {
-      if (!p.hall?.designs?.[OWN]) return;
-      let err = null;
-      if (show3d) setShow3d(false);
-      mutate(() => {
-        err = openBooth(p, OWN);
-        if (!err) (showFloor = false), (p.mode = "3d"), (selected = null);
-      });
-      if (err) toast(err, true);
-      else toast("Your own booth — the one on no booth of this floor — is open again.");
-    },
-    "hall-map": () => {
-      if (!p.hall) return;
-      download(new Blob([hallHTML(p.hall, p.name)], { type: "text/html" }), safeName() + "-hall-map.html");
-      toast("Hall map downloaded: the map, a legend, totals and every booth. Open it to print.");
-    },
-    "hall-csv": () => {
-      if (!p.hall) return;
-      download(new Blob([hallCSV(p.hall)], { type: "text/csv" }), safeName() + "-exhibitors.csv");
-      toast("Exhibitor list downloaded as CSV — it opens in any spreadsheet.");
-    },
-    "power-sheet": () => {
-      download(new Blob([powerHTML(p, { outlets: powerOutlets })], { type: "text/html" }), safeName() + "-power-and-rentals.html");
-      toast("Power and rentals sheet downloaded. Correct anything on the printout before sending it to the show.");
-    },
     "draw-box": () => setDrawingBox(!scene?.drawingBox),
     "upload-model": () => document.querySelector("#model-input").click(),
-    "export-glb": async () => {
-      if (busy || !scene) return;
-      busy = true;
-      try {
-        toast("Writing the booth as .glb…");
-        const blob = await scene.exportGLB();
-        download(blob, safeName() + ".glb");
-        toast(`Booth exported as .glb · ${(blob.size / 1048576).toFixed(1)} MB. Opens in SketchUp (with the glTF importer), Blender and AR viewers.`);
-      } catch (err) {
-        toast(err.message || "The .glb could not be written.", true);
-      } finally {
-        busy = false;
-      }
-    },
     "upload-underlay": () => document.querySelector("#underlay-input").click(),
     "remove-underlay": () =>
       mutate(() => {
@@ -3254,10 +2947,6 @@ async function boot() {
       syncTools();
       toast(`Plan scaled ×${factor.toFixed(3)}: the taped distance now measures ${formatLength(real)}.`);
     },
-    elevations: () => {
-      download(new Blob([elevationsHTML(p)], { type: "text/html" }), safeName() + "-elevations.html");
-      toast("Elevations downloaded: a floor plan and every hung wall, to scale. Print at 100%.");
-    },
     "view-save": () => {
       if (!scene) return;
       const views = p.views || [];
@@ -3265,27 +2954,6 @@ async function boot() {
       const v = newView(scene.pose(), uid(), views);
       mutate(() => (p.views = [...views, v]));
       toast(`Saved as “${v.name}”. Rename it in the list; the View menu under the booth goes back to it.`);
-    },
-    "views-export": async () => {
-      if (busy || !scene) return;
-      const views = p.views || [];
-      if (!views.length) return;
-      busy = true;
-      const back = scene.pose();
-      try {
-        for (const [i, v] of views.entries()) {
-          toast(`Rendering ${i + 1} of ${views.length}: ${v.name}…`);
-          scene.applyPose(v);
-          const blob = await scene.export(exportLong, { frame: exportFrame, custom: customFrame, place: framePlace.export });
-          if (blob) download(blob, `${safeName()}-${v.name.replace(/[^a-z0-9-]+/gi, "-").replace(/^-|-$/g, "") || "view-" + (i + 1)}.png`);
-        }
-        toast(`${views.length} views exported as ${exportLong} px PNGs.`);
-      } catch (err) {
-        toast(err.message, true);
-      } finally {
-        scene.applyPose(back);
-        busy = false;
-      }
     },
     "sheet-toggle": () => setSheet(!document.body.classList.contains("sheet-collapsed")),
     "bar-default": () =>
@@ -3302,7 +2970,7 @@ async function boot() {
         );
       }),
   };
-  Object.assign(actions, createArtworkActions(ctx), createVideoActions(ctx));
+  Object.assign(actions, createArtworkActions(ctx), createVideoActions(ctx), createExportActions(ctx), createShowActions(ctx));
   // Removing a pedestal takes nothing with it: nothing hangs on one.
   function deletePedestal(id) {
     mutate(() => {
