@@ -197,3 +197,12 @@ wrong.)
   (wrapped, a `const` after `ctx`, passing its arguments on), `setPanTool`,
   `setShow3d` and `setWalking`. The ratchet is 6,008 (red on `main`'s
   6,348).
+- **2026-10-22, seam 7: the tool index's cache stays declared in
+  `main.js`.** The assistant's `appMap` in `window.__booth` reads and fills
+  `toolIndex` itself, so the `let` with `toolHits` and `toolAt` stays in
+  `main.js` (seam 5's ruling), with a two-line comment where the section's
+  long one was; the long one moved with the code. `ctx` gains getters and
+  setters for all three, and `inspectorHTML` and `showSection`. The import
+  of `src/toolsearch.js` moved too, with its note on why `fold` comes in
+  as `foldText`, reworded for its new file. The ratchet is 5,816 (red on
+  `main`'s 6,008).
