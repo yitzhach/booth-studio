@@ -17,6 +17,15 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-22: `main.js`'s fourth seam (ROADMAP 1.2).** The looks, Make it
+  beautiful and the hero set — `looksSection`, `heroSection`, `runHeroSet`,
+  `runLook`, `runPolish` and their two notes — moved into
+  `src/ui/polish-panel.js`, and the image editor's preview and dialog into
+  `src/ui/image-editor.js`. Unchanged but for `ctx.` and `export`, checked
+  line for line against the removed code. One node test that reads the
+  editor's source text now reads it from the new file. `main.js` is 6,764
+  lines (from 6,876). view-polish, view-finish and view-wall-assets green,
+  and 527 node tests.
 - **2026-10-22: `main.js`'s third seam (ROADMAP 1.2).** Export → Keep your
   work — `keepSafeHTML`, `paintKeepSafe`, `remindBackup` and the browser's
   last answer they share — moved out of `boot()` into

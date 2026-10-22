@@ -64,7 +64,7 @@ pushing.
 | 1 | `shareFile`, `sentLinksHTML`, `copyLink`, `sendToLink`, `removeLink`, `showShareLink`, `openShareLink` | `src/ui/share-dialogs.js` | ~140 | view-share, view-hub, e2e |
 | 2 | `openWelcome`, `describeBlock`, `describeToAssistant`, `welcomeDismissed`, `chooseRole`, `openQuickStart`, `runQuickStart` | `src/ui/welcome.js` | ~120 | view-roles, view-quickstart, view-assistant |
 | 3 | `keepSafeHTML`, `paintKeepSafe`, `remindBackup`, the templates' read and write | `src/ui/keep-safe-panel.js`, `src/ui/templates.js` | ~160 | view-keep-safe, view-report, view-quickstart, view-floor2 |
-| 4 | `looksSection`, `heroSection`, `runHeroSet`, `runLook`, `runPolish`; the image editor | `src/ui/polish-panel.js`, `src/ui/image-editor.js` | ~130 | view-polish, view-finish |
+| 4 | `looksSection`, `heroSection`, `runHeroSet`, `runLook`, `runPolish`; the image editor | `src/ui/polish-panel.js`, `src/ui/image-editor.js` | ~130 | view-polish, view-finish, view-wall-assets |
 | 5 | the timeline dialog and the batch | `src/ui/timeline-dialog.js`, `src/ui/batch.js` | ~580 | view-timeline, view-batch, view-video, view-frame |
 | 6 | the show-floor panel | `src/ui/show-floor-panel.js` | ~380 | view-show, view-show3d, view-hall, view-linked, view-floor2 |
 | 7 | Find a tool and the app map | `src/ui/find-tool.js` | ~150 | view-toolsearch, view-assistant |
@@ -146,3 +146,21 @@ wrong.)
   6,876 (red on `main`'s 6,990). The module assigns no state of boot's, so
   there is no setter to reach. *Cost if wrong:* none found; a later seam
   whose code needs state turns its plain module into a factory.
+- **2026-10-22, seam 4: a node test that reads moved source follows it.**
+  `tests/image-regression.test.js` slices `drawImageEditorPreview` out of
+  the source text and runs it; it now reads `src/ui/image-editor.js` and
+  hands the fixture project in as `ctx.p` instead of `p`. Its assertions
+  are unchanged. The image editor's own buttons (`edit-image`,
+  `editor-save`, the rotations) are in the action table and stay there
+  until seams 12–15; `currentArtwork`, which the table calls everywhere,
+  stays in `main.js` and reaches the editor through `ctx`. `editRange` is
+  only the editor's, so it is not returned (seam 2's ruling).
+  `POLISH_NOTE` moved with its only user; `HALL_OFF_NOTE` moved too and is
+  exported, because the environment menu in `main.js` says it as well.
+  The editor's preview names its canvas context `ctx`, as it always did:
+  that shadows the module's `ctx` inside `paint` only, which reads nothing
+  of boot's. view-wall-assets is the suite that drives the editor, so it
+  joins the row. `ctx` gains `busy`, `busyVideo`, `editingStart` (getters
+  only: nothing here assigns them), `currentArtwork`, `runClips` and
+  `kit` (wrapped: its `const` comes after `ctx`). The ratchet is 6,764
+  (red on `main`'s 6,876).
