@@ -8,8 +8,8 @@ import {
   keySchedule, keyTAt, easeFn, autoTime, neighbourKey, autoPanTimeline,
 } from "./timeline.js";
 import { cleanSettings, resolveJob, tweak, applyPreset, removePreset, jobSlug, MAX_PRESETS, CUSTOM as KIT_CUSTOM } from "./batch.js";
-import { SIZES, DEFAULT_SIZE, FPS, DEFAULT_FPS, videoSupported, pickCodec } from "./video.js";
-import { FRAMES, DEFAULT_FRAME, DEFAULT_CLIP_FRAME, CUSTOM_FRAME, FRAME_MIN, FRAME_MAX, STILL_SIZES, frameSize, placeRect, placeFromRect, normalPlace, DEFAULT_PLACE } from "./framing.js";
+import { SIZES, DEFAULT_SIZE, DEFAULT_FPS, videoSupported, pickCodec } from "./video.js";
+import { FRAMES, DEFAULT_FRAME, DEFAULT_CLIP_FRAME, CUSTOM_FRAME, FRAME_MIN, FRAME_MAX, STILL_SIZES, placeRect, placeFromRect, normalPlace, DEFAULT_PLACE } from "./framing.js";
 import { SHADOW_FIELD, SHADOW_KINDS, SHADOW_MAX, globalAngle, normalAngle, shadowSpec } from "./dropshadow.js";
 import { MAX_SWATCHES, isColor, readPalette, savePalette, removeSwatch, rememberColor, previousColor } from "./swatches.js";
 import { DEFAULT_IMAGE_EDITS, normalizeImageEdits } from "./image-edit.js";
@@ -232,11 +232,11 @@ import { ALIGN_MODES, alignWorks, distributeWorks } from "./align.js";
 import { MAX_VIEWS, STEP, STRIDE, newView } from "./views.js";
 import { checkClearance } from "./clearance.js";
 import { elevationsHTML } from "./elevations.js";
-import { HALL_LIMITS, MAX_HALL_BOOTHS, STATUSES, boothOf, hallCSV, hallHTML, hallLayout, hallSVG, hallTotals, moveSale, newHall } from "./hall.js";
-import { floorTemplateOf, growToFit, SHAPES, VENUES as SHOW_VENUES, boothBlock, boundsOf, feet, floorOf, renumber, showItems, showSVG, spacePieces, toFloor } from "./show.js";
+import { MAX_HALL_BOOTHS, hallCSV, hallHTML, moveSale, newHall } from "./hall.js";
+import { floorTemplateOf, growToFit, SHAPES, VENUES as SHOW_VENUES, boothBlock, boundsOf, feet, floorOf, renumber, showItems, spacePieces, toFloor } from "./show.js";
 import { createShowEditor } from "./show-editor.js";
 import { showWalkthrough } from "./show-scene.js";
-import { PACK_LONG, PACK_SIZES, SURFACES, describeScene, protectPass, provider as aiProvider, render as aiRender, renderPack } from "./ai-render.js";
+import { PACK_LONG, describeScene, protectPass, provider as aiProvider, render as aiRender, renderPack } from "./ai-render.js";
 import { designFile } from "./booth-file.js";
 import { SHARE_PARAM, rememberLink, sentLinks, shareLink, uploadShare } from "./share.js";
 import { createShareDialogs } from "./ui/share-dialogs.js";
@@ -254,9 +254,12 @@ import { createLightingPanel } from "./panels/lighting.js";
 import { createArtShowPanel } from "./panels/art-show.js";
 import { createArtworkPanel } from "./panels/artwork.js";
 import { createLayoutPanel } from "./panels/layout.js";
+import { createVideoPanel } from "./panels/video.js";
+import { createExportPanel } from "./panels/export.js";
+import { createHallPanel } from "./panels/hall.js";
 import { MAX_FLOOR_TEMPLATES, MAX_TEMPLATES, readFloorTemplates, readTemplates, writeFloorTemplates, writeTemplates } from "./ui/templates.js";
 import { OWN, assetInDesigns, hasDesign, liveNumber, openBooth, setMine } from "./linked.js";
-import { CIRCUIT_WATTS, powerHTML, powerLines, powerTotals } from "./power.js";
+import { powerHTML } from "./power.js";
 import { templateOf } from "./quickstart.js";
 import { PhotoEditor } from "./photo.js";
 import { hangingGuide } from "./guide.js";
@@ -612,6 +615,9 @@ async function boot() {
     get picked() { return picked; },
     get search() { return search; },
     get selectedPerson() { return selectedPerson; },
+    get aiLong() { return aiLong; },
+    get powerOutlets() { return powerOutlets; },
+    get videoCodec() { return videoCodec; },
     get actions() { return actions; },
     activeSlot,
     allowed: (feature) => allowed(feature),
@@ -630,6 +636,7 @@ async function boot() {
     kit: () => kit(),
     libraryItems,
     mutate,
+    probeCodec,
     proLock,
     readTemplates,
     refreshIcons,
@@ -651,8 +658,13 @@ async function boot() {
     gated: (...args) => gated(...args),
     lightBarLevels: (...args) => lightBarLevels(...args),
     pickedWorks: () => pickedWorks(),
-    frameFields,
-    frameNote,
+    frameFields: (...args) => frameFields(...args),
+    frameNote: (...args) => frameNote(...args),
+    frameKeyed: () => frameKeyed(),
+    getPlace: (...args) => getPlace(...args),
+    selectedKeyName: () => selectedKeyName(),
+    showFloorPanel: () => showFloorPanel(),
+    timelineSummary: () => timelineSummary(),
     range,
     scheduleSave,
     updateFrameGuide,
@@ -1559,53 +1571,7 @@ async function boot() {
         : ""
     }</div></div>`;
   }
-  /**
-   * The frame a delivered file comes out in, for a still and for a clip.
-   *
-   * Both used to inherit the viewport's shape, which meant an export was
-   * whatever size someone's browser window happened to be — reported as "it
-   * exports at the same dimensions I have the viewing window at". "This
-   * window" is still offered and is still the default, because a shot
-   * composed in the viewport is a real intention; the rest name their ratio.
-   */
-  function frameFields(which) {
-    const value = which === "video" ? videoFrameShape : exportFrame;
-    const options = Object.entries(FRAMES)
-      .map(([k, v]) => `<option value="${k}" ${value === k ? "selected" : ""}>${e(v.label)}</option>`)
-      .join("");
-    const custom =
-      value === "custom"
-        ? `<div class="field-row"><label class="field"><span>Width</span><div><input type="number" data-frame-custom="width" data-frame-which="${which}" aria-label="Custom frame width" value="${customFrame.width}" min="${FRAME_MIN}" max="${FRAME_MAX}" step="2"/><small>px</small></div></label><label class="field"><span>Height</span><div><input type="number" data-frame-custom="height" data-frame-which="${which}" aria-label="Custom frame height" value="${customFrame.height}" min="${FRAME_MIN}" max="${FRAME_MAX}" step="2"/><small>px</small></div></label></div><p class="muted">One custom size, shared by the still and the clip. Sides are rounded to even numbers, which is what an H.264 encoder requires.</p>`
-        : "";
-    const place = getPlace(which);
-    const keyed = which === "video" && frameKeyed();
-    const slider = (key, label, min, v) =>
-      `<label class="range"><span>${label}<output>${Math.round(v * 100)}%</output></span><input type="range" data-frame-place="${key}" data-frame-which="${which}" aria-label="${e(label)} (${which === "video" ? "video" : "still"})" min="${min}" max="100" step="1" value="${Math.round(v * 100)}"/></label>`;
-    // The frame's place in the viewport: the same thing the guide's handles
-    // drag, as sliders. Only for a frame with its own shape — "This window"
-    // is the viewport and has nowhere to move.
-    const placing =
-      value === "view"
-        ? ""
-        : `${keyed ? `<p class="keyed-note">Keyframed: these set <strong>${e(selectedKeyName())}</strong>'s frame.</p>` : which === "video" && videoMove === CUSTOM_MOVE && videoTimeline?.frameKeys ? `<p class="keyed-note">This clip's frame is keyframed: each keyframe has its own, set in Edit timeline. These sliders do not move it.</p>` : ""}${slider("scale", "Frame size", 20, place.scale)}${slider("x", "Frame left / right", -100, place.x)}${slider("y", "Frame up / down", -100, place.y)}<p class="muted">Or drag the frame in the viewport: its label moves it, a corner resizes it, an edge changes its shape (and makes it a custom size).</p>${place.scale !== 1 || place.x !== 0 || place.y !== 0 ? btn(`frame-reset-${which}`, "Reset frame to fit", "rotate-ccw", "wide") : ""}`;
-    return `<label class="setting-label">Frame<select data-frame="${which}" aria-label="${which === "video" ? "Video frame" : "Export frame"}">${options}</select></label>${custom}${placing}`;
-  }
-  /** What the chosen frame will actually produce, in pixels, said out loud. */
-  function frameNote(which) {
-    const viewport = scene?.renderer?.domElement
-      ? scene.renderer.domElement.width / scene.renderer.domElement.height
-      : 16 / 9;
-    const shape =
-      which === "video"
-        ? frameSize(videoFrameShape, {
-            long: Math.max(SIZES[videoSize]?.width || 1920, SIZES[videoSize]?.height || 1080),
-            viewport,
-            custom: customFrame,
-          })
-        : frameSize(exportFrame, { long: exportLong, viewport, custom: customFrame });
-    const chosen = which === "video" ? videoFrameShape : exportFrame;
-    return `${shape.width} × ${shape.height} px${chosen === "view" ? ", the shape of this window" : ""}. ${chosen === "view" ? "" : "The viewport outlines it while this tab is open: what is inside the outline is what the file shows."}`;
-  }
+  const { frameFields, frameNote, aiSection, powerSection } = createExportPanel(ctx);
   /**
    * Every shadow control on the page, set from the booth — after a live
    * change, so the typed number follows its slider, and the other shadow's
@@ -1865,39 +1831,9 @@ async function boot() {
     mutate(() => (p.booth.people = [...people, person]));
     toast(`${personName(kind)} added at ${Math.floor(person.height / 12)}′${person.height % 12}″.`);
   }
-  /**
-   * Hall (Pro): the whole show's floor, for a promoter — rows of numbered
-   * booths on aisles, each with an exhibitor, a status and a price, a map to
-   * print and a list to send. Kept in the project as `p.hall`.
-   */
-  function hallPanel() {
-    if (showFloor && p.hall && allowed("hall")) return showFloorPanel();
-    const intro = "Plan a whole show: rows of numbered booths on aisles, each with an exhibitor, a status and a price. Print the map, send the exhibitor list.";
-    if (!allowed("hall")) return proLock("hall", intro + " Part of Booth Studio Pro.");
-    const h = p.hall;
-    if (!h) return `<p class="muted">${intro}</p>${btn("hall-start", "Start a hall plan", "map", "primary wide")}`;
-    const booths = hallLayout(h);
-    if (hallSelected !== null && !booths.some((b) => b.number === hallSelected)) hallSelected = null;
-    const t = hallTotals(h);
-    const f = (label, key, unit = "", step = 1) => field(label, key, h[key], ...HALL_LIMITS[key], step, unit, "hallplan", "Hall " + label);
-    const chosen = hallSelected !== null ? boothOf(h, hallSelected) : null;
-    const editor = chosen
-      ? `<section class="hall-booth"><h3>Booth ${hallSelected}${h.mine === hallSelected ? ' <span class="badge">Yours</span>' : ""}</h3><label class="setting-label">Status<select data-field="status" data-scope="hallbooth" aria-label="Booth status">${Object.entries(STATUSES).map(([k, v]) => `<option value="${k}" ${chosen.status === k ? "selected" : ""}>${e(v.label)}</option>`).join("")}</select></label><label class="setting-label">Exhibitor<input type="text" data-field="name" data-scope="hallbooth" aria-label="Exhibitor" maxlength="120" value="${e(chosen.name)}"/></label>${field("Price", "price", chosen.price || 0, ...HALL_LIMITS.price, 1, "$", "hallbooth", "Booth price")}<label class="setting-label">Note<input type="text" data-field="note" data-scope="hallbooth" aria-label="Booth note" maxlength="300" value="${e(chosen.note)}"/></label><div class="button-row">${btn("hall-mine", h.mine === hallSelected ? "Not my booth" : "This is my booth", "box")}${btn("hall-deselect", "Done", "check")}</div></section>`
-      : `<p class="muted">Tap a booth on the map to set its exhibitor, status and price.</p>`;
-    return `${btn("mode-show", "Open the show floor", "map", "primary wide")}<p class="muted">The show floor fills the viewport with this plan: drag booths of any size, walkways, walls, doors, tents and stages from a library, snap them together and space them.</p><section><h3>Map <span>${t.booths} booths</span></h3><div class="hall-map-wrap">${h.items ? showSVG(h) : hallSVG(h, { selected: hallSelected, interactive: true })}</div><p class="hall-totals">${t.sold} sold · ${t.held} held · ${t.open} open${t.soldValue ? ` · sold $${Math.round(t.soldValue).toLocaleString("en-US")}` : ""}${t.heldValue ? ` · held $${Math.round(t.heldValue).toLocaleString("en-US")}` : ""}</p></section>${editor}${h.items ? `<section><h3>Layout</h3><p class="muted">This plan is laid out piece by piece on the show floor, so rows and aisles are no longer typed here. Open the show floor to change it.</p></section>` : `<section><h3>Layout <span>inches</span></h3><div class="field-pair">${f("Rows", "rows")}${f("Booths per row", "perRow")}</div><div class="field-pair">${f("Booth width", "boothWidth", "in")}${f("Booth depth", "boothDepth", "in")}</div>${f("Aisle width", "aisle", "in")}<label class="check-field"><input type="checkbox" data-field="backToBack" data-scope="hallplan" ${h.backToBack ? "checked" : ""}/>Rows back to back, in pairs</label>${f("First booth number", "start")}${f("Default price", "price", "$")}<p class="muted">Up to ${MAX_HALL_BOOTHS} booths. Aisles under 10′ are tight for a crowd; many fire marshals ask for 10′ main aisles.</p></section>`}<section><h3>Share it</h3><div class="button-row">${btn("hall-map", "Download hall map", "download")}${btn("hall-csv", "Exhibitor list (CSV)", "download")}</div>${btn("hall-delete", "Delete the hall plan", "trash-2", "wide")}</section>`;
-  }
+  const { hallPanel } = createHallPanel(ctx);
   // ---- The show floor ------------------------------------------------------
   const { showPieces, showSelected, renumberBooths, showRotate, showMirror, showDuplicate, showDelete, applyTemplate, startFrom, showAlign, show3dKey, showFloorKey, showChange, showLibraryHTML, showFloorPanel } = createShowFloorPanel(ctx);
-  /**
-   * Export → AI render (the hook, src/ai-render.js): the frame, its depth
-   * pass, its surface mask and the scene in words, as one file for an image
-   * model to repaint. No model is called — local-first — until the owner
-   * chooses a provider.
-   */
-  function aiSection() {
-    const legend = Object.values(SURFACES).map((x) => `<span class="ai-swatch"><i style="background:${x.color}"></i>${e(x.label)}</span>`).join("");
-    return `<section class="ai-render"><h3>AI render</h3><p class="muted">For repainting this view with an image model: the frame as rendered, its depth (near white, far black), a mask with every surface one flat colour, and the artwork and signs alone on transparent — laid back over whatever a model returns, so it never repaints the work. All lined up pixel for pixel, with the scene described in words, in one .json file. The frame is the one set above.</p><div class="ai-legend">${legend}</div><label class="setting-label">Size<select id="ai-size" aria-label="AI render pack size">${PACK_SIZES.map((n) => `<option value="${n}" ${aiLong === n ? "selected" : ""}>${n} px on the long side</option>`).join("")}</select></label>${btn("ai-pack", "Download AI render pack", "sparkles", "wide")}${btn("ai-render", aiProvider ? `Render with ${aiProvider.name}` : "Render with AI", "sparkles", "wide")}<p class="muted">${aiProvider ? "" : "No AI provider is set up yet — nothing leaves this device. The pack works with any model that takes an image, a depth map or a mask."}</p></section>`;
-  }
   /** The three passes of this view and the pack made from them. */
   async function makeAiPack() {
     if (!scene) throw new Error("3D is not available, so there is no view to render.");
@@ -1934,11 +1870,6 @@ async function boot() {
       description: describeScene(p, show3d ? { show: p.hall, openNumber: liveNumber(p.hall) } : {}),
       project: p.name,
     });
-  }
-  /** Export → Power and rentals (Pro): the service desk's two forms. */
-  function powerSection() {
-    const totals = powerTotals(powerLines(p, { outlets: powerOutlets }));
-    return `<section><h3>Power and rentals</h3><p class="muted">What to order from the show: <strong>${totals.watts} W · ${totals.amps} A · ${totals.circuits} circuit${totals.circuits === 1 ? "" : "s"}</strong> of 120 V / 15 A, worked out from the lights, screens and outlets in this booth (circuits loaded to ${CIRCUIT_WATTS} W), and every table, chair and riser on its floor with carpet for it.</p><label class="field"><span>General outlets</span><div><input type="number" id="power-outlets" min="0" max="20" step="1" value="${powerOutlets}" aria-label="General outlets"/><small>ea</small></div></label>${btn("power-sheet", "Download power and rentals sheet", "plug", "wide")}</section>`;
   }
   /** Pro's clearance issues, for the plan view's red lines; none in Lite. */
   function syncClearance() {
@@ -2046,41 +1977,7 @@ async function boot() {
     syncTools();
   }
 
-  // Video export. Offered only where it can actually be delivered: the encoder
-  // is WebCodecs, and saying up front what it will produce is kinder than a
-  // failure — or a file QuickTime refuses — after someone has waited through a
-  // render.
-  function videoSection() {
-    const custom = videoMove === CUSTOM_MOVE;
-    const move = resolveMove(videoMove);
-    const supported = videoSupported();
-    // Fire and forget: the probe re-renders this panel when it answers, and it
-    // no-ops for a size and rate it has already asked about, so this cannot
-    // loop.
-    if (supported) probeCodec();
-    if (!supported)
-      return `<section><h3>Video</h3><p class="muted">Video export needs the WebCodecs video encoder, which this browser does not offer. Chrome, Edge and Safari 16.4 or newer have it. Export PNG works everywhere.</p></section>`;
-    const moveOptions = [
-      ...Object.entries(MOVES).map(([k, v]) => `<option value="${k}" ${videoMove === k ? "selected" : ""}>${e(v.label)}</option>`),
-      `<option value="${CUSTOM_MOVE}" ${custom ? "selected" : ""}>Custom · your own keyframes</option>`,
-    ].join("");
-    // A custom clip's length lives in the timeline, with the keyframe times it
-    // has to agree with; offering a second length control beside it would let
-    // the two contradict each other.
-    const lengthField = custom
-      ? `${btn("edit-timeline", "Edit timeline…", "sliders-horizontal", "wide")}<p class="muted">${e(timelineSummary())}</p>`
-      : `<label class="setting-label">Length<select id="video-seconds" aria-label="Clip length">${[6, 8, 10, 12, 14, 16, 20]
-          .map((sec) => `<option value="${sec}" ${videoSeconds === sec ? "selected" : ""}>${sec} seconds</option>`)
-          .join("")}</select></label>${btn("edit-timeline", "Edit timeline…", "sliders-horizontal", "wide")}<p class="muted">Opens your own keyframed move, and switches the camera move to Custom.</p>`;
-    const describe = custom
-      ? "Your own keyframes, in the order you set them. Compose a shot in the viewport, add it as a keyframe, and repeat — each one is the exact view you captured, not a gesture applied to the current framing."
-      : `${e(move.describe)} The move starts and ends on the view you have now, so compose the shot first.`;
-    return `<section><h3>Video</h3><label class="setting-label">Camera move<select id="video-move" aria-label="Camera move">${moveOptions}</select></label><p class="muted">${describe}</p>${lengthField}<label class="setting-label">Frame rate<select id="video-fps" aria-label="Frame rate">${FPS.map(
-      (f) => `<option value="${f}" ${videoFps === f ? "selected" : ""}>${f} fps</option>`,
-    ).join("")}</select></label><label class="setting-label">Resolution<select id="video-size" aria-label="Video resolution">${Object.entries(SIZES)
-      .map(([k, v]) => `<option value="${k}" ${String(videoSize) === k ? "selected" : ""}>${e(v.label)}</option>`)
-      .join("")}</select></label>${frameFields("video")}<label class="check-field"><input type="checkbox" data-video-settle ${videoSettle ? "checked" : ""}/>Careful rendering</label><p class="muted">${videoSettle ? "Each frame is drawn twice, the second time after the browser has caught up, so nothing is captured half-finished. It roughly doubles the render and it is what fixes glitches in an exported clip." : "Off: each frame is captured as soon as it is drawn. Faster, and the setting to turn back on if a clip comes out with a wall, a shadow or the backdrop from the frame before."}</p><p class="muted">MP4 · H.264 where this browser can encode it, which is what QuickTime Player and phones want. ${e(frameNote("video"))} Every frame is rendered in full before it is encoded, so the clip runs at the frame rate you chose however fast this machine is — which is why it takes longer than the clip lasts.</p>${videoCodecLine()}${busyPreview ? btn("stop-preview", "Stop preview", "x", "wide") : btn("preview-move", "Preview the move", "play", "wide")}<p class="muted">Plays the move in the viewport at its real length, without rendering anything. Judge it here first: a 14-second 1440p clip is minutes of encoding.</p>${btn("export-video", "Export MP4", "download", "primary wide")}${busyVideo ? btn("cancel-video", "Cancel", "x", "wide") : ""}<div class="video-progress" role="status" aria-live="polite">${busyVideo ? progressHTML() : ""}</div></section>`;
-  }
+  const { videoSection } = createVideoPanel(ctx);
   const { getPlace, setPlace, placeSettled, frameKeyed, selectedKeyName, timelineSummary, timeline, keyName, renderTimelineDialog, currentPose, grabThumb, showKey, followPlayhead, timelineOpen } = createTimelineDialog(ctx);
   // View state only, like the timeline itself: thumbnails are pictures of
   // the viewport, held per key id and never saved.
@@ -2188,14 +2085,6 @@ async function boot() {
   const progressHTML = () =>
     `<progress max="1" value="${videoProgress}"></progress><span>${Math.round(videoProgress * 100)}% · frame ${videoFrame} of ${videoFrames}</span>`;
 
-  // Says what will come out, in the terms that matter: whether QuickTime
-  // Player will open it. Nothing is claimed until the probe has answered.
-  function videoCodecLine() {
-    if (!videoCodec) return `<p class="muted">Checking what this browser can encode…</p>`;
-    if (videoCodec.kind === "vp09")
-      return `<p class="warn-note">This browser has no H.264 encoder, so the clip will be <strong>VP9 in an MP4</strong>. It plays in Chrome, Edge and VLC, but <strong>QuickTime Player cannot open it</strong>. Record in Chrome or Safari for a QuickTime-ready file.</p>`;
-    return `<p class="muted">This browser will encode <strong>${e(videoCodec.label)}</strong> — the codec QuickTime Player, phones and upload forms expect.</p>`;
-  }
   /**
    * Sub-tabs. A panel of three or more sections gets a row of chips under
    * its heading, one per section by its own heading, and shows the chosen
