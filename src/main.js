@@ -247,7 +247,7 @@ import { floorTemplateOf, growToFit, SHAPES, VENUES as SHOW_VENUES, boothBlock, 
 import { createShowEditor } from "./show-editor.js";
 import { showWalkthrough } from "./show-scene.js";
 import { PACK_LONG, PACK_SIZES, SURFACES, describeScene, protectPass, provider as aiProvider, render as aiRender, renderPack } from "./ai-render.js";
-import { designFile, importDesign, readDesignFile } from "./booth-file.js";
+import { designFile } from "./booth-file.js";
 import { SHARE_PARAM, rememberLink, sentLinks, shareLink, uploadShare } from "./share.js";
 import { createShareDialogs } from "./ui/share-dialogs.js";
 import { createWelcome } from "./ui/welcome.js";
@@ -258,7 +258,8 @@ import { createTimelineDialog } from "./ui/timeline-dialog.js";
 import { createBatch } from "./ui/batch.js";
 import { createShowFloorPanel } from "./ui/show-floor-panel.js";
 import { createFindTool } from "./ui/find-tool.js";
-import { MAX_FLOOR_TEMPLATES, MAX_TEMPLATES, mergeFloorTemplates, readFloorTemplates, readTemplates, writeFloorTemplates, writeTemplates } from "./ui/templates.js";
+import { createUpload } from "./ui/upload.js";
+import { MAX_FLOOR_TEMPLATES, MAX_TEMPLATES, readFloorTemplates, readTemplates, writeFloorTemplates, writeTemplates } from "./ui/templates.js";
 import { OWN, assetInDesigns, hasDesign, liveNumber, openBooth, setMine } from "./linked.js";
 import { CIRCUIT_WATTS, powerHTML, powerLines, powerTotals } from "./power.js";
 import { templateOf } from "./quickstart.js";
@@ -563,6 +564,14 @@ async function boot() {
     get busyVideo() { return busyVideo; },
     get editingStart() { return editingStart; },
     get scene() { return scene; },
+    get designTarget() { return designTarget; },
+    set designTarget(v) { designTarget = v; },
+    get lightIndex() { return lightIndex; },
+    set lightIndex(v) { lightIndex = v; },
+    get photoLightIndex() { return photoLightIndex; },
+    set photoLightIndex(v) { photoLightIndex = v; },
+    get photoSelected() { return photoSelected; },
+    set photoSelected(v) { photoSelected = v; },
     get toolIndex() { return toolIndex; },
     set toolIndex(v) { toolIndex = v; },
     get toolHits() { return toolHits; },
@@ -606,6 +615,7 @@ async function boot() {
     get actions() { return actions; },
     allowed: (feature) => allowed(feature),
     applyRole,
+    backfillThumbnails,
     backup,
     btn,
     confirmAction,
@@ -622,6 +632,7 @@ async function boot() {
     runClips,
     setPanTool,
     showSection,
+    tagAssetRoles,
     setShow3d,
     setWalking,
     toast,
@@ -5254,177 +5265,7 @@ async function boot() {
       ev.target.closest("label").querySelector("output").textContent =
         ev.target.value;
   });
-  async function upload(files, type) {
-    if (!files.length) return;
-    try {
-      toast("Reading original images…");
-      const assets = [];
-      for (const file of files) assets.push(await readImage(file));
-      if (Object.keys(p.assets).length + assets.length > 250) throw new Error("This prototype supports up to 250 images.");
-      mutate(() => {
-        if (type === "photo") {
-          const id = uid();
-          assets[0].role = "photo";
-          p.assets[id] = assets[0];
-          p.photo.asset = id;
-          p.photo.layers = [];
-          p.photo.lights = [];
-          p.mode = "photo";
-          tab = "art";
-          return;
-        }
-        // Uploading is filing, not hanging. Every upload used to push a
-        // placement per file onto the back wall at the same x and y, so
-        // choosing five images from a phone put five coplanar panels in one
-        // spot: they z-fight, and the wall flashes through all five. The
-        // library already lists an original that has no placement — see
-        // `libraryItems` — so the files land there and the wall stays as it
-        // was until someone taps one.
-        for (const asset of assets) {
-          const id = uid();
-          asset.role = "artwork";
-          p.assets[id] = asset;
-          if (type === "replace") {
-            const a = p.art.find((a) => a.id === selected);
-            if (a) {
-              a.asset = id;
-              a.title = asset.name.replace(/\.[^.]+$/, "");
-              a.edits = undefined;
-            }
-            break;
-          }
-        }
-        tab = "art";
-      });
-      toast(
-        type === "photo"
-          ? "Booth photo ready. Select an uploaded artwork to add it."
-          : type === "replace"
-            ? "Image replaced. The original stays in your library."
-            : `${assets.length} original${assets.length > 1 ? "s" : ""} added to your library. Tap one to hang it on a wall.`,
-      );
-    } catch (err) {
-      toast(err.message, true);
-    }
-  }
-  for (const [id, type] of [
-    ["art-input", "art"],
-    ["replace-input", "replace"],
-    ["photo-input", "photo"],
-  ])
-    document.querySelector("#" + id).onchange = async (ev) => {
-      const files = [...ev.target.files];
-      if (type === "photo" && p.photo.asset) {
-        confirmAction(
-          "Replace booth photograph?",
-          "A backup will download first. Photo artwork and lighting overlays will reset for the new photograph.",
-          () => {
-            backup();
-            upload(files, type);
-          },
-        );
-      } else await upload(files, type);
-      ev.target.value = "";
-    };
-  // An exhibitor's booth design file, onto the floor booth chosen when Import
-  // was pressed (src/booth-file.js), or the one it was dropped on.
-  document.querySelector("#design-input").onchange = async (ev) => {
-    const f = ev.target.files[0];
-    ev.target.value = "";
-    const n = designTarget;
-    designTarget = null;
-    await importDesignFile(f, n);
-  };
-  // A file dragged over the 2D floor: the booth under the pointer is where it
-  // will land, and is outlined while it is held there.
-  const floorHost = document.querySelector("#show-floor");
-  const boothUnder = (ev) => document.elementsFromPoint(ev.clientX, ev.clientY).map((el) => el.closest?.("#show-floor [data-hall-booth]")).find(Boolean) || null;
-  const markDrop = (g) => {
-    for (const x of floorHost.querySelectorAll(".sf-drop")) if (x !== g) x.classList.remove("sf-drop");
-    g?.classList.add("sf-drop");
-  };
-  floorHost.addEventListener("dragover", (ev) => {
-    if (!showFloor || show3d || !p.hall || ![...ev.dataTransfer.types].includes("Files")) return;
-    ev.preventDefault();
-    const g = boothUnder(ev);
-    ev.dataTransfer.dropEffect = g ? "copy" : "none";
-    markDrop(g);
-  });
-  floorHost.addEventListener("dragleave", (ev) => {
-    if (!floorHost.contains(ev.relatedTarget)) markDrop(null);
-  });
-  floorHost.addEventListener("drop", async (ev) => {
-    if (!showFloor || show3d || !p.hall || ![...ev.dataTransfer.types].includes("Files")) return;
-    ev.preventDefault();
-    const g = boothUnder(ev);
-    markDrop(null);
-    const f = ev.dataTransfer.files[0];
-    if (!f) return;
-    if (!g) return toast("Drop a booth design file on a booth.", true);
-    const n = Number(g.dataset.hallBooth);
-    hallSelected = n;
-    showEditor?.select([g.dataset.id]);
-    await importDesignFile(f, n);
-  });
-  async function importDesignFile(f, n) {
-    if (!f || !p.hall || !Number.isInteger(n)) return;
-    let file;
-    try {
-      if (f.size > 200 * 1024 * 1024) throw new Error("That file is over the 200 MB limit.");
-      file = readDesignFile(JSON.parse(await f.text()));
-    } catch (err) {
-      return toast(err instanceof SyntaxError ? "This is not a Booth Studio booth design file." : err.message, true);
-    }
-    const from = file.name ? `“${file.name}”` : "The design";
-    const go = () => {
-      let err = null;
-      const live = liveNumber(p.hall) === n;
-      mutate(() => {
-        err = importDesign(p, n, file);
-        if (!err && live) selected = null;
-      });
-      if (err) toast(err, true);
-      else toast(`${from} is on booth ${n}. ${live ? "It is open in the booth editor." : "Open this booth to edit it; See it in 3D shows it on the floor."}`);
-    };
-    if (hasDesign(p.hall, n)) confirmAction(`Replace booth ${n}'s design?`, `${from} replaces the design booth ${n} has now. Undo brings it back.`, go);
-    else go();
-  }
-  document.querySelector("#backup-input").onchange = async (ev) => {
-    const f = ev.target.files[0];
-    ev.target.value = "";
-    if (!f) return;
-    try {
-      if (f.size > 200 * 1024 * 1024)
-        throw new Error("Backup exceeds the 200 MB prototype limit.");
-      const raw = JSON.parse(await f.text());
-      const carried = raw && typeof raw === "object" && Array.isArray(raw.floorTemplates) ? raw.floorTemplates : [];
-      if (raw && typeof raw === "object") delete raw.floorTemplates;
-      const imported = validateProject(raw);
-      confirmAction(
-        "Open this project?",
-        "Your current project will download as a backup before the imported project opens.",
-        () => {
-          backup();
-          mutate(() => {
-            p = imported;
-            tagAssetRoles(p);
-            selected = p.art[0]?.id;
-            photoSelected = null;
-            lightIndex = 0;
-            photoLightIndex = 0;
-          });
-          scene?.setView("perspective");
-          // A backup written before thumbnails existed brings none with it.
-          backfillThumbnails();
-          const added = mergeFloorTemplates(carried);
-          if (added) renderInspector();
-          toast(`Project restored with its original images.${added ? ` ${added} floor template${added === 1 ? "" : "s"} from the backup added to this browser.` : ""}`);
-        },
-      );
-    } catch (err) {
-      toast(err.message, true);
-    }
-  };
+  createUpload(ctx);
   // Photoshop's angle dial: press anywhere on it and drag round. The angle
   // is where the light comes from, so the line points at the pointer.
   // A shape in the show floor's library: pressed, it is dragged onto the
