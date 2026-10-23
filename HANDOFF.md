@@ -163,14 +163,15 @@ look at and what to change if it reads wrong.
    image service). Its phase 1 (foundations) needs none of those. Done: 1.1
    (this file's split), 1.5, 1.7, 1.8 and 1.9; half done: 1.4 (every module
    in `src/` is type-checked but `main.js`, `scene.js`, `studio.js` and what
-   the split moves out of `main.js`) and 1.6; begun: 1.2 (seams 1–15 of
+   the split moves out of `main.js`) and 1.6; begun: 1.2 (seams 1–16 of
    `MAIN_SPLIT_PHASE.md`: the share dialogs, the welcome, Keep your work
    and the templates, the looks and the image editor, the timeline dialog
    and the batch, the show-floor panel, Find a tool and the app map,
    upload and import, and every tab's section builders in `src/panels/` —
    `inspectorHTML`, which lays each tab out, stays in `main.js` until seam
-   19; the whole action table, by area, in `src/actions/`; seams 16–21,
-   the listeners, the render and the rest, are next). Left for sessions: the rest of
+   19; the whole action table, by area, in `src/actions/`; the panels'
+   listeners in `src/ui/inputs.js`; seams 17–21, the click dispatch and
+   keyboard, the scene's callbacks, the render and the rest, are next). Left for sessions: the rest of
    1.2 and 1.3 (split `main.js` and `scene.js`, which phase 2 waits on, seam
    by seam as that plan lists them) and the rest of 1.4, after them. 1.10's site-qa and Dependabot, 1.11 (the
    custom domain) and 1.12 (security headers, which change what the Worker

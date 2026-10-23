@@ -76,7 +76,7 @@ pushing.
 | 13 | the Video tab's actions: the clip, the timeline, the batch, auto-pan | `src/actions/video.js` | ~340 | the whole chain |
 | 14 | Export's and the show floor's actions | `src/actions/export.js`, `src/actions/show.js` | ~330 | the whole chain |
 | 15 | the rest: the booth, the viewport, the project and the app | `src/actions/booth.js`, `src/actions/app.js` | ~340 | the whole chain |
-| 16 | the `change`, `input` and `pointerdown` listeners on the panels | `src/ui/inputs.js` | ~570 | the whole chain |
+| 16 | the `change`, `input` and `pointerdown` listeners on the panels | `src/ui/inputs.js` | ~550 | the whole chain |
 | 17 | the `click` dispatch and the keyboard | `src/ui/events.js` | ~280 | the whole chain |
 | 18 | the scene's callbacks, the studio host and `window.__booth` | `src/ui/scene-wiring.js`, `src/ui/test-hooks.js` | ~350 | the whole chain |
 | 19 | `render`, `renderStatus`, `inspectorHTML` and the section chips | `src/ui/render.js` | ~400 | the whole chain |
@@ -445,3 +445,26 @@ wrong.)
   `inspectorHTML`, the library and placement, and then the rest. What
   stays for good is the state's declarations (~160 lines), `ctx` (~225)
   and the module's top (~250): about 650, under the gate with room.
+- **2026-10-23, seam 16: the panels' listeners.** The document's `change`
+  listener (410 lines: every select, checkbox and typed number in the
+  inspector, and the end of a slider's gesture), its `input` listener (141:
+  the booth moving live under a slider or a colour), and the two
+  `pointerdown` listeners (the show floor library's press and the
+  drop-shadow dial) moved into `src/ui/inputs.js` as `createInputs(ctx)`,
+  called for its effect where the first of them stood — before
+  `createUpload(ctx)`, which used to sit between the `input` listener and
+  the two `pointerdown` ones. Upload wires only its file inputs and the 2D
+  floor's drop, never these three events on the document, so no listener
+  changes its order against another of its kind; the small `change`
+  listener that writes a range's number beside it (line 1253) stays where
+  it was and is still registered first. The dial's comment sat over the
+  show floor's listener, one up from the dial's own, and moved with both.
+  `ctx` gains getters and setters for the gesture flags and the state
+  these assign (`activeBooth`, `artGesture`, `autoScale`, `colorHistory`,
+  `panelGesture`, `pedestalGesture`, `personGesture`, `quality`,
+  `scaleGesture`; setters for `exportFrame`, `exportLong`,
+  `furnitureChoice`, `powerOutlets` and `search`), a getter for
+  `scaleBase`, the function declarations they call, and the show floor's
+  `showChange` wrapped. The gesture flags' `let`s stay in `main.js`, where
+  `scaleSelected` reads them too (seam 5's ruling). Eighteen imports went.
+  The ratchet is 3,453 (red on `main`'s 4,003).
