@@ -13,7 +13,7 @@ import { FRAMES, DEFAULT_FRAME, DEFAULT_CLIP_FRAME, CUSTOM_FRAME, FRAME_MIN, FRA
 import { SHADOW_FIELD, SHADOW_KINDS, SHADOW_MAX, globalAngle, normalAngle, shadowSpec } from "./dropshadow.js";
 import { MAX_SWATCHES, isColor, readPalette, removeSwatch, rememberColor, previousColor } from "./swatches.js";
 import { normalizeImageEdits } from "./image-edit.js";
-import { MAX_PEOPLE, flipFacing, newPerson, personName } from "./people.js";
+import { MAX_PEOPLE, newPerson, personName } from "./people.js";
 import {
   DEFAULT_SPACE, MAX_GAP, MAX_SLOTS,
   addBooths, addSpace, boothSlots, hasRow, normalizeRow, removeSlot,
@@ -171,7 +171,6 @@ import {
 } from "lucide";
 import {
   demoProject,
-  blankProject,
   lightVisible,
   uid,
   validateProject,
@@ -181,7 +180,6 @@ import {
   GROUND_UPLOAD,
   groundLibrary,
   groundUpload,
-  removeGroundUpload,
   selectGround,
   constrain,
   openSpot,
@@ -190,7 +188,6 @@ import {
   constrainPedestal,
   scalePanel,
   convex,
-  MAX_PANELS,
   boothPanels,
   findPanel,
   panelKey,
@@ -198,7 +195,6 @@ import {
   panelIdOf,
   wallLabel,
   wallSpec,
-  LIGHT_BAR,
   MAX_PEDESTALS,
   FURNITURE,
   BOX_LIMITS,
@@ -223,11 +219,11 @@ function accountButton() {
   const a = accountLabel(readSession());
   return `<button class="avatar${a.signedIn ? "" : " sign-in"}" data-action="studio-account" title="${e(a.title)}" aria-label="${e(a.signedIn ? a.title : "Sign in")}">${e(a.text)}</button>`;
 }
-import { BoothScene, BACKDROP_FRAMING } from "./scene.js";
+import { BoothScene } from "./scene.js";
 import { AUTO_QUALITY, startScale } from "./adaptive.js";
-import { distanceInches, formatLength } from "./measure.js";
+import { formatLength } from "./measure.js";
 import { nudge, sameWall } from "./arrange.js";
-import { MAX_VIEWS, STEP, STRIDE, newView } from "./views.js";
+import { STEP, STRIDE, newView } from "./views.js";
 import { checkClearance } from "./clearance.js";
 import { MAX_HALL_BOOTHS, moveSale } from "./hall.js";
 import { SHAPES, VENUES as SHOW_VENUES, feet, floorOf, showItems, toFloor } from "./show.js";
@@ -256,12 +252,13 @@ import { createArtworkActions } from "./actions/artwork.js";
 import { createVideoActions } from "./actions/video.js";
 import { createExportActions } from "./actions/export.js";
 import { createShowActions } from "./actions/show.js";
-import { MAX_TEMPLATES, readFloorTemplates, readTemplates, writeFloorTemplates, writeTemplates } from "./ui/templates.js";
+import { createBoothActions } from "./actions/booth.js";
+import { createAppActions } from "./actions/app.js";
+import { readFloorTemplates, readTemplates, writeFloorTemplates, writeTemplates } from "./ui/templates.js";
 import { assetInDesigns, liveNumber } from "./linked.js";
-import { templateOf } from "./quickstart.js";
 import { PhotoEditor } from "./photo.js";
 import { PRO_FEATURES, TIERS, actionFeature, can, readTier, resolveTier, writeTier } from "./tier.js";
-import { LOOKS, applyEnvPreset } from "./polish.js";
+import { applyEnvPreset } from "./polish.js";
 import { ROLES, hasMoreTabs, hiddenActions, needsWelcome, readRole, resolveRole, visibleTabs } from "./roles.js";
 import { noteKeepSafe } from "./keep-safe.js";
 import { errorEntry, recordError } from "./report.js";
@@ -642,8 +639,12 @@ async function boot() {
     get videoAbort() { return videoAbort; },
     get BUILD() { return BUILD; },
     get photo() { return photo; },
+    get draftPolicy() { return draftPolicy; },
     get actions() { return actions; },
     activeSlot,
+    addPerson,
+    addRowBooths,
+    addRowSpace,
     addWallAsset,
     allowed: (feature) => allowed(feature),
     applyRole,
@@ -662,9 +663,11 @@ async function boot() {
     hideEye,
     icon,
     inspectorHTML,
+    keepKit,
     kit: () => kit(),
     makeAiPack,
     libraryItems,
+    loadStudio,
     mutate,
     probeCodec,
     proLock,
@@ -675,6 +678,12 @@ async function boot() {
     renderSelection,
     runClips,
     safeName,
+    setDraft,
+    setDraftPolicy,
+    setDrawingBox,
+    setMeasuring,
+    setSheet,
+    setTier,
     saveViewPrefs,
     scaleSelected,
     setPanTool,
@@ -684,6 +693,7 @@ async function boot() {
     setWalking,
     snapshot,
     syncAutoPan,
+    syncTools,
     toast,
     // Declared after ctx (consts, or a module's functions), so wrapped.
     batchSection: () => batchSection(),
@@ -728,6 +738,16 @@ async function boot() {
     showRotate: (...args) => showRotate(...args),
     shareFile: (...args) => shareFile(...args),
     showShareLink: (...args) => showShareLink(...args),
+    rowCount: (...args) => rowCount(...args),
+    chooseRole: (...args) => chooseRole(...args),
+    describeToAssistant: (...args) => describeToAssistant(...args),
+    openQuickStart: (...args) => openQuickStart(...args),
+    openWelcome: (...args) => openWelcome(...args),
+    runQuickStart: (...args) => runQuickStart(...args),
+    welcomeDismissed: (...args) => welcomeDismissed(...args),
+    runLook: (...args) => runLook(...args),
+    runPolish: (...args) => runPolish(...args),
+    shortcutHelp: (...args) => shortcutHelp(...args),
     range,
     scheduleSave,
     updateFrameGuide,
@@ -2604,373 +2624,10 @@ async function boot() {
     return p.art.find((item) => item.id === selected);
   }
   const { drawImageEditorPreview, renderImageEditor, scheduleEditedPreview, updateEditorEdits } = createImageEditor(ctx);
-  const actions = {
-    "upload-surround": () => document.querySelector("#surround-input").click(),
-    "upload-ground": () => document.querySelector("#ground-input").click(),
-    "clear-surround": () => mutate(()=>{p.booth.surroundAsset=null;}),
-    // Removing an upload deletes that library entry; the floor falls back to
-    // the last preset rather than leaving an empty slot behind.
-    "remove-ground-upload": () => {
-      const id = groundUpload(p);
-      if (id) mutate(()=>removeGroundUpload(p, id));
-    },
-    // Zoom in steps of 5 points. Lower framing is a wider lens, so "zoom out"
-    // subtracts; the clamp matches the slider and the schema.
-    "backdrop-out": () => mutate(()=>{p.booth.backdropFraming=Math.max(25,(p.booth.backdropFraming ?? BACKDROP_FRAMING)-5);}),
-    "backdrop-in": () => mutate(()=>{p.booth.backdropFraming=Math.min(100,(p.booth.backdropFraming ?? BACKDROP_FRAMING)+5);}),
-    "backdrop-reset": () => mutate(()=>{p.booth.backdropFraming=BACKDROP_FRAMING;p.booth.surroundRotation=0;p.booth.backdropTilt=0;}),
-    import: () => document.querySelector("#backup-input").click(),
-    backup,
-    pan: () => setPanTool(!panTool),
-    "clear-tapes": () => scene?.clearTapes(),
-    select: () => {
-      if (panTool) setPanTool(false);
-      scene.move = false;
-      document.querySelector('[data-action="select"]').classList.add("active");
-      document.querySelector('[data-action="move"]').classList.remove("active");
-      render();
-    },
-    move: () => {
-      if (panTool) setPanTool(false);
-      scene.move = true;
-      document.querySelector('[data-action="move"]').classList.add("active");
-      document
-        .querySelector('[data-action="select"]')
-        .classList.remove("active");
-      render();
-    },
-    snap: () => {
-      scene.snap = !scene.snap;
-      document
-        .querySelector('[data-action="snap"]')
-        .classList.toggle("active", scene.snap);
-      render();
-    },
-    // The tape measure. Its reading goes in the status bar as well as on the
-    // tape, so it can be read without hunting for the label.
-    measure: () => setMeasuring(!scene?.measure.on),
-    draft: () => setDraft(!scene?.draft),
-    "row-booth-left": () => addRowBooths("left", 1),
-    "row-booth-right": () => addRowBooths("right", 1),
-    "row-count-left": () => addRowBooths("left", rowCount()),
-    "row-count-right": () => addRowBooths("right", rowCount()),
-    "row-space-left": () => addRowSpace("left"),
-    "row-space-right": () => addRowSpace("right"),
-    "draft-lock": () =>
-      setDraftPolicy({ auto: "on", on: "off", off: "auto" }[draftPolicy] || "auto"),
-    undo: () => {
-      if (!history.length) return;
-      future.push(snapshot());
-      p = keepKit(fromSnapshot(history.pop()));
-      render();
-      scheduleSave();
-    },
-    redo: () => {
-      if (!future.length) return;
-      history.push(snapshot());
-      p = keepKit(fromSnapshot(future.pop()));
-      render();
-      scheduleSave();
-    },
-    "mode-3d": () => {
-      if (show3d) setShow3d(false);
-      showFloor = false;
-      mutate(() => (p.mode = "3d"));
-    },
-    "mode-photo": () =>
-      (show3d && setShow3d(false), mutate(() => {
-        showFloor = false;
-        p.mode = "photo";
-        tab = p.photo.asset ? "art" : "layout";
-      })),
-    "export-tab": () => {
-      tab = "export";
-      renderInspector();
-    },
-    "zoom-in": () => (showFloor && !show3d ? showEditor?.zoom(1.25) : p.mode === "3d" && scene?.zoom(1.2)),
-    "zoom-out": () => (showFloor && !show3d ? showEditor?.zoom(1 / 1.25) : p.mode === "3d" && scene?.zoom(1/1.2)),
-    "reset-view": () => {
-      if (showFloor && !show3d) return showEditor?.fit();
-      scene?.setView("perspective");
-      document
-        .querySelectorAll("[data-view]")
-        .forEach((b) =>
-          b.classList.toggle("active", b.dataset.view === "perspective"),
-        );
-    },
-    "quick-start": () => openQuickStart(),
-    "qs-go": () => runQuickStart(),
-    "qs-cancel": () => document.querySelector("#dialog").close(),
-    "welcome-describe": () => describeToAssistant(),
-    "welcome-sign-in": () => {
-      document.querySelector("#dialog").close();
-      welcomeDismissed();
-      actions["studio-account"]();
-    },
-    "welcome-close": () => {
-      document.querySelector("#dialog").close();
-      welcomeDismissed();
-    },
-    "save-template": () => {
-      const list = readTemplates();
-      const t = templateOf(p, p.name);
-      const next = [t, ...list.filter((x) => x.label !== t.label)];
-      if (writeTemplates(next))
-        toast(`Saved “${t.label}” as a template${next.length > MAX_TEMPLATES ? `; the oldest of ${MAX_TEMPLATES} was dropped` : ""}. Quick start offers it next time. Artwork and images are not included.`);
-      else toast("This browser would not store the template. Download a project backup instead.", true);
-    },
-    "studio-account": () =>
-      loadStudio()
-        .then((b) => b.openPanel())
-        .catch((err) => toast(`Studio account couldn't open: ${err.message}`, true)),
-    "new-project": () =>
-      confirmAction(
-        "Start an empty booth?",
-        "A backup of your current project will download before it is replaced.",
-        () => {
-          backup();
-          mutate(() => {
-            p = blankProject();
-            selected = null;
-            tab = "layout";
-          });
-          scene?.setView("perspective");
-        },
-      ),
-    "copy-project": () => {
-      backup();
-      mutate(() => {
-        p.id = uid();
-        p.name = p.name.replace(/ · Alternative$/, "") + " · Alternative";
-      });
-      toast(
-        "Alternative created. The previous layout was downloaded as a backup.",
-      );
-    },
-    daylight: () =>
-      mutate(() => {
-        p.ambient = 1.6;
-        for (const l of p.mode === "photo" ? p.photo.lights : p.lights) {
-          l.kelvin = 5500;
-          l.power = p.mode === "photo" ? 0.4 : 70;
-        }
-      }),
-    warm: () =>
-      mutate(() => {
-        p.ambient = 0.7;
-        for (const l of p.mode === "photo" ? p.photo.lights : p.lights) {
-          l.kelvin = 3000;
-          l.power = p.mode === "photo" ? 0.55 : 100;
-        }
-      }),
-    "add-light": () =>
-      mutate(() => {
-        if (p.mode === "photo" && p.photo.lights.length < 8) {
-          p.photo.lights.push({
-            id: uid(),
-            x: 0.5,
-            y: 0.3,
-            radius: 0.3,
-            power: 0.5,
-            kelvin: 4000,
-          });
-          photoLightIndex = p.photo.lights.length - 1;
-        } else if (p.mode === "3d" && p.lights.length < 4) {
-          p.lights.push({
-            id: uid(),
-            x: 0,
-            y: 91,
-            z: 24,
-            tx: 0,
-            ty: 55,
-            tz: -59,
-            power: 80,
-            kelvin: 4000,
-          });
-          lightIndex = p.lights.length - 1;
-        }
-      }),
-    "delete-light": () =>
-      mutate(() => {
-        if (p.mode === "photo") {
-          p.photo.lights.splice(photoLightIndex, 1);
-          photoLightIndex = 0;
-        } else {
-          p.lights.splice(lightIndex, 1);
-          lightIndex = 0;
-        }
-      }),
-    "add-woman": () => addPerson("woman"),
-    "add-man": () => addPerson("man"),
-    "add-child": () => addPerson("child"),
-    "add-pair": () => addPerson("group"),
-    "add-wheelchair": () => addPerson("wheelchair"),
-    // Turn the figure round to face the other way; the cut-out picture
-    // mirrors with its facing (people.js), so this is the one-click flip.
-    "flip-person": (button) => {
-      const id = button?.closest("[data-person]")?.dataset.person;
-      mutate(() => {
-        const person = (p.booth.people || []).find((x) => x.id === id);
-        if (person) person.rotation = flipFacing(person.rotation ?? 0);
-      });
-    },
-    "delete-person": (button) => {
-      const id = button?.closest("[data-person]")?.dataset.person;
-      mutate(() => (p.booth.people = (p.booth.people || []).filter((x) => x.id !== id)));
-    },
-    help: () => {
-      const d = document.querySelector("#dialog");
-      document.querySelector("#dialog-content").innerHTML =
-        `<div class="panel-heading"><h2>Welcome to Booth Studio</h2>${btn("close-help", "Close", "x", "icon-only")}</div><p>Start with Layout, upload your original artwork, and enter its actual dimensions. Sample panels are dimension placeholders, not artwork.</p><ol><li><strong>Arrange:</strong> select a work in the library. Set its wall, left edge, and bottom edge. Use Move to drag along the wall, or Center to align.</li><li><strong>Art show booth:</strong> the Art show tool switches this booth to an indoor convention booth — seamless white walls, a light bar with directional heads spotting each wall, and a white exhibition hall around you. Booth size, wall sizes and the individual display panel are all typed in inches there.</li><li><strong>Free-standing walls and pedestals:</strong> add them in the Walls tool, then click a wall — or double-click a pedestal — in the booth to pick it up. Drag it across the floor, or use its left/right and front/back sliders. Snap keeps a drag on whole inches.</li><li><strong>Navigate:</strong> drag empty space to orbit, scroll to zoom, right-drag to pan. On touch, use one finger to orbit and two to pan/zoom. Wall and Plan views give precise views.</li><li><strong>Light:</strong> adjust ambient light and each spotlight’s position, target, power, and temperature.</li><li><strong>Photo:</strong> upload a booth shot, select uploaded library artwork to add it, then drag its four corners. Lighting is a visual overlay. Existing photo objects remain baked in.</li><li><strong>Keep:</strong> autosave is on this browser/device only. Download a full backup to transfer or archive a project.</li><li><strong>Export:</strong> PNG captures the current view; the hanging guide gives measured artwork edges.</li></ol><p class="muted">Ctrl/⌘ Z: undo · Ctrl/⌘ Shift Z: redo · Delete: remove selected artwork · Arrows: nudge 1″ (Shift: 1′) · R / Shift R: turn a pedestal or wall 15° · Ctrl/⌘ D: duplicate · V: select · M: move · T: tape measure · Esc: put the tape away · / or Ctrl/⌘ K: find a tool.</p>${shortcutHelp()}<p class="muted">No AI calls. Single images do not supply surface relief; baked-in lighting remains. Photorealism and exact display color are not guaranteed.</p>`;
-      refreshIcons();
-      d.showModal();
-    },
-    "close-help": () => document.querySelector("#dialog").close(),
-    // The phone's way into search: the box is in the header, out of a
-    // thumb's reach, so a button in the viewport's corner focuses it.
-    // The studio assistant's other two doors (src/studio-assistant.js): the
-    // header's button and, on a phone, the icon above Find a tool. Both show
-    // only while the panel's own button would (body.assistant-on).
-    assistant: () => document.querySelector("studio-assistant")?.toggle(),
-    // The inspector's More: every tab, then back to the workspace's own.
-    "tabs-more": () => {
-      tabsMore = !tabsMore;
-      applyRole();
-    },
-    workspace: () => openWelcome(),
-    polish: () => runPolish(),
-    ...Object.fromEntries(Object.keys(LOOKS).map((k) => [`look-${k}`, () => runLook(k)])),
-    "role-artist": () => chooseRole("artist"),
-    "role-organizer": () => chooseRole("organizer"),
-    "role-all": () => chooseRole("all"),
-    // Phones only (the button is hidden wider): the toolbar shows Select,
-    // Move, Walk and Undo, and this opens the rest in the same row.
-    "tools-more": () => {
-      const open = document.body.classList.toggle("tools-open");
-      document.querySelector('.toolbar [data-action="tools-more"]').setAttribute("aria-expanded", String(open));
-    },
-    "find-tool": () => {
-      const box = document.querySelector("#tool-search");
-      box.focus();
-      box.select();
-    },
-    "add-panel": () =>
-      mutate(() => {
-        const panels = (p.booth.panels ||= []);
-        if (panels.length >= MAX_PANELS) {
-          toast(`This prototype supports up to ${MAX_PANELS} free-standing walls.`, true);
-          return;
-        }
-        // A new panel stands across the middle of the booth, facing the
-        // entrance like the back wall, so it is visible the moment it appears
-        // rather than needing three numbers typed before anything shows.
-        panels.push({
-          id: uid(),
-          name: "Panel " + (panels.length + 1),
-          width: Math.min(p.booth.width, 72),
-          height: p.booth.walls.back.height,
-          x: 0,
-          z: 0,
-          rotation: 0,
-        });
-        // Selected on arrival: the next thing anyone does with a new wall is
-        // move it, and a selected wall can be dragged straight away.
-        selectedPanel = panelKey(panels[panels.length - 1].id);
-        toast("Free-standing wall added at the centre of the booth. Drag it in the booth or use the sliders below.");
-      }),
-    "open-walls": () => {
-      tab = "walls";
-      renderInspector();
-    },
-    "add-pedestal": () =>
-      mutate(() => {
-        const list = (p.booth.pedestals ||= []);
-        if (list.length >= MAX_PEDESTALS) {
-          toast(`This prototype supports up to ${MAX_PEDESTALS} pieces of furniture.`, true);
-          return;
-        }
-        const kind = furnitureChoice,
-          { label, ...size } = FURNITURE[kind],
-          same = list.filter((x) => furnitureKind(x) === kind).length;
-        // Near the entrance on the right, where a card table usually stands,
-        // rather than in the middle of the floor where it would be in the way
-        // of the first thing anyone looks at. Measured from the piece's own
-        // size, so an 8′ table lands inside the booth and a pedestal lands
-        // exactly where it always did.
-        list.push({
-          id: uid(),
-          name: (kind === "pedestal" ? "Pedestal" : label) + " " + (same + 1),
-          ...size,
-          ...(kind === "pedestal" ? {} : { kind }),
-          x: Math.round(p.booth.width / 2 - size.width / 2 - 6),
-          z: Math.round(p.booth.depth / 2 - size.depth / 2 - 18),
-          rotation: 0,
-        });
-        list[list.length - 1] = constrainPedestal(p, list[list.length - 1]);
-        selectedPedestal = list[list.length - 1].id;
-        selectedPanel = null;
-        toast(`${label} added near the entrance. Double-click it in the booth to pick it up, or use the sliders.`);
-      }),
-    // The one drag back for a booth carrying the brightness default from
-    // before the slider was a percentage. It writes the stored unit, not the
-    // slider point, because the stored unit is what the light reads.
-    "tier-pro": () => setTier("pro"),
-    walk: () => setWalking(!walking),
-    "draw-box": () => setDrawingBox(!scene?.drawingBox),
-    "upload-model": () => document.querySelector("#model-input").click(),
-    "upload-underlay": () => document.querySelector("#underlay-input").click(),
-    "remove-underlay": () =>
-      mutate(() => {
-        const id = p.booth.underlay?.asset;
-        delete p.booth.underlay;
-        // The image is only the plan's: nothing else can be using it.
-        if (id && !p.art.some((a) => a.asset === id) && !assetInDesigns(p, id)) delete p.assets[id];
-      }),
-    "underlay-scale": () => {
-      const u = p.booth.underlay;
-      const pts = scene?.measure.points;
-      if (!u || pts?.length !== 2) return toast("Measure a known distance on the plan with the tape (T) first.", true);
-      const taped = distanceInches(pts[0], pts[1], 0.0254);
-      const real = Number(document.querySelector("#underlay-real")?.value);
-      if (!(taped > 0.5) || !(real > 0)) return toast("Type the real length of the distance you taped.", true);
-      const factor = real / taped;
-      const width = Math.max(12, Math.min(24000, u.width * factor));
-      // Scaled about the tape's start, so the point that was measured from
-      // stays under the cursor and the booth does not slide off the plan.
-      const ox = pts[0].x / 0.0254, oz = pts[0].z / 0.0254;
-      mutate(() => {
-        u.width = Math.round(width * 100) / 100;
-        u.x = Math.round((ox + (u.x - ox) * factor) * 100) / 100;
-        u.z = Math.round((oz + (u.z - oz) * factor) * 100) / 100;
-      });
-      scene.setMeasuring(false);
-      syncTools();
-      toast(`Plan scaled ×${factor.toFixed(3)}: the taped distance now measures ${formatLength(real)}.`);
-    },
-    "view-save": () => {
-      if (!scene) return;
-      const views = p.views || [];
-      if (views.length >= MAX_VIEWS) return toast(`${MAX_VIEWS} views is the limit.`, true);
-      const v = newView(scene.pose(), uid(), views);
-      mutate(() => (p.views = [...views, v]));
-      toast(`Saved as “${v.name}”. Rename it in the list; the View menu under the booth goes back to it.`);
-    },
-    "sheet-toggle": () => setSheet(!document.body.classList.contains("sheet-collapsed")),
-    "bar-default": () =>
-      mutate(() => {
-        p.booth.lightBar = { ...lightBarSpec(p.booth), power: LIGHT_BAR.power };
-        toast("Fixture brightness set to 50.");
-      }),
-    "relink-walls": () =>
-      mutate(() => {
-        relinkArtShowWalls(p);
-        const module = artShowPanel(p.booth);
-        toast(
-          `Walls rebuilt from ${Number(module.width.toFixed(2))}″ × ${module.height}″ panels: back ${p.booth.walls.back.width}″, sides ${p.booth.walls.left.width}″.`,
-        );
-      }),
-  };
-  Object.assign(actions, createArtworkActions(ctx), createVideoActions(ctx), createExportActions(ctx), createShowActions(ctx));
+  // The action table: every button's handler under its data-action, put
+  // together from its areas in src/actions/ (MAIN_SPLIT_PHASE.md, seams 12–15).
+  const actions = {};
+  Object.assign(actions, createArtworkActions(ctx), createVideoActions(ctx), createExportActions(ctx), createShowActions(ctx), createBoothActions(ctx), createAppActions(ctx));
   // Removing a pedestal takes nothing with it: nothing hangs on one.
   function deletePedestal(id) {
     mutate(() => {

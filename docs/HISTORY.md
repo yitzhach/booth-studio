@@ -17,6 +17,14 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-22: `main.js`'s fifteenth seam (ROADMAP 1.2).** The rest of
+  the action table — the booth's 35 buttons into `src/actions/booth.js`,
+  the app's 43 into `src/actions/app.js` — so `actions` is now put
+  together from its six areas in `src/actions/`. Unchanged but for
+  `ctx.`, checked line for line. `main.js` is 4,003 lines (from 4,346);
+  `MAIN_SPLIT_PHASE.md` measures what is left as seams 16–21. Lint, type
+  check, 527 node tests and build green; the whole chain is run one suite
+  at a time before its pull request, which reports it.
 - **2026-10-22: `main.js`'s fourteenth seam (ROADMAP 1.2).** The Export
   tab's 11 buttons into `src/actions/export.js` and the show floor's 31
   into `src/actions/show.js`, merged back into the one action table.
