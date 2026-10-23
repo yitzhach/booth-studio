@@ -5,15 +5,14 @@ import {
 } from "./timeline.js";
 import { jobSlug } from "./batch.js";
 import { SIZES, DEFAULT_SIZE, DEFAULT_FPS, pickCodec } from "./video.js";
-import { FRAMES, DEFAULT_FRAME, DEFAULT_CLIP_FRAME, CUSTOM_FRAME, FRAME_MIN, FRAME_MAX, STILL_SIZES, placeRect, normalPlace, DEFAULT_PLACE } from "./framing.js";
+import { DEFAULT_FRAME, DEFAULT_CLIP_FRAME, CUSTOM_FRAME, DEFAULT_PLACE } from "./framing.js";
 import { SHADOW_FIELD, SHADOW_KINDS, SHADOW_MAX, normalAngle, shadowSpec } from "./dropshadow.js";
-import { MAX_SWATCHES, isColor, readPalette, rememberColor, previousColor } from "./swatches.js";
+import { MAX_SWATCHES, isColor, rememberColor, previousColor } from "./swatches.js";
 import { MAX_PEOPLE, newPerson, personName } from "./people.js";
 import {
   DEFAULT_SPACE, MAX_SLOTS,
-  addBooths, addSpace, boothSlots, normalizeRow, removeSlot,
-  slotLabel,
-} from "./row.js";
+  addBooths, addSpace, normalizeRow, removeSlot,
+  } from "./row.js";
 import "@fontsource/dm-sans/400.css";
 import "@fontsource/dm-sans/500.css";
 import "@fontsource/dm-sans/600.css";
@@ -170,12 +169,9 @@ import {
   validateProject,
   escapeHTML as e,
   GROUND_UPLOAD,
-  groundLibrary,
   groundUpload,
   selectGround,
   constrain,
-  openSpot,
-  PLACEMENT_GAP,
   constrainPanel,
   constrainPedestal,
   scalePanel,
@@ -183,7 +179,6 @@ import {
   findPanel,
   panelKey,
   panelIdOf,
-  wallLabel,
   wallSpec,
   MAX_MODELS,
   artShowPanel,
@@ -237,6 +232,8 @@ import { createSceneWiring } from "./ui/scene-wiring.js";
 import { createStudioHost } from "./ui/studio-host.js";
 import { createTestHooks } from "./ui/test-hooks.js";
 import { createRender } from "./ui/render.js";
+import { createViewPrefs } from "./ui/view-prefs.js";
+import { createLibrary } from "./ui/library.js";
 import { readFloorTemplates, readTemplates } from "./ui/templates.js";
 import { assetInDesigns, liveNumber } from "./linked.js";
 import { PhotoEditor } from "./photo.js";
@@ -579,6 +576,9 @@ async function boot() {
     get exportLong() { return exportLong; },
     set exportLong(v) { exportLong = v; },
     get framePlace() { return framePlace; },
+    set framePlace(v) { framePlace = v; },
+    get lastEdge() { return lastEdge; },
+    set lastEdge(v) { lastEdge = v; },
     get livePlace() { return livePlace; },
     set livePlace(v) { livePlace = v; },
     get tlBeforeAuto() { return tlBeforeAuto; },
@@ -671,6 +671,8 @@ async function boot() {
     get tier() { return tier; },
     get studioHost() { return studioHost; },
     activeSlot,
+    addPhotoLayer,
+    showLibraryHTML: (...args) => showLibraryHTML(...args),
     addPerson,
     addRowBooths,
     addRowSpace,
@@ -697,7 +699,7 @@ async function boot() {
     keepKit,
     kit: () => kit(),
     makeAiPack,
-    libraryItems,
+    libraryItems: (...args) => libraryItems(...args),
     mutate,
     probeCodec,
     proLock,
@@ -705,18 +707,18 @@ async function boot() {
     refreshIcons,
     refreshScene,
     rememberEdge,
-    renderLibrary,
+    renderLibrary: (...args) => renderLibrary(...args),
     renderSelection,
     runClips,
     safeName,
-    setDraft,
-    setDraftPolicy,
+    setDraft: (...args) => setDraft(...args),
+    setDraftPolicy: (...args) => setDraftPolicy(...args),
     setDrawingBox,
     setMeasuring,
     setSheet,
     setShadowLive,
     setTier,
-    saveViewPrefs,
+    saveViewPrefs: (...args) => saveViewPrefs(...args),
     scaleSelected,
     setPanTool,
     tagAssetRoles,
@@ -727,11 +729,11 @@ async function boot() {
     syncArtInputs,
     syncPanelInputs,
     syncPedestalInputs,
-    syncQuality,
+    syncQuality: (...args) => syncQuality(...args),
     syncShadowInputs,
-    syncTools,
+    syncTools: (...args) => syncTools(...args),
     toast,
-    addCatalogPlacement,
+    addCatalogPlacement: (...args) => addCatalogPlacement(...args),
     applyColor,
     deletePanel,
     deletePedestal,
@@ -739,8 +741,8 @@ async function boot() {
     removeRowSlot,
     rotateSelection,
     showClearance,
-    frameGuideShape,
-    loadViewPrefs,
+    frameGuideShape: (...args) => frameGuideShape(...args),
+    loadViewPrefs: (...args) => loadViewPrefs(...args),
     reveal,
     revealPanelFields,
     revealPedestalFields,
@@ -810,7 +812,7 @@ async function boot() {
     buildToolIndex: (...args) => buildToolIndex(...args),
     openTool: (...args) => openTool(...args),
     placeHit: (...args) => placeHit(...args),
-    qualityOptions,
+    qualityOptions: (...args) => qualityOptions(...args),
     scaleControl,
     syncSavedViews,
     render: (...args) => render(...args),
@@ -851,7 +853,7 @@ async function boot() {
     viewsSection: (...args) => viewsSection(...args),
     range,
     scheduleSave,
-    updateFrameGuide,
+    updateFrameGuide: (...args) => updateFrameGuide(...args),
   };
   try {
     p = await load();
@@ -893,6 +895,9 @@ async function boot() {
     `<header><a class="brand" href="#" aria-label="Booth Studio">${icon("box")}<span>Artist OS</span></a><span class="app-badge">Booth Studio</span><div class="tool-search"><span aria-hidden="true">⌕</span><input id="tool-search" type="search" placeholder="Find a tool…" aria-label="Find a tool" title="Find a tool by name or shortcut · press / or Ctrl/⌘ K to jump here" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-controls="tool-results" aria-expanded="false"/><ul id="tool-results" role="listbox" aria-label="Matching tools" hidden></ul></div><button class="workspace-pill" data-action="workspace" title="Workspace: which tabs and tools to show" aria-label="Workspace">${icon("layers")}<span id="workspace-label">${e(ROLES[resolveRole(role)].label)}</span></button><button class="assistant-top" data-action="assistant" title="Ask the studio assistant" aria-label="Ask the studio assistant">${icon("message-circle")}<span>Assistant</span></button><div class="project"><input id="project-name" aria-label="Project name" maxlength="120" value="${e(p.name)}"/>${icon("chevron-down")}</div><div class="save-status" id="save-status" role="status">Opening…</div>${btn("help", "Help", "help-circle", "icon-only")}${accountButton()}</header>
 <div class="workspace"><aside class="library" id="library"></aside><main class="editor"><div class="toolbar"><div class="toolgroup">${btn("select", "Select", "mouse-pointer-2", "active")}${btn("move", "Move", "move")}${btn("pan", "Pan", "hand")}${btn("autopan-menu", "Auto pan", "chevron-down", "icon-only autopan-caret")}${btn("snap", "Snap 1″", "grid-2x2", "active")}${btn("measure", "Measure", "ruler")}${btn("walk", "Walk", "footprints")}${btn("draw-box", "Box", "square")}${btn("draft", "Fast edit", "zap")}${btn("draft-lock", "Fast edit: follows the gesture", "lock", "draft-lock")}${btn("tools-more", "More tools", "ellipsis", "icon-only tools-more")}</div><div class="toolgroup floor-tools">${btn("pan", "Pan", "hand")}</div><div class="toolgroup">${btn("undo", "Undo", "undo-2", "icon-only")}${btn("redo", "Redo", "redo-2", "icon-only")}</div><div class="mode-switch"><button data-action="mode-3d">3D booth</button><button data-action="mode-photo">Photo</button><button data-action="mode-show">Show floor</button></div>${btn("export-tab", "Export", "download", "export-top")}</div><div class="viewport"><div id="scene"></div><div class="frame-guide" hidden><div class="frame-guide-box"><button class="fg-move" data-fg="move" title="Drag to move the frame" aria-label="Move the export frame"><span class="fg-label"></span></button>${["nw", "ne", "sw", "se"].map((c) => `<i class="fg-h fg-corner" data-fg="${c}" title="Drag to resize the frame"></i>`).join("")}${["n", "s", "e", "w"].map((c) => `<i class="fg-h fg-edge" data-fg="${c}" title="Drag to change the frame's shape"></i>`).join("")}</div></div><div id="photo" hidden></div><div id="show-floor" hidden></div><div class="scene-label"><span class="eyebrow" id="mode-label">MEASURED WORKSPACE</span><strong id="scene-title"></strong><span id="scene-subtitle"></span><small class="mobile-stamp" title="Built ${BUILD.time} · commit ${BUILD.commit}">${BUILD.stamp} · ${BUILD.commit}</small></div><div id="photo-empty" hidden><div>${icon("image-plus")}<h2>Start with your booth shot</h2><p>Add artwork and adjust its four corners to match the wall perspective.</p>${btn("upload-photo", "Upload booth photo", "plus", "primary")}</div></div><button class="find-tool" data-action="find-tool" aria-label="Find a tool" title="Find a tool">${icon("search")}</button><button class="assistant-fab" data-action="assistant" aria-label="Ask the studio assistant" title="Ask the studio assistant">${icon("message-circle")}</button><div class="walk-pad" hidden><button data-walk="forward" aria-label="Step forward">▲</button><button data-walk="left" aria-label="Step left">◀</button><button data-walk="back" aria-label="Step back">▼</button><button data-walk="right" aria-label="Step right">▶</button><button data-action="walk" class="walk-exit" aria-label="Stop walking">Done</button></div><div class="autopan-menu" hidden><strong>Auto pan</strong><label>Direction<select id="autopan-dir" aria-label="Auto pan direction"><option value="1">Left to right</option><option value="-1">Right to left</option></select></label><label>Motion<select id="autopan-ease" aria-label="Auto pan motion"><option value="smooth">Ease in and out</option><option value="linear">Steady</option><option value="in">Ease in</option><option value="out">Ease out</option></select></label><label>Distance<span><input type="number" id="autopan-dist" min="1" max="200" step="0.5" aria-label="Auto pan distance in feet"/> ft</span></label><label>Speed<span><input type="number" id="autopan-speed" min="0.05" max="50" step="0.05" aria-label="Auto pan speed in feet a second"/> ft/s</span></label><label>Time<span><input type="number" id="autopan-time" min="0.5" max="600" step="0.5" aria-label="Auto pan time in seconds"/> s</span></label><p class="muted">Speed and time follow each other: change one and the other is worked out from the distance. With an ease, speed is the average.</p><div class="button-row">${btn("autopan-go", "Start", "play", "primary")}${btn("autopan-menu", "Close", "check")}</div><div class="button-row">${btn("autopan-record", "Record it as MP4", "video")}${btn("batch-add-autopan", "Add to the batch", "plus")}</div><p class="muted">Renders the same pan from the view now, at the Video tab's size and frame rate, without moving the view — or queues it in the batch (Video tab). ${MIN_SECONDS}–${MAX_SECONDS} s.</p></div><div class="measure-bar" hidden><label><input type="checkbox" id="keep-tapes"/> Keep every tape</label><button data-action="clear-tapes">Clear tapes</button></div><div class="viewport-bottom"><div class="view-switch" id="view-switch"><button data-view="perspective" class="active">Perspective</button><button data-view="back">Back</button><button data-view="left">Left</button><button data-view="right">Right</button><button data-view="plan">Plan</button></div><select class="view-quick" id="view-quick" aria-label="View"><option value="" hidden>View</option><option value="perspective">Perspective</option><option value="back">Back</option><option value="left">Left</option><option value="right">Right</option><option value="plan">Plan</option></select><label class="saved-view-pick" hidden><span>View</span><select id="saved-view" aria-label="Go to a saved view"></select></label><div class="zoom-controls"><span class="zoom-label">Zoom</span>${btn("zoom-out", "Zoom out", "minus", "icon-only")}${btn("zoom-in", "Zoom in", "plus", "icon-only")}${btn("reset-view", "Reset view", "rotate-ccw", "icon-only")}</div></div></div><div class="statusbar"><span id="gesture-hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</span><label class="preview-quality" title="Preview quality: how many pixels the viewport draws for each one on screen. Exports are never affected."><span>Preview</span><select id="quality-quick" aria-label="Preview quality"></select><output id="quality-now"></output></label><span id="selection-status"></span></div></main><aside class="inspector"><button class="sheet-toggle" data-action="sheet-toggle" aria-label="Fold the panel away" title="Fold the panel away"><span>Fold</span></button><div class="inspector-tabs">${["art", "layout", "show", "walls", "lighting", "video", "hall", "export"].map((t, i) => `<button data-tab="${t}">${icon(["image", "layout-panel-left", "building-2", "columns-2", "lightbulb", "video", "map", "download"][i])}<span>${["Artwork", "Layout", "Art show", "Walls", "Lighting", "Video", "Show floor", "Export"][i]}</span></button>`).join("")}<button class="tabs-more" data-action="tabs-more" aria-expanded="false" title="Show every tab" hidden>${icon("ellipsis")}<span>More</span></button></div><div id="inspector-content"></div></aside></div><footer><span class="footer-brand">${icon("box")} BOOTH STUDIO <small>Prototype 01</small><small id="build-stamp" title="Version ${BUILD.version} · built ${BUILD.time} · commit ${BUILD.commit}">v${BUILD.version} · ${BUILD.stamp} · ${BUILD.commit}</small></span><span>Your images. Your space. Your arrangement.</span><span id="network">Local workspace</span></footer><input type="file" id="art-input" accept="image/jpeg,image/png" multiple hidden/><input type="file" id="replace-input" accept="image/jpeg,image/png" hidden/><input type="file" id="photo-input" accept="image/jpeg,image/png" hidden/><input type="file" id="surround-input" accept="image/jpeg,image/png" hidden/><input type="file" id="ground-input" accept="image/jpeg,image/png" hidden/><input type="file" id="underlay-input" accept="image/jpeg,image/png" hidden/><input type="file" id="model-input" accept=".glb,model/gltf-binary" hidden/><input type="file" id="backup-input" accept=".json,.booth" hidden/><input type="file" id="design-input" accept=".json" hidden/><div id="toast" role="status"></div><dialog id="dialog"><div id="dialog-content"></div></dialog><dialog id="image-editor"><div id="image-editor-content"></div></dialog><dialog id="timeline-dialog" class="timeline-dialog"><div id="timeline-content"></div></dialog>`;
   let scene;
+  // The view settings, the toolbar's state and the frame guide: src/ui/view-prefs.js.
+  // Made before the scene's wiring, which loads the view settings as it starts.
+  const { qualityOptions, syncQuality, syncTools, loadViewPrefs, saveViewPrefs, setDraftPolicy, setDraft, frameGuideShape, updateFrameGuide } = createViewPrefs(ctx);
   createSceneWiring(ctx);
   const photo = new PhotoEditor(
     document.querySelector("#photo"),
@@ -1180,189 +1185,6 @@ async function boot() {
     });
     return true;
   }
-  /**
-   * The preview quality menu's options, with Auto saying which rung it has
-   * settled on. Asked on the real machine: "when not editing, what preview
-   * quality are we looking at? I don't see where the level is visible." It
-   * was a setting at the bottom of Export and a toast said once when Auto
-   * stepped down, and nothing else — so the menu now also sits under the
-   * viewport, and Auto names where it is.
-   */
-  function qualityOptions() {
-    const rung = scene?.autoScale;
-    const autoText =
-      quality === AUTO_QUALITY && rung
-        ? `Auto · now ${rungName(rung)}`
-        : "Auto · adapts to this computer";
-    return [
-      [AUTO_QUALITY, autoText],
-      [1, "Efficient · older devices"],
-      [2, "Balanced"],
-      [3, "High detail · light-bar shadows"],
-    ]
-      .map(([value, text]) => `<option value="${value}" ${quality === value ? "selected" : ""}>${e(text)}</option>`)
-      .join("");
-  }
-  /** What a supersampling factor is called, by the fixed setting that draws at it. */
-  function rungName(scale) {
-    return scale >= 3 ? "High detail, 3×" : scale >= 2 ? "Balanced, 2×" : scale > 1 ? `${scale}×` : "Efficient, 1×";
-  }
-  /**
-   * The menu under the viewport and the one in Export, and beside the first
-   * the factor the viewport is actually drawing at — which is not always the
-   * setting: fast edit draws at 1× without shadows, and on a Retina display
-   * Efficient still draws at the display's own 2×.
-   */
-  function syncQuality() {
-    for (const select of document.querySelectorAll("#quality, #quality-quick")) select.innerHTML = qualityOptions();
-    const now = document.querySelector("#quality-now");
-    if (!now) return;
-    const factor = scene ? Number(scene.renderer.getPixelRatio().toFixed(2)) : null;
-    now.textContent = !scene ? "" : scene.draft ? "fast edit · softest, no shadows" : sharpness(factor);
-  }
-  /**
-   * What the drawing scale looks like, in words rather than a supersampling
-   * factor: asked for on the real machine, because "drawing at 2×" meant
-   * nothing to someone who is not a graphics programmer. The factor stays in
-   * the tooltip for whoever wants it.
-   */
-  function sharpness(factor) {
-    const word = factor >= 3 ? "sharpest" : factor >= 2 ? "sharp" : factor > 1 ? "softer" : "softest";
-    document.querySelector("#quality-now")?.setAttribute("title", `Drawing ${factor} pixels for each one on screen`);
-    return word;
-  }
-  function syncTools() {
-    syncQuality();
-    const draft = !!scene?.draft;
-    document.querySelector('[data-action="measure"]')?.classList.toggle("active", !!scene?.measure.on);
-    for (const el of document.querySelectorAll('.toolbar [data-action="pan"]')) el.classList.toggle("active", panTool);
-    const keep = document.querySelector("#keep-tapes");
-    if (keep) keep.checked = !!scene?.measure.keep;
-    document.querySelector('.toolbar [data-action="walk"]')?.classList.toggle("active", walking);
-    document.querySelector('.toolbar [data-action="draw-box"]')?.classList.toggle("active", !!scene?.drawingBox);
-    document
-      .querySelector('[data-action="snap"]')
-      ?.classList.toggle("active", !!scene?.snap);
-    for (const el of document.querySelectorAll('[data-action="draft"]'))
-      el.classList.toggle("active", draft);
-    for (const el of document.querySelectorAll("[data-draft]")) el.checked = draft;
-    const lockLabels = {
-      auto: ["Auto", "Fast edit follows the gesture: on while you arrange a work, off when you let go."],
-      on: ["On", "Fast edit is held on. Shadows and supersampling stay off until you unlock it."],
-      off: ["Off", "Fast edit is held off. Arranging a work will not drop the quality."],
-    };
-    const [text, title] = lockLabels[draftPolicy] || lockLabels.auto;
-    for (const el of document.querySelectorAll('[data-action="draft-lock"]')) {
-      el.classList.toggle("active", draftPolicy !== "auto");
-      el.classList.toggle("locked-off", draftPolicy === "off");
-      el.title = title;
-      el.setAttribute("aria-label", "Fast edit lock: " + text);
-      const span = el.querySelector("span");
-      if (span) span.textContent = text;
-    }
-    for (const el of document.querySelectorAll("[data-draft-policy]"))
-      el.value = draftPolicy;
-  }
-  /**
-   * The lock beside the Fast edit button, cycling auto → on → off. Auto is the
-   * default and is the gesture deciding for itself; the two locks are for
-   * someone who has judged it on their own machine and does not want it
-   * changed back under them.
-   */
-  /**
-   * The view settings that belong to this browser rather than to the booth:
-   * the export frame, the clip's frame, careful rendering, the saved palette
-   * and the last edge finish. None of them is in the backup, none is in the
-   * undo history, and none is in schema 1 — the same rule the fast-edit lock
-   * follows. Read defensively: a stored value that is no longer offered falls
-   * back to the default rather than being trusted.
-   */
-  function loadViewPrefs() {
-    let saved;
-    try {
-      saved = JSON.parse(localStorage.getItem("booth.view") || "{}");
-    } catch {
-      return;
-    }
-    if (!saved || typeof saved !== "object") return;
-    if (FRAMES[saved.exportFrame]) exportFrame = saved.exportFrame;
-    // Before 2026-09-25 every browser saved "This window" for a clip, because
-    // that was the default, not because anyone chose it. Those are left at
-    // the new widescreen default; a choice saved since (`clipFrame: 2`) is
-    // kept, "This window" included.
-    if (FRAMES[saved.videoFrameShape] && saved.clipFrame === 2) videoFrameShape = saved.videoFrameShape;
-    if (STILL_SIZES.includes(Number(saved.exportLong))) exportLong = Number(saved.exportLong);
-    if (typeof saved.videoSettle === "boolean") videoSettle = saved.videoSettle;
-    if (saved.framePlace && typeof saved.framePlace === "object")
-      framePlace = { video: normalPlace(saved.framePlace.video), export: normalPlace(saved.framePlace.export) };
-    if (saved.customFrame) {
-      const clamp = (n, fallback) =>
-        Number.isFinite(Number(n)) ? Math.max(FRAME_MIN, Math.min(FRAME_MAX, Math.round(Number(n)))) : fallback;
-      customFrame = {
-        width: clamp(saved.customFrame.width, CUSTOM_FRAME.width),
-        height: clamp(saved.customFrame.height, CUSTOM_FRAME.height),
-      };
-    }
-    palette = readPalette(saved.palette);
-    if (saved.colorHistory && typeof saved.colorHistory === "object") colorHistory = saved.colorHistory;
-    if (saved.lastEdge && typeof saved.lastEdge === "object") lastEdge = saved.lastEdge;
-    if (saved.quality === AUTO_QUALITY || [1, 2, 3].includes(saved.quality)) quality = saved.quality;
-    if (saved.autoScale && typeof saved.autoScale === "object") autoScale = saved.autoScale;
-  }
-  function saveViewPrefs() {
-    try {
-      localStorage.setItem(
-        "booth.view",
-        JSON.stringify({ exportFrame, exportLong, customFrame, videoFrameShape, clipFrame: 2, framePlace, videoSettle, palette, colorHistory, lastEdge, quality, autoScale }),
-      );
-    } catch {
-      // A browser with storage switched off keeps all of this for the
-      // session; remembering it across one is the only thing lost.
-    }
-  }
-  function setDraftPolicy(policy, announce = true) {
-    draftPolicy = scene ? scene.setDraftPolicy(policy) : policy;
-    try {
-      localStorage.setItem("booth.draftPolicy", draftPolicy);
-    } catch {
-      // A browser with storage switched off still gets the setting for this
-      // session; remembering it is the only thing that is lost.
-    }
-    syncTools();
-    if (announce)
-      toast(
-        {
-          auto: "Fast edit follows the gesture again: on while you arrange a work, off when you let go.",
-          on: "Fast edit locked on. Exports are unaffected.",
-          off: "Fast edit locked off. Arranging will not drop the quality.",
-        }[draftPolicy],
-      );
-  }
-  /**
-   * Fast edit is the draft renderer: shadows off, supersampling off. It is a
-   * view setting, so it is not pushed onto the undo history and does not mark
-   * the project dirty — nothing about the booth changed, and every export
-   * puts full quality back before it draws a frame.
-   *
-   * It deliberately does not go through `render()`. That rebuilds the library
-   * and the whole inspector, which on a booth full of uploaded originals is
-   * the most expensive thing this file does — so the button whose job is to
-   * make the app faster used to cost a pause of its own on the way in.
-   */
-  function setDraft(on, announce = true) {
-    if (!scene || scene.draft === !!on) {
-      syncTools();
-      return;
-    }
-    scene.setDraft(!!on);
-    syncTools();
-    if (announce)
-      toast(
-        scene.draft
-          ? "Fast edit on. Shadows and supersampling are off while you arrange — exports are unaffected."
-          : "Full quality. Shadows and supersampling are back.",
-      );
-  }
   function field(
     label,
     key,
@@ -1590,108 +1412,8 @@ async function boot() {
     const shown = value / scale;
     return `<label class="range"><span>${label}<output>${Number(shown.toFixed(2))}${unit}</output></span><input type="range" data-field="${key}" data-scope="${scope}" aria-label="${label}" min="${min}" max="${max}" step="${step}" value="${shown}"${scale === 1 ? "" : ` data-scale="${scale}"`}/></label>`;
   }
-  function libraryItems() {
-    const excluded = new Set([
-      p.photo.asset,
-      p.booth.surroundAsset,
-      ...groundLibrary(p).map((g) => g.id),
-    ].filter(Boolean));
-    const originals = Object.entries(p.assets)
-.filter(([id, asset]) => !excluded.has(id) && (asset.role === "artwork" || p.art.some((item) => item.asset === id)))
-      .map(([assetId, asset]) => {
-        const existing = p.art.find((item) => item.asset === assetId);
-        if (existing) return { ...existing, sourceKey: "asset:" + assetId };
-        const h = Math.min(48, (36 * asset.height) / asset.width);
-        return {
-          id: "catalog-" + assetId,
-          sourceKey: "asset:" + assetId,
-          asset: assetId,
-          title: asset.name.replace(/\.[^.]+$/, ""),
-          wall: "back",
-          face: "inside",
-          x: 12,
-          y: 30,
-          w: +((h * asset.width) / asset.height).toFixed(3),
-          h: +h.toFixed(3),
-          thickness: 1.5,
-          offset: 0.75,
-        };
-      });
-    const samples = p.art
-      .filter((item) => !item.asset && !item.kind && !item.sourceId)
-      .map((item) => ({ ...item, sourceKey: "sample:" + item.id }));
-    return [...originals, ...samples];
-  }
-  function templateFromSource(sourceKey) {
-    return libraryItems().find((item) => item.sourceKey === sourceKey);
-  }
-  function placementFromTemplate(template, keepEdits = false) {
-    // Which booth of the row this is going into, and therefore which works
-    // count as "already there": a work in another booth is not something to
-    // start beside, and openSpot ignores it too.
-    const booth = activeSlot();
-    const current = p.art.find(
-      (item) => item.id === selected && (item.booth || null) === booth,
-    );
-    const wall = current?.wall || template.wall || "back";
-    const face = current?.face || template.face || "inside";
-    // `openSpot` is what keeps a second tap on the same original from landing
-    // exactly on the first one. The starting point is still beside whatever is
-    // selected; it only moves on from there if that spot is occupied.
-    return openSpot(
-      p,
-      constrain(p, {
-        ...template,
-        id: uid(),
-        sourceKey: undefined,
-        sourceId: template.asset ? undefined : template.sourceId || template.id,
-        booth: booth || undefined,
-        wall,
-        face,
-        x: current ? current.x + PLACEMENT_GAP : template.x ?? 12,
-        y: current ? current.y : template.y ?? 30,
-        // The finish the last work was given. Only ever a starting value, and
-        // only for a work that does not already carry one of its own — a
-        // second copy of something already hung keeps what that one has.
-        ...(lastEdge && !template.edgeColor
-          ? {
-              edgeColor: lastEdge.edgeColor,
-              edgeTexture: lastEdge.edgeTexture,
-              thickness: Number.isFinite(lastEdge.thickness) ? lastEdge.thickness : template.thickness,
-            }
-          : {}),
-        edits: keepEdits && template.edits ? structuredClone(template.edits) : undefined,
-      }),
-    );
-  }
-  function addCatalogPlacement(sourceKey) {
-    const template = templateFromSource(sourceKey);
-    if (!template) return;
-    if (p.art.length >= 200) {
-      toast("This prototype supports up to 200 wall placements.", true);
-      return;
-    }
-    if (p.mode === "photo") {
-      addPhotoLayer(template);
-      return;
-    }
-    let placed;
-    mutate(() => {
-      placed = placementFromTemplate(template);
-      p.art.push(placed);
-      selected = placed.id;
-      tab = "art";
-    });
-    const inBooth = placed.booth
-      ? " of " + slotLabel(boothSlots(p.booth).find((b) => b.id === placed.booth) || {})
-      : "";
-    toast(
-      `Hung on the ${wallLabel(p, placed.wall)}${inBooth} · ${placed.face === "outside" ? "outside" : "inside"}. Double-tap it on the wall to move or scale it.`,
-    );
-  }
-  function renderLibrary() {
-    document.querySelector("#library").innerHTML = showFloor ? showLibraryHTML() : libraryHTML();
-  }
+  // The library, its placements and its drag onto the stage: src/ui/library.js.
+  const { libraryItems, addCatalogPlacement, renderLibrary } = createLibrary(ctx);
   const { groundFields, rowSection, surroundingsFields, draftSection, viewsSection, tagsSection, underlaySection, clearanceSection, peopleSection } = createLayoutPanel(ctx);
   /**
    * The booth of the row that new artwork goes into, as a slot id, or null for
@@ -2074,50 +1796,6 @@ async function boot() {
     }
   };
   const { keepSafeHTML, paintKeepSafe, remindBackup } = createKeepSafePanel(ctx);
-  /**
-   * The frame guide: the chosen export frame outlined over the viewport, with
-   * everything outside it dimmed. Shown while the Video or Export tab is open,
-   * the timeline dialog is up, or a move is previewing — the places a shot is
-   * composed for a file — and only when the frame is not "This window", which
-   * is the viewport already. The export draws exactly what is inside it
-   * (scene.js `frameRect`), so composing to the guide is composing the file.
-   */
-  function frameGuideShape() {
-    if (!scene || p.mode === "photo") return null;
-    const timelineOpen = document.querySelector("#timeline-dialog")?.open;
-    const which = tab === "export" ? "export" : tab === "video" || timelineOpen || busyPreview ? "video" : null;
-    const id = which === "export" ? exportFrame : which === "video" ? videoFrameShape : null;
-    if (!id || id === "view" || !FRAMES[id]) return null;
-    const aspect = id === "custom" ? customFrame.width / customFrame.height : FRAMES[id].aspect;
-    return { id, which, aspect, label: id === "custom" ? `${customFrame.width} × ${customFrame.height}` : FRAMES[id].label.split(" · ")[1] || FRAMES[id].label };
-  }
-  function updateFrameGuide() {
-    const guide = document.querySelector(".frame-guide");
-    const host = document.querySelector("#scene");
-    if (!guide || !host) return;
-    const shape = frameGuideShape();
-    guide.hidden = !shape;
-    if (!shape) return;
-    guide.dataset.which = shape.which;
-    const W = host.clientWidth,
-      H = host.clientHeight;
-    const r = renderRect
-      ? { x: renderRect.x * W, y: renderRect.y * H, width: renderRect.width * W, height: renderRect.height * H }
-      : placeRect(W, H, shape.aspect, getPlace(shape.which));
-    Object.assign(guide.style, {
-      left: `${host.offsetLeft}px`,
-      top: `${host.offsetTop}px`,
-      width: `${host.clientWidth}px`,
-      height: `${host.clientHeight}px`,
-    });
-    Object.assign(guide.firstElementChild.style, {
-      left: `${r.x}px`,
-      top: `${r.y}px`,
-      width: `${r.width}px`,
-      height: `${r.height}px`,
-    });
-    guide.querySelector(".fg-label").textContent = shape.label;
-  }
   // The booth link's dialogs: src/ui/share-dialogs.js.
   const { shareFile, sentLinksHTML, copyLink, sendToLink, removeLink, showShareLink, openShareLink } = createShareDialogs(ctx);
   function confirmAction(title, text, run) {
@@ -2270,51 +1948,6 @@ async function boot() {
     hallSelected = Number(cell.dataset.hallBooth);
     renderInspector();
     document.querySelector(`[data-hall-booth="${hallSelected}"]`)?.focus();
-  });
-
-  function placeCopyAt(sourceKey, ev) {
-    const template = templateFromSource(sourceKey);
-    if (!template || !scene || p.mode !== "3d") return false;
-    if (p.art.length >= 200) {
-      toast("This prototype supports up to 200 wall placements.", true);
-      return false;
-    }
-    const copy = placementFromTemplate(template);
-    const placed = scene.wallDrop(ev, copy);
-    if (!placed) {
-      toast("Drop directly on an enabled interior or exterior booth wall.", true);
-      return false;
-    }
-    mutate(() => {
-      p.art.push(placed);
-      selected = placed.id;
-      tab = "art";
-    });
-    toast("New copy placed on " + wallLabel(p, placed.wall) + " · " + placed.face + ". Double-tap to adjust.");
-    return true;
-  }
-  document.addEventListener("dragstart", (ev) => {
-    const card = ev.target.closest("[data-source]");
-    if (!card || p.mode !== "3d") return;
-    ev.dataTransfer.setData("application/x-booth-original", card.dataset.source);
-    ev.dataTransfer.effectAllowed = "copy";
-  });
-  const stage = document.querySelector("#scene");
-  stage.addEventListener("dragover", (ev) => {
-    if (p.mode === "3d" && [...ev.dataTransfer.types].includes("application/x-booth-original")) {
-      ev.preventDefault();
-      ev.dataTransfer.dropEffect = "copy";
-      stage.classList.add("drop-ready");
-    }
-  });
-  stage.addEventListener("dragleave", () => stage.classList.remove("drop-ready"));
-  document.addEventListener("dragend", () => stage.classList.remove("drop-ready"));
-  stage.addEventListener("drop", (ev) => {
-    const sourceKey = ev.dataTransfer.getData("application/x-booth-original");
-    stage.classList.remove("drop-ready");
-    if (!sourceKey) return;
-    ev.preventDefault();
-    placeCopyAt(sourceKey, ev);
   });
 
   document.querySelector("#model-input").onchange = async (ev) => {

@@ -604,3 +604,62 @@ wrong.)
   move; one state object is a pull request of its own once the split is
   done), and neither is a move. The header says the factory is called once,
   because it adds a listener. The ratchet is 2,562 (red on `main`'s 2,793).
+- **2026-10-23, seam 20: the viewport's settings, made before the scene's
+  wiring, and the library with its drag.** `qualityOptions`, `rungName`,
+  `syncQuality`, `sharpness`, `syncTools`, `loadViewPrefs`,
+  `saveViewPrefs`, the frame guide promised by seam 19 (`frameGuideShape`,
+  `updateFrameGuide`) and Fast edit with its lock (`setDraftPolicy`,
+  `setDraft`) moved into `src/ui/view-prefs.js` as `createViewPrefs(ctx)`.
+  The two Fast edit functions were the open question: they went too,
+  because they are a view setting kept per browser like the rest, they
+  call `syncTools` and nothing else of the booth, and the lock's doc
+  comment already sat in the run, stacked over `loadViewPrefs`'s (it
+  describes the cycle that the `draft-lock` action in `src/actions/app.js`
+  steps through; moved as it was). `loadViewPrefs` is called by
+  `createSceneWiring` as it starts, so the factory is called just before
+  `createSceneWiring(ctx)`, not where the functions stood: it adds no
+  listener and reads nothing when it is made (its only helpers are
+  `toast`, a hoisted declaration, and `ctx`'s wrapper of `getPlace`), so
+  nothing between the two places can see a difference. The nine are now
+  a `const` from that line rather than hoisted, and nothing before it
+  calls one: `boot()`'s statements above it are the project's load,
+  `tagAssetRoles`, the `studio-session` listener's callback and the page's
+  HTML. All nine are returned: `ctx` or `main.js` still calls each.
+  `libraryItems`, `templateFromSource`, `placementFromTemplate`,
+  `addCatalogPlacement`, `renderLibrary`, `placeCopyAt` and the drag onto
+  the stage — `dragstart` and `dragend` on the document, and `const stage`
+  with its `dragover`, `dragleave` and `drop` — moved into
+  `src/ui/library.js` as `createLibrary(ctx)`, called where `libraryItems`
+  stood, before the Layout tab's builders. That registers the five drag
+  listeners about 850 lines earlier than before, past `createInputs`,
+  `createUpload` and `createEvents`. Order cannot change for them: the
+  only other drag or drop listeners in `src/` are `createUpload`'s three
+  on `#show-floor`, which is a sibling of `#scene`, not on it or the
+  document (grepped), and `#scene` is on the page from the HTML statement
+  on. `libraryItems` is called earlier only inside functions (the Artwork
+  tab's builder takes `ctx`'s wrapper and calls it when it draws), and
+  every view suite loads the page. Only `libraryItems`,
+  `addCatalogPlacement` and `renderLibrary` are returned (seam 2's rule).
+  One change that is not only `ctx.`: `saveViewPrefs` wrote its object
+  with shorthand keys, which cannot hold `ctx.exportFrame`, so the keys
+  are now spelled out (`exportFrame: ctx.exportFrame`, …), the same keys
+  in the same order. `ctx` gains a setter for `framePlace` and a getter
+  and setter for `lastEdge` (`loadViewPrefs` sets both; placement reads
+  the last edge finish), `addPhotoLayer`, and `showLibraryHTML` wrapped
+  (the show floor's factory const, after `ctx`); the twelve returned
+  functions, all hoisted declarations before, are now wrapped. No property
+  is read on any of them (checked). Thirteen imports went. 373 lines moved
+  and `main.js` lost 367. The review found one bug older than the move,
+  left as it was for the fix after the split: the document's `dragstart`
+  calls `ev.target.closest` without checking that the target is an
+  element, so dragging a text selection, whose target is a Text node,
+  throws (the scene's wiring guards the same pattern with `closest?.`).
+  Its tidy-ups change moved code, so they wait for the typing pass: the
+  200-placement limit and its toast are written out in both
+  `addCatalogPlacement` and `placeCopyAt` (and twice more elsewhere, one
+  saying "panels"); `placeCopyAt` runs `openSpot`'s search and then
+  `wallDrop` replaces the spot; `templateFromSource` rebuilds the whole
+  library to find one card; `placementFromTemplate`'s `keepEdits` is never
+  passed; and the lock's stacked doc comment above. It asked about the
+  listener order, answered above. The ratchet is 2,195 (red on `main`'s
+  2,562).

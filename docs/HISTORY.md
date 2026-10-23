@@ -17,6 +17,15 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-23: `main.js`'s twentieth seam (ROADMAP 1.2).** The
+  viewport's own settings — the preview quality menu, the toolbar's state,
+  Fast edit and its lock, the view settings this browser keeps, and the
+  frame guide — into `src/ui/view-prefs.js`, and the library, with what it
+  hangs and its drag onto the stage, into `src/ui/library.js`. Unchanged
+  but for `ctx.`, checked line for line. `main.js` is 2,195 lines (from
+  2,562). Lint, type check, 527 node tests and build green; the whole
+  chain is run one suite at a time before its pull request, which reports
+  it.
 - **2026-10-23: `main.js`'s nineteenth seam (ROADMAP 1.2).** What the
   page draws from the project — `render`, `renderStatus`, the inspector
   (`renderInspector` and `inspectorHTML`, which lays each tab out) and the

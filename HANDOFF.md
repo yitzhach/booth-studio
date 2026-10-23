@@ -93,7 +93,7 @@ is true has changed.
   with AI** (`src/ai-render.js`) downloads its pack; its provider is `null`
   until the owner picks the service and its spend (Next).
 - **How it is built and checked.** Vite and three.js, no framework.
-  `src/main.js` (2,562 lines, most of it inside `boot()`, being split
+  `src/main.js` (2,195 lines, most of it inside `boot()`, being split
   into `src/ui/`, `src/panels/` and `src/actions/`) builds the panels and
   their actions; `src/scene.js` (3,500) draws the booth. Schema 1
   is forever: `validateProject` in `src/model.js` opens every backup ever
@@ -164,7 +164,7 @@ look at and what to change if it reads wrong.
    image service). Its phase 1 (foundations) needs none of those. Done: 1.1
    (this file's split), 1.5, 1.7, 1.8 and 1.9; half done: 1.4 (every module
    in `src/` is type-checked but `main.js`, `scene.js`, `studio.js` and what
-   the split moves out of `main.js`) and 1.6; begun: 1.2 (seams 1–19 of
+   the split moves out of `main.js`) and 1.6; begun: 1.2 (seams 1–20 of
    `MAIN_SPLIT_PHASE.md`: the share dialogs, the welcome, Keep your work
    and the templates, the looks and the image editor, the timeline dialog
    and the batch, the show-floor panel, Find a tool and the app map,
@@ -175,8 +175,10 @@ look at and what to change if it reads wrong.
    `window.__booth` in `src/ui/scene-wiring.js`, `src/ui/studio-host.js`
    and `src/ui/test-hooks.js`; `render`, `renderStatus`, the inspector
    (`inspectorHTML`, which lays each tab out) and the section chips in
-   `src/ui/render.js`; seams 20–21, the library and the view prefs (with
-   the frame guide), then the rest, are next — `main.js` is 2,562 lines
+   `src/ui/render.js`; the view prefs, the toolbar's state and the frame
+   guide in `src/ui/view-prefs.js`, and the library with its drag onto the
+   stage in `src/ui/library.js`; seam 21, what is left over 1,500, is
+   next — `main.js` is 2,195 lines
    against the gate's 1,500. A seam is done with the scripts in
    `tools/main-split/`, as `MAIN_SPLIT_PHASE.md` → "Each seam, step by
    step" says, and its Rulings hold the bugs older than the move that the
