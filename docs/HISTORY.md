@@ -17,6 +17,15 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-23: `main.js`'s eighteenth seam (ROADMAP 1.2).** The
+  viewport's set-up — the scene and its callbacks, the frame guide and its
+  drag — into `src/ui/scene-wiring.js`, the studio's host and its lazy load
+  into `src/ui/studio-host.js`, and `window.__booth` into
+  `src/ui/test-hooks.js`. Unchanged but for `ctx.` and the two `import()`
+  paths, checked line for line. `main.js` is 2,793 lines (from 3,183). The
+  scripts the seams use are in `tools/main-split/`. Lint, type check, 527
+  node tests and build green; the whole chain is run one suite at a time
+  before its pull request, which reports it.
 - **2026-10-23: `main.js`'s seventeenth seam (ROADMAP 1.2).** The
   document's `click` dispatch, which every button on the page reaches, and
   the keyboard listener into `src/ui/events.js`. Unchanged but for `ctx.`,
