@@ -78,12 +78,21 @@ pushing.
 | 15 | the rest: the booth, the viewport, the project and the app | `src/actions/booth.js`, `src/actions/app.js` | ~340 | the whole chain |
 | 16 | the `change`, `input` and `pointerdown` listeners on the panels | `src/ui/inputs.js` | ~550 | the whole chain |
 | 17 | the `click` dispatch and the keyboard | `src/ui/events.js` | ~280 | the whole chain |
-| 18 | the scene's callbacks, the studio host and `window.__booth` | `src/ui/scene-wiring.js`, `src/ui/test-hooks.js` | ~350 | the whole chain |
+| 18 | the scene's callbacks, the studio host and `window.__booth` | `src/ui/scene-wiring.js`, `src/ui/studio-host.js`, `src/ui/test-hooks.js` | ~390 | the whole chain |
 | 19 | `render`, `renderStatus`, `inspectorHTML` and the section chips | `src/ui/render.js` | ~400 | the whole chain |
 | 20 | the library and placement, the view prefs, the tool sync | `src/ui/library.js`, `src/ui/view-prefs.js` | ~400 | the whole chain |
 | 21 | what is left over 1,500 (the icon table first) | — | — | the whole chain |
 
 ## Each seam, step by step
+
+The scripts each step names are in `tools/main-split/` (each says its usage
+on its first lines); they need only `espree` and `eslint-scope`, which
+ESLint brings. `list.mjs` numbers `boot()`'s statements, `extract.mjs` cuts
+them by number, `classify.mjs` sorts the names the cut code reads into
+imports, boot's state (`let`) and boot's helpers, `ctxify.mjs` rewrites the
+state to `ctx.`, `imports.mjs` writes the module's imports from `main.js`'s,
+`prune.mjs` drops the imports `main.js` no longer uses (ESLint names them),
+and `views.sh` runs the chain one suite at a time.
 
 1. Lower the number in `tests/main-size.test.js` to what `main.js` will be;
    `node --test tests/main-size.test.js` is red.
@@ -503,3 +512,49 @@ wrong.)
   from and nothing changed; and Delete or Backspace always cancels the
   key's default, even when nothing is selected to delete. The ratchet is
   3,183 (red on `main`'s 3,453).
+- **2026-10-23, seam 18: three modules, not two, and the viewport's set-up
+  goes whole.** The scene is made inside a `try`, and between it and its
+  later callbacks (`if (scene) { … }`) sit the remembered Fast edit lock,
+  `loadViewPrefs()`, the frame guide's ResizeObserver and its drag; the
+  callbacks' `scene.setQuality(quality, …)` reads what `loadViewPrefs()`
+  set. So the whole run of seven statements, from the `try` to the end of
+  the callbacks, moved into `src/ui/scene-wiring.js` as
+  `createSceneWiring(ctx)`, called for its effect where the `try` stood,
+  which keeps every one in its order; `let scene;` stays in `main.js`
+  above the call, and `ctx` gains its setter. `adaptToasted` was read by
+  nothing else and moved with it (seam 3's rule). The studio's host — the
+  lazy load of the studio and the assistant, the `studioHost` object they
+  are handed, the chunk-failure notice and the signed-in boot — is no part
+  of the scene, so it went to a module of its own, `src/ui/studio-host.js`
+  (`createStudioHost(ctx)` returns `loadStudio` and `studioHost`, called
+  where they stood, at the end of `boot()`), and `window.__booth` to
+  `src/ui/test-hooks.js` (`createTestHooks(ctx)`, right after it). One
+  change that is not `ctx.`: the two `import()` paths in the studio's load
+  now say `../studio.js` and `../studio-assistant.js`, the same files
+  reached from `src/ui/`; the build still splits both into their own
+  chunks, and `window.__booth` is still absent from the production build
+  (checked in `dist/`). `loadStudio` was a function declaration and is now
+  a factory's `const`, so `ctx` wraps it; the review asked whether a click
+  could reach it before that line runs. It cannot: nothing in `boot()`
+  calls it, a click needs `boot()` to have finished, and a throw before
+  that line already replaces the whole page with "could not start". `ctx`
+  gains setters for `draftPolicy`, `scene` and `selectedPerson`, getters
+  and setters for `measureHint`, `renderRect`, `studioBridge`, and the
+  module-level `chunkFailed` and `chunkNoticeUntil` (declared outside
+  `boot()`, read by the page's first lines), getters for `MEASURE_HINT`,
+  `tier` and `studioHost`, the function declarations these call, and Find
+  a tool's four functions and `loadStudio` wrapped. Nine imports went. The
+  review found four bugs older than the move, left as they were for the
+  fix after the split: the Box tool stays armed when it refuses (Lite, or
+  the piece limit), so every drag after that toasts the refusal again; a
+  click or a drag under 1″ with it saves a box of no width, because only
+  the limits' maximum is applied; a version opened from the studio resets
+  the selected work and lights but not the selected wall, pedestal or
+  figure, the multiple selection or the row's booth, which keep ids from
+  the project it replaced; and a frame-guide corner dragged within 40 px
+  of the viewport's edge lets the 40 px minimum push the frame past it.
+  The review's two tidy-ups (`window.__booth.save` could call
+  `studioHost.saveNow`; the factory could set `ctx`'s two names itself)
+  change moved code, so they wait for the typing pass. The scripts each
+  seam has used are now in `tools/main-split/`, so a new session does not
+  rebuild them. The ratchet is 2,793 (red on `main`'s 3,183).

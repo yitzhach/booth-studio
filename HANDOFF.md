@@ -163,7 +163,7 @@ look at and what to change if it reads wrong.
    image service). Its phase 1 (foundations) needs none of those. Done: 1.1
    (this file's split), 1.5, 1.7, 1.8 and 1.9; half done: 1.4 (every module
    in `src/` is type-checked but `main.js`, `scene.js`, `studio.js` and what
-   the split moves out of `main.js`) and 1.6; begun: 1.2 (seams 1–17 of
+   the split moves out of `main.js`) and 1.6; begun: 1.2 (seams 1–18 of
    `MAIN_SPLIT_PHASE.md`: the share dialogs, the welcome, Keep your work
    and the templates, the looks and the image editor, the timeline dialog
    and the batch, the show-floor panel, Find a tool and the app map,
@@ -171,8 +171,14 @@ look at and what to change if it reads wrong.
    `inspectorHTML`, which lays each tab out, stays in `main.js` until seam
    19; the whole action table, by area, in `src/actions/`; the panels'
    listeners in `src/ui/inputs.js`; the click dispatch and the keyboard in
-   `src/ui/events.js`; seams 18–21, the scene's callbacks, the render and
-   the rest, are next). Left for sessions: the rest of
+   `src/ui/events.js`; the scene's wiring, the studio host and
+   `window.__booth` in `src/ui/scene-wiring.js`, `src/ui/studio-host.js`
+   and `src/ui/test-hooks.js`; seams 19–21, `render` and `inspectorHTML`,
+   the library and the view prefs, then the rest, are next — `main.js` is
+   2,793 lines against the gate's 1,500. A seam is done with the scripts in
+   `tools/main-split/`, as `MAIN_SPLIT_PHASE.md` → "Each seam, step by
+   step" says, and its Rulings hold the bugs older than the move that the
+   reviews found, for a fix once the split is done). Left for sessions: the rest of
    1.2 and 1.3 (split `main.js` and `scene.js`, which phase 2 waits on, seam
    by seam as that plan lists them) and the rest of 1.4, after them. 1.10's site-qa and Dependabot, 1.11 (the
    custom domain) and 1.12 (security headers, which change what the Worker
