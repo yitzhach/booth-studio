@@ -458,7 +458,8 @@ wrong.)
   changes its order against another of its kind; the small `change`
   listener that writes a range's number beside it (line 1253) stays where
   it was and is still registered first. The dial's comment sat over the
-  show floor's listener, one up from the dial's own, and moved with both.
+  show floor's listener, one up from the dial's own; it now heads the
+  dial's.
   `ctx` gains getters and setters for the gesture flags and the state
   these assign (`activeBooth`, `artGesture`, `autoScale`, `colorHistory`,
   `panelGesture`, `pedestalGesture`, `personGesture`, `quality`,

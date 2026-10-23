@@ -17,7 +17,7 @@ import { selectGround, constrain, constrainPanel, constrainPedestal, scalePanel,
 import { AUTO_QUALITY, startScale } from "../adaptive.js";
 import { MAX_HALL_BOOTHS } from "../hall.js";
 import { SHAPES } from "../show.js";
-import { HALL_OFF_NOTE } from "../ui/polish-panel.js";
+import { HALL_OFF_NOTE } from "./polish-panel.js";
 import { applyEnvPreset } from "../polish.js";
 
 export function createInputs(ctx) {
@@ -573,8 +573,6 @@ export function createInputs(ctx) {
       ev.target.closest("label").querySelector("output").textContent =
         ev.target.value;
   });
-  // Photoshop's angle dial: press anywhere on it and drag round. The angle
-  // is where the light comes from, so the line points at the pointer.
   // A shape in the show floor's library: pressed, it is dragged onto the
   // floor or, tapped, dropped in the middle of the view.
   document.addEventListener("pointerdown", (ev) => {
@@ -583,6 +581,8 @@ export function createInputs(ctx) {
     const shape = SHAPES.find((sh) => sh.key === b.dataset.showShape);
     if (shape) ctx.showEditor.libraryPress(ev, shape);
   });
+  // Photoshop's angle dial: press anywhere on it and drag round. The angle
+  // is where the light comes from, so the line points at the pointer.
   document.addEventListener("pointerdown", (ev) => {
     const dial = ev.target.closest?.("[data-dial]");
     if (!dial || ev.button !== 0) return;
