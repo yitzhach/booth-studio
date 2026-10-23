@@ -469,3 +469,37 @@ wrong.)
   `showChange` wrapped. The gesture flags' `let`s stay in `main.js`, where
   `scaleSelected` reads them too (seam 5's ruling). Eighteen imports went.
   The ratchet is 3,453 (red on `main`'s 4,003).
+- **2026-10-23, seam 17: the click dispatch and the keyboard, called where
+  the keyboard stood.** The document's `click` dispatch (180 lines: the
+  `data-action` gate and its prefixed actions, then the tab, the layer,
+  the walk, the view, the swatches and the eyes) and its `keydown`
+  listener (103: the image editor's Escape, the show floor's and the
+  walk's keys, the dial's arrows, the nudges, the tool letters, undo,
+  delete and zoom) moved into `src/ui/events.js` as `createEvents(ctx)`,
+  called for its effect right after `createFindTool(ctx)` — where the
+  keyboard stood, not where the click dispatch did. Find a tool adds a
+  `keydown` listener of its own to the document ("/" and Ctrl/⌘-K), and
+  it was registered before the keyboard; calling the factory where the
+  click dispatch stood would have put the keyboard first. Called where
+  it is, nothing that runs between the two old places (the inputs, upload,
+  the drag and drop, Find a tool) adds a `click` listener to the document,
+  so neither listener changes its order against another of its kind. The
+  hall map's small `click` and `keydown` listeners, just above the
+  dispatch, stay in `main.js` for the same reason: moved in, the hall's
+  `keydown` would come after Find a tool's. One thing does change, and
+  only on a failure: if the inputs, upload or Find a tool threw during
+  `boot()`, the buttons used to be wired already and now are not; but
+  such a throw already stopped the keyboard and the rest of `boot()`, so
+  the page was broken either way. `ctx` gains the function declarations
+  these call (`addCatalogPlacement`, `applyColor`, `deletePanel`,
+  `deletePedestal`, `nudgeSelection`, `removeRowSlot`, `rotateSelection`,
+  `showClearance`) and the share dialogs' and the show floor's
+  `applyTemplate`, `copyLink`, `removeLink`, `sendToLink`, `show3dKey`,
+  `showFloorKey` and `startFrom`, wrapped; every piece of state the two
+  read or set had its getter and setter already. Thirteen imports went.
+  The review found two bugs older than the move, left as they were for
+  the fix after the split: a saved view's "Update" toasts "View replaced
+  with what the camera shows now." when there is no scene to take a pose
+  from and nothing changed; and Delete or Backspace always cancels the
+  key's default, even when nothing is selected to delete. The ratchet is
+  3,183 (red on `main`'s 3,453).
