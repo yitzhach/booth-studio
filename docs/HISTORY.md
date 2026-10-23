@@ -17,6 +17,13 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-23: `main.js`'s sixteenth seam (ROADMAP 1.2).** The panels'
+  listeners — the document's `change` and `input` handlers that every
+  control in the inspector reaches, the show floor library's press and the
+  drop-shadow dial — into `src/ui/inputs.js`. Unchanged but for `ctx.`,
+  checked line for line. `main.js` is 3,453 lines (from 4,003). Lint, type
+  check, 527 node tests and build green; the whole chain is run one suite
+  at a time before its pull request, which reports it.
 - **2026-10-22: `main.js`'s fifteenth seam (ROADMAP 1.2).** The rest of
   the action table — the booth's 35 buttons into `src/actions/booth.js`,
   the app's 43 into `src/actions/app.js` — so `actions` is now put

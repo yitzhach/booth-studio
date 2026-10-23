@@ -1,23 +1,21 @@
 import { TENTS } from "./environment.js";
 import { typingIn } from "./typing.js";
 import { ENV_PRESETS, ART_FIDELITY, DEFAULT_PRESET, DEFAULT_FIDELITY, FIXTURE_MODES, DEFAULT_FIXTURES, isIndoor, showFixtures } from "./lighting.js";
-import { MOVES, DEFAULT_MOVE, CUSTOM_MOVE, resolveMove, frameTimes } from "./camera-path.js";
+import { MOVES, DEFAULT_MOVE, CUSTOM_MOVE, frameTimes } from "./camera-path.js";
 import {
   MIN_SECONDS, MAX_SECONDS,
-  normalizeTimeline, timelineSeconds,
-  keySchedule, keyTAt,
+  normalizeTimeline,
 } from "./timeline.js";
-import { cleanSettings, tweak, jobSlug, CUSTOM as KIT_CUSTOM } from "./batch.js";
+import { jobSlug } from "./batch.js";
 import { SIZES, DEFAULT_SIZE, DEFAULT_FPS, pickCodec } from "./video.js";
 import { FRAMES, DEFAULT_FRAME, DEFAULT_CLIP_FRAME, CUSTOM_FRAME, FRAME_MIN, FRAME_MAX, STILL_SIZES, placeRect, placeFromRect, normalPlace, DEFAULT_PLACE } from "./framing.js";
-import { SHADOW_FIELD, SHADOW_KINDS, SHADOW_MAX, globalAngle, normalAngle, shadowSpec } from "./dropshadow.js";
+import { SHADOW_FIELD, SHADOW_KINDS, SHADOW_MAX, normalAngle, shadowSpec } from "./dropshadow.js";
 import { MAX_SWATCHES, isColor, readPalette, removeSwatch, rememberColor, previousColor } from "./swatches.js";
-import { normalizeImageEdits } from "./image-edit.js";
 import { MAX_PEOPLE, newPerson, personName } from "./people.js";
 import {
-  DEFAULT_SPACE, MAX_GAP, MAX_SLOTS,
+  DEFAULT_SPACE, MAX_SLOTS,
   addBooths, addSpace, boothSlots, hasRow, normalizeRow, removeSlot,
-  setSpaceWidth, slotLabel,
+  slotLabel,
 } from "./row.js";
 import "@fontsource/dm-sans/400.css";
 import "@fontsource/dm-sans/500.css";
@@ -187,7 +185,6 @@ import {
   constrainPanel,
   constrainPedestal,
   scalePanel,
-  convex,
   boothPanels,
   findPanel,
   panelKey,
@@ -200,15 +197,13 @@ import {
   BOX_LIMITS,
   MAX_MODELS,
   furnitureKind,
-  applyVenue,
   artShowPanel,
   boothPedestals,
   findPedestal,
   hallSpec,
   isArtShow,
   lightBarSpec,
-  relinkArtShowWalls,
-} from "./model.js";
+  } from "./model.js";
 import { lightBarFixtures } from "./lightbar.js";
 import { load, save, download, readImage, thumbnailOf, THUMB_MAX } from "./storage.js";
 import { decodeAt } from "./image-source.js";
@@ -225,15 +220,15 @@ import { formatLength } from "./measure.js";
 import { nudge, sameWall } from "./arrange.js";
 import { STEP, STRIDE, newView } from "./views.js";
 import { checkClearance } from "./clearance.js";
-import { MAX_HALL_BOOTHS, moveSale } from "./hall.js";
-import { SHAPES, VENUES as SHOW_VENUES, feet, floorOf, showItems, toFloor } from "./show.js";
+import { moveSale } from "./hall.js";
+import { VENUES as SHOW_VENUES, feet, floorOf, showItems, toFloor } from "./show.js";
 import { createShowEditor } from "./show-editor.js";
 import { PACK_LONG, describeScene, protectPass, renderPack } from "./ai-render.js";
 import { SHARE_PARAM, sentLinks, shareLink } from "./share.js";
 import { createShareDialogs } from "./ui/share-dialogs.js";
 import { createWelcome } from "./ui/welcome.js";
 import { createKeepSafePanel } from "./ui/keep-safe-panel.js";
-import { HALL_OFF_NOTE, createPolishPanel } from "./ui/polish-panel.js";
+import { createPolishPanel } from "./ui/polish-panel.js";
 import { createImageEditor } from "./ui/image-editor.js";
 import { createTimelineDialog } from "./ui/timeline-dialog.js";
 import { createBatch } from "./ui/batch.js";
@@ -254,11 +249,11 @@ import { createExportActions } from "./actions/export.js";
 import { createShowActions } from "./actions/show.js";
 import { createBoothActions } from "./actions/booth.js";
 import { createAppActions } from "./actions/app.js";
+import { createInputs } from "./ui/inputs.js";
 import { readFloorTemplates, readTemplates, writeFloorTemplates, writeTemplates } from "./ui/templates.js";
 import { assetInDesigns, liveNumber } from "./linked.js";
 import { PhotoEditor } from "./photo.js";
 import { PRO_FEATURES, TIERS, actionFeature, can, readTier, resolveTier, writeTier } from "./tier.js";
-import { applyEnvPreset } from "./polish.js";
 import { ROLES, hasMoreTabs, hiddenActions, needsWelcome, readRole, resolveRole, visibleTabs } from "./roles.js";
 import { noteKeepSafe } from "./keep-safe.js";
 import { errorEntry, recordError } from "./report.js";
@@ -588,7 +583,9 @@ async function boot() {
     get customFrame() { return customFrame; },
     set customFrame(v) { customFrame = v; },
     get exportFrame() { return exportFrame; },
+    set exportFrame(v) { exportFrame = v; },
     get exportLong() { return exportLong; },
+    set exportLong(v) { exportLong = v; },
     get framePlace() { return framePlace; },
     get livePlace() { return livePlace; },
     set livePlace(v) { livePlace = v; },
@@ -615,13 +612,16 @@ async function boot() {
     set tlPlayhead(v) { tlPlayhead = v; },
     get keyThumbs() { return keyThumbs; },
     get furnitureChoice() { return furnitureChoice; },
+    set furnitureChoice(v) { furnitureChoice = v; },
     get hiddenTags() { return hiddenTags; },
     get picked() { return picked; },
     set picked(v) { picked = v; },
     get search() { return search; },
+    set search(v) { search = v; },
     get selectedPerson() { return selectedPerson; },
     get aiLong() { return aiLong; },
     get powerOutlets() { return powerOutlets; },
+    set powerOutlets(v) { powerOutlets = v; },
     get videoCodec() { return videoCodec; },
     get addMode() { return addMode; },
     set addMode(v) { addMode = v; },
@@ -640,6 +640,25 @@ async function boot() {
     get BUILD() { return BUILD; },
     get photo() { return photo; },
     get draftPolicy() { return draftPolicy; },
+    get activeBooth() { return activeBooth; },
+    set activeBooth(v) { activeBooth = v; },
+    get artGesture() { return artGesture; },
+    set artGesture(v) { artGesture = v; },
+    get autoScale() { return autoScale; },
+    set autoScale(v) { autoScale = v; },
+    get colorHistory() { return colorHistory; },
+    set colorHistory(v) { colorHistory = v; },
+    get panelGesture() { return panelGesture; },
+    set panelGesture(v) { panelGesture = v; },
+    get pedestalGesture() { return pedestalGesture; },
+    set pedestalGesture(v) { pedestalGesture = v; },
+    get personGesture() { return personGesture; },
+    set personGesture(v) { personGesture = v; },
+    get quality() { return quality; },
+    set quality(v) { quality = v; },
+    get scaleGesture() { return scaleGesture; },
+    set scaleGesture(v) { scaleGesture = v; },
+    get scaleBase() { return scaleBase; },
     get actions() { return actions; },
     activeSlot,
     addPerson,
@@ -648,6 +667,7 @@ async function boot() {
     addWallAsset,
     allowed: (feature) => allowed(feature),
     applyRole,
+    checkpoint,
     arrangePicked,
     arrangeWall,
     backfillThumbnails,
@@ -658,7 +678,9 @@ async function boot() {
     field,
     currentArtwork,
     deviceStore: () => deviceStore(),
+    endShadowGesture,
     fieldTarget,
+    goToView,
     fromSnapshot,
     hideEye,
     icon,
@@ -673,9 +695,13 @@ async function boot() {
     proLock,
     readTemplates,
     refreshIcons,
+    refreshScene,
+    rememberEdge,
     render,
     renderInspector,
+    renderLibrary,
     renderSelection,
+    renderStatus,
     runClips,
     safeName,
     setDraft,
@@ -683,6 +709,7 @@ async function boot() {
     setDrawingBox,
     setMeasuring,
     setSheet,
+    setShadowLive,
     setTier,
     saveViewPrefs,
     scaleSelected,
@@ -693,6 +720,11 @@ async function boot() {
     setWalking,
     snapshot,
     syncAutoPan,
+    syncArtInputs,
+    syncPanelInputs,
+    syncPedestalInputs,
+    syncQuality,
+    syncShadowInputs,
     syncTools,
     toast,
     // Declared after ctx (consts, or a module's functions), so wrapped.
@@ -748,6 +780,7 @@ async function boot() {
     runLook: (...args) => runLook(...args),
     runPolish: (...args) => runPolish(...args),
     shortcutHelp: (...args) => shortcutHelp(...args),
+    showChange: (...args) => showChange(...args),
     range,
     scheduleSave,
     updateFrameGuide,
@@ -3060,591 +3093,8 @@ async function boot() {
     };
     saveViewPrefs();
   }
-  document.addEventListener("change", (ev) => {
-    const el = ev.target;
-    if (showChange(el)) return;
-    // The slider's own input handler has already made the move and taken the
-    // one checkpoint the gesture gets; this only closes it out. Falling
-    // through to the generic field handler would checkpoint the finished
-    // position, which is undo pointing at the wrong thing.
-    if (
-      el.type === "range" &&
-      (el.dataset.scope || "").startsWith("panel-") &&
-      ["x", "z"].includes(el.dataset.field)
-    ) {
-      panelGesture = false;
-      refreshScene();
-      scheduleSave();
-      return;
-    }
-    if (
-      el.type === "range" &&
-      (el.dataset.scope || "").startsWith("pedestal-") &&
-      ["x", "z"].includes(el.dataset.field)
-    ) {
-      pedestalGesture = false;
-      refreshScene();
-      scheduleSave();
-      return;
-    }
-    if (el.id === "art-scale") {
-      scaleGesture = false;
-      scheduleSave();
-      return;
-    }
-    // A drawn shadow's slider or typed number: the input handler already
-    // made the change live and took its checkpoint.
-    if (el.dataset.fxLive !== undefined) {
-      setShadowLive(el.dataset.scope, el.dataset.field, el.value, el);
-      endShadowGesture();
-      syncShadowInputs();
-      return;
-    }
-    // The work's own position sliders: the move already happened live, so
-    // this closes the gesture out and saves it, exactly as a panel's does.
-    if (el.type === "range" && el.dataset.scope === "art-position") {
-      artGesture = false;
-      scheduleSave();
-      return;
-    }
-    // A figure's sliders, the same way: the scene is already up to date, so
-    // this only ends the gesture and redraws the panel's own readouts.
-    if (el.type === "range" && el.dataset.scope?.startsWith("person-")) {
-      personGesture = false;
-      renderInspector();
-      scheduleSave();
-      return;
-    }
-    if (el.id === "project-name") {
-      mutate(() => (p.name = el.value.trim() || "Untitled booth"));
-      return;
-    }
-    if (el.id === "furniture-kind") {
-      if (FURNITURE[el.value]) furnitureChoice = el.value;
-      renderInspector();
-      return;
-    }
-    if (el.id === "quality" || el.id === "quality-quick") {
-      quality = el.value === AUTO_QUALITY ? AUTO_QUALITY : +el.value;
-      // Choosing Auto again starts it over from the top, so a machine that
-      // has since been freed up gets to measure its way back to sharp.
-      if (quality === AUTO_QUALITY) autoScale = null;
-      scene?.setQuality(quality, quality === AUTO_QUALITY ? startScale(devicePixelRatio) : undefined);
-      scene?.resize();
-      saveViewPrefs();
-      syncQuality();
-      return;
-    }
-    // Video settings are view state, not project state: they are not saved
-    // with the booth and do not belong in the undo history.
-    // The batch queue's settings. Saved with the project, outside the undo
-    // history: see setKit.
-    if (el.dataset.kitDefault) {
-      const k = kit();
-      const key = el.dataset.kitDefault;
-      setKit({ ...k, defaults: { ...k.defaults, ...cleanSettings({ [key]: key === "settle" ? el.checked : el.value }) } });
-      return;
-    }
-    if (el.dataset.jobSet || el.dataset.jobMove !== undefined || el.dataset.jobName !== undefined) {
-      const k = kit();
-      const id = el.closest("[data-job]")?.dataset.job;
-      const job = k.queue.find((j) => j.id === id);
-      if (!job) return;
-      let next = job;
-      if (el.dataset.jobSet) next = tweak(job, el.dataset.jobSet, el.value === "" ? undefined : el.value);
-      else if (el.dataset.jobName !== undefined) next = { ...job, name: el.value.trim().slice(0, 120) || undefined };
-      else if (el.value.startsWith("preset:")) next = { ...job, move: KIT_CUSTOM, preset: el.value.slice(7) };
-      else if (el.value === "own") next = { ...job, move: KIT_CUSTOM, preset: undefined };
-      else if (MOVES[el.value]) next = { ...job, move: el.value, preset: undefined, seconds: job.move === el.value ? job.seconds : resolveMove(el.value).seconds };
-      setKit({ ...k, queue: k.queue.map((j) => (j.id === id ? next : j)) });
-      return;
-    }
-    if (el.id === "timeline-frame-keys") {
-      const tl = timeline();
-      // On: every keyframe starts from the frame as it is now, and is then
-      // its own. Off: the keyframes' frames are dropped and the Video tab's
-      // placement holds for the whole clip.
-      const keys = el.checked ? tl.keys.map((k) => ({ ...k, place: { ...framePlace.video } })) : tl.keys;
-      videoTimeline = normalizeTimeline({ ...tl, keys, frameKeys: el.checked });
-      livePlace = null;
-      placeSettled();
-      return;
-    }
-    if (el.id === "timeline-seconds") {
-      videoTimeline = normalizeTimeline({ ...timeline(), seconds: +el.value });
-      renderTimelineDialog();
-      return;
-    }
-    if (el.id === "timeline-fade-in" || el.id === "timeline-fade-out") {
-      const tl = timeline();
-      const fade = { ...tl.fade, [el.id === "timeline-fade-in" ? "in" : "out"]: +el.value };
-      videoTimeline = normalizeTimeline({ ...tl, fade });
-      renderTimelineDialog();
-      return;
-    }
-    if (el.id === "timeline-flow") {
-      videoTimeline = normalizeTimeline({ ...timeline(), flow: el.value });
-      renderTimelineDialog();
-      return;
-    }
-    if (el.id === "timeline-flare") {
-      const tl = timeline();
-      videoTimeline = normalizeTimeline({ ...tl, flare: { ...tl.flare, on: el.checked } });
-      renderTimelineDialog();
-      return;
-    }
-    if (el.id === "timeline-flare-source") {
-      const tl = timeline();
-      videoTimeline = normalizeTimeline({ ...tl, flare: { ...tl.flare, source: el.value } });
-      renderTimelineDialog();
-      return;
-    }
-    if (el.dataset.keyField) {
-      const tl = timeline();
-      const keys = tl.keys.map((k) => {
-        if (k.id !== el.dataset.key) return k;
-        // Times are entered in seconds — the unit on screen — and stored as a
-        // fraction of the clip, so changing the clip length moves the keys with
-        // it rather than stranding them past the end.
-        if (el.dataset.keyField === "t") return { ...k, t: keyTAt(tl, tl.keys.indexOf(k), +el.value) };
-        if (el.dataset.keyField === "hold") return { ...k, hold: +el.value };
-        return { ...k, ease: el.value };
-      });
-      videoTimeline = normalizeTimeline({ ...tl, keys });
-      // The playhead goes with a retimed key, as it does when one is dragged,
-      // so the previous / next arrows count from where the key now is.
-      if (el.dataset.keyField === "t") {
-        const i = videoTimeline.keys.findIndex((k) => k.id === el.dataset.key);
-        if (i >= 0) tlPlayhead = keySchedule(videoTimeline)[i].arrive;
-      }
-      renderTimelineDialog();
-      return;
-    }
-    if (el.id === "video-move") {
-      videoMove = el.value;
-      // Each move has a length it was designed around, so choosing a move
-      // proposes its own length rather than keeping the last one. A custom
-      // timeline carries its own, set in the dialog.
-      videoSeconds = videoMove === CUSTOM_MOVE ? timelineSeconds(timeline()) : resolveMove(videoMove).seconds;
-      renderInspector();
-      return;
-    }
-    if (el.id === "video-seconds") {
-      videoSeconds = +el.value;
-      return;
-    }
-    // Both of these change the H.264 level, so the codec is re-probed and the
-    // panel re-rendered once the browser has answered.
-    if (el.id === "video-fps") {
-      videoFps = +el.value;
-      probeCodec();
-      return;
-    }
-    if (el.id === "export-size") {
-      const value = Number(el.value);
-      if (STILL_SIZES.includes(value)) exportLong = value;
-      saveViewPrefs();
-      renderInspector();
-      return;
-    }
-    if (el.id === "video-size") {
-      videoSize = el.value;
-      probeCodec();
-      renderInspector();
-      return;
-    }
-    // The frame, the custom pixel size and careful rendering. All three are
-    // view settings: they say what the delivered file is, never what the
-    // booth is, so none of them goes through `mutate` or marks anything dirty.
-    if (el.dataset.frame) {
-      const value = FRAMES[el.value] ? el.value : DEFAULT_FRAME;
-      if (el.dataset.frame === "video") videoFrameShape = value;
-      else exportFrame = value;
-      saveViewPrefs();
-      refreshPanels();
-      return;
-    }
-    if (el.dataset.framePlace) {
-      saveViewPrefs();
-      placeSettled();
-      return;
-    }
-    if (el.dataset.frameCustom) {
-      const side = Math.max(FRAME_MIN, Math.min(FRAME_MAX, Math.round(Number(el.value) || 0)));
-      customFrame = { ...customFrame, [el.dataset.frameCustom]: side };
-      saveViewPrefs();
-      refreshPanels();
-      return;
-    }
-    if (el.dataset.videoSettle !== undefined) {
-      videoSettle = el.checked;
-      saveViewPrefs();
-      renderInspector();
-      return;
-    }
-    // Fast edit is not a field: it is a view setting with no home in the
-    // project, so it never reaches `mutate` and never marks anything dirty.
-    if (el.dataset.draft !== undefined) {
-      setDraft(el.checked);
-      return;
-    }
-    if (el.id === "power-outlets") {
-      powerOutlets = Math.max(0, Math.min(20, Math.round(Number(el.value) || 0)));
-      renderInspector();
-      return;
-    }
-    if (el.dataset.tag !== undefined) {
-      if (el.checked) hiddenTags.delete(el.dataset.tag);
-      else hiddenTags.add(el.dataset.tag);
-      scene?.setHiddenTags(hiddenTags);
-      return;
-    }
-    if (el.dataset.viewName !== undefined) {
-      const name = el.value.trim().slice(0, 120);
-      if (name) mutate(() => (p.views = (p.views || []).map((v) => (v.id === el.dataset.viewName ? { ...v, name } : v))));
-      else renderInspector();
-      return;
-    }
-    if (el.id === "saved-view") {
-      if (el.value) goToView(el.value);
-      el.value = "";
-      return;
-    }
-    if (el.dataset.tier !== undefined) {
-      setTier(el.value);
-      return;
-    }
-    if (el.dataset.draftPolicy !== undefined) {
-      setDraftPolicy(el.value);
-      return;
-    }
-    // Which booth of the row the next original is hung in. A view setting too:
-    // it is where the next tap lands, not anything about the booth.
-    if (el.dataset.rowActive !== undefined) {
-      const row = normalizeRow(p.booth);
-      activeBooth = el.value === row.home ? null : el.value;
-      renderInspector();
-      renderStatus();
-      return;
-    }
-    if (!el.dataset.field) return;
-    const key = el.dataset.field,
-      scope = el.dataset.scope;
-    if (el.type === "number" && !el.checkValidity()) {
-      toast("Enter a value within the displayed range.", true);
-      renderInspector();
-      return;
-    }
-    // A slider may show a scale of its own rather than the stored unit —
-    // Fixture brightness is a percentage of a bar that reads right, where the
-    // stored unit is a light's power and always will be. `data-scale` is how
-    // many stored units one point of the slider is worth, so this is the one
-    // place the two meet and everything past it sees the stored number.
-    const scale = Number(el.dataset.scale) || 1;
-    const value =
-      el.type === "checkbox"
-        ? el.checked
-        : ["number", "range"].includes(el.type)
-          ? Number(el.value) * scale
-          : el.value;
-    mutate(() => {
-      // Switching venue rewrites the footprint, the walls and the finish
-      // together: half an art-show booth — 12ft walls under a canopy — is not
-      // a booth anyone is planning.
-      // The row: the gap between slots, and a space's own width. Both rewrite
-      // the whole row record, because a row is one value and normalizing it
-      // is what guarantees a home booth is still in it.
-      if (scope === "row" && key === "gap") {
-        p.booth.row = { ...normalizeRow(p.booth), gap: Math.max(0, Math.min(MAX_GAP, Number(value))) };
-        return;
-      }
-      if (String(scope).startsWith("space-") && key === "width") {
-        p.booth.row = setSpaceWidth(p.booth, String(scope).slice(6), Number(value));
-        return;
-      }
-      if (scope === "booth" && key === "venue") {
-        applyVenue(p, String(value));
-        selectedPanel = null;
-        selectedPedestal = null;
-        scene?.setView("perspective");
-        toast(
-          value === "artshow"
-            ? "Art-show booth: 144″ back wall, 120″ sides, seamless white, nine-head light bar."
-            : "Outdoor pop-up booth restored.",
-        );
-        return;
-      }
-      // The one place a floor is chosen, so the picker and the preset it
-      // remembers cannot disagree.
-      if (scope === "booth" && key === "ground") {
-        selectGround(p, String(value));
-        return;
-      }
-      if (key === "preset") {
-        p.booth.width = +value;
-        p.booth.depth = 120;
-        p.booth.walls.back.width = +value;
-        scene?.setView("perspective");
-        return;
-      }
-      if (scope === "corner") {
-        const layer = p.photo.layers.find((l) => l.id === photoSelected),
-          q = structuredClone(layer.corners),
-          [i, j] = key.split("-").map(Number);
-        q[i][j] = value / 100;
-        if (convex(q)) layer.corners = q;
-        else toast("Keep corners in order without crossing edges.", true);
-        return;
-      }
-      const a = p.art.find((a) => a.id === selected);
-      // Moving a work from one booth of the row to another. The walls are the
-      // same measurements in every booth, so it keeps its wall, its face and
-      // its position on that wall — only which booth is drawing it changes.
-      if (scope === "art" && key === "inBooth" && a) {
-        const home = normalizeRow(p.booth).home;
-        a.booth = String(value) === home ? undefined : String(value);
-        activeBooth = a.booth || null;
-        return;
-      }
-      if (scope === "art" && key === "location" && a) {
-        const raw = String(value),
-          cut = raw.lastIndexOf("-"),
-          wall = raw.slice(0, cut),
-          face = raw.slice(cut + 1);
-        const currentFace = a.face || "inside";
-        let x = a.x;
-        if (currentFace !== face) x = (wallSpec(p, wall)?.width ?? a.x + a.w) - a.x - a.w;
-        Object.assign(a, constrain(p, {...a, wall, face, x}));
-        return;
-      }
-      const target = fieldTarget(scope, a);
-      // The colour this control held before the one it is about to hold, for
-      // the Previous button beside it, and the edge finish the next work
-      // inherits. Both are per browser and neither is part of the edit.
-      if (target && el.type === "color") colorHistory = rememberColor(colorHistory, `${scope}|${key}`, target[key]);
-      if (target) target[key] = value;
-      if (scope === "art" && ["edgeColor", "edgeTexture", "thickness"].includes(key)) rememberEdge(target);
-      if (el.type === "color" || scope === "art") saveViewPrefs();
-      // A preset carries a matching floor and horizon; the user can still
-      // override either afterwards, and that choice is not overwritten until
-      // the preset itself changes again.
-      if (scope === "booth" && key === "envPreset") {
-        // The preset's floor and horizon come with it, and an art-show booth
-        // in a photographed environment leaves its white hall, whose back
-        // wall would cut across the photograph as a white band. The rule is
-        // applyEnvPreset in src/polish.js, which the looks follow too; its
-        // comment says why each part is so. The test there is whether the
-        // preset shows a photograph, not which preset it is: this once read
-        // `value !== "studio"`, and switched off a white hall's own hall.
-        if (applyEnvPreset(p, value).hallOff) toast(HALL_OFF_NOTE);
-      }
-      // Use Global Light: switched on, the shadow takes the shared angle;
-      // switched off, it keeps that angle as its own — Photoshop's rule. The
-      // record was written back resolved, so both already hold.
-      if (SHADOW_KINDS.some((kind) => SHADOW_FIELD[kind] === scope) && key === "global" && value)
-        target.angle = globalAngle(p.booth);
-      if (scope === "booth" && key === "tentStyle") p.booth.tent = true;
-      if (scope === "booth" && key === "height")
-        Object.values(p.booth.walls).forEach((w) => (w.height = value));
-      // A typed footprint is the art-show tool's "custom booth dimensions".
-      // A wall may be narrower than the side it stands on, but never wider:
-      // the schema says so and a wall poking out of the booth is not a plan.
-      if (scope === "booth" && (key === "width" || key === "depth")) {
-        for (const wall of key === "width" ? ["back"] : ["left", "right"])
-          p.booth.walls[wall].width = Math.max(
-            12,
-            Math.min(p.booth.walls[wall].width, value),
-          );
-        p.art = p.art.map((a) => constrain(p, a));
-        p.booth.panels = boothPanels(p).map((panel) => constrainPanel(p, panel));
-        p.booth.pedestals = boothPedestals(p).map((ped) => constrainPedestal(p, ped));
-      }
-      // A hall has at most MAX_HALL_BOOTHS booths: whichever of rows and
-      // booths per row was just typed wins, and the other gives way.
-      if (scope === "hallplan" && (key === "rows" || key === "perRow")) {
-        const other = key === "rows" ? "perRow" : "rows";
-        p.hall[other] = Math.min(p.hall[other], Math.floor(MAX_HALL_BOOTHS / p.hall[key]));
-      }
-      // The panel module is what the walls are rebuilt from, and a linked
-      // booth rebuilds as it is typed rather than waiting for the button.
-      if (scope === "artShow" && p.booth.artShow.linked) relinkArtShowWalls(p);
-    });
-  });
-  document.addEventListener("input", (ev) => {
-    // The frame's size and position sliders: live on the guide, saved on change.
-    if (ev.target.dataset?.framePlace) {
-      const which = ev.target.dataset.frameWhich === "export" ? "export" : "video";
-      const key = ev.target.dataset.framePlace;
-      const v = Number(ev.target.value) / 100;
-      setPlace(which, normalPlace({ ...getPlace(which), [key]: v }));
-      // The same slider can be in the Video tab and in the timeline at once;
-      // both follow.
-      document.querySelectorAll(`[data-frame-place="${key}"][data-frame-which="${which}"]`).forEach((input) => {
-        if (input !== ev.target) input.value = ev.target.value;
-        input.closest("label")?.querySelector("output")?.replaceChildren(`${Math.round(Number(ev.target.value))}%`);
-      });
-      updateFrameGuide();
-      return;
-    }
-    if (ev.target.dataset?.fxLive !== undefined) {
-      setShadowLive(ev.target.dataset.scope, ev.target.dataset.field, ev.target.value, ev.target);
-      return;
-    }
-    if (ev.target.id === "art-scale") {
-      const a = currentArtwork();
-      if (!a || scaleBase?.id !== a.id) return;
-      if (!scaleGesture) { checkpoint(); scaleGesture = true; }
-      const next = scalePanel(p, scaleBase, Number(ev.target.value) / 100);
-      Object.assign(a, next);
-      scene?.updateArtwork(a);
-      ev.target.closest("label").querySelector("output").textContent = Math.round(a.w / scaleBase.w * 100) + "%";
-      for (const key of ["w", "h", "x", "y"]) {
-        const input = document.querySelector('[data-scope="art"][data-field="' + key + '"]');
-        if (input) input.value = Number(a[key].toFixed(3));
-      }
-      return;
-    }
-    // A position slider for the selected work: the same edit as typing into
-    // the field beside it, through the same constraint, and moved with
-    // updateArtwork rather than a rebuild.
-    if (ev.target.type === "range" && ev.target.dataset.scope === "art-position") {
-      const a = currentArtwork();
-      if (!a) return;
-      if (!artGesture) { checkpoint(); artGesture = true; }
-      Object.assign(a, constrain(p, { ...a, [ev.target.dataset.field]: Number(ev.target.value) }));
-      scene?.updateArtwork(a);
-      syncArtInputs(a, ev.target);
-      ev.target
-        .closest("label")
-        ?.querySelector("output")
-        ?.replaceChildren(Number(a[ev.target.dataset.field].toFixed(2)) + "in");
-      return;
-    }
-    // A figure's placement and height sliders. Same deal as the artwork's:
-    // one checkpoint for the whole gesture, and `movePerson` restands the
-    // figure rather than disposing and rebuilding the booth per pixel.
-    if (ev.target.type === "range" && ev.target.dataset.scope?.startsWith("person-")) {
-      const id = ev.target.dataset.scope.slice(7);
-      const person = (p.booth.people || []).find((x) => x.id === id);
-      if (!person) return;
-      if (!personGesture) { checkpoint(); personGesture = true; }
-      const key = ev.target.dataset.field;
-      scene?.movePerson({ ...person, [key]: Number(ev.target.value) });
-      // The typed field beside the slider, and the slider's own readout.
-      // `.value`, not setAttribute: the attribute is the initial value and an
-      // input the user has already touched ignores it.
-      const typed = document.querySelector(
-        `input[type="number"][data-field="${key}"][data-scope="person-${CSS.escape(id)}"]`,
-      );
-      if (typed) typed.value = String(Number(ev.target.value));
-      ev.target
-        .closest("label")
-        ?.querySelector("output")
-        ?.replaceChildren(Number(ev.target.value) + "in");
-      return;
-    }
-    // A position slider for a free-standing wall. Handled live, and entirely
-    // here: one checkpoint at the start of the gesture rather than one per
-    // pixel, and the scene restands the panel without a rebuild — the same
-    // deal the artwork scale slider gets, for the same reason.
-    const panelScope = ev.target.dataset.scope || "";
-    if (
-      ev.target.type === "range" &&
-      panelScope.startsWith("panel-") &&
-      ["x", "z"].includes(ev.target.dataset.field)
-    ) {
-      const panel = findPanel(p, panelKey(panelScope.slice(6)));
-      if (!panel) return;
-      if (!panelGesture) { checkpoint(); panelGesture = true; }
-      panel[ev.target.dataset.field] = Number(ev.target.value);
-      scene?.movePanel({ ...panel });
-      syncPanelInputs(panel, ev.target);
-      ev.target
-        .closest("label")
-        ?.querySelector("output")
-        ?.replaceChildren(Number(panel[ev.target.dataset.field].toFixed(2)) + "in");
-      return;
-    }
-    const pedScope = ev.target.dataset.scope || "";
-    if (
-      ev.target.type === "range" &&
-      pedScope.startsWith("pedestal-") &&
-      ["x", "z"].includes(ev.target.dataset.field)
-    ) {
-      const ped = findPedestal(p, pedScope.slice(9));
-      if (!ped) return;
-      if (!pedestalGesture) { checkpoint(); pedestalGesture = true; }
-      ped[ev.target.dataset.field] = Number(ev.target.value);
-      scene?.movePedestal({ ...ped });
-      syncPedestalInputs(ped, ev.target);
-      ev.target
-        .closest("label")
-        ?.querySelector("output")
-        ?.replaceChildren(Number(ped[ev.target.dataset.field].toFixed(2)) + "in");
-      return;
-    }
-    if (ev.target.dataset.scope === "timeline" && ev.target.dataset.field === "flare-strength") {
-      const tl = timeline();
-      videoTimeline = { ...tl, flare: { ...tl.flare, strength: Number(ev.target.value) / 100 } };
-      ev.target.closest("label")?.querySelector("output")?.replaceChildren(ev.target.value + "%");
-      return;
-    }
-    if (ev.target.dataset.edit) {
-      const a = currentArtwork();
-      if (!editingStart || !a?.asset) return;
-      a.edits = normalizeImageEdits(a.edits);
-      a.edits[ev.target.dataset.edit] = Number(ev.target.value);
-      ev.target.closest("label")?.querySelector("output")?.replaceChildren(ev.target.value);
-      scheduleEditedPreview();
-      return;
-    }
-    if (ev.target.id === "search") {
-      search = ev.target.value;
-      const pos = ev.target.selectionStart;
-      renderLibrary();
-      const s = document.querySelector("#search");
-      s.focus();
-      s.setSelectionRange(pos, pos);
-      refreshIcons();
-    }
-    if (ev.target.type === "range")
-      ev.target.closest("label").querySelector("output").textContent =
-        ev.target.value;
-  });
+  createInputs(ctx);
   createUpload(ctx);
-  // Photoshop's angle dial: press anywhere on it and drag round. The angle
-  // is where the light comes from, so the line points at the pointer.
-  // A shape in the show floor's library: pressed, it is dragged onto the
-  // floor or, tapped, dropped in the middle of the view.
-  document.addEventListener("pointerdown", (ev) => {
-    const b = ev.target.closest?.("[data-show-shape]");
-    if (!b || !showEditor || ev.button > 0) return;
-    const shape = SHAPES.find((sh) => sh.key === b.dataset.showShape);
-    if (shape) showEditor.libraryPress(ev, shape);
-  });
-  document.addEventListener("pointerdown", (ev) => {
-    const dial = ev.target.closest?.("[data-dial]");
-    if (!dial || ev.button !== 0) return;
-    ev.preventDefault();
-    dial.focus();
-    const scope = dial.dataset.dial;
-    const aim = (e2) => {
-      const r = dial.getBoundingClientRect();
-      const deg = Math.atan2(r.top + r.height / 2 - e2.clientY, e2.clientX - (r.left + r.width / 2)) * (180 / Math.PI);
-      setShadowLive(scope, "angle", Math.round(deg));
-    };
-    const done = () => {
-      dial.removeEventListener("pointermove", aim);
-      dial.removeEventListener("pointerup", done);
-      dial.removeEventListener("pointercancel", done);
-      endShadowGesture();
-    };
-    dial.setPointerCapture?.(ev.pointerId);
-    dial.addEventListener("pointermove", aim);
-    dial.addEventListener("pointerup", done);
-    dial.addEventListener("pointercancel", done);
-    aim(ev);
-  });
   // Find a tool's index, its hits and the one picked (src/ui/find-tool.js);
   // the assistant's app map reads and fills the index too.
   let toolIndex = null,
