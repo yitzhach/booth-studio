@@ -7,8 +7,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-// After seam 19, render, renderStatus, inspectorHTML and the section chips (src/ui/render.js).
-const MAX = 2562;
+// After seam 20, the view prefs, tool sync and frame guide (src/ui/view-prefs.js) and the library (src/ui/library.js).
+const MAX = 2195;
 
 test(`src/main.js stays at ${MAX} lines or fewer: a seam moves code out, nothing moves back`, () => {
   const text = readFileSync(fileURLToPath(new URL("../src/main.js", import.meta.url)), "utf8");
