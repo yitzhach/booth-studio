@@ -93,8 +93,9 @@ is true has changed.
   with AI** (`src/ai-render.js`) downloads its pack; its provider is `null`
   until the owner picks the service and its spend (Next).
 - **How it is built and checked.** Vite and three.js, no framework.
-  `src/main.js` (about 7,200 lines, most of it inside `boot()`) builds the
-  panels and their actions; `src/scene.js` (3,500) draws the booth. Schema 1
+  `src/main.js` (2,562 lines, most of it inside `boot()`, being split
+  into `src/ui/`, `src/panels/` and `src/actions/`) builds the panels and
+  their actions; `src/scene.js` (3,500) draws the booth. Schema 1
   is forever: `validateProject` in `src/model.js` opens every backup ever
   written. CI (`.github/workflows/ci.yml`) runs `core` (the node suites, the
   build, the vendored SDK and scene checks, two devices against studio-api,
@@ -163,19 +164,20 @@ look at and what to change if it reads wrong.
    image service). Its phase 1 (foundations) needs none of those. Done: 1.1
    (this file's split), 1.5, 1.7, 1.8 and 1.9; half done: 1.4 (every module
    in `src/` is type-checked but `main.js`, `scene.js`, `studio.js` and what
-   the split moves out of `main.js`) and 1.6; begun: 1.2 (seams 1–18 of
+   the split moves out of `main.js`) and 1.6; begun: 1.2 (seams 1–19 of
    `MAIN_SPLIT_PHASE.md`: the share dialogs, the welcome, Keep your work
    and the templates, the looks and the image editor, the timeline dialog
    and the batch, the show-floor panel, Find a tool and the app map,
-   upload and import, and every tab's section builders in `src/panels/` —
-   `inspectorHTML`, which lays each tab out, stays in `main.js` until seam
-   19; the whole action table, by area, in `src/actions/`; the panels'
+   upload and import, and every tab's section builders in `src/panels/`;
+   the whole action table, by area, in `src/actions/`; the panels'
    listeners in `src/ui/inputs.js`; the click dispatch and the keyboard in
    `src/ui/events.js`; the scene's wiring, the studio host and
    `window.__booth` in `src/ui/scene-wiring.js`, `src/ui/studio-host.js`
-   and `src/ui/test-hooks.js`; seams 19–21, `render` and `inspectorHTML`,
-   the library and the view prefs, then the rest, are next — `main.js` is
-   2,793 lines against the gate's 1,500. A seam is done with the scripts in
+   and `src/ui/test-hooks.js`; `render`, `renderStatus`, the inspector
+   (`inspectorHTML`, which lays each tab out) and the section chips in
+   `src/ui/render.js`; seams 20–21, the library and the view prefs (with
+   the frame guide), then the rest, are next — `main.js` is 2,562 lines
+   against the gate's 1,500. A seam is done with the scripts in
    `tools/main-split/`, as `MAIN_SPLIT_PHASE.md` → "Each seam, step by
    step" says, and its Rulings hold the bugs older than the move that the
    reviews found, for a fix once the split is done). Left for sessions: the rest of
@@ -465,8 +467,8 @@ anything else in a browser until it is done.
 - `src/arrange.js` — even spacing, the 60″ hang line, arrow nudges.
 - `src/quickstart.js` — Quick start and user templates.
 - `src/showpack.js` — the show pack: floor plan, inventory, checklist.
-- `src/toolsearch.js` — tool search's ranking; the index is built in main.js
-  from each tab's `inspectorHTML()`.
+- `src/toolsearch.js` — tool search's ranking; the index is built in
+  `src/ui/find-tool.js` from each tab's `inspectorHTML()` (`src/ui/render.js`).
 - `src/tier.js` — Lite and Pro: the one table of Pro features and `can()`.
   `gated` / `proLock` and the action gate in `src/main.js` use it.
 - `src/polish.js` — looks, Make it beautiful (even hang, aimed lights) and
