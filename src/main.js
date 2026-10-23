@@ -1,5 +1,4 @@
 import { TENTS } from "./environment.js";
-import { typingIn } from "./typing.js";
 import { ENV_PRESETS, ART_FIDELITY, DEFAULT_PRESET, DEFAULT_FIDELITY, FIXTURE_MODES, DEFAULT_FIXTURES, isIndoor, showFixtures } from "./lighting.js";
 import { MOVES, DEFAULT_MOVE, CUSTOM_MOVE, frameTimes } from "./camera-path.js";
 import {
@@ -10,7 +9,7 @@ import { jobSlug } from "./batch.js";
 import { SIZES, DEFAULT_SIZE, DEFAULT_FPS, pickCodec } from "./video.js";
 import { FRAMES, DEFAULT_FRAME, DEFAULT_CLIP_FRAME, CUSTOM_FRAME, FRAME_MIN, FRAME_MAX, STILL_SIZES, placeRect, placeFromRect, normalPlace, DEFAULT_PLACE } from "./framing.js";
 import { SHADOW_FIELD, SHADOW_KINDS, SHADOW_MAX, normalAngle, shadowSpec } from "./dropshadow.js";
-import { MAX_SWATCHES, isColor, readPalette, removeSwatch, rememberColor, previousColor } from "./swatches.js";
+import { MAX_SWATCHES, isColor, readPalette, rememberColor, previousColor } from "./swatches.js";
 import { MAX_PEOPLE, newPerson, personName } from "./people.js";
 import {
   DEFAULT_SPACE, MAX_SLOTS,
@@ -188,7 +187,6 @@ import {
   boothPanels,
   findPanel,
   panelKey,
-  isShown,
   panelIdOf,
   wallLabel,
   wallSpec,
@@ -217,14 +215,12 @@ function accountButton() {
 import { BoothScene } from "./scene.js";
 import { AUTO_QUALITY, startScale } from "./adaptive.js";
 import { formatLength } from "./measure.js";
-import { nudge, sameWall } from "./arrange.js";
-import { STEP, STRIDE, newView } from "./views.js";
+import { sameWall } from "./arrange.js";
 import { checkClearance } from "./clearance.js";
-import { moveSale } from "./hall.js";
 import { VENUES as SHOW_VENUES, feet, floorOf, showItems, toFloor } from "./show.js";
 import { createShowEditor } from "./show-editor.js";
 import { PACK_LONG, describeScene, protectPass, renderPack } from "./ai-render.js";
-import { SHARE_PARAM, sentLinks, shareLink } from "./share.js";
+import { SHARE_PARAM } from "./share.js";
 import { createShareDialogs } from "./ui/share-dialogs.js";
 import { createWelcome } from "./ui/welcome.js";
 import { createKeepSafePanel } from "./ui/keep-safe-panel.js";
@@ -250,10 +246,11 @@ import { createShowActions } from "./actions/show.js";
 import { createBoothActions } from "./actions/booth.js";
 import { createAppActions } from "./actions/app.js";
 import { createInputs } from "./ui/inputs.js";
-import { readFloorTemplates, readTemplates, writeFloorTemplates, writeTemplates } from "./ui/templates.js";
+import { createEvents } from "./ui/events.js";
+import { readFloorTemplates, readTemplates } from "./ui/templates.js";
 import { assetInDesigns, liveNumber } from "./linked.js";
 import { PhotoEditor } from "./photo.js";
-import { PRO_FEATURES, TIERS, actionFeature, can, readTier, resolveTier, writeTier } from "./tier.js";
+import { PRO_FEATURES, TIERS, can, readTier, resolveTier, writeTier } from "./tier.js";
 import { ROLES, hasMoreTabs, hiddenActions, needsWelcome, readRole, resolveRole, visibleTabs } from "./roles.js";
 import { noteKeepSafe } from "./keep-safe.js";
 import { errorEntry, recordError } from "./report.js";
@@ -727,6 +724,14 @@ async function boot() {
     syncShadowInputs,
     syncTools,
     toast,
+    addCatalogPlacement,
+    applyColor,
+    deletePanel,
+    deletePedestal,
+    nudgeSelection,
+    removeRowSlot,
+    rotateSelection,
+    showClearance,
     // Declared after ctx (consts, or a module's functions), so wrapped.
     batchSection: () => batchSection(),
     progressHTML: () => progressHTML(),
@@ -781,6 +786,13 @@ async function boot() {
     runPolish: (...args) => runPolish(...args),
     shortcutHelp: (...args) => shortcutHelp(...args),
     showChange: (...args) => showChange(...args),
+    applyTemplate: (...args) => applyTemplate(...args),
+    copyLink: (...args) => copyLink(...args),
+    removeLink: (...args) => removeLink(...args),
+    sendToLink: (...args) => sendToLink(...args),
+    show3dKey: (...args) => show3dKey(...args),
+    showFloorKey: (...args) => showFloorKey(...args),
+    startFrom: (...args) => startFrom(...args),
     range,
     scheduleSave,
     updateFrameGuide,
@@ -2702,186 +2714,6 @@ async function boot() {
     renderInspector();
     document.querySelector(`[data-hall-booth="${hallSelected}"]`)?.focus();
   });
-  document.addEventListener("click", (ev) => {
-    const b = ev.target.closest("button");
-    if (!b) return;
-    if (b.dataset.action) {
-      try {
-        const action = b.dataset.action;
-        // The one gate every Pro action passes: whatever drew the button, a
-        // Lite browser gets the reason instead of the tool.
-        const feature = actionFeature(action);
-        if (feature && !allowed(feature)) {
-          toast(`${PRO_FEATURES[feature]} is part of Booth Studio Pro. Layout → Project → Plan switches to Pro.`, true);
-          return;
-        }
-        if (action.startsWith("row-remove-")) removeRowSlot(action.slice(11));
-        else if (/^link-(copy|update|delete)-/.test(action)) {
-          const [, what, id] = action.match(/^link-(\w+)-(.+)$/);
-          const l = sentLinks().find((x) => x.id === id);
-          if (!l) renderInspector();
-          else if (what === "copy") copyLink(shareLink(l.id));
-          else if (what === "update") sendToLink(l);
-          else removeLink(l);
-        }
-        else if (action.startsWith("view-go-")) goToView(action.slice(8));
-        else if (action.startsWith("clearance-show-")) showClearance(Number(action.slice(15)));
-        else if (action.startsWith("delete-model-")) {
-          const id = action.slice(13);
-          mutate(() => {
-            const gone = (p.booth.models || []).find((m) => m.id === id);
-            p.booth.models = (p.booth.models || []).filter((m) => m.id !== id);
-            if (!p.booth.models.length) delete p.booth.models;
-            // The file goes with its last placement.
-            if (gone && !(p.booth.models || []).some((m) => m.asset === gone.asset) && !assetInDesigns(p, gone.asset)) delete p.assets[gone.asset];
-          });
-        }
-        else if (action.startsWith("view-update-")) {
-          const id = action.slice(12);
-          const pose = scene?.pose();
-          if (pose) mutate(() => (p.views = (p.views || []).map((v) => (v.id === id ? { ...v, ...newView(pose, id), name: v.name } : v))));
-          toast("View replaced with what the camera shows now.");
-        }
-        else if (action.startsWith("view-delete-")) {
-          const id = action.slice(12);
-          mutate(() => {
-            p.views = (p.views || []).filter((v) => v.id !== id);
-            if (!p.views.length) delete p.views;
-          });
-        }
-        else if (action.startsWith("delete-panel-")) deletePanel(action.slice(13));
-        else if (action.startsWith("delete-pedestal-")) deletePedestal(action.slice(16));
-        else if (action.startsWith("show-template-")) applyTemplate(action.slice(14));
-        else if (action.startsWith("hall-orphan-move-")) {
-          const from = Number(action.slice(17));
-          const to = Number(document.querySelector(`[data-orphan-to="${from}"]`)?.value);
-          let moved = false;
-          mutate(() => (moved = moveSale(p.hall, from, to)));
-          toast(moved ? `Booth ${from}'s sale is on booth ${to} now. Undo puts it back.` : `Booth ${to} has a sale of its own, or is not on the floor.`, !moved);
-        } else if (action.startsWith("hall-orphan-forget-")) {
-          const n = Number(action.slice(19));
-          confirmAction(`Forget booth ${n}'s sale?`, "Its status, exhibitor, price and note go. Undo brings them back.", () => mutate(() => delete p.hall.booths[n]));
-        }
-        else if (action.startsWith("show-mytemplate-")) {
-          const t = readFloorTemplates().find((x) => x.id === action.slice(16));
-          if (t && p.hall) startFrom(t.label, () => ({ venue: { ...t.venue }, items: t.items.map((it) => ({ ...it })) }));
-        } else if (action.startsWith("show-forget-template-")) {
-          writeFloorTemplates(readFloorTemplates().filter((x) => x.id !== action.slice(21)));
-          renderInspector();
-        }
-        else if (action.startsWith("qs-forget-")) {
-          writeTemplates(readTemplates().filter((t) => t.id !== action.slice(10)));
-          openQuickStart();
-        }
-        else actions[action]?.(b);
-      } catch (err) {
-        toast(err.message, true);
-      }
-    }
-    if (b.dataset.tab) {
-      // On a phone a folded panel comes back when a tab is chosen: choosing
-      // one is asking to see it.
-      setSheet(false);
-      tab = b.dataset.tab;
-      renderInspector();
-    }
-    if (b.dataset.source) addCatalogPlacement(b.dataset.source);
-    if (b.dataset.layer) {
-      photoSelected = b.dataset.layer;
-      renderInspector();
-      photo.update(p, photoSelected);
-    }
-    if (b.dataset.walk) {
-      const [f, r] = { forward: [1, 0], back: [-1, 0], left: [0, -1], right: [0, 1] }[b.dataset.walk] || [0, 0];
-      scene?.walk(f, r, STRIDE / 2);
-      return;
-    }
-    if (b.dataset.view) {
-      if (walking) setWalking(false);
-      scene?.setView(b.dataset.view);
-      document
-        .querySelectorAll("[data-view]")
-        .forEach((x) => x.classList.toggle("active", x === b));
-    }
-    if (b.dataset.color) mutate(() => (p.booth.color = b.dataset.color));
-    // A saved colour, applied to the control it sits under. Shift-click takes
-    // it out of the palette instead: seven slots is few enough that one
-    // colour nobody wants any more is a seventh of the palette.
-    if (b.dataset.swatch && b.dataset.target) {
-      if (ev.shiftKey && !b.classList.contains("swatch-previous")) {
-        palette = removeSwatch(palette, b.dataset.swatch);
-        saveViewPrefs();
-        renderInspector();
-      } else applyColor(b.dataset.target, b.dataset.swatch);
-    }
-    // The eye beside a spotlight. Hiding one keeps its position, its aim and
-    // its power — deleting it, which used to be the only way to take a light
-    // out of a composition, threw all three away.
-    if (b.dataset.lightEye !== undefined) {
-      const index = +b.dataset.lightEye;
-      const list = p.mode === "photo" ? p.photo.lights : p.lights;
-      const light = list[index];
-      if (light) {
-        mutate(() => (light.on = !lightVisible(light)));
-        toast(lightVisible(light) ? `Spotlight ${index + 1} showing.` : `Spotlight ${index + 1} hidden. Its position and aim are kept.`);
-      }
-      return;
-    }
-    // Lock a floor piece: still drawn, no longer picked in the viewport, so a
-    // box laid down as a stage or a floor can be clicked through. Only this
-    // button and the piece's own controls change it.
-    if (b.dataset.lockPedestal) {
-      const id = b.dataset.lockPedestal,
-        item = boothPedestals(p).find((x) => x.id === id);
-      if (!item) return;
-      const lock = !item.locked;
-      mutate(() => {
-        if (lock) item.locked = true;
-        else delete item.locked;
-        if (lock && selectedPedestal === id) selectedPedestal = null;
-      });
-      toast(lock ? "Locked. Clicks in the booth pass through it; change it here, or unlock it." : "Unlocked. Click it in the booth to select it again.");
-      return;
-    }
-    // Hide a piece rather than delete it. Letting go of it too, if it was the
-    // one selected: its controls stay in the list, but there is nothing left
-    // in the viewport for a selection outline or a drag to point at.
-    if (b.dataset.hide) {
-      const kind = b.dataset.hide,
-        id = b.dataset.hideId;
-      const list = kind === "pedestal" ? boothPedestals(p) : kind === "panel" ? boothPanels(p) : kind === "model" ? p.booth.models || [] : p.booth.people || [];
-      const item = list.find((x) => x.id === id);
-      if (!item) return;
-      const hide = isShown(item);
-      mutate(() => {
-        if (hide) item.hidden = true;
-        else delete item.hidden;
-        if (hide && kind === "pedestal" && selectedPedestal === id) selectedPedestal = null;
-        if (hide && kind === "panel" && selectedPanel === panelKey(id)) selectedPanel = null;
-      });
-      const what = { pedestal: "Piece", panel: "Free-standing wall", person: "Figure", model: "Model" }[kind] || "Piece";
-      toast(hide ? `${what} hidden. Its size and place are kept; the eye brings it back.` : `${what} showing again.`);
-      return;
-    }
-    // The eye in a drawn shadow's heading. Hidden keeps every setting, so
-    // the second shadow can be set up before it is shown.
-    if (b.dataset.shadowEye) {
-      const kind = b.dataset.shadowEye;
-      if (!SHADOW_KINDS.includes(kind)) return;
-      mutate(() => {
-        const record = (p.booth[SHADOW_FIELD[kind]] = shadowSpec(p.booth, kind));
-        record.on = !record.on;
-      });
-      const on = shadowSpec(p.booth, kind).on;
-      toast(`${kind === "behind" ? "Drop shadow" : "Second shadow"} ${on ? "showing" : "hidden. Its settings are kept"}.`);
-      return;
-    }
-    if (b.dataset.light !== undefined) {
-      if (p.mode === "photo") photoLightIndex = +b.dataset.light;
-      else lightIndex = +b.dataset.light;
-      renderInspector();
-    }
-  });
 
   function placeCopyAt(sourceKey, ev) {
     const template = templateFromSource(sourceKey);
@@ -3101,109 +2933,7 @@ async function boot() {
     toolHits = [],
     toolAt = 0;
   const { findableName, shortcutHelp, buildToolIndex, appMapText, placeHit, openTool } = createFindTool(ctx);
-  document.addEventListener("keydown", (ev) => {
-    if (document.querySelector("#image-editor").open) {
-      if (ev.key === "Escape") {
-        ev.preventDefault();
-        actions["editor-cancel"]();
-      }
-      return;
-    }
-    if (
-      typingIn(ev) ||
-      document.querySelector("#dialog").open
-    )
-      return;
-    // The show in 3D: walking, and the way back to the plan.
-    if (showFloor && show3d) {
-      if (show3dKey(ev)) ev.preventDefault();
-      return;
-    }
-    // The show floor has keys of its own, and none of the booth's apply.
-    if (showFloor && showEditor) {
-      if (showFloorKey(ev)) ev.preventDefault();
-      return;
-    }
-    // The shadow angle dial, focused: arrows turn it a degree, Shift fifteen,
-    // counterclockwise for Up and Right the way the angle is measured.
-    if (ev.target.dataset?.dial) {
-      const turn = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[ev.key];
-      if (!turn) return;
-      ev.preventDefault();
-      const kind = SHADOW_KINDS.find((k) => SHADOW_FIELD[k] === ev.target.dataset.dial);
-      if (!kind) return;
-      setShadowLive(ev.target.dataset.dial, "angle", shadowSpec(p.booth, kind).angle + turn * (ev.shiftKey ? 15 : 1));
-      endShadowGesture();
-      return;
-    }
-    // Walking: WASD and the arrows step, Shift strides, Esc stops. Before the
-    // nudge keys, which would otherwise move the selected work instead.
-    if (walking) {
-      const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
-      const move = { w: [1, 0], ArrowUp: [1, 0], s: [-1, 0], ArrowDown: [-1, 0], a: [0, -1], ArrowLeft: [0, -1], d: [0, 1], ArrowRight: [0, 1] }[k];
-      if (move && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
-        ev.preventDefault();
-        scene.walk(move[0], move[1], ev.shiftKey ? STRIDE : STEP);
-        return;
-      }
-      if (ev.key === "Escape") {
-        ev.preventDefault();
-        setWalking(false);
-        return;
-      }
-    }
-    if (ev.key === "Escape" && scene?.drawingBox) {
-      ev.preventDefault();
-      setDrawingBox(false);
-      return;
-    }
-    if (ev.key === "Escape" && scene?.measure.on) {
-      ev.preventDefault();
-      setMeasuring(false);
-      return;
-    }
-    const step = nudge(ev.key, ev.shiftKey);
-    if (step && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
-      if (nudgeSelection(...step)) ev.preventDefault();
-      return;
-    }
-    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "d") {
-      ev.preventDefault();
-      if (p.mode === "3d" && selected) actions["duplicate-art"]();
-      return;
-    }
-    if (!ev.ctrlKey && !ev.metaKey && !ev.altKey && scene && p.mode === "3d") {
-      const key = ev.key.toLowerCase();
-      if (key === "r" && rotateSelection(ev.shiftKey ? -15 : 15)) return ev.preventDefault();
-      if (key === "v") return actions.select();
-      if (key === "m") return actions.move();
-      if (key === "h") return actions.pan();
-      if (key === "t") return actions.measure();
-      if (key === "w") return setWalking(true);
-    }
-    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "z") {
-      ev.preventDefault();
-      actions[ev.shiftKey ? "redo" : "undo"]();
-    }
-    if (ev.key === "Delete" || ev.key === "Backspace") {
-      ev.preventDefault();
-      if (p.mode === "photo" && photoSelected) actions["photo-delete"]();
-      else if (p.mode === "3d" && selected) actions["delete-art"]();
-    }
-    // +/- zoom the viewport, matching the on-screen zoom buttons. Both rows of
-    // keys count: "=" is the unshifted key "+" lives on, and the numpad sends
-    // "Add"/"Subtract" as "+"/"-" already. Ctrl/Cmd is left alone so the
-    // browser's own page zoom still works.
-    if (!ev.ctrlKey && !ev.metaKey && !ev.altKey) {
-      if (ev.key === "+" || ev.key === "=") {
-        ev.preventDefault();
-        actions["zoom-in"]();
-      } else if (ev.key === "-" || ev.key === "_") {
-        ev.preventDefault();
-        actions["zoom-out"]();
-      }
-    }
-  });
+  createEvents(ctx);
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) save(fromSnapshot(editingStart || snapshot())).catch(() => {});
   });
