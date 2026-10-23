@@ -558,3 +558,49 @@ wrong.)
   change moved code, so they wait for the typing pass. The scripts each
   seam has used are now in `tools/main-split/`, so a new session does not
   rebuild them. The ratchet is 2,793 (red on `main`'s 3,183).
+- **2026-10-23, seam 19: what the page draws, with the panel it draws
+  last.** `render` (the header, the mode switch, the toolbar's state and
+  the show floor's board, then the library, the inspector and the scene),
+  `renderStatus` (the two lines under the viewport), `inspectorHTML` and
+  the sub-tabs — `subTab`, `subSeen`, `SUB_ALL`, `sectionTabsOn`,
+  `panelSections`, `applySectionTabs`, `showSection` and the chips' `click`
+  listener on `#inspector-content` — moved into `src/ui/render.js` as
+  `createRender(ctx)`, and so did `renderInspector`, with the
+  `keepTabInSight` it alone calls and its `tabInSight`: it is the one
+  function that puts `inspectorHTML` on the page and applies the chips, so
+  it belongs with them. `render`, `renderStatus`, `inspectorHTML`,
+  `renderInspector` and `showSection` are returned; the rest is only the
+  module's (seam 2's rule). The factory is called where the sub-tabs stood,
+  the first of the moved statements, so the chips' listener is registered
+  exactly where it was: nothing between its old and new place adds a
+  listener of any kind, because the six statements between are the moved
+  sub-tabs' own declarations. What sat among the moved code and stays is
+  `applyRole` (the workspace: the welcome and the action table call it),
+  `deviceStore` and Keep your work's factory call (seam 3's), and the frame
+  guide (`frameGuideShape`, `updateFrameGuide`), which is the viewport's and
+  goes with the view prefs in seam 20. `render.resizing`, a property `render`
+  keeps on itself so one resize is asked for per frame, is read only inside
+  `render`, which is still a function declaration inside the factory, so it
+  is the same function's property as before; `ctx.render` is a wrapper, and
+  nothing reads a property of it (checked). Before, all five were hoisted
+  function declarations; now they are a `const` from the factory call, so a
+  call to any of them earlier in `boot()` would throw. None is made: every
+  earlier mention is inside a function or a callback (the scene's, the
+  photo editor's), and every view suite loads the page. `ctx` gains setters
+  for `show3d` and `showEditor` (`render` turns the 3D show off and makes
+  the board), getters and setters for `otherTimeline` (swapped with
+  `videoTimeline` when the 3D show goes off), getters for `PAN_HINT` and
+  `DEFAULT_HINT`, the function declarations these call (`qualityOptions`,
+  `scaleControl`, `syncSavedViews`), and, wrapped, the five returned
+  functions and the 31 section builders `inspectorHTML` composes, which are
+  factory consts declared after `ctx` (the panels' and the dialogs':
+  `multiSection` to `viewsSection`, `findableName`, `showSelected`).
+  Twenty imports went. 267 lines moved and `main.js` lost 231, because `ctx`
+  grows by 38. The review found no bug older than the move in this code. It
+  asked again whether `ctx`, now well past the ~60 names at which the
+  decision above said to collapse the state, should become one object, and
+  whether the builders should reach `createRender` some other way than
+  wrappers; both were settled after seam 11 (the getters stay through the
+  move; one state object is a pull request of its own once the split is
+  done), and neither is a move. The header says the factory is called once,
+  because it adds a listener. The ratchet is 2,562 (red on `main`'s 2,793).

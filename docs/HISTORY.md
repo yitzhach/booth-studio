@@ -17,6 +17,13 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-23: `main.js`'s nineteenth seam (ROADMAP 1.2).** What the
+  page draws from the project — `render`, `renderStatus`, the inspector
+  (`renderInspector` and `inspectorHTML`, which lays each tab out) and the
+  section chips over a long panel — into `src/ui/render.js`. Unchanged but
+  for `ctx.`, checked line for line. `main.js` is 2,562 lines (from 2,793).
+  Lint, type check, 527 node tests and build green; the whole chain is run
+  one suite at a time before its pull request, which reports it.
 - **2026-10-23: `main.js`'s eighteenth seam (ROADMAP 1.2).** The
   viewport's set-up — the scene and its callbacks, the frame guide and its
   drag — into `src/ui/scene-wiring.js`, the studio's host and its lazy load
