@@ -178,3 +178,28 @@ wrong.)
 
 - **2026-10-24, the plan: no questions for the owner.** It is a move, like
   1.2, so every decision above is the agent's, and the defaults are taken.
+- **2026-10-24, seam 1: a method's last line gains a comma, and nothing else
+  changes.** An object literal needs `},` where a class body has `}`, so
+  `cut.mjs` writes that and checks each method ends on a line of its own.
+  A script compared the 120 lines taken out of `scene.js` with the new
+  module: every one is there, the two closing braces as `},`. The ratchet is
+  3,418 (red on `main`'s 3,531). *Cost if wrong:* none; a class used as a
+  holder would have kept the brace, but `this` in it would type as the
+  holder, not the scene, in the typing pass.
+- **2026-10-24, seam 1: a helper the build still reads moves with the rig
+  and is imported back.** `temperature` colours the bar's heads and the
+  spotlights `update` builds. No mixin imports `scene.js`, so it lives in
+  `src/scene/light-rig.js`, `scene.js` imports it from there and still
+  exports it. When seam 9 moves `update`, `build.js` imports it from the rig
+  too.
+- **2026-10-24, seam 1: `mixin` has a node test of its own.**
+  `tests/scene-mixin.test.js`: a moved method is defined as the class
+  defines one (same descriptor, nothing enumerable on the instance, `this`
+  is the instance), and a name the class still has throws.
+- **2026-10-24, seam 1: HANDOFF's code map is redone once, at the last
+  seam.** Its pointers name methods (`placeShadow` / `updateShadows` in
+  `src/scene.js`), and every name stays the same, so a search still finds
+  each one meanwhile. The light rig had no pointer.
+- **2026-10-24, seam 1: `tools/main-split/imports.mjs` writes namespace
+  imports** (`import * as T from "three"`), which every scene module needs,
+  and took `scene.js` as its source for this seam's imports unchanged.

@@ -17,6 +17,15 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-24: `scene.js`'s first seam (ROADMAP 1.3).** The art-show
+  light bar — `buildLightBar`, `setBarShadows` and `temperature` — into
+  `src/scene/light-rig.js`, an object of methods that `src/scene/mixin.js`
+  installs on `BoothScene`'s prototype, so every call stays as it was.
+  Unchanged but for a comma after each method, checked line for line.
+  `scene.js` is 3,418 lines (from 3,531), held there by
+  `tests/scene-size.test.js`. Lint, type check, 530 node tests and build
+  green; view-artshow, view-lighting, view-finish and view-polish green,
+  one at a time. `tools/scene-split/` holds the scripts the seams use.
 - **2026-10-24: the two-devices race fixed.** In `tests/two-devices.mjs`,
   "the app says the studio can't sync, and keeps the change" read `status()`
   straight after `sync()`, while the app's own push from the rename could
