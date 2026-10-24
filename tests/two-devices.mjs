@@ -478,6 +478,7 @@ try {
   await rename(one, "While the studio was down");
   await sync(one);
   check("the edit is saved on the device", (await stored(one)).name === "While the studio was down");
+  await until(one, "the 503 to land", async () => (await status(one)) === "error");
   check("the app says the studio can't sync, and keeps the change", (await status(one)) === "error" && (await pending(one)) >= 1,
     `${await status(one)} / ${await pending(one)}`);
   await one.page.unroute("**/v1/**");
