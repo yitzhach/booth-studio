@@ -17,6 +17,14 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-24: the two-devices race fixed.** In `tests/two-devices.mjs`,
+  "the app says the studio can't sync, and keeps the change" read `status()`
+  straight after `sync()`, while the app's own push from the rename could
+  still be in flight, so the 503 had not yet turned the status into `error`.
+  It failed once on seam 21's pull request and passed on the re-run, on one
+  commit. The test now waits for the 503 to land before checking; the
+  assertion is unchanged. Three runs in a row here, 52/52 each. The note in
+  `HANDOFF.md` → Testing is gone.
 - **2026-10-24: `main.js`'s twenty-first and last seam (ROADMAP 1.2 done).**
   What was left over the gate, in six modules: the icons and the lucide
   import (`src/ui/icons.js`), the panels' field builders and the Pro lock

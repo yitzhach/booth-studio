@@ -337,16 +337,6 @@ Nor while a review subagent runs: `/code-review` may run browser suites of
 its own, and on seam 21 one of them beside the chain made view-responsive
 time out on a click at 3× (it passed alone).
 
-**`tests/two-devices.mjs` has a race (found 2026-10-24, not yet fixed).**
-"the app says the studio can't sync, and keeps the change" reads `status()`
-straight after `sync()`, while the app's own push from the rename can still
-be in flight, so the 503 has not yet turned it into `error`. On seam 21's
-pull request it passed in the job's first run and failed in the second, on
-one commit, with its own detail reading `error / 1`. The fix, in a pull
-request of its own: wait for the state before checking it — `await
-until(one, "the 503 to land", async () => (await status(one)) === "error");`
-just above that `check`.
-
 ## Rules that are easy to break
 
 - **Never set `.hidden` on an SVG element.** Only HTML elements have the
