@@ -215,7 +215,7 @@ more small pull requests, each green on every suite before it merges.
       and `docs/LESSONS.md`; `docs/DECISIONS.md` holds 99 answers, B-001 to
       B-099, and the 28 calls still open. `tests/handoff.test.js` keeps it
       under 600 lines and its pointers whole.)*
-- [ ] **1.2 Split `src/main.js` along the seams it already has.** Almost all
+- [x] **1.2 Split `src/main.js` along the seams it already has.** Almost all
       of its 6,961 lines are inside `boot()`. Move, without changing
       behaviour: the panel builders (`*Section`, `*HTML`, `*Fields`) into
       `src/panels/<tab>.js`; the `actions` object (from about line 4,080,
@@ -226,6 +226,10 @@ more small pull requests, each green on every suite before it merges.
       `scene`, `toast`, …) instead of reaching into the closure. One seam per
       pull request, every view suite green on each. Target: `main.js` under
       1,500 lines.
+      *(2026-10-24: 21 seams, `MAIN_SPLIT_PHASE.md`; `main.js` is 1,438
+      lines, its code moved unchanged but for `ctx.` into `src/ui/`,
+      `src/panels/` and `src/actions/`. The bugs older than the move that
+      the reviews found are in that file's Rulings, for the typing pass.)*
 - [ ] **1.3 Split `src/scene.js`** the same way: booth build, light rig,
       picking and interaction, export and render passes.
 - [ ] **1.4 Type checking without a build step.** `// @ts-check` with JSDoc

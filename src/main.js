@@ -1,18 +1,10 @@
-import { MOVES, DEFAULT_MOVE, CUSTOM_MOVE, frameTimes } from "./camera-path.js";
+import { MOVES, DEFAULT_MOVE } from "./camera-path.js";
 import {
   MIN_SECONDS, MAX_SECONDS,
-  normalizeTimeline,
-} from "./timeline.js";
-import { jobSlug } from "./batch.js";
-import { SIZES, DEFAULT_SIZE, DEFAULT_FPS, pickCodec } from "./video.js";
+  } from "./timeline.js";
+import { DEFAULT_SIZE, DEFAULT_FPS } from "./video.js";
 import { DEFAULT_FRAME, DEFAULT_CLIP_FRAME, CUSTOM_FRAME, DEFAULT_PLACE } from "./framing.js";
-import { SHADOW_FIELD, SHADOW_KINDS, SHADOW_MAX, normalAngle, shadowSpec } from "./dropshadow.js";
-import { MAX_SWATCHES, isColor, rememberColor, previousColor } from "./swatches.js";
 import { MAX_PEOPLE, newPerson, personName } from "./people.js";
-import {
-  DEFAULT_SPACE, MAX_SLOTS,
-  addBooths, addSpace, normalizeRow, removeSlot,
-  } from "./row.js";
 import "@fontsource/dm-sans/400.css";
 import "@fontsource/dm-sans/500.css";
 import "@fontsource/dm-sans/600.css";
@@ -84,93 +76,11 @@ let chunkFailed = null;
 let chunkNoticeUntil = 0;
 addEventListener("vite:preloadError", () => chunkFailed?.());
 import {
-  createIcons,
-  Shapes,
-  RotateCw,
-  AlignStartHorizontal,
-  ListOrdered,
-  ArrowLeft,
-  Box,
-  ImagePlus,
-  LayoutPanelLeft,
-  Lightbulb,
-  Download,
-  Undo2,
-  Redo2,
-  MousePointer2,
-  Move,
-  Grid2X2,
-  Copy,
-  Trash2,
-  Plus,
-  Minus,
-  ChevronDown,
-  Maximize,
-  FolderOpen,
-  Save,
-  HelpCircle,
-  Camera,
-  Image as ImageIcon,
-  Check,
-  Sun,
-  PanelLeftClose,
-  X,
-  AlignCenter,
-  ArrowUpToLine,
-  Layers,
-  RotateCcw,
-  Play,
-  Pause,
-  Building2,
-  Columns2,
-  Ruler,
-  Zap,
-  Lock,
-  LockOpen,
-  ArrowLeftToLine,
-  ArrowRightToLine,
-  Eye,
-  EyeOff,
-  Video,
-  UserRound,
-  SlidersHorizontal,
-  Footprints,
-  Search,
-  Bookmark,
-  Tags,
-  Magnet,
-  Square,
-  Map as MapIcon,
-  Plug,
-  Upload,
-  Send,
-  AlignHorizontalDistributeCenter,
-  AlignStartVertical,
-  SkipBack,
-  SkipForward,
-  Images,
-  Crop,
-  ArrowUp,
-  Route,
-  DoorOpen,
-  LayoutTemplate,
-  FlipHorizontal2,
-  FlipVertical2,
-  Hand,
-  Sparkles,
-  MessageCircle,
-  Ellipsis,
-  ShieldCheck,
-  ClipboardCopy,
-} from "lucide";
-import {
   demoProject,
   uid,
   validateProject,
   escapeHTML as e,
-  GROUND_UPLOAD,
   groundUpload,
-  selectGround,
   constrain,
   constrainPanel,
   constrainPedestal,
@@ -178,17 +88,12 @@ import {
   boothPanels,
   findPanel,
   panelKey,
-  panelIdOf,
   wallSpec,
-  MAX_MODELS,
-  artShowPanel,
   boothPedestals,
   findPedestal,
-  hallSpec,
   isArtShow,
-  lightBarSpec,
   } from "./model.js";
-import { load, save, download, readImage, thumbnailOf, THUMB_MAX } from "./storage.js";
+import { load, save, download, thumbnailOf, THUMB_MAX } from "./storage.js";
 import { decodeAt } from "./image-source.js";
 import { accountLabel, readSession } from "./studio-session.js";
 
@@ -234,114 +139,22 @@ import { createTestHooks } from "./ui/test-hooks.js";
 import { createRender } from "./ui/render.js";
 import { createViewPrefs } from "./ui/view-prefs.js";
 import { createLibrary } from "./ui/library.js";
+import { createIconSet } from "./ui/icons.js";
+import { createFields } from "./panels/fields.js";
+import { createSyncInputs } from "./ui/sync-inputs.js";
+import { createClips } from "./ui/clips.js";
+import { createAssetInputs } from "./ui/asset-inputs.js";
+import { createRowEdit } from "./ui/row-edit.js";
 import { readFloorTemplates, readTemplates } from "./ui/templates.js";
-import { assetInDesigns, liveNumber } from "./linked.js";
+import { liveNumber } from "./linked.js";
 import { PhotoEditor } from "./photo.js";
-import { PRO_FEATURES, can, readTier, resolveTier, writeTier } from "./tier.js";
+import { readTier, resolveTier, writeTier } from "./tier.js";
 import { ROLES, hasMoreTabs, hiddenActions, needsWelcome, readRole, resolveRole, visibleTabs } from "./roles.js";
 import { noteKeepSafe } from "./keep-safe.js";
 import { errorEntry, recordError } from "./report.js";
 async function boot() {
-  const icons = {
-    ShieldCheck,
-    ClipboardCopy,
-    FlipHorizontal2,
-    FlipVertical2,
-    Hand,
-    Grid2x2: Grid2X2,
-    SkipBack,
-    SkipForward,
-    Images,
-    Crop,
-    ArrowUp,
-    Box,
-    ImagePlus,
-    LayoutPanelLeft,
-    Lightbulb,
-    Download,
-    Undo2,
-    Redo2,
-    MousePointer2,
-    Move,
-    Grid2X2,
-    Copy,
-    Trash2,
-    Plus,
-  Minus,
-    ChevronDown,
-    Maximize,
-    FolderOpen,
-    Save,
-    HelpCircle,
-    Camera,
-    Image: ImageIcon,
-    Check,
-    Sun,
-    PanelLeftClose,
-    X,
-    AlignCenter,
-    ArrowUpToLine,
-    Layers,
-    RotateCcw,
-    Play,
-    Pause,
-    Building2,
-    Columns2,
-    Ruler,
-    Zap,
-    Lock,
-    LockOpen,
-    Eye,
-    EyeOff,
-    ArrowLeftToLine,
-    ArrowRightToLine,
-    Video,
-    UserRound,
-    SlidersHorizontal,
-    Footprints,
-    Search,
-    Bookmark,
-    Tags,
-    Magnet,
-    Square,
-    Map: MapIcon,
-    Plug,
-    Upload,
-    Send,
-    AlignHorizontalDistributeCenter,
-    AlignStartVertical,
-    Shapes,
-    RotateCw,
-    AlignStartHorizontal,
-    ListOrdered,
-    ArrowLeft,
-    Route,
-    DoorOpen,
-    LayoutTemplate,
-    Sparkles,
-    MessageCircle,
-    Ellipsis,
-  };
-  // An icon is written into the HTML as its finished SVG. lucide's
-  // createIcons scans the whole document for placeholders and builds each
-  // one as DOM nodes, and every inspector redraw paid for that again — a
-  // visible share of what a click cost on a slow machine. The markup is built
-  // once per icon name and reused as a string.
-  const iconMarkup = new Map();
-  const icon = (n) => {
-    let svg = iconMarkup.get(n);
-    if (svg === undefined) {
-      const node = icons[n.replace(/(^|-)(\w)/g, (_, __, c) => c.toUpperCase())];
-      const attrs = (o) => Object.entries(o).map(([k, v]) => ` ${k}="${v}"`).join("");
-      svg = node
-        ? `<svg${attrs({ xmlns: "http://www.w3.org/2000/svg", width: 24, height: 24, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": 1.6, "stroke-linecap": "round", "stroke-linejoin": "round", class: `lucide lucide-${n}`, "aria-hidden": "true" })}>${node[2].map(([tag, a]) => `<${tag}${attrs(a)}/>`).join("")}</svg>`
-        : "";
-      iconMarkup.set(n, svg);
-    }
-    return svg;
-  };
-  const btn = (action, label, ic, cls = "") =>
-    `<button data-action="${action}" class="${cls}" title="${e(label)}" aria-label="${e(label)}">${ic ? icon(ic) : ""}<span>${label}</span></button>`;
+  // The icons, as finished SVG: src/ui/icons.js.
+  const { icon, btn, refreshIcons } = createIconSet();
   let p,
     selected = null,
     // A multiple selection of artwork, by id, including `selected` — or empty
@@ -533,6 +346,7 @@ async function boot() {
     get busy() { return busy; },
     set busy(v) { busy = v; },
     get busyVideo() { return busyVideo; },
+    set busyVideo(v) { busyVideo = v; },
     get editingStart() { return editingStart; },
     set editingStart(v) { editingStart = v; },
     get scene() { return scene; },
@@ -584,6 +398,7 @@ async function boot() {
     get tlBeforeAuto() { return tlBeforeAuto; },
     set tlBeforeAuto(v) { tlBeforeAuto = v; },
     get videoBatchAt() { return videoBatchAt; },
+    set videoBatchAt(v) { videoBatchAt = v; },
     get videoFps() { return videoFps; },
     set videoFps(v) { videoFps = v; },
     get videoFrameShape() { return videoFrameShape; },
@@ -618,6 +433,18 @@ async function boot() {
     get powerOutlets() { return powerOutlets; },
     set powerOutlets(v) { powerOutlets = v; },
     get videoCodec() { return videoCodec; },
+    get shadowGesture() { return shadowGesture; },
+    set shadowGesture(v) { shadowGesture = v; },
+    get videoCodecFor() { return videoCodecFor; },
+    set videoCodecFor(v) { videoCodecFor = v; },
+    get videoFrame() { return videoFrame; },
+    set videoFrame(v) { videoFrame = v; },
+    get videoFrames() { return videoFrames; },
+    set videoFrames(v) { videoFrames = v; },
+    get videoProgress() { return videoProgress; },
+    set videoProgress(v) { videoProgress = v; },
+    dialSVG: (...args) => dialSVG(...args),
+    set videoCodec(v) { videoCodec = v; },
     get addMode() { return addMode; },
     set addMode(v) { addMode = v; },
     get future() { return future; },
@@ -632,6 +459,7 @@ async function boot() {
     set autoPanRunning(v) { autoPanRunning = v; },
     get autoPanSettings() { return autoPanSettings; },
     get videoAbort() { return videoAbort; },
+    set videoAbort(v) { videoAbort = v; },
     get BUILD() { return BUILD; },
     get photo() { return photo; },
     get draftPolicy() { return draftPolicy; },
@@ -670,13 +498,13 @@ async function boot() {
     set chunkNoticeUntil(v) { chunkNoticeUntil = v; },
     get tier() { return tier; },
     get studioHost() { return studioHost; },
-    activeSlot,
-    addPhotoLayer,
+    activeSlot: (...args) => activeSlot(...args),
+    addPhotoLayer: (...args) => addPhotoLayer(...args),
     showLibraryHTML: (...args) => showLibraryHTML(...args),
     addPerson,
-    addRowBooths,
-    addRowSpace,
-    addWallAsset,
+    addRowBooths: (...args) => addRowBooths(...args),
+    addRowSpace: (...args) => addRowSpace(...args),
+    addWallAsset: (...args) => addWallAsset(...args),
     allowed: (feature) => allowed(feature),
     applyRole,
     checkpoint,
@@ -685,38 +513,38 @@ async function boot() {
     backfillThumbnails,
     backup,
     btn,
-    colorField,
+    colorField: (...args) => colorField(...args),
     confirmAction,
-    field,
+    field: (...args) => field(...args),
     currentArtwork,
     deviceStore: () => deviceStore(),
-    endShadowGesture,
-    fieldTarget,
+    endShadowGesture: (...args) => endShadowGesture(...args),
+    fieldTarget: (...args) => fieldTarget(...args),
     goToView,
     fromSnapshot,
-    hideEye,
+    hideEye: (...args) => hideEye(...args),
     icon,
     keepKit,
     kit: () => kit(),
     makeAiPack,
     libraryItems: (...args) => libraryItems(...args),
     mutate,
-    probeCodec,
-    proLock,
+    probeCodec: (...args) => probeCodec(...args),
+    proLock: (...args) => proLock(...args),
     readTemplates,
     refreshIcons,
     refreshScene,
-    rememberEdge,
+    rememberEdge: (...args) => rememberEdge(...args),
     renderLibrary: (...args) => renderLibrary(...args),
     renderSelection,
-    runClips,
+    runClips: (...args) => runClips(...args),
     safeName,
     setDraft: (...args) => setDraft(...args),
     setDraftPolicy: (...args) => setDraftPolicy(...args),
     setDrawingBox,
     setMeasuring,
     setSheet,
-    setShadowLive,
+    setShadowLive: (...args) => setShadowLive(...args),
     setTier,
     saveViewPrefs: (...args) => saveViewPrefs(...args),
     scaleSelected,
@@ -726,26 +554,26 @@ async function boot() {
     setWalking,
     snapshot,
     syncAutoPan,
-    syncArtInputs,
-    syncPanelInputs,
-    syncPedestalInputs,
+    syncArtInputs: (...args) => syncArtInputs(...args),
+    syncPanelInputs: (...args) => syncPanelInputs(...args),
+    syncPedestalInputs: (...args) => syncPedestalInputs(...args),
     syncQuality: (...args) => syncQuality(...args),
-    syncShadowInputs,
+    syncShadowInputs: (...args) => syncShadowInputs(...args),
     syncTools: (...args) => syncTools(...args),
     toast,
     addCatalogPlacement: (...args) => addCatalogPlacement(...args),
-    applyColor,
+    applyColor: (...args) => applyColor(...args),
     deletePanel,
     deletePedestal,
     nudgeSelection,
-    removeRowSlot,
+    removeRowSlot: (...args) => removeRowSlot(...args),
     rotateSelection,
     showClearance,
     frameGuideShape: (...args) => frameGuideShape(...args),
     loadViewPrefs: (...args) => loadViewPrefs(...args),
-    reveal,
-    revealPanelFields,
-    revealPedestalFields,
+    reveal: (...args) => reveal(...args),
+    revealPanelFields: (...args) => revealPanelFields(...args),
+    revealPedestalFields: (...args) => revealPedestalFields(...args),
     // Declared after ctx (consts, or a module's functions), so wrapped.
     batchSection: () => batchSection(),
     progressHTML: () => progressHTML(),
@@ -851,7 +679,7 @@ async function boot() {
     underlaySection: (...args) => underlaySection(...args),
     videoSection: (...args) => videoSection(...args),
     viewsSection: (...args) => viewsSection(...args),
-    range,
+    range: (...args) => range(...args),
     scheduleSave,
     updateFrameGuide: (...args) => updateFrameGuide(...args),
   };
@@ -998,11 +826,6 @@ async function boot() {
     t.className = "show" + (error ? " error" : "");
     clearTimeout(toast.timer);
     toast.timer = setTimeout(() => (t.className = ""), ms);
-  }
-  // Icons arrive as SVG already (see `icon`). This only converts a stray
-  // lucide placeholder, should any markup still write one.
-  function refreshIcons() {
-    if (document.querySelector("i[data-lucide]")) createIcons({ icons, attrs: { "stroke-width": 1.6 } });
   }
   function refreshScene() {
     prunePicked();
@@ -1185,58 +1008,10 @@ async function boot() {
     });
     return true;
   }
-  function field(
-    label,
-    key,
-    value,
-    min = 0,
-    max = 360,
-    step = 0.25,
-    unit = "in",
-    scope = "art",
-    // Several panels each show a "Width" and a "Position X". The visible label
-    // is right as it is; the accessible name has to say which panel.
-    aria = label,
-  ) {
-    return `<label class="field"><span>${label}</span><div><input type="number" data-field="${key}" data-scope="${scope}" aria-label="${e(aria)}" value="${Number(value.toFixed(3))}" min="${min}" max="${max}" step="${step}"/><small>${unit}</small></div></label>`;
-  }
-  /** One work's placement, in both its number field and its slider. */
-  function syncArtInputs(a, except = null) {
-    for (const key of ["x", "y"]) {
-      for (const input of document.querySelectorAll(
-        `[data-field="${key}"][data-scope="art"], [data-field="${key}"][data-scope="art-position"]`,
-      )) {
-        if (input === except) continue;
-        input.value = Number(a[key].toFixed(3));
-        input
-          .closest("label")
-          ?.querySelector("output")
-          ?.replaceChildren(Number(a[key].toFixed(2)) + "in");
-      }
-    }
-  }
-  /**
-   * The eye beside a piece someone added — a free-standing wall, a pedestal or
-   * piece of furniture, a figure — asked for as "a hide button, so you don't
-   * need to delete; you can just hide it". Hidden keeps its size and place;
-   * see `isShown` in model.js for everything it is left out of.
-   */
-  function hideEye(kind, id, name, shown) {
-    return `<button data-hide="${kind}" data-hide-id="${e(id)}" class="eye" title="${shown ? "Hide" : "Show"} ${e(name)}" aria-label="${shown ? "Hide" : "Show"} ${e(name)}" aria-pressed="${!shown}">${icon(shown ? "eye" : "eye-off")}</button>`;
-  }
-  /** Whether this browser's tier includes a feature. The only question asked. */
-  const allowed = (feature) => can(tier, feature);
-  /**
-   * What a Pro section shows in Lite: its name, a lock, and the one way on.
-   * The section's own controls are not drawn at all, so nothing in it can be
-   * half-used; the booth itself still draws every Pro part it carries.
-   */
-  function proLock(feature, what = "") {
-    const name = PRO_FEATURES[feature] || "This tool";
-    return `<section class="pro-lock" data-pro-lock="${e(feature)}"><h3>${e(name)} <span class="pro-badge">${icon("lock")}Pro</span></h3><p class="muted">${e(what || name + " is part of Booth Studio Pro.")}</p>${btn("tier-pro", "Switch to Pro", "zap", "wide")}</section>`;
-  }
-  /** A Pro section's markup, or its lock in Lite. */
-  const gated = (feature, html, what) => (allowed(feature) ? html : proLock(feature, what));
+  // The panels' field builders and the Pro lock: src/panels/fields.js.
+  const { field, hideEye, allowed, proLock, gated, colorField, range } = createFields(ctx);
+  // The controls that follow an edit made elsewhere, and what a control is about: src/ui/sync-inputs.js.
+  const { syncArtInputs, syncPanelInputs, reveal, revealPanelFields, syncPedestalInputs, revealPedestalFields, syncShadowInputs, setShadowLive, endShadowGesture, fieldTarget, applyColor, rememberEdge } = createSyncInputs(ctx);
   /**
    * Fold the inspector down to its tab bar, on a phone, so the booth gets the
    * screen. A view setting of the moment: not remembered, not in the project.
@@ -1260,239 +1035,16 @@ async function boot() {
     toast(tier === "pro" ? "Pro: every tool is unlocked." : "Lite: Pro tools show a lock. Anything already in this booth still draws.");
   }
   const { panelFields, pedestalFields, modelsSection } = createWallsPanel(ctx);
-  // One panel's X and Z, in both controls at once. A drag in the viewport and
-  // a pull on either slider are the same edit, so whichever one is not being
-  // touched has to follow rather than sit at a stale number.
-  function syncPanelInputs(panel, except = null) {
-    for (const key of ["x", "z"]) {
-      for (const input of document.querySelectorAll(
-        `[data-scope="panel-${CSS.escape(panel.id)}"][data-field="${key}"]`,
-      )) {
-        if (input === except) continue;
-        input.value = Number(panel[key].toFixed(3));
-        input
-          .closest("label")
-          ?.querySelector("output")
-          ?.replaceChildren(Number(panel[key].toFixed(2)) + "in");
-      }
-    }
-  }
-  // Selecting a wall in the viewport is only useful if its controls are on
-  // screen; the Layout panel is long enough that they usually are not.
-  /**
-   * Bring a control the viewport just picked into sight. With the panels'
-   * section chips on, it may sit in a section another chip hides, and
-   * scrolling to a hidden element does nothing — so its chip is chosen first.
-   */
-  function reveal(el) {
-    if (!el) return;
-    showSection(el);
-    el.scrollIntoView({ block: "nearest" });
-  }
-  function revealPanelFields() {
-    const id = panelIdOf(selectedPanel);
-    if (!id) return;
-    reveal(document.querySelector(`.wall-setting[data-panel="${CSS.escape(id)}"]`));
-  }
-  /** One pedestal's X and Z, in both its number field and its slider. */
-  function syncPedestalInputs(ped, except = null) {
-    for (const key of ["x", "z"]) {
-      for (const input of document.querySelectorAll(
-        `[data-scope="pedestal-${CSS.escape(ped.id)}"][data-field="${key}"]`,
-      )) {
-        if (input === except) continue;
-        input.value = Number(ped[key].toFixed(3));
-        input
-          .closest("label")
-          ?.querySelector("output")
-          ?.replaceChildren(Number(ped[key].toFixed(2)) + "in");
-      }
-    }
-  }
-  function revealPedestalFields() {
-    if (!selectedPedestal) return;
-    reveal(document.querySelector(`.wall-setting[data-pedestal="${CSS.escape(selectedPedestal)}"]`));
-  }
   const { lightBarLevels, shadowSection, dialSVG } = createLightingPanel(ctx);
   const { artShowHTML } = createArtShowPanel(ctx);
-  /**
-   * A colour control, with the saved palette under it.
-   *
-   * The operating system's own colour window opens from the swatch and
-   * nothing can be added inside it, so the seven saved colours and Previous
-   * sit in the panel directly beneath — the same place the fixed finishes
-   * already are, one gesture away either way. Saving is explicit: a colour is
-   * kept because someone pressed Save, not because they passed through it.
-   */
-  function colorField(label, key, scope, value, aria = label) {
-    const target = `${scope}|${key}`,
-      current = (value || "#ffffff").toLowerCase(),
-      previous = previousColor(colorHistory, target, current);
-    const chip = (color, attrs, title, text = "") =>
-      `<button ${attrs} style="background:${e(color)}" title="${e(title)}" aria-label="${e(title)}">${text}</button>`;
-    const saved = palette
-      .map((c) => chip(c, `data-swatch="${e(c)}" data-target="${e(target)}"`, `Use ${c} · shift-click to forget it`))
-      .join("");
-    return `<div class="color-block"><label class="color-field">${label}<input type="color" data-field="${e(key)}" data-scope="${e(scope)}" aria-label="${e(aria)}" value="${e(current)}"/></label><div class="swatches saved-swatches">${saved}${
-      palette.length < MAX_SWATCHES
-        ? `<button class="swatch-save" data-action="swatch-save" data-target="${e(target)}" title="Save ${current} to the palette" aria-label="Save this colour to the palette">+</button>`
-        : ""
-    }${
-      previous
-        ? chip(previous, `class="swatch-previous" data-swatch="${e(previous)}" data-target="${e(target)}"`, `Previous · ${previous}`, "<span>Previous</span>")
-        : ""
-    }</div></div>`;
-  }
   const { frameFields, frameNote, aiSection, powerSection } = createExportPanel(ctx);
-  /**
-   * Every shadow control on the page, set from the booth — after a live
-   * change, so the typed number follows its slider, and the other shadow's
-   * angle follows a global light that just moved. The control being used is
-   * left alone: rewriting an input under the cursor fights the person typing.
-   */
-  function syncShadowInputs(except = null) {
-    for (const kind of SHADOW_KINDS) {
-      const s = shadowSpec(p.booth, kind),
-        scope = SHADOW_FIELD[kind];
-      for (const input of document.querySelectorAll(`[data-fx-live][data-scope="${scope}"]`)) {
-        if (input === except) continue;
-        const v = s[input.dataset.field];
-        if (typeof v === "number") input.value = input.dataset.field === "angle" ? Math.round(v) : Number(v.toFixed(2));
-      }
-      const dial = document.querySelector(`[data-dial="${scope}"]`);
-      if (dial) {
-        dial.innerHTML = dialSVG(s.angle);
-        dial.setAttribute("aria-valuenow", String(Math.round(s.angle)));
-      }
-    }
-  }
-  /**
-   * One live change to a shadow, from a slider, a typed number or the dial.
-   * The record is written back whole the first time — which is what upgrades
-   * an older booth's `dropShadow` — and an angle under the global light moves
-   * the global light, so every shadow using it turns together.
-   */
-  function setShadowLive(scope, key, raw, source = null) {
-    const kind = SHADOW_KINDS.find((k) => SHADOW_FIELD[k] === scope);
-    if (!kind) return;
-    const limits = { opacity: [0, 100], spread: [0, 100], distance: [0, SHADOW_MAX], size: [0, SHADOW_MAX], angle: [-180, 180] }[key];
-    const value = Number(raw);
-    if (!limits || raw === "" || !Number.isFinite(value)) return;
-    const v = key === "angle" ? normalAngle(Math.round(value)) : Math.max(limits[0], Math.min(limits[1], value));
-    if (shadowSpec(p.booth, kind)[key] === v) return;
-    if (!shadowGesture) {
-      checkpoint();
-      shadowGesture = true;
-    }
-    const record = (p.booth[scope] = shadowSpec(p.booth, kind));
-    record[key] = v;
-    if (key === "angle" && record.global) p.booth.shadowAngle = v;
-    scene?.updateShadows();
-    syncShadowInputs(source);
-  }
-  /** The end of a live shadow gesture: saved, and one undo step behind it. */
-  function endShadowGesture() {
-    if (!shadowGesture) return;
-    shadowGesture = false;
-    scheduleSave();
-  }
-  function range(
-    label,
-    key,
-    value,
-    min,
-    max,
-    step,
-    scope = "global",
-    unit = "",
-    // How many stored units one point of this slider is worth. 1 — every
-    // slider but one — means the control is the stored number itself.
-    scale = 1,
-  ) {
-    const shown = value / scale;
-    return `<label class="range"><span>${label}<output>${Number(shown.toFixed(2))}${unit}</output></span><input type="range" data-field="${key}" data-scope="${scope}" aria-label="${label}" min="${min}" max="${max}" step="${step}" value="${shown}"${scale === 1 ? "" : ` data-scale="${scale}"`}/></label>`;
-  }
   // The library, its placements and its drag onto the stage: src/ui/library.js.
   const { libraryItems, addCatalogPlacement, renderLibrary } = createLibrary(ctx);
   const { groundFields, rowSection, surroundingsFields, draftSection, viewsSection, tagsSection, underlaySection, clearanceSection, peopleSection } = createLayoutPanel(ctx);
-  /**
-   * The booth of the row that new artwork goes into, as a slot id, or null for
-   * this booth. Validated on the way out: a booth that has been removed
-   * cannot stay selected, and the answer then is home.
-   */
-  function activeSlot() {
-    if (!activeBooth) return null;
-    const row = normalizeRow(p.booth);
-    const slot = row.slots.find((x) => x.id === activeBooth && x.kind === "booth");
-    if (!slot || slot.id === row.home) {
-      activeBooth = null;
-      return null;
-    }
-    return activeBooth;
-  }
-  /** The row, edited and written back. One undo step, like every other edit. */
-  function editRow(fn) {
-    mutate(() => {
-      p.booth.row = fn(p.booth);
-      // A booth that has just gone takes its artwork with it: leaving the
-      // works behind would leave them hanging on walls that are not drawn,
-      // which is the one state this row must never produce.
-      const ids = new Set(
-        normalizeRow(p.booth).slots.filter((x) => x.kind === "booth").map((x) => x.id),
-      );
-      p.art = p.art.filter((a) => !a.booth || ids.has(a.booth));
-      activeSlot();
-    });
-  }
-  function addRowBooths(side, count) {
-    const before = normalizeRow(p.booth).slots.length;
-    editRow((booth) => addBooths(booth, side, count));
-    const added = normalizeRow(p.booth).slots.length - before;
-    if (!added) {
-      toast(`A row holds ${MAX_SLOTS} slots. Remove one to add another.`, true);
-      return;
-    }
-    toast(
-      `${added} booth${added === 1 ? "" : "s"} added to the ${side}. Pick one under “Hang new artwork in”, then tap an original.`,
-    );
-  }
-  function addRowSpace(side) {
-    const before = normalizeRow(p.booth).slots.length;
-    editRow((booth) => addSpace(booth, side, DEFAULT_SPACE));
-    if (normalizeRow(p.booth).slots.length === before) {
-      toast(`A row holds ${MAX_SLOTS} slots. Remove one to add another.`, true);
-      return;
-    }
-    toast(`A ${DEFAULT_SPACE}″ space added to the ${side}. Type its width to change it.`);
-  }
-  function removeRowSlot(id) {
-    const hung = p.art.filter((a) => a.booth === id).length;
-    editRow((booth) => removeSlot(booth, id));
-    toast(hung ? `Booth removed, with the ${hung} work${hung === 1 ? "" : "s"} hung in it.` : "Removed from the row.");
-  }
-  const rowCount = () =>
-    Math.max(1, Math.min(MAX_SLOTS, Math.round(+document.querySelector("#row-count")?.value || 1)));
-  // Asks the browser which codec it will encode, for the size and rate
-  // currently chosen, and re-renders the panel once it knows. Keyed so that
-  // changing the resolution or frame rate re-probes: the H.264 level depends
-  // on both, and a machine can support one and refuse another.
-  async function probeCodec() {
-    const key = `${videoSize}/${videoFps}`;
-    if (videoCodecFor === key) return;
-    videoCodecFor = key;
-    const preset = SIZES[videoSize] || SIZES[DEFAULT_SIZE];
-    try {
-      videoCodec = await pickCodec({
-        width: preset.width,
-        height: preset.height,
-        framerate: videoFps,
-        bitrate: preset.bitrate,
-      });
-    } catch {
-      videoCodec = null;
-    }
-    if (tab === "export" || tab === "video") renderInspector();
-  }
+  // The row of booths: which one new work goes into, and its edits: src/ui/row-edit.js.
+  const { activeSlot, addRowBooths, addRowSpace, removeRowSlot, rowCount } = createRowEdit(ctx);
+  // Recording clips, one or a batch, and the codec check: src/ui/clips.js.
+  const { probeCodec, runClips, progressHTML } = createClips(ctx);
 
   // A figure lands in front of the back wall and a little to the side of the
   // ones already there, so two in a row do not stand inside each other.
@@ -1657,105 +1209,6 @@ async function boot() {
     tlPlayhead = 0;
   const keyThumbs = new Map();
   const { kit, setKit, refreshPanels, batchSection, currentClip, addJobs, clipJob, stillJob } = createBatch(ctx);
-  // Renders one clip or a whole batch, in order, downloading each as it lands.
-  // A batch is not a different code path: it is this loop with more than one
-  // entry, which is what keeps a single export and a batch honest with each
-  // other.
-  // A batch is the same loop with stills in it: a still is one frame, rendered
-  // by the PNG export from the view it was queued with.
-  async function runClips(jobs, { batch = false } = {}) {
-    busy = busyVideo = true;
-    videoAbort = new AbortController();
-    videoBatchAt = batch ? 0 : -1;
-    refreshPanels();
-    // The progress element is written to directly rather than through
-    // renderInspector: redrawing the whole panel a few hundred times would
-    // itself slow the render it is reporting on. There can be one in the
-    // Video tab and one in the timeline; both are kept.
-    const status = (note) => {
-      document.querySelectorAll(".video-progress").forEach((box) => {
-        if (!batch && box.closest(".batch")) return;
-        if (!box.querySelector("progress")) box.innerHTML = progressHTML();
-        box.querySelector("progress").value = videoProgress;
-        box.querySelector("span").textContent = `${note}${Math.round(videoProgress * 100)}% · frame ${videoFrame} of ${videoFrames}`;
-      });
-    };
-    let done = 0;
-    let stills = 0;
-    let vp9 = false;
-    try {
-      for (const [index, job] of jobs.entries()) {
-        videoBatchAt = batch ? index : -1;
-        if (batch) refreshPanels();
-        videoProgress = 0;
-        videoFrame = 0;
-        const note = jobs.length > 1 ? `${job.kind === "still" ? "Still" : "Clip"} ${index + 1} of ${jobs.length} · ` : "";
-        const name = batch ? `${safeName()}-${jobSlug(job, index)}` : `${safeName()}-${job.fileTag || job.move}`;
-        if (job.kind === "still") {
-          videoFrames = 1;
-          status(note);
-          if (videoAbort.signal.aborted) throw new DOMException("Cancelled", "AbortError");
-          const blob = await scene.export(job.long, { frame: job.frame, custom: job.custom, place: job.place, pose: job.pose || undefined });
-          download(blob, `${name}.png`);
-          videoProgress = 1;
-          status(note);
-          done += 1;
-          stills += 1;
-          continue;
-        }
-        if (job.move === CUSTOM_MOVE && !job.timeline) throw new Error(`Item ${index + 1} has no timeline to render. Load a preset into it or remove it.`);
-        videoFrames = frameTimes(job.seconds, job.fps).count;
-        status(note);
-        const recorded = await scene.recordVideo({
-          // A timeline where the move is Custom, one of the fixed moves
-          // otherwise. Everything downstream — the recorder, the encoder, the
-          // muxer — sees the same (t) -> pose contract either way.
-          move: job.move === CUSTOM_MOVE ? normalizeTimeline(job.timeline) : job.move,
-          seconds: job.seconds,
-          fps: job.fps,
-          size: job.size,
-          frame: job.frame,
-          custom: job.custom,
-          place: job.place,
-          settle: job.settle !== false,
-          signal: videoAbort.signal,
-          onProgress: (fraction) => {
-            videoProgress = fraction;
-            videoFrame = Math.round(fraction * videoFrames);
-            status(note);
-          },
-        });
-        download(recorded.blob, `${name}.mp4`);
-        vp9 = vp9 || recorded.kind === "vp09";
-        done += 1;
-      }
-      // Which codec landed decides what can open the file, so it is said out
-      // loud. VP9 is the fallback for a browser with no H.264 encoder, and
-      // QuickTime Player cannot open VP9 — someone handed that file without
-      // being told just sees their player refuse their own export.
-      if (vp9)
-        toast(
-          "Exported as VP9, because this browser cannot encode H.264. It plays in Chrome, Edge and VLC, but not in QuickTime Player — use Chrome or Safari for a QuickTime-ready file.",
-          true,
-        );
-      else if (batch) toast(`${done} exported${stills ? ` · ${done - stills} ${done - stills === 1 ? "clip" : "clips"}, ${stills} ${stills === 1 ? "still" : "stills"}` : ""}.`);
-      else toast(`${jobs[0].seconds}s MP4 exported · ${videoFrames} frames at ${jobs[0].fps} fps.`);
-    } catch (err) {
-      // A cancelled batch keeps the clips it already wrote: they are on disk
-      // and saying otherwise would be a lie.
-      if (err?.name === "AbortError")
-        toast(done ? `Cancelled after ${done} ${done === 1 ? "item" : "items"}.` : "Recording cancelled.");
-      else toast(err.message, true);
-    } finally {
-      busy = busyVideo = false;
-      videoAbort = null;
-      videoProgress = 0;
-      videoBatchAt = -1;
-      refreshPanels();
-    }
-  }
-  const progressHTML = () =>
-    `<progress max="1" value="${videoProgress}"></progress><span>${Math.round(videoProgress * 100)}% · frame ${videoFrame} of ${videoFrames}</span>`;
 
   // What the page draws from the project, and the inspector's sub-tabs: src/ui/render.js.
   const { render, renderStatus, inspectorHTML, renderInspector, showSection } = createRender(ctx);
@@ -1832,54 +1285,8 @@ async function boot() {
       "booth-studio"
     );
   }
-  function addPhotoLayer(a) {
-    if (!p.photo.asset) {
-      toast("Upload a booth photo first.", true);
-      return;
-    }
-    if (a.kind === "sign" || a.kind === "label") {
-      toast("Signs and labels are currently available in measured 3D mode.", true); return;
-    }
-    if (!a.asset) {
-      toast("Add an original image to this sample panel first.", true);
-      return;
-    }
-    const asset = p.assets[a.asset],
-      bg = p.assets[p.photo.asset],
-      h = Math.min(
-        0.6,
-        (0.25 * bg.width) / bg.height / (asset.width / asset.height),
-      );
-    const l = {
-      id: uid(),
-      asset: a.asset,
-      title: a.title,
-      corners: [
-        [0.35, 0.25],
-        [0.6, 0.25],
-        [0.6, 0.25 + h],
-        [0.35, 0.25 + h],
-      ],
-      shadow: 18,
-    };
-    mutate(() => {
-      p.photo.layers.push(l);
-      photoSelected = l.id;
-      tab = "art";
-    });
-  }
-  function addWallAsset(kind) {
-    if (p.art.length >= 200) { toast("This prototype supports up to 200 panels.", true); return; }
-    const source = p.art.find(a=>a.id===selected);
-    const a = {id:uid(), asset:null, kind,
-      title:kind==="sign"?"Artist sign":source?.title || "Artwork title",
-      artistName:"", city:"", medium:source?.medium || "", price:"",
-      wall:source?.wall || "back", face:source?.face || "inside",
-      w:kind==="sign"?30:4, h:kind==="sign"?12:2.5,
-      x:source ? source.x : 12, y:kind==="sign"?78:source ? Math.max(0,source.y-4) : 48,
-      thickness:.1, offset:.2};
-    mutate(()=>{p.art.push(constrain(p,a));selected=a.id;tab="art";});
-  }
+  // Photo layers, wall assets and the four file inputs for models, plans, backdrops and grounds: src/ui/asset-inputs.js.
+  const { addPhotoLayer, addWallAsset } = createAssetInputs(ctx);
   let scaleBase = null, scaleGesture = false;
   // One undo step per slider gesture, not one per pixel.
   let panelGesture = false;
@@ -1950,171 +1357,7 @@ async function boot() {
     document.querySelector(`[data-hall-booth="${hallSelected}"]`)?.focus();
   });
 
-  document.querySelector("#model-input").onchange = async (ev) => {
-    const file = ev.target.files[0];
-    ev.target.value = "";
-    if (!file) return;
-    if (!allowed("glb")) return toast("3D model import is part of Booth Studio Pro.", true);
-    try {
-      if (!/\.glb$/i.test(file.name)) throw new Error("Choose a .glb file — binary glTF, which SketchUp, Blender and most scanners export.");
-      if (file.size > 28 * 1024 * 1024) throw new Error("That model is over 28 MB. Simplify or compress it and try again.");
-      const models = p.booth.models || [];
-      if (models.length >= MAX_MODELS) throw new Error(`${MAX_MODELS} models is the limit.`);
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      // glTF binary files start "glTF".
-      if (String.fromCharCode(...bytes.slice(0, 4)) !== "glTF") throw new Error("That file is not a binary glTF (.glb).");
-      const data = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result).replace(/^data:[^;]*;/, "data:model/gltf-binary;"));
-        reader.onerror = () => reject(new Error("The model could not be read."));
-        reader.readAsDataURL(new Blob([bytes], { type: "model/gltf-binary" }));
-      });
-      const assetId = uid();
-      const model = { id: uid(), asset: assetId, name: file.name.replace(/\.glb$/i, "").slice(0, 120), height: 36, x: 0, z: 0, rotation: 0 };
-      mutate(() => {
-        p.assets[assetId] = { name: file.name, width: 1, height: 1, role: "model", data };
-        p.booth.models = [...models, model];
-        tab = "walls";
-      });
-      toast(`${model.name} stands in the booth at 36″. Type its real height in the Walls tool.`);
-    } catch (err) {
-      toast(err.message, true);
-    }
-  };
-  document.querySelector("#underlay-input").onchange = async (ev) => {
-    const file = ev.target.files[0];
-    ev.target.value = "";
-    if (!file) return;
-    if (!allowed("underlay")) return toast("The floor plan underlay is part of Booth Studio Pro.", true);
-    try {
-      if (Object.keys(p.assets).length >= 250) throw new Error("This prototype supports up to 250 images.");
-      const asset = await readImage(file);
-      mutate(() => {
-        const old = p.booth.underlay?.asset;
-        if (old && !p.art.some((a) => a.asset === old) && !assetInDesigns(p, old)) delete p.assets[old];
-        const id = uid();
-        asset.role = "underlay";
-        p.assets[id] = asset;
-        // A first guess: the plan ten times the booth's width, centred on it.
-        // The tape and Scale plan set the real scale.
-        p.booth.underlay = { asset: id, width: Math.min(24000, p.booth.width * 10), x: 0, z: 0, rotation: 0, opacity: 0.6, on: true };
-      });
-      scene?.setView("plan");
-      document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === "plan"));
-      toast("Floor plan laid under the booth. Measure something you know with the tape (T), then Scale plan.");
-    } catch (err) {
-      toast(err.message, true);
-    }
-  };
-  for(const [input,key] of [["surround-input","surroundAsset"],["ground-input","groundAsset"]]){
-    document.querySelector("#"+input).onchange=async ev=>{
-      const file=ev.target.files[0];ev.target.value="";if(!file)return;
-      try{
-        if(Object.keys(p.assets).length>=250)throw new Error("This prototype supports up to 250 images.");
-        const asset=await readImage(file);
-        if(key==="surroundAsset" && Math.abs(asset.width/asset.height-2)>.1)
-          throw new Error("Choose a 2:1 full-sphere panorama for this 360° background. Ordinary booth photos belong in Photo mode.");
-        mutate(()=>{
-          const id=uid();
-          asset.role=key==="surroundAsset"?"surround":"ground";
-          p.assets[id]=asset;
-          // A ground upload joins the library and is selected; it does not
-          // take a slot of its own that the preset picker has to fight.
-          if(key==="groundAsset") selectGround(p, GROUND_UPLOAD+id); else p.booth[key]=id;
-        });
-        toast(key==="groundAsset"
-          ? "Ground photograph added to your library and selected."
-          : "Photographic material added. Original image is included in backups.");
-      }catch(err){toast(err.message,true);}
-    };
-  }
 
-  /**
-   * Which object a control's `data-scope` is about. One function, because the
-   * inspector writes to these from two places now — a typed field or a slider,
-   * and a colour chosen from the saved palette — and two copies of this
-   * ternary would be two answers to "what a pedestal's scope means".
-   *
-   * The three derived records (the panel module, the light bar, the hall) are
-   * written back as they are read, which is what upgrades a booth saved
-   * before they existed the first time one is touched.
-   */
-  function fieldTarget(scope, art) {
-    return (
-        scope === "art"
-          ? art
-          : scope === "booth"
-            ? p.booth
-            : scope?.startsWith("wall-")
-              ? p.booth.walls[scope.slice(5)]
-              : scope?.startsWith("person-")
-                ? (p.booth.people || []).find((x) => x.id === scope.slice(7))
-            : scope?.startsWith("panel-")
-              ? findPanel(p, panelKey(scope.slice(6)))
-            : scope?.startsWith("pedestal-")
-              ? findPedestal(p, scope.slice(9))
-            : scope === "artShow"
-              ? (p.booth.artShow = artShowPanel(p.booth))
-            : scope === "lightBar"
-              ? (p.booth.lightBar = lightBarSpec(p.booth))
-            : scope === "hall"
-              ? (p.booth.hall = hallSpec(p.booth))
-            : scope === "underlay"
-              ? p.booth.underlay
-            : scope === "hallplan"
-              ? p.hall
-            : scope === "hallbooth"
-              ? p.hall && hallSelected !== null ? (p.hall.booths[hallSelected] ||= {}) : null
-            : scope?.startsWith("model-")
-              ? (p.booth.models || []).find((m) => m.id === scope.slice(6))
-            : SHADOW_KINDS.some((kind) => SHADOW_FIELD[kind] === scope)
-              ? (p.booth[scope] = shadowSpec(p.booth, SHADOW_KINDS.find((kind) => SHADOW_FIELD[kind] === scope)))
-              : scope === "light"
-                ? p.lights[lightIndex]
-                : scope === "photoLight"
-                  ? p.photo.lights[photoLightIndex]
-                  : scope === "photoLayer"
-                    ? p.photo.layers.find((l) => l.id === photoSelected)
-                    : scope === "photo"
-                      ? p.photo
-                      : p
-    );
-  }
-  /**
-   * Setting one colour control from the palette. It goes through the same
-   * `fieldTarget` a typed change does, and takes the same undo step, so a
-   * colour chosen from a swatch and a colour chosen from the system picker
-   * are one edit in two clothes.
-   */
-  function applyColor(targetKey, color) {
-    if (!isColor(color)) return;
-    const [scope, key] = String(targetKey).split("|");
-    mutate(() => {
-      const a = p.art.find((x) => x.id === selected);
-      const target = fieldTarget(scope, a);
-      if (!target) return;
-      colorHistory = rememberColor(colorHistory, targetKey, target[key]);
-      target[key] = color;
-      if (scope === "art" && key === "edgeColor") rememberEdge(target);
-    });
-    saveViewPrefs();
-  }
-  /**
-   * The finish the next original hung on a wall inherits: the last edge
-   * colour, edge material and thickness someone chose. Per browser, like the
-   * palette — it is how this person frames work, not something about one
-   * booth — and it is only ever a starting value, which every placement is
-   * free to change afterwards.
-   */
-  function rememberEdge(a) {
-    if (!a) return;
-    lastEdge = {
-      edgeColor: isColor(a.edgeColor) ? a.edgeColor : lastEdge?.edgeColor,
-      edgeTexture: a.edgeTexture || lastEdge?.edgeTexture,
-      thickness: Number.isFinite(a.thickness) ? a.thickness : lastEdge?.thickness,
-    };
-    saveViewPrefs();
-  }
   createInputs(ctx);
   createUpload(ctx);
   // Find a tool's index, its hits and the one picked (src/ui/find-tool.js);

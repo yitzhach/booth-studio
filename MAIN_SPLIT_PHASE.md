@@ -81,7 +81,7 @@ pushing.
 | 18 | the scene's callbacks, the studio host and `window.__booth` | `src/ui/scene-wiring.js`, `src/ui/studio-host.js`, `src/ui/test-hooks.js` | ~390 | the whole chain |
 | 19 | `render`, `renderStatus`, `inspectorHTML` and the section chips | `src/ui/render.js` | ~400 | the whole chain |
 | 20 | the library and placement, the view prefs, the tool sync | `src/ui/library.js`, `src/ui/view-prefs.js` | ~400 | the whole chain |
-| 21 | what is left over 1,500 (the icon table first) | — | — | the whole chain |
+| 21 | what is left over 1,500: the icon table, the field builders, the input sync, the clips, the asset inputs, the row edits | `src/ui/icons.js`, `src/panels/fields.js`, `src/ui/sync-inputs.js`, `src/ui/clips.js`, `src/ui/asset-inputs.js`, `src/ui/row-edit.js` | ~775 | the whole chain |
 
 ## Each seam, step by step
 
@@ -663,3 +663,64 @@ wrong.)
   passed; and the lock's stacked doc comment above. It asked about the
   listener order, answered above. The ratchet is 2,195 (red on `main`'s
   2,562).
+- **2026-10-24, seam 21: the rest, in six modules, and the gate is met.**
+  What was left over 1,500 went by what it does, each module a factory
+  called where its first function stood. The icon table first:
+  `icons`, `iconMarkup`, `icon`, `btn` and `refreshIcons` (the one user of
+  lucide's `createIcons` and of the table), with the lucide import from
+  the top of `main.js`, into `src/ui/icons.js` as `createIconSet()`. It
+  reads none of boot's state, so it takes no `ctx`; it is called first,
+  before `ctx` is made, so `icon`, `btn` and `refreshIcons` stay plain
+  values in `ctx` as `icon` and `btn` were. The panels' field builders and
+  the Pro lock (`field`, `hideEye`, `allowed`, `proLock`, `gated`,
+  `colorField`, `range`) into `src/panels/fields.js`, which is where seam
+  9's ruling left them for later. What the controls do after an edit made
+  elsewhere (`syncArtInputs`, `syncPanelInputs`, `reveal`,
+  `revealPanelFields`, `syncPedestalInputs`, `revealPedestalFields`,
+  `syncShadowInputs`, `setShadowLive`, `endShadowGesture`) and what a
+  control writes to (`fieldTarget`, with `applyColor` and `rememberEdge`,
+  from further down) into `src/ui/sync-inputs.js`. The review asked whether
+  those last three belong in a module of their own; the module's header says
+  it holds both, and a rename is not a move, so it waits for the typing
+  pass. Recording (`probeCodec`, `runClips`, `progressHTML`) into
+  `src/ui/clips.js`. `addPhotoLayer`, `addWallAsset` and the `onchange` of
+  the four file inputs (model, floor plan, 360° backdrop, ground) into
+  `src/ui/asset-inputs.js`, which now sets those handlers earlier than
+  before: each is the input's only `onchange`, nothing else sets one
+  (grepped; the actions only `.click()` them), and `createInputs`' `change`
+  listener is on the document, which an input's event reaches by bubbling
+  whatever order the two were set in. The row's edits (`activeSlot`,
+  `editRow`, `addRowBooths`, `addRowSpace`, `removeRowSlot`, `rowCount`)
+  into `src/ui/row-edit.js`; `editRow` is not returned, because only its
+  module calls it (seam 2's rule). Every moved function is now a `const`
+  from its factory's line rather than hoisted, and no earlier statement in
+  `boot()` calls one: every earlier mention is inside a function or a
+  callback, the scene's callbacks run on a click or a drag rather than
+  from its constructor, and every view suite loads the page.
+  `ctx.shadowGesture` reads a `let` declared after `createSyncInputs`, as
+  `setShadowLive` read it before; it is called only from the panels'
+  listeners, which `createInputs` adds after both. One change that is not
+  only `ctx.`: `busy = busyVideo = true` in `runClips` is now
+  `ctx.busy = ctx.busyVideo = true`, a chained assignment through two
+  setters that leaves both with the same value. Two tests read the moved
+  code's source from `main.js` (`tests/icons.test.js` the icon table,
+  `tests/image-regression.test.js` the lucide import); they now read
+  `src/ui/icons.js`, with their assertions unchanged. `ctx` gains setters
+  for `busyVideo`, `videoAbort`, `videoBatchAt` and `videoCodec`, getters
+  and setters for `shadowGesture`, `videoCodecFor`, `videoFrame`,
+  `videoFrames` and `videoProgress`, and `dialSVG` wrapped (the Lighting
+  tab's factory const); 25 entries, hoisted declarations before, are now
+  wrappers. No property is read on any of them (checked). The lucide
+  import (78 icons and `createIcons`) went to `src/ui/icons.js`, and 32
+  other imports went. 775 lines moved (695 from `boot()`, 80 of import)
+  and `main.js` lost 757. The review found no bug in the move. Older than
+  it, and cosmetic: the icon table registers `Grid2X2` twice, once as
+  `Grid2x2: Grid2X2`, which `icon("grid-2x2")` finds, and once under its
+  own name, which nothing looks up. Its tidy-ups wait for the typing pass:
+  the three sync loops for art, panels and pedestals are one loop written
+  three times; the pruned imports left `MIN_SECONDS, MAX_SECONDS` on a
+  line of its own in a block; and the new `ctx` entries went in beside the
+  getter they were added after, so `set videoCodec` sits twelve lines below
+  its getter and `dialSVG` among the getters (their order changes nothing). `main.js` is 1,438 lines, under the gate's
+  1,500 (7,209 when the split began); the ratchet is 1,438 (red on
+  `main`'s 2,195) and stays, so it cannot grow back.
