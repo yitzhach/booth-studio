@@ -17,6 +17,17 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-24: `main.js`'s twenty-first and last seam (ROADMAP 1.2 done).**
+  What was left over the gate, in six modules: the icons and the lucide
+  import (`src/ui/icons.js`), the panels' field builders and the Pro lock
+  (`src/panels/fields.js`), the controls that follow an edit and what a
+  control writes to (`src/ui/sync-inputs.js`), recording clips
+  (`src/ui/clips.js`), photo layers, wall assets and four file inputs
+  (`src/ui/asset-inputs.js`), and the row's edits (`src/ui/row-edit.js`).
+  Unchanged but for `ctx.`, checked line for line. `main.js` is 1,438
+  lines (from 2,195; 7,209 when the split began), under the gate's 1,500.
+  Lint, type check, 527 node tests and build green; the whole chain is run
+  one suite at a time before its pull request, which reports it.
 - **2026-10-23: `main.js`'s twentieth seam (ROADMAP 1.2).** The
   viewport's own settings — the preview quality menu, the toolbar's state,
   Fast edit and its lock, the view settings this browser keeps, and the

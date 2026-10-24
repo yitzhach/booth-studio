@@ -75,7 +75,8 @@ test("artwork transforms reuse scene objects without disposing textures", () => 
 });
 
 test("image editor uses the browser Image loader, not the imported icon", () => {
-  const source = readFileSync(new URL("../src/main.js", import.meta.url), "utf8");
+  // The lucide import moved with the icons, to src/ui/icons.js (seam 21).
+  const source = readFileSync(new URL("../src/ui/icons.js", import.meta.url), "utf8");
   const imports = source.slice(source.indexOf("import {"), source.indexOf('} from "lucide"'));
   assert.match(imports, /Image as ImageIcon/);
   assert.doesNotMatch(imports, /\n\s*Image,/);

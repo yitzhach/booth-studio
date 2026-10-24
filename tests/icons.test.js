@@ -4,12 +4,14 @@
 // this reads the names out of main.js's own source and checks them. Since
 // main.js is being split (MAIN_SPLIT_PHASE.md), the panels and dialogs moved
 // out of it draw their buttons with the same `btn` and `icon`, so their
-// modules are read too; the registry itself is still main.js's.
+// modules are read too. The registry moved with them, to src/ui/icons.js
+// (seam 21).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 
 const src = readFileSync(new URL("../src/main.js", import.meta.url), "utf8");
+const registry = readFileSync(new URL("../src/ui/icons.js", import.meta.url), "utf8");
 const moved = ["ui", "panels", "actions"]
   .map((dir) => new URL(`../src/${dir}/`, import.meta.url))
   .filter((dir) => existsSync(dir))
@@ -17,7 +19,7 @@ const moved = ["ui", "panels", "actions"]
 const pascal = (name) => name.split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join("");
 
 test("every icon named in main.js is registered", () => {
-  const block = src.slice(src.indexOf("const icons = {"), src.indexOf("};", src.indexOf("const icons = {")));
+  const block = registry.slice(registry.indexOf("const icons = {"), registry.indexOf("};", registry.indexOf("const icons = {")));
   const registered = new Set([...block.matchAll(/^\s*(\w+)(?::\s*\w+)?,/gm)].map((m) => m[1]));
   const used = new Set();
   for (const text of [src, ...moved]) {

@@ -93,7 +93,7 @@ is true has changed.
   with AI** (`src/ai-render.js`) downloads its pack; its provider is `null`
   until the owner picks the service and its spend (Next).
 - **How it is built and checked.** Vite and three.js, no framework.
-  `src/main.js` (2,195 lines, most of it inside `boot()`, being split
+  `src/main.js` (1,438 lines, most of it inside `boot()`, split
   into `src/ui/`, `src/panels/` and `src/actions/`) builds the panels and
   their actions; `src/scene.js` (3,500) draws the booth. Schema 1
   is forever: `validateProject` in `src/model.js` opens every backup ever
@@ -162,9 +162,9 @@ look at and what to change if it reads wrong.
    and the owner's decisions (who pays first, the name — "Booth Studio" is
    taken on the App Store — what stays free, error reports, payments, the
    image service). Its phase 1 (foundations) needs none of those. Done: 1.1
-   (this file's split), 1.5, 1.7, 1.8 and 1.9; half done: 1.4 (every module
+   (this file's split), 1.2, 1.5, 1.7, 1.8 and 1.9; half done: 1.4 (every module
    in `src/` is type-checked but `main.js`, `scene.js`, `studio.js` and what
-   the split moves out of `main.js`) and 1.6; begun: 1.2 (seams 1–20 of
+   the split moved out of `main.js`) and 1.6. 1.2 took 21 seams of
    `MAIN_SPLIT_PHASE.md`: the share dialogs, the welcome, Keep your work
    and the templates, the looks and the image editor, the timeline dialog
    and the batch, the show-floor panel, Find a tool and the app map,
@@ -176,15 +176,17 @@ look at and what to change if it reads wrong.
    and `src/ui/test-hooks.js`; `render`, `renderStatus`, the inspector
    (`inspectorHTML`, which lays each tab out) and the section chips in
    `src/ui/render.js`; the view prefs, the toolbar's state and the frame
-   guide in `src/ui/view-prefs.js`, and the library with its drag onto the
-   stage in `src/ui/library.js`; seam 21, what is left over 1,500, is
-   next — `main.js` is 2,195 lines
-   against the gate's 1,500. A seam is done with the scripts in
-   `tools/main-split/`, as `MAIN_SPLIT_PHASE.md` → "Each seam, step by
-   step" says, and its Rulings hold the bugs older than the move that the
-   reviews found, for a fix once the split is done). Left for sessions: the rest of
-   1.2 and 1.3 (split `main.js` and `scene.js`, which phase 2 waits on, seam
-   by seam as that plan lists them) and the rest of 1.4, after them. 1.10's site-qa and Dependabot, 1.11 (the
+   guide in `src/ui/view-prefs.js`; the library with its drag onto the
+   stage in `src/ui/library.js`; and the icons, the field builders, the
+   input sync, the clips, the asset inputs and the row's edits in
+   `src/ui/icons.js`, `src/panels/fields.js`, `src/ui/sync-inputs.js`,
+   `src/ui/clips.js`, `src/ui/asset-inputs.js` and `src/ui/row-edit.js` —
+   `main.js` is 1,438 lines, under the gate's 1,500. The scripts each seam
+   used are in `tools/main-split/`, and the plan's Rulings hold the bugs
+   older than the move that the reviews found, for a fix after the split).
+   Left for sessions: 1.3 (split `scene.js`, which phase 2 waits on, the
+   same way) and the rest of 1.4 after it — the typing pass over
+   `main.js` and the modules the split made, with those fixes. 1.10's site-qa and Dependabot, 1.11 (the
    custom domain) and 1.12 (security headers, which change what the Worker
    sends) want the owner's yes first.
 4. **The assistant panel on a phone (2026-10-07): built — see `docs/HISTORY.md`.** The
@@ -331,6 +333,19 @@ a snapshot: `git worktree add ../bs-test HEAD`, `cp -al node_modules
 ../bs-test/` (hard links — a symlink puts the fonts outside vite's allow
 list), run the chain there in the background, and edit here without running
 anything else in a browser until it is done.
+Nor while a review subagent runs: `/code-review` may run browser suites of
+its own, and on seam 21 one of them beside the chain made view-responsive
+time out on a click at 3× (it passed alone).
+
+**`tests/two-devices.mjs` has a race (found 2026-10-24, not yet fixed).**
+"the app says the studio can't sync, and keeps the change" reads `status()`
+straight after `sync()`, while the app's own push from the rename can still
+be in flight, so the 503 has not yet turned it into `error`. On seam 21's
+pull request it passed in the job's first run and failed in the second, on
+one commit, with its own detail reading `error / 1`. The fix, in a pull
+request of its own: wait for the state before checking it — `await
+until(one, "the 503 to land", async () => (await status(one)) === "error");`
+just above that `check`.
 
 ## Rules that are easy to break
 
