@@ -1,4 +1,5 @@
 // Usage: node imports.mjs <main.js> <names,...> → import lines (../ paths) for names main imports.
+// Also takes scene.js (SCENE_SPLIT_PHASE.md), whose modules need `import * as T`.
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 const require = createRequire(process.cwd() + "/");
@@ -9,6 +10,12 @@ const ast = espree.parse(readFileSync(file, "utf8"), { ecmaVersion: "latest", so
 const out = [], found = new Set();
 for (const d of ast.body) {
   if (d.type !== "ImportDeclaration") continue;
+  const ns = d.specifiers.find((s) => s.type === "ImportNamespaceSpecifier" && want.has(s.local.name));
+  if (ns) {
+    found.add(ns.local.name);
+    out.push(`import * as ${ns.local.name} from "${d.source.value.replace(/^\.\//, "../")}";`);
+    continue;
+  }
   const specs = d.specifiers.filter((s) => s.type === "ImportSpecifier" && want.has(s.local.name));
   if (!specs.length) continue;
   specs.forEach((s) => found.add(s.local.name));
