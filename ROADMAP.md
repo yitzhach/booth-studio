@@ -232,6 +232,8 @@ more small pull requests, each green on every suite before it merges.
       the reviews found are in that file's Rulings, for the typing pass.)*
 - [ ] **1.3 Split `src/scene.js`** the same way: booth build, light rig,
       picking and interaction, export and render passes.
+      *(2026-10-24: planned in `SCENE_SPLIT_PHASE.md` — nine seams, the
+      methods moved unchanged as mixins on the class; gate 1,000 lines.)*
 - [ ] **1.4 Type checking without a build step.** `// @ts-check` with JSDoc
       types and `tsc --noEmit --checkJs` in CI, starting with the modules
       `npm run bundle:scene` ships to studio-api (`model.js`, `scene-ops.js`,
