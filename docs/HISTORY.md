@@ -17,6 +17,15 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-26: `scene.js`'s second seam (ROADMAP 1.3).** What leaves the
+  app as a file — the .glb, the still export, the AI render passes and the
+  frame guide that composes them (`exportGLB`, `export`, `renderPasses`,
+  `applyPass`, `surfaceOf`, `showRenderRect`, `clearRenderRect`,
+  `frameRect`) — into `src/scene/export.js`, installed by `mixin`. Unchanged
+  but for a comma after each method, checked line for line. `scene.js` is
+  3,134 lines (from 3,418). Lint, type check, 530 node tests and build
+  green; view-ai, view-frame, view-round13, view-tier, e2e and view-video
+  green, one at a time.
 - **2026-10-24: `scene.js`'s first seam (ROADMAP 1.3).** The art-show
   light bar — `buildLightBar`, `setBarShadows` and `temperature` — into
   `src/scene/light-rig.js`, an object of methods that `src/scene/mixin.js`
