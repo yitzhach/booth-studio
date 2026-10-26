@@ -46,7 +46,7 @@ for (const d of ast.body) if (d.type === "ImportDeclaration") for (const s of d.
 for (const v of mod.variables) {
   const refs = v.references.filter((r) => inCut(r.identifier.range[0]));
   if (!refs.length) continue;
-  const left = v.references.filter((r) => !inCut(r.identifier.range[0])).length;
+  const left = v.references.filter((r) => !r.init && !inCut(r.identifier.range[0])).length;
   const where = imported.has(v.name) ? `import from ${imported.get(v.name)}` : `declared in scene.js`;
   console.log(`${v.name.padEnd(22)} ${where}${left ? `; still read ${left}× by what stays` : "; read by nothing that stays"}`);
 }

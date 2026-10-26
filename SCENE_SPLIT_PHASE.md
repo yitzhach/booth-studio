@@ -203,3 +203,16 @@ wrong.)
 - **2026-10-24, seam 1: `tools/main-split/imports.mjs` writes namespace
   imports** (`import * as T from "three"`), which every scene module needs,
   and took `scene.js` as its source for this seam's imports unchanged.
+- **2026-10-26, seam 2: `cut.mjs` no longer counts a `const`'s own
+  declaration as a read.** It reported `FRAMES_WITH_SHAPE` as "still read 1×
+  by what stays" when its only reader was `frameRect`, which was moving:
+  eslint-scope records a `const`'s initialiser as a reference. The report
+  now skips those. Seam 1's count for `temperature` was right, because a
+  function declaration records none.
+- **2026-10-26, seam 2: the export's frame guide moves with it.**
+  `showRenderRect`, `clearRenderRect` and `frameRect` are also called by
+  `recordVideo` (seam 3), so view-video ran with this seam's suites too.
+  They belong with what decides an export's frame, and the video imports
+  nothing for them, because a mixin calls them through `this`. The ratchet
+  is 3,134 (red on `main`'s 3,418).
+

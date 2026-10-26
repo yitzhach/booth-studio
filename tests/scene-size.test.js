@@ -7,8 +7,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-// After seam 1, the light rig.
-const MAX = 3418;
+// After seam 2, export and the render passes.
+const MAX = 3134;
 
 test(`src/scene.js stays at ${MAX} lines or fewer: a seam moves code out, nothing moves back`, () => {
   const text = readFileSync(fileURLToPath(new URL("../src/scene.js", import.meta.url)), "utf8");
