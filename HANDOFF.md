@@ -310,6 +310,12 @@ Playwright's own, else the sandbox's `/opt/pw-browsers/chromium`. Set nothing
 here. Since 2026-10-26 the sandbox ships build 1243, whose full browser exits
 at launch under the suites' `--single-process`, so do not point
 `BOOTH_TEST_CHROMIUM` at `/opt/pw-browsers/chromium` as older notes say.
+Its headless shell runs the view suites, but two checks fail on it, on `main`
+as on a branch (measured both sides, 2026-10-26): e2e, whose browser dies in
+the 4096 px PNG export, and `test:offline`, whose grass texture never comes
+back from the service worker. Build 1194 can't be fetched here
+(`cdn.playwright.dev` is refused), so CI is the verdict for those two: say
+so, never call them flakes.
 
 **Never verify through a pipe.** A pipeline's exit status is the last command's,
 so `npm test | grep PASS` exits 0 even when the suite fails. This has already
