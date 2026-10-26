@@ -1,7 +1,7 @@
 // Covers the environment presets in a real browser: every preset must render
 // and keep the procedural surroundings whether or not its HDRI is committed,
 // and leave uploaded artwork colour untouched by image-based lighting.
-import {chromium} from '@playwright/test';
+import { launchChromium } from './helpers/chromium.mjs';
 import {createServer} from 'vite';
 import assert from 'node:assert/strict';
 import {existsSync} from 'node:fs';
@@ -10,8 +10,7 @@ import {existsSync} from 'node:fs';
 const hasHdri=p=>existsSync(new URL(`../public/assets/hdri/${p}/light.hdr`,import.meta.url));
 const server=await createServer({server:{host:'127.0.0.1',port:5190}});
 await server.listen();
-const browser=await chromium.launch({headless:true,...(process.env.BOOTH_TEST_CHROMIUM?{executablePath:process.env.BOOTH_TEST_CHROMIUM}:{}),
-  args:['--no-sandbox','--enable-unsafe-swiftshader','--use-angle=swiftshader','--use-gl=angle','--in-process-gpu','--single-process','--disable-dev-shm-usage']});
+const browser=await launchChromium();
 try {
  const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
  await page.addInitScript(() => localStorage.setItem('booth.role', 'all')); // past the first visit's welcome (src/roles.js)

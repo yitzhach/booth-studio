@@ -1,8 +1,12 @@
 #!/bin/bash
 # Booth Studio's cloud-session start (docs/WORKFLOW.md). It installs the npm
-# dependencies and points the browser suites at the sandbox's Chromium, so
-# every command in CLAUDE.md → Testing runs without setup. Cloud sessions only:
+# dependencies, so every command in CLAUDE.md → Testing runs without setup,
+# and says which Chromium the browser suites will use. Cloud sessions only:
 # on a laptop it does nothing.
+#
+# A session started above this repository (several repositories at once, in
+# /home/user) does not run it: run it by hand from the repository,
+# `CLAUDE_CODE_REMOTE=true .claude/hooks/session-start.sh`.
 #
 # `npm ci` runs only when node_modules is missing or older than the lockfile.
 # A cloud container keeps its state after this hook, so the next session
@@ -46,22 +50,14 @@ else
   note "node_modules up to date"
 fi
 
-# A BOOTH_TEST_CHROMIUM the environment already sets is kept; the line is
-# written once, however often the session restarts (resume, compact).
-chromium=/opt/pw-browsers/chromium
-if [ -n "${BOOTH_TEST_CHROMIUM:-}" ]; then
-  if [ -x "$BOOTH_TEST_CHROMIUM" ]; then
-    note "BOOTH_TEST_CHROMIUM=$BOOTH_TEST_CHROMIUM (already set)"
-  else
-    note "BOOTH_TEST_CHROMIUM=$BOOTH_TEST_CHROMIUM is set but not executable: browser suites will not launch"
-  fi
-elif [ ! -x "$chromium" ]; then
-  note "no Chromium at $chromium: browser suites need BOOTH_TEST_CHROMIUM pointed at one"
-elif [ -n "${CLAUDE_ENV_FILE:-}" ]; then
-  grep -qs "BOOTH_TEST_CHROMIUM=" "$CLAUDE_ENV_FILE" || echo "export BOOTH_TEST_CHROMIUM=$chromium" >>"$CLAUDE_ENV_FILE"
-  note "BOOTH_TEST_CHROMIUM=$chromium"
-else
-  note "no CLAUDE_ENV_FILE: prefix browser suites with BOOTH_TEST_CHROMIUM=$chromium"
+# The suites pick their browser themselves (tests/helpers/chromium.mjs):
+# BOOTH_TEST_CHROMIUM if set, else the pinned Playwright's own Chromium, else
+# the sandbox's /opt/pw-browsers/chromium. This only says which, by asking it.
+if [ -d node_modules/@playwright/test ]; then
+  browser=$(node --input-type=module -e '
+    import { chromiumOptions } from "./tests/helpers/chromium.mjs";
+    process.stdout.write(chromiumOptions().executablePath || "the pinned Playwright'"'"'s own Chromium");' 2>&1)
+  note "browser suites use ${browser:-an unknown Chromium}"
 fi
 
 echo "booth-studio session start: $notes"

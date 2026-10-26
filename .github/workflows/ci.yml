@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # A change that spans both repos sits on a branch of the same name in each
       # (Art-Talk-Back D-056): test against that platform branch, else its default branch.
       - name: Pick the platform branch
@@ -48,7 +48,7 @@ jobs:
           else
             echo "ref=" >> "$GITHUB_OUTPUT"
           fi
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: yitzhach/Art-Talk-Back
           ref: ${{ steps.platform.outputs.ref }}
@@ -56,7 +56,7 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: .studio-platform/package.json
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -104,14 +104,15 @@ jobs:
           if [ ! -f "$f" ]; then echo "::notice::the platform doesn't run this app's scene code yet"; exit 0; fi
           cmp dist-scene/booth-scene.js "$f" || {
             echo "::error::Art-Talk-Back's workers/studio-api/src/vendor/booth-scene.js differs from npm run bundle:scene: copy dist-scene/booth-scene.js there on the branch of the same name"; exit 1; }
-      # The browser suites are written against the Chromium the development
-      # sandbox has (build 1194, Chromium 141, full browser: BOOTH_TEST_CHROMIUM in
-      # CLAUDE.md), with WebGL on swiftshader. The pinned Playwright's own default,
-      # a newer headless shell, stops drawing frames under the suites' single-process
-      # flags, so CI fetches that same build and points the suites at it.
-      - name: Chromium build 1194 (the sandbox's)
+      # The browser suites were written against Chromium build 1194 (Chromium
+      # 141, the full browser), with WebGL on swiftshader, and CI keeps to it:
+      # BOOTH_TEST_CHROMIUM picks it (tests/helpers/chromium.mjs). The runner
+      # image has the libraries it needs, so no --with-deps: that apt step only
+      # added fonts, at times over three minutes of a mirror's 117 kB/s. Only
+      # the full browser is fetched (--no-shell); the suites never use the shell.
+      - name: Chromium build 1194
         run: |
-          npx -y playwright@1.56.1 install --with-deps chromium
+          npx -y playwright@1.56.1 install --no-shell chromium
           echo "BOOTH_TEST_CHROMIUM=$HOME/.cache/ms-playwright/chromium-1194/chrome-linux/chrome" >> "$GITHUB_ENV"
       - name: Two devices, offline, against studio-api (the app's compatibility date)
         env: { HTTPS_PROXY: "http://127.0.0.1:9", HTTP_PROXY: "http://127.0.0.1:9", NO_PROXY: "127.0.0.1,localhost", STUDIO_PLATFORM: .studio-platform }
@@ -134,8 +135,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -155,30 +156,22 @@ jobs:
       matrix:
         shard: [0, 1, 2, 3]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       # The same Chromium as `core`, for the same reason (see there).
-      - name: Chromium build 1194 (the sandbox's)
+      - name: Chromium build 1194
         run: |
-          npx -y playwright@1.56.1 install --with-deps chromium
+          npx -y playwright@1.56.1 install --no-shell chromium
           echo "BOOTH_TEST_CHROMIUM=$HOME/.cache/ms-playwright/chromium-1194/chrome-linux/chrome" >> "$GITHUB_ENV"
-      # The suites of `npm run test:view`, read from package.json; this shard
-      # takes every fourth, so a suite added there is picked up with no change
-      # here. Each runs to the end, and the step names every one that failed.
+      # This shard's suites, cut by their recorded times so the four finish
+      # together (tests/helpers/view-suites.mjs). Each runs to the end, and the
+      # step names every one that failed.
       - name: View suites, shard ${{ matrix.shard }} of 4
-        run: |
-          suites=$(node -p "require('./package.json').scripts['test:view'].match(/tests\/view-[\w-]+\.mjs/g).filter((_, i) => i % 4 === ${{ matrix.shard }}).join(' ')")
-          failed=""
-          for s in $suites; do
-            echo "::group::$s"
-            node "$s" || failed="$failed $s"
-            echo "::endgroup::"
-          done
-          if [ -n "$failed" ]; then echo "::error::View suites failed:$failed"; exit 1; fi
+        run: node tests/run-views.mjs --shard ${{ matrix.shard }}/4
 
   # Runs when a needed job failed or was skipped, so that is a red check; not
   # when the whole run was cancelled for a newer push, which is no verdict.

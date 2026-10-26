@@ -17,6 +17,35 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-26: one way to launch the test browser, one way to run the view
+  suites, and CI's shards cut by time.** The owner asked for a clean house.
+  A new cloud container came with Chromium build 1243 in
+  `/opt/pw-browsers`, whose full browser exits at launch under the suites'
+  `--single-process` and `--in-process-gpu`, so `BOOTH_TEST_CHROMIUM=
+  /opt/pw-browsers/chromium`, which CLAUDE.md, the hook and the skills all
+  said to use, broke every browser suite; the pinned Playwright's own
+  headless shell (also 1243) runs them. `tests/helpers/chromium.mjs` now
+  holds the flags and picks the browser (`BOOTH_TEST_CHROMIUM`, else
+  Playwright's own, else the sandbox's), and the 45 view suites, e2e,
+  offline, two-devices, `verify-deploy`, `perf-probe` and `make-icons`
+  launch through it instead of each copying the block; the hook only names
+  the browser. `tests/run-views.mjs` runs suites one at a time to the end
+  and names each failure (`npm run test:view`, CI's shards, and
+  `--logs <dir>` for a background run, replacing
+  `tools/main-split/views.sh`). The shards were every fourth suite and ran
+  7, 14, 11 and 8 minutes on `main`'s last run; they are now cut by each
+  suite's recorded time (`tests/helpers/view-suites.mjs`), about 10 minutes
+  each, and `tests/run-views.test.js` fails when a `tests/view-*.mjs` file
+  is not on the list. That guard came from `tests/environment.mjs`, which
+  was on no list and so never ran: the welcome dialog had blocked its first
+  click since 2026-10-19 and its export control had been renamed. It is
+  `tests/view-environment.mjs` now, readable, passing, and no longer
+  writing its tent pictures into `docs/previews/` (deleted, five JPEGs
+  nothing referenced). CI also stopped `--with-deps` (an apt step that only
+  added fonts, at times for over three minutes at 117 kB/s) and fetching
+  the headless shell it never used, and moved to `actions/checkout@v5` and
+  `setup-node@v5` (Node 20 is deprecated on the runners). The four
+  `tools/main-split/` scripts only `boot()` fitted are deleted.
 - **2026-10-26: `scene.js`'s fifth seam (ROADMAP 1.3).** What stands in
   the booth besides its walls — the figures and their cut-outs, the
   pedestals and their furniture, the free-standing panels, each built,

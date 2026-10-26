@@ -33,10 +33,10 @@
    compatibility date (the platform pins 2026-08-15, its D-025; the app uses
    its own, read from wrangler.jsonc).
 
-   Usage: npm run build && STUDIO_PLATFORM=../Art-Talk-Back \
-          BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/two-devices.mjs
+   Usage: npm run build && STUDIO_PLATFORM=../Art-Talk-Back node tests/two-devices.mjs
    ========================================================================== */
 import { chromium } from "@playwright/test";
+import { chromiumOptions } from "./helpers/chromium.mjs";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -151,11 +151,9 @@ async function codeFor(email, after) {
 }
 
 /* ---- devices ---------------------------------------------------------------- */
-const launch = {
-  headless: true,
+const launch = chromiumOptions({
   args: ["--no-sandbox", "--enable-unsafe-swiftshader", "--use-angle=swiftshader", "--use-gl=angle", "--disable-dev-shm-usage"],
-  ...(process.env.BOOTH_TEST_CHROMIUM ? { executablePath: process.env.BOOTH_TEST_CHROMIUM } : {}),
-};
+});
 const IGNORE = /Failed to load resource|ERR_INTERNET_DISCONNECTED|net::ERR_FAILED|WebGL|GPU stall|GL Driver/;
 async function device(browser, name) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });

@@ -10,7 +10,7 @@
 // from the network, not the copy, and a redirect must be followed; a kept
 // texture a day old is looked at again by its ETag; and when the network
 // answers with an error, or too slowly, the kept page must stand in.
-import { chromium } from "@playwright/test";
+import { launchChromium } from "./helpers/chromium.mjs";
 import { preview } from "vite";
 import assert from "node:assert/strict";
 
@@ -55,11 +55,7 @@ const server = await preview({
     },
   ],
 });
-const browser = await chromium.launch({
-  headless: true,
-  ...(process.env.BOOTH_TEST_CHROMIUM ? { executablePath: process.env.BOOTH_TEST_CHROMIUM } : {}),
-  args: ["--no-sandbox", "--enable-unsafe-swiftshader", "--use-angle=swiftshader", "--use-gl=angle", "--in-process-gpu", "--single-process", "--disable-dev-shm-usage"],
-});
+const browser = await launchChromium();
 const url = `http://127.0.0.1:${PORT}/`;
 try {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });

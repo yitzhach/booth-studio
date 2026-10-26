@@ -117,7 +117,7 @@ two (and more) browser contexts as devices:
 
 ```sh
 npm run build
-STUDIO_PLATFORM=../Art-Talk-Back BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/two-devices.mjs
+STUDIO_PLATFORM=../Art-Talk-Back node tests/two-devices.mjs
 BOOTH_COMPAT_DATE=2026-08-15 STUDIO_PLATFORM=... node tests/two-devices.mjs   # the platform's pinned date
 E2E_LOG=/tmp/wr.log ...   # on a failure, the dev server's log (studio-api's errors) goes here
 ```

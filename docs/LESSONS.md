@@ -59,7 +59,7 @@ are in `HANDOFF.md` → Rules that are easy to break.
   it. **Measure both sides before believing this one** — a worktree at
   `origin/main` and the same probe is ten minutes and settles it — and raise
   that one wait if it becomes tiresome. It is the same class of flake
-  `tests/environment.mjs` already carries, for the same reason.
+  `tests/view-environment.mjs` (then `tests/environment.mjs`) already carries, for the same reason.
 - **A readback flushes the GPU; a captured video frame does not.** A still
   drawn twice "to be safe" cost a second 28-second render for nothing,
   because `canvas.toBlob` reads the pixels back and a readback waits for
@@ -213,7 +213,7 @@ are in `HANDOFF.md` → Rules that are easy to break.
   progress callback, which only fires once a frame is drawn. If you write a
   browser assertion timed against wall clock in this repo, expect it to fail
   here at random — time it against something the renderer did instead.
-- **`tests/environment.mjs` is still flaky in this sandbox**, and it is not a
+- **`tests/view-environment.mjs` (then `tests/environment.mjs`) is still flaky in this sandbox**, and it is not a
   regression to chase. All three
   Its assertions are timed against wall clock — a 4096px export must finish
   inside 30s — and swiftshader is slow enough to miss that at random. Re-run

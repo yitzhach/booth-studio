@@ -2,7 +2,7 @@
 // the booth and shows a link; the link, opened, puts that booth on a floor
 // booth with its original images, or opens it to look at. /api/* is routed
 // to the real Worker code (worker/index.js) over an in-memory bucket.
-import { chromium } from '@playwright/test';
+import { launchChromium } from './helpers/chromium.mjs';
 import { createServer } from 'vite';
 import assert from 'node:assert/strict';
 import { handleApi } from '../worker/index.js';
@@ -11,11 +11,7 @@ import { fakeR2 } from './helpers/fake-r2.js';
 const root = new URL('..', import.meta.url).pathname;
 const server = await createServer({ root, server: { host: '127.0.0.1', port: 5234 } });
 await server.listen();
-const browser = await chromium.launch({
-  headless: true,
-  ...(process.env.BOOTH_TEST_CHROMIUM ? { executablePath: process.env.BOOTH_TEST_CHROMIUM } : {}),
-  args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--use-gl=angle', '--in-process-gpu', '--single-process', '--disable-dev-shm-usage'],
-});
+const browser = await launchChromium();
 try {
   const env = { SHARES: fakeR2() };
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });

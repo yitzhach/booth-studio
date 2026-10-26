@@ -17,13 +17,13 @@ and one script checks a deploy. Nothing here changes the app.
   picks it up from that.
 - **The session-start hook** (`.claude/hooks/session-start.sh`, registered in
   `.claude/settings.json`) runs `npm ci` when `node_modules` is missing or
-  older than the lockfile, and sets `BOOTH_TEST_CHROMIUM` for the browser
-  suites. It runs in cloud sessions only, and the session starts whatever
+  older than the lockfile, and names the Chromium the browser suites will use
+  (they pick it in `tests/helpers/chromium.mjs`). It runs in cloud sessions only, and the session starts whatever
   happens: it reports in one line, "booth-studio session start: …", which
   arrives in the session's context. A session started above several
   repositories may not run this repository's hook; when that line is missing,
-  run `CLAUDE_CODE_REMOTE=true booth-studio/.claude/hooks/session-start.sh`
-  and prefix browser suites with `BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium`.
+  run `CLAUDE_CODE_REMOTE=true .claude/hooks/session-start.sh` from the
+  repository.
 
 | Skill | Use it when | Say, for example |
 | --- | --- | --- |

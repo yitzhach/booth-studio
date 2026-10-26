@@ -39,8 +39,9 @@ subagent's report of success is not evidence; check the diff and run the suite.
   runs: the suites drive a live Vite server, and a save reloads the page
   mid-assertion. To keep working during the full chain (about 25 minutes), run
   it in a snapshot: HANDOFF.md → Testing has the `git worktree` recipe.
-- `BOOTH_TEST_CHROMIUM` is set by the session-start hook; if it is empty,
-  prefix the command with `BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium`.
+- The suites pick their browser (`tests/helpers/chromium.mjs`); set nothing.
+  `node tests/run-views.mjs <names…>` runs several, one at a time, and names
+  each that failed.
 
 ## A bug fix proves itself twice
 

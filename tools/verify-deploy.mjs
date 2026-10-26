@@ -27,8 +27,8 @@
 // it only with NODE_USE_ENV_PROXY=1 (Node 22.21 and later), so the script runs
 // itself again with that set, and Chromium is given the same proxy (it trusts
 // the proxy's authority through the system's NSS store, which the cloud
-// environment sets up). `BOOTH_TEST_CHROMIUM` picks the browser, and the
-// launch flags are the test suites' own.
+// environment sets up). The browser and its flags are the test suites' own
+// (tests/helpers/chromium.mjs).
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -213,21 +213,8 @@ async function startsInBrowser(expected) {
   const cannot = (error) => ({ code: 3, line: `FAIL   the browser check could not run: ${String(error?.message ?? error).split("\n")[0]}` });
   let browser;
   try {
-    const { chromium } = await import("@playwright/test");
-    browser = await chromium.launch({
-      headless: true,
-      ...(process.env.BOOTH_TEST_CHROMIUM ? { executablePath: process.env.BOOTH_TEST_CHROMIUM } : {}),
-      ...(proxy ? { proxy: { server: proxy } } : {}),
-      args: [
-        "--no-sandbox",
-        "--enable-unsafe-swiftshader",
-        "--use-angle=swiftshader",
-        "--use-gl=angle",
-        "--in-process-gpu",
-        "--single-process",
-        "--disable-dev-shm-usage",
-      ],
-    });
+    const { launchChromium } = await import("../tests/helpers/chromium.mjs");
+    browser = await launchChromium(proxy ? { proxy: { server: proxy } } : {});
   } catch (error) {
     return cannot(error);
   }

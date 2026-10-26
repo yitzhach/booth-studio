@@ -1,10 +1,9 @@
-import {chromium} from '@playwright/test';
+import { launchChromium } from './helpers/chromium.mjs';
 import {createServer} from 'vite';
 import assert from 'node:assert/strict';
 const server=await createServer({server:{host:'127.0.0.1',port:5187}});
 await server.listen();
-const browser=await chromium.launch({headless:true,...(process.env.BOOTH_TEST_CHROMIUM?{executablePath:process.env.BOOTH_TEST_CHROMIUM}:{}),
-  args:['--no-sandbox','--enable-unsafe-swiftshader','--use-angle=swiftshader','--use-gl=angle','--in-process-gpu','--single-process']});
+const browser=await launchChromium({ args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--use-gl=angle', '--in-process-gpu', '--single-process'] });
 try {
  const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
  // Past the first visit's welcome (src/roles.js); a workspace the suite picks later is kept.
