@@ -2,17 +2,13 @@
 // and rejections are kept, and Export → Something wrong? copies a report with
 // the build, the browser, the project in counts and those errors — or, where
 // the clipboard is refused, shows it to copy by hand. Nothing is sent.
-import { chromium } from "@playwright/test";
+import { launchChromium } from "./helpers/chromium.mjs";
 import { createServer } from "vite";
 import assert from "node:assert/strict";
 
 const server = await createServer({ server: { host: "127.0.0.1", port: 5259 } });
 await server.listen();
-const browser = await chromium.launch({
-  headless: true,
-  ...(process.env.BOOTH_TEST_CHROMIUM ? { executablePath: process.env.BOOTH_TEST_CHROMIUM } : {}),
-  args: ["--no-sandbox", "--enable-unsafe-swiftshader", "--use-angle=swiftshader", "--use-gl=angle", "--in-process-gpu", "--single-process"],
-});
+const browser = await launchChromium({ args: ["--no-sandbox", "--enable-unsafe-swiftshader", "--use-angle=swiftshader", "--use-gl=angle", "--in-process-gpu", "--single-process"] });
 try {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, permissions: ["clipboard-read", "clipboard-write"] });
   const page = await context.newPage();

@@ -1,6 +1,6 @@
 // The show pack in a real browser: a price typed in the Artwork tool reaches
 // the downloaded pack, with the floor plan and the checklist for this booth.
-import { chromium } from '@playwright/test';
+import { launchChromium } from './helpers/chromium.mjs';
 import { createServer } from 'vite';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -8,11 +8,7 @@ import { readFile } from 'node:fs/promises';
 const root = new URL('..', import.meta.url).pathname;
 const server = await createServer({ root, server: { host: '127.0.0.1', port: 5215 } });
 await server.listen();
-const browser = await chromium.launch({
-  headless: true,
-  ...(process.env.BOOTH_TEST_CHROMIUM ? { executablePath: process.env.BOOTH_TEST_CHROMIUM } : {}),
-  args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--use-gl=angle', '--in-process-gpu', '--single-process', '--disable-dev-shm-usage'],
-});
+const browser = await launchChromium();
 
 try {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });

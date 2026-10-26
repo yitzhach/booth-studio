@@ -2,18 +2,14 @@
 // measure. The node tests pin the arithmetic; this checks that the lines and
 // labels reach the page, follow the selection, and that two clicks on the
 // floor read back the distance between them.
-import { chromium } from '@playwright/test';
+import { launchChromium } from './helpers/chromium.mjs';
 import { createServer } from 'vite';
 import assert from 'node:assert/strict';
 
 const root = new URL('..', import.meta.url).pathname;
 const server = await createServer({ root, server: { host: '127.0.0.1', port: 5211 } });
 await server.listen();
-const browser = await chromium.launch({
-  headless: true,
-  ...(process.env.BOOTH_TEST_CHROMIUM ? { executablePath: process.env.BOOTH_TEST_CHROMIUM } : {}),
-  args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--use-gl=angle', '--in-process-gpu', '--single-process', '--disable-dev-shm-usage'],
-});
+const browser = await launchChromium();
 const IN = 0.0254;
 
 try {

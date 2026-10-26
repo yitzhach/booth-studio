@@ -3,7 +3,7 @@
 // after changing the favicon. The "maskable" one is the mark on a full-bleed
 // square at 60% size, so a phone's round or squircle mask never cuts into it;
 // the others are the favicon as it is.
-import { chromium } from "@playwright/test";
+import { launchChromium } from "../tests/helpers/chromium.mjs";
 import { readFileSync } from "node:fs";
 
 const root = new URL("..", import.meta.url);
@@ -16,10 +16,7 @@ const ICONS = [
   { file: "apple-touch-icon.png", size: 180, mark: 0.8 },
 ];
 
-const browser = await chromium.launch({
-  headless: true,
-  ...(process.env.BOOTH_TEST_CHROMIUM ? { executablePath: process.env.BOOTH_TEST_CHROMIUM } : {}),
-});
+const browser = await launchChromium({ args: [] });
 try {
   for (const { file, size, mark } of ICONS) {
     const page = await browser.newPage({ viewport: { width: size, height: size } });

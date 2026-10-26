@@ -92,7 +92,10 @@ them by number, `classify.mjs` sorts the names the cut code reads into
 imports, boot's state (`let`) and boot's helpers, `ctxify.mjs` rewrites the
 state to `ctx.`, `imports.mjs` writes the module's imports from `main.js`'s,
 `prune.mjs` drops the imports `main.js` no longer uses (ESLint names them),
-and `views.sh` runs the chain one suite at a time.
+and `views.sh` runs the chain one suite at a time. (2026-10-26: with the split
+done, the four that only fit `boot()` are deleted, `views.sh` became
+`tests/run-views.mjs`, and `imports.mjs` and `prune.mjs` stay for the scene
+split.)
 
 1. Lower the number in `tests/main-size.test.js` to what `main.js` will be;
    `node --test tests/main-size.test.js` is red.

@@ -1,4 +1,5 @@
 import { chromium } from "@playwright/test";
+import { chromiumOptions } from "./helpers/chromium.mjs";
 import { createServer } from "vite";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -14,21 +15,7 @@ const server = await createServer({
   server: { host: "127.0.0.1", port: 5183 },
 });
 await server.listen();
-const launch = {
-  headless: true,
-  args: [
-    "--no-sandbox",
-    "--enable-unsafe-swiftshader",
-    "--use-angle=swiftshader",
-    "--use-gl=angle",
-    "--in-process-gpu",
-    "--single-process",
-    "--disable-dev-shm-usage",
-  ],
-  ...(process.env.BOOTH_TEST_CHROMIUM
-    ? { executablePath: process.env.BOOTH_TEST_CHROMIUM }
-    : {}),
-};
+const launch = chromiumOptions();
 const profile = await fs.mkdtemp(path.join(os.tmpdir(), "booth-e2e-"));
 let context;
 const errors = [];

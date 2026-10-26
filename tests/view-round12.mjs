@@ -2,7 +2,7 @@
 // block that runs off it; a sale on a booth number no longer on the floor is
 // listed and moved; floor templates ride in a project backup and come back
 // from one; and a figure is turned round with one click on Flip.
-import { chromium } from '@playwright/test';
+import { launchChromium } from './helpers/chromium.mjs';
 import { createServer } from 'vite';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -10,11 +10,7 @@ import { readFile } from 'node:fs/promises';
 const root = new URL('..', import.meta.url).pathname;
 const server = await createServer({ root, server: { host: '127.0.0.1', port: 5236 } });
 await server.listen();
-const browser = await chromium.launch({
-  headless: true,
-  ...(process.env.BOOTH_TEST_CHROMIUM ? { executablePath: process.env.BOOTH_TEST_CHROMIUM } : {}),
-  args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--use-gl=angle', '--in-process-gpu', '--single-process', '--disable-dev-shm-usage'],
-});
+const browser = await launchChromium();
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });
   await page.addInitScript(() => localStorage.setItem('booth.role', 'all')); // past the first visit's welcome (src/roles.js)

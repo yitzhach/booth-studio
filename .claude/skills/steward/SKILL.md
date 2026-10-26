@@ -67,9 +67,10 @@ those says so in its description and waits for the owner.
 
 - Read the failing step's log first. The view-suite step runs every suite and
   names each one that failed, so one run shows every failure.
-- Reproduce with the same command here (`BOOTH_TEST_CHROMIUM` comes from the
-  session-start hook). Run browser suites one at a time: two at once on this
-  sandbox's four cores time out with errors that are not bugs.
+- Reproduce with the same command here (`node tests/run-views.mjs <suite>`;
+  the browser is picked in `tests/helpers/chromium.mjs`). Run browser suites
+  one at a time: two at once on this sandbox's four cores time out with
+  errors that are not bugs.
 - Use the `root-cause` skill before changing code. A timeout with no code near
   it is not a flake until it has been reproduced or re-run once, as the
   harness's own rules say.

@@ -279,11 +279,11 @@ npm run lint             # ESLint, eslint.config.js: seconds; CI runs it first
 npm run typecheck        # TypeScript reading the JSDoc: the scene bundle (tsconfig.json), the page (tsconfig.app.json)
 npm test                 # 526 Node tests
 npm run build
-npm run test:view        # 44 suites (tools2, hub, share, roles, polish and wall-assets included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
-BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs   # what an edit costs, before/after numbers
+npm run test:view        # 44 suites, one at a time (tests/run-views.mjs; `node tests/run-views.mjs people panels` runs two) (tools2, hub, share, roles, polish and wall-assets included): city, lighting, HDRI, textures, ground library, video, timeline, people, panels, responsiveness, art show, booth row, finishing, measuring, furniture, arranging, quick start, show pack, tool search, tier, guides, views, plan, box, hall, frame, batch, show floor, show in 3D, linked booths, AI render, first-look tools, Show Hub, share links
+node tools/perf-probe.mjs   # what an edit costs, before/after numbers
 npm run test:browser     # 25 end-to-end checks
 npm run test:offline     # the built app opens with the network cut (after npm run build)
-STUDIO_PLATFORM=../Art-Talk-Back BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tests/two-devices.mjs   # 52 checks; after npm run build (see `docs/STUDIO-PLATFORM.md`)
+STUDIO_PLATFORM=../Art-Talk-Back node tests/two-devices.mjs   # 52 checks; after npm run build (see `docs/STUDIO-PLATFORM.md`)
 node tools/verify-deploy.mjs   # after a merge: waits for production to serve the commit, then checks the page starts
 ```
 
@@ -298,15 +298,18 @@ globals, but `main.js` and `scene.js` (until their split, ROADMAP 1.2 and
 1.3) and `studio.js` (it imports the vendored SDK, which has no types). One
 run reports both configs' findings. Both run in
 CI's `lint` job. The view suites run in CI as four shards at once (`views`),
-`tests/view-wall-assets.mjs` among them; `booth` is green only when every
-job is. How each came to be is in `docs/HISTORY.md`, 2026-10-20.
+cut by each suite's recorded time so they finish together
+(`tests/helpers/view-suites.mjs`, where a new suite gets a line, or
+`tests/run-views.test.js` fails); `booth` is green only when every job is.
+How each came to be is in `docs/HISTORY.md`, 2026-10-20 and 2026-10-26.
 
-The sandbox has WebGL via swiftshader, but the pinned Playwright expects a
-newer Chromium than is installed, so pass the browser explicitly:
-
-```sh
-BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium npm run test:view
-```
+Every browser suite and tool launches Chromium through
+`tests/helpers/chromium.mjs`, which holds the swiftshader flags and picks the
+browser: `BOOTH_TEST_CHROMIUM` if set (CI sets build 1194), else the pinned
+Playwright's own, else the sandbox's `/opt/pw-browsers/chromium`. Set nothing
+here. Since 2026-10-26 the sandbox ships build 1243, whose full browser exits
+at launch under the suites' `--single-process`, so do not point
+`BOOTH_TEST_CHROMIUM` at `/opt/pw-browsers/chromium` as older notes say.
 
 **Never verify through a pipe.** A pipeline's exit status is the last command's,
 so `npm test | grep PASS` exits 0 even when the suite fails. This has already
@@ -332,8 +335,10 @@ view-responsive and e2e both failed that way and both passed alone. The way
 to keep working while the whole chain runs (it takes about 25 minutes now) is
 a snapshot: `git worktree add ../bs-test HEAD`, `cp -al node_modules
 ../bs-test/` (hard links — a symlink puts the fonts outside vite's allow
-list), run the chain there in the background, and edit here without running
-anything else in a browser until it is done.
+list), run the chain there in the background (`node tests/run-views.mjs
+--logs <dir> all e2e`, which writes `<dir>/status` a line per suite, then
+DONE), and edit here without running anything else in a browser until it is
+done.
 Nor while a review subagent runs: `/code-review` may run browser suites of
 its own, and on seam 21 one of them beside the chain made view-responsive
 time out on a click at 3× (it passed alone).

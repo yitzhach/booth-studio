@@ -1,18 +1,14 @@
 // Measures what an edit costs on this machine, in a real browser: a full
 // scene rebuild, a library redraw and an inspector redraw, for the default
 // booth and the art-show booth. Not a test — numbers to compare before and
-// after a change. BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium node tools/perf-probe.mjs
-import { chromium } from '@playwright/test';
+// after a change. node tools/perf-probe.mjs
+import { launchChromium } from '../tests/helpers/chromium.mjs';
 import { createServer } from 'vite';
 
 const root = new URL('..', import.meta.url).pathname;
 const server = await createServer({ root, server: { host: '127.0.0.1', port: 5231 } });
 await server.listen();
-const browser = await chromium.launch({
-  headless: true,
-  ...(process.env.BOOTH_TEST_CHROMIUM ? { executablePath: process.env.BOOTH_TEST_CHROMIUM } : {}),
-  args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--use-gl=angle', '--in-process-gpu', '--single-process', '--disable-dev-shm-usage'],
-});
+const browser = await launchChromium();
 const measure = (page) => page.evaluate(async () => {
   const b = window.__booth, scene = b.scene, n = 10;
   const time = (fn) => { const t = performance.now(); for (let i = 0; i < n; i++) fn(); return +((performance.now() - t) / n).toFixed(1); };

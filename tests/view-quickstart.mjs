@@ -1,18 +1,14 @@
 // Quick start in a real browser: the form builds the booth it describes,
 // a saved template comes back as the same booth without the work, and a
 // template can be forgotten.
-import { chromium } from '@playwright/test';
+import { launchChromium } from './helpers/chromium.mjs';
 import { createServer } from 'vite';
 import assert from 'node:assert/strict';
 
 const root = new URL('..', import.meta.url).pathname;
 const server = await createServer({ root, server: { host: '127.0.0.1', port: 5214 } });
 await server.listen();
-const browser = await chromium.launch({
-  headless: true,
-  ...(process.env.BOOTH_TEST_CHROMIUM ? { executablePath: process.env.BOOTH_TEST_CHROMIUM } : {}),
-  args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--use-gl=angle', '--in-process-gpu', '--single-process', '--disable-dev-shm-usage'],
-});
+const browser = await launchChromium();
 
 try {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });

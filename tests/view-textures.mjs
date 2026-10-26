@@ -8,7 +8,7 @@
 // public/assets, so the sets exercised below are the committed ones — the
 // temporary copy is written but not served. Nothing here writes to the
 // repository, which is what the arrangement was protecting.
-import { chromium } from '@playwright/test';
+import { launchChromium } from './helpers/chromium.mjs';
 import { createServer } from 'vite';
 import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -51,11 +51,7 @@ await writeFile(join(canvasDir, 'meta.json'), JSON.stringify({ tileMetres: 1, no
 
 const server = await createServer({ root, publicDir, server: { host: '127.0.0.1', port: 5192 } });
 await server.listen();
-const browser = await chromium.launch({
-  headless: true,
-  ...(process.env.BOOTH_TEST_CHROMIUM ? { executablePath: process.env.BOOTH_TEST_CHROMIUM } : {}),
-  args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--use-gl=angle', '--in-process-gpu', '--single-process', '--disable-dev-shm-usage'],
-});
+const browser = await launchChromium();
 const groundState = (page) => page.evaluate(() => {
   const floor = window.__booth.scene.group.getObjectByName('environment-ground');
   const m = floor.material;

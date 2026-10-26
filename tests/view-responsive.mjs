@@ -2,18 +2,14 @@
 // like in a photographed environment. All three were reported from a real
 // machine: selecting a work was slow to show its handles, dragging was not
 // smooth, and an indoor booth put a white band across the hall behind it.
-import { chromium } from '@playwright/test';
+import { launchChromium } from './helpers/chromium.mjs';
 import { createServer } from 'vite';
 import assert from 'node:assert/strict';
 
 const root = new URL('..', import.meta.url).pathname;
 const server = await createServer({ root, server: { host: '127.0.0.1', port: 5198 } });
 await server.listen();
-const browser = await chromium.launch({
-  headless: true,
-  ...(process.env.BOOTH_TEST_CHROMIUM ? { executablePath: process.env.BOOTH_TEST_CHROMIUM } : {}),
-  args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--use-gl=angle', '--in-process-gpu', '--single-process', '--disable-dev-shm-usage'],
-});
+const browser = await launchChromium();
 
 // revision counts scene rebuilds: update() disposes the group and increments
 // it. It is the measure that matters here — a rebuild is the expensive thing,

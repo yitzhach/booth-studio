@@ -74,16 +74,20 @@ npm run lint             # ESLint (eslint.config.js)
 npm run typecheck        # TypeScript: what bundle:scene ships (tsconfig.json), the page's modules (tsconfig.app.json)
 npm test                 # node suites
 npm run build
-BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium npm run test:view
-BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium npm run test:browser
-BOOTH_TEST_CHROMIUM=/opt/pw-browsers/chromium npm run test:offline   # after npm run build
+npm run test:view                          # every view suite: node tests/run-views.mjs
+node tests/run-views.mjs people panels     # some of them (tests/view-people.mjs, …)
+npm run test:browser
+npm run test:offline                       # after npm run build
 ```
 
-Sandbox has WebGL via swiftshader but the pinned Playwright wants a newer
-Chromium than is installed — hence `BOOTH_TEST_CHROMIUM`. In a cloud session
-the session-start hook (`.claude/hooks/session-start.sh`) runs `npm ci` when
-needed and sets it. After a merge, `node tools/verify-deploy.mjs` waits for
-the live commit and checks the page starts.
+Browser suites pick their Chromium in `tests/helpers/chromium.mjs`
+(`BOOTH_TEST_CHROMIUM` if set, else Playwright's own, else the sandbox's);
+set nothing. In a cloud session the session-start hook
+(`.claude/hooks/session-start.sh`) runs `npm ci` when needed; a session
+started in `/home/user` (several repos) skips it, so if `node_modules` is
+missing run `CLAUDE_CODE_REMOTE=true .claude/hooks/session-start.sh` here.
+After a merge, `node tools/verify-deploy.mjs` waits for the live commit and
+checks the page starts.
 
 ## Workflow
 

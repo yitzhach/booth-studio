@@ -3,7 +3,7 @@
 // produced it — with a photograph uploaded, choosing a preset appeared to do
 // nothing, because the upload lived in a slot of its own and outranked the
 // kind. Selecting across the groups here must change the floor every time.
-import { chromium } from '@playwright/test';
+import { launchChromium } from './helpers/chromium.mjs';
 import { createServer } from 'vite';
 import assert from 'node:assert/strict';
 import jpeg from 'jpeg-js';
@@ -22,11 +22,7 @@ const photo = (() => {
 
 const server = await createServer({ root, server: { host: '127.0.0.1', port: 5196 } });
 await server.listen();
-const browser = await chromium.launch({
-  headless: true,
-  ...(process.env.BOOTH_TEST_CHROMIUM ? { executablePath: process.env.BOOTH_TEST_CHROMIUM } : {}),
-  args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--use-gl=angle', '--in-process-gpu', '--single-process', '--disable-dev-shm-usage'],
-});
+const browser = await launchChromium();
 
 // `ownedMap` is what tells the two kinds of floor apart: the texture cache
 // lends a preset's maps to the material and marks them not owned, while an

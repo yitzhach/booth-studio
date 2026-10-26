@@ -105,7 +105,7 @@ calls.
 
 `tools/main-split/` assumes `boot()`'s statements and `ctx`, so most of it
 does not fit a class. What carries over: `prune.mjs` (generic), `views.sh`
-(generic), and `imports.mjs` once it also writes namespace imports
+(generic; since 2026-10-26 `tests/run-views.mjs`), and `imports.mjs` once it also writes namespace imports
 (`import * as T`), which every mixin needs. New, in `tools/scene-split/`,
 each with its usage on its first lines, needing only `espree` and
 `eslint-scope`:
@@ -128,7 +128,7 @@ each with its usage on its first lines, needing only `espree` and
    and `tools/main-split/prune.mjs` the imports `scene.js` no longer uses.
 3. `npm run lint` (an undefined name is a missed import), `npm run typecheck`,
    `npm test` (the ratchet is green), `npm run build`.
-4. The seam's suites, one at a time (`tools/main-split/views.sh <dir>
+4. The seam's suites, one at a time (`node tests/run-views.mjs --logs <dir>
    <suites…>`), each exit status read. Seams 7–9 run the whole chain in a
    snapshot worktree (HANDOFF → Testing).
 5. `git diff --color-moved=dimmed-zebra main` shows nothing but the move,

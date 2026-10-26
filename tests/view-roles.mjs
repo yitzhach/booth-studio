@@ -3,18 +3,14 @@
 // and tools; More shows every tab; the header's Workspace switches; the
 // choice survives a reload; an organizer opens on the Show floor tab; and a
 // browser that already has a project is never asked and keeps every tool.
-import { chromium } from '@playwright/test';
+import { launchChromium } from './helpers/chromium.mjs';
 import { createServer } from 'vite';
 import assert from 'node:assert/strict';
 
 const root = new URL('..', import.meta.url).pathname;
 const server = await createServer({ root, server: { host: '127.0.0.1', port: 5251 } });
 await server.listen();
-const browser = await chromium.launch({
-  headless: true,
-  ...(process.env.BOOTH_TEST_CHROMIUM ? { executablePath: process.env.BOOTH_TEST_CHROMIUM } : {}),
-  args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--use-gl=angle', '--in-process-gpu', '--single-process', '--disable-dev-shm-usage'],
-});
+const browser = await launchChromium();
 const APP = 'http://127.0.0.1:5251';
 const ALL = ['art', 'layout', 'show', 'walls', 'lighting', 'video', 'hall', 'export'];
 
