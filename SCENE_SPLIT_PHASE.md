@@ -238,4 +238,17 @@ wrong.)
 - **2026-10-26, seam 4: view-round13 and view-panels ran too.** The plan's
   five suites do not drive auto-pan or focusing a wall; those two do. The
   ratchet is 2,571 (red on `main`'s 2,828).
+- **2026-10-26, seam 5: `src/scene/shared.js` holds three helpers, and
+  `placePedestal` goes with the props.** The plan put `WALL_SLAB_OFFSET` and
+  `placePedestal` with the booth build (seam 9). In the code, `placePedestal`
+  is read only by the props, so it moved here, and its comment, which had
+  drifted above `parseModel`, sits over it again. `FLOOR` is read by the
+  props and still by `bind` and the tape measure, `placePanelFrame` by the
+  props and `wallFrame`, and `placePanelFrame` reads `WALL_SLAB_OFFSET`,
+  which `update` reads too. So those three go to `shared.js`, exported, and
+  `scene.js` and `props.js` import them. Their `export` keywords are the
+  only words added to moved text, besides the commas. The ratchet is 2,287
+  (red on `main`'s 2,571).
+- **2026-10-26, seam 5: view-round13 ran too,** because it picks a figure by
+  double-click, which `pickPerson` answers.
 

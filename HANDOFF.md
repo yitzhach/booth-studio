@@ -185,7 +185,7 @@ look at and what to change if it reads wrong.
    used are in `tools/main-split/`, and the plan's Rulings hold the bugs
    older than the move that the reviews found, for a fix after the split).
    Left for sessions: 1.3 (split `scene.js`, which phase 2 waits on, in
-   nine seams: `SCENE_SPLIT_PHASE.md`; seams 1–4 are in, the scripts are in
+   nine seams: `SCENE_SPLIT_PHASE.md`; seams 1–5 are in, the scripts are in
    `tools/scene-split/`) and the rest of 1.4 after it — the typing pass over
    `main.js` and the modules the split made, with those fixes. 1.10's site-qa and Dependabot, 1.11 (the
    custom domain) and 1.12 (security headers, which change what the Worker

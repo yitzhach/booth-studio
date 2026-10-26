@@ -17,6 +17,20 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-26: `scene.js`'s fifth seam (ROADMAP 1.3).** What stands in
+  the booth besides its walls — the figures and their cut-outs, the
+  pedestals and their furniture, the free-standing panels, each built,
+  picked, dragged and restood (`buildPedestals`, `movePerson`,
+  `rebuildFigure`, `cutoutFor`, `loadCutout`, `movePedestal`,
+  `pickPedestal`, `pickPerson`, `pedestalDragTarget`, `pickPanel`,
+  `panelDragTarget`, `movePanel`, with `placePedestal`) — into
+  `src/scene/props.js`, installed by `mixin`. `FLOOR`, `placePanelFrame`
+  and `WALL_SLAB_OFFSET`, which the booth build reads too, went to
+  `src/scene/shared.js`. Unchanged but for a comma after each method and
+  `export` on the three shared names, checked line for line. `scene.js` is
+  2,287 lines (from 2,571). Lint, type check, 530 node tests and build
+  green; view-people, view-panels, view-furniture, view-artshow,
+  view-arrange and view-round13 green, one at a time.
 - **2026-10-26: `scene.js`'s fourth seam (ROADMAP 1.3).** The camera —
   the preset views and the show floor's overview, the ground limit, zoom,
   focusing a wall, auto-pan and the pan tool, and walking (`setView`,
