@@ -57,7 +57,11 @@ try {
 
   await page.locator('[data-tab="export"]').click();
   await page.getByLabel('Export image size').selectOption('2048');
-  const dl = page.waitForEvent('download');
+  // The export renders on the CPU (swiftshader): with neighbours and the park
+  // horizon a 2048 px PNG took past Playwright's 30 s default on a GitHub
+  // runner (2026-10-26). A wait for the render, as e2e's RENDER_WAIT, not a
+  // performance gate.
+  const dl = page.waitForEvent('download', { timeout: 180_000 });
   await page.locator('[data-action="export-image"]').click();
   await (await dl).saveAs('test-results/environment-export.png');
 
