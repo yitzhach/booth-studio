@@ -17,6 +17,13 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-26: `scene.js`'s third seam (ROADMAP 1.3).** The camera over
+  time — `previewMove`, `recordVideo`, `pose`, `showMoment`, `clearMoment`
+  and `applyPose` — into `src/scene/video.js`, installed by `mixin`, with
+  the imports only it read. Unchanged but for a comma after each method,
+  checked line for line. `scene.js` is 2,828 lines (from 3,134). Lint, type
+  check, 530 node tests and build green; view-video, view-timeline,
+  view-batch, view-frame and view-show3d green, one at a time.
 - **2026-10-26: `scene.js`'s second seam (ROADMAP 1.3).** What leaves the
   app as a file — the .glb, the still export, the AI render passes and the
   frame guide that composes them (`exportGLB`, `export`, `renderPasses`,

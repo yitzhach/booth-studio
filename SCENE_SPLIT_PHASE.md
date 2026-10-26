@@ -215,4 +215,10 @@ wrong.)
   They belong with what decides an export's frame, and the video imports
   nothing for them, because a mixin calls them through `this`. The ratchet
   is 3,134 (red on `main`'s 3,418).
+- **2026-10-26, seam 3: the video takes all of its imports with it.**
+  `camera-path.js`, `timeline.js` and `video.js` are read by nothing else
+  in `scene.js` now, nor are `DEFAULT_FRAME` and `frameSize`, so those four
+  imports leave `scene.js` whole. `pose` moved here, and `export()` (seam 2)
+  calls it through `this` as before; view-frame drives that export. The
+  ratchet is 2,828 (red on `main`'s 3,134).
 
