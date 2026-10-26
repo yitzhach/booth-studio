@@ -17,6 +17,18 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-26: `scene.js`'s fourth seam (ROADMAP 1.3).** The camera —
+  the preset views and the show floor's overview, the ground limit, zoom,
+  focusing a wall, auto-pan and the pan tool, and walking (`setView`,
+  `setShowView`, `clampToGround`, `zoom`, `focusWall`, `autoPan`,
+  `panRight`, `stopAutoPan`, `setPanTool`, `walkKey`, `startWalk`, `walk`,
+  `stopWalk`) — into `src/scene/camera.js` with its three constants,
+  installed by `mixin`. Unchanged but for a comma after each method and
+  `export` on `MAX_POLAR`, checked line for line. `scene.js` is 2,571 lines
+  (from 2,828). `tests/image-regression.test.js` slices `updateArtwork` to
+  the member that now follows it. Lint, type check, 530 node tests and
+  build green; view-views, view-show3d, view-hdri, view-responsive,
+  view-city, view-round13 and view-panels green, one at a time.
 - **2026-10-26: `scene.js`'s third seam (ROADMAP 1.3).** The camera over
   time — `previewMove`, `recordVideo`, `pose`, `showMoment`, `clearMoment`
   and `applyPose` — into `src/scene/video.js`, installed by `mixin`, with
