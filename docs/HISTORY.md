@@ -17,6 +17,17 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-26: `scene.js`'s sixth seam (ROADMAP 1.3).** Measuring and
+  drawing on the booth — the plan's dimension lines and the tape measure
+  with its kept tapes, the smart guides, the box tool's preview and the
+  labels over them (`refreshGuides`, `setDrawingBox`, `boxFrom`,
+  `showBoxPreview`, `showSnap`, `placeAnnotations`, `setMeasuring`,
+  `setKeepTapes`, `keepTape`, `clearTapes`, `measurePoint`, with
+  `MAX_TAPES`) — into `src/scene/measure-tools.js`, installed by `mixin`.
+  Unchanged but for a comma after each method and `export` on `MAX_TAPES`,
+  checked line for line. `scene.js` is 2,066 lines (from 2,287). Lint, type
+  check, 532 node tests and build green; view-measure, view-guides,
+  view-box, view-plan and view-row green, one at a time.
 - **2026-10-26: one way to launch the test browser, one way to run the view
   suites, and CI's shards cut by time.** The owner asked for a clean house.
   A new cloud container came with Chromium build 1243 in
