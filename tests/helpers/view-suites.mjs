@@ -5,9 +5,10 @@
 // `npm run test:view` runs them in, and the weights the shards are cut by:
 // suites go longest first onto whichever shard has the least so far, so the
 // shards finish close together instead of one waiting on a long tail (the
-// round-robin it replaces ran 7, 14, 11 and 8 minutes). A rough number is
-// enough for a new suite; tests/run-views.test.js fails until every
-// tests/view-*.mjs file has one.
+// round-robin it replaces ran 7, 14, 11 and 8 minutes). A suite's time moves
+// by up to twice from one run to the next (view-round13 took 59 s, then
+// 128 s), so re-weighing from a single run chases noise: a rough number is
+// enough, and a new suite needs one before tests/run-views.test.js passes.
 export const SECONDS = {
   "view-city": 9,
   "view-lighting": 43,
@@ -53,7 +54,7 @@ export const SECONDS = {
   "view-wall-assets": 166,
   "view-keep-safe": 51,
   "view-report": 12,
-  "view-environment": 120, // a guess: 135 s in the sandbox, 2026-10-26
+  "view-environment": 93, // CI run on 3c86005, 2026-10-26
 };
 
 export const SUITES = Object.keys(SECONDS);
