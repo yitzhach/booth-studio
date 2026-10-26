@@ -57,7 +57,7 @@ test("unedited image texture loads with the default null adjustment argument", a
 
 test("artwork transforms reuse scene objects without disposing textures", () => {
   const source = readFileSync(new URL("../src/scene.js", import.meta.url), "utf8");
-  const method = source.slice(source.indexOf("  updateArtwork("), source.indexOf("  refreshGuides("));
+  const method = source.slice(source.indexOf("  updateArtwork("), source.indexOf("  buildUnderlay("));
   const scene = new Function("IN", "return {" + method + "};")(0.0254);
   let position, scale;
   const group = { position: { set: (...v) => position = v }, scale: { set: (...v) => scale = v } };

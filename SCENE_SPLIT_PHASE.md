@@ -251,4 +251,15 @@ wrong.)
   (red on `main`'s 2,571).
 - **2026-10-26, seam 5: view-round13 ran too,** because it picks a figure by
   double-click, which `pickPerson` answers.
-
+- **2026-10-26, seam 6: the tape's limit moves with the tape.**
+  `MAX_TAPES` and its comment go to `src/scene/measure-tools.js`, and
+  `scene.js` imports it back only to keep exporting it, as it does `FOV`.
+  `measure.js`'s three imports leave `scene.js` whole; `FLOOR` comes from
+  `shared.js`. `tests/image-regression.test.js` slices `updateArtwork` up to
+  `  buildUnderlay(` now, as planned: red with the move (1 of 5 failing),
+  green with the marker. A script found all 225 removed lines verbatim in
+  the module but the one import, whose path gained `../`. The ratchet is
+  2,066 (red on `main`'s 2,287). Seam 7 is next, and from there the plan
+  runs the whole chain, in a snapshot (HANDOFF → Testing): note that e2e
+  and `test:offline` fail in this sandbox on `main` too, so CI decides
+  those two.
