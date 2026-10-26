@@ -221,4 +221,21 @@ wrong.)
   imports leave `scene.js` whole. `pose` moved here, and `export()` (seam 2)
   calls it through `this` as before; view-frame drives that export. The
   ratchet is 2,828 (red on `main`'s 3,134).
+- **2026-10-26, seam 4: the camera's constants move with it, and two come
+  back by import.** `MIN_CAMERA_Y`, `MAX_POLAR` and `FOV` go to
+  `src/scene/camera.js` with their comments (the orbit note had drifted
+  above `MAX_TAPES`; it now sits over the two constants it describes). The
+  constructor still reads `MAX_POLAR` and `FOV`, so `camera.js` exports
+  them and `scene.js` imports both and still exports `FOV`. Exporting
+  `MAX_POLAR` is the one word added to moved text.
+- **2026-10-26, seam 4: `tests/image-regression.test.js` slices
+  `updateArtwork` up to `  refreshGuides(`**, the member that now follows
+  it, instead of `  setView(`, which moved. It went red with the move (the
+  slice ran to the file's end and would not parse) and green with the new
+  marker; its assertion is unchanged. Seam 6 moves `refreshGuides`, so it
+  repoints the marker again, to `  buildUnderlay(`. A slice must stop at a
+  member, because two class methods side by side are not an object literal.
+- **2026-10-26, seam 4: view-round13 and view-panels ran too.** The plan's
+  five suites do not drive auto-pan or focusing a wall; those two do. The
+  ratchet is 2,571 (red on `main`'s 2,828).
 
