@@ -150,7 +150,7 @@ try {
   assert.equal(aimed.order, 'YXZ', 'pan-then-tilt order keeps the horizon level');
   assert.equal(aimed.backdropOrder, 'YXZ', 'the backdrop pass inherits the same order');
 
-  // The pole limit the assertions below share, restated from src/scene.js.
+  // The pole limit the assertions below share, restated from src/scene/render-loop.js.
   const view_edge_limit = 52;
 
   // Horizon lock. The backdrop's wider lens compresses the same pitch, so a
