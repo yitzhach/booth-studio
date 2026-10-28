@@ -47,9 +47,11 @@ are in `HANDOFF.md` → Rules that are easy to break.
 - **`this.frames` in scene.js is the map of wall frames** (`frameKey`), not a
   counter. The on-demand loop's counter is `framesOwed`; naming it `frames`
   broke every drag and was only caught by the e2e suite.
-- **`tests/image-regression.test.js` slices scene.js from `updateArtwork(` to
-  `setView(`** and evaluates the text. A method added between those two
-  breaks it with a SyntaxError; put new methods elsewhere.
+- **`tests/image-regression.test.js` slices `src/scene/build.js` from
+  `texture(` to `update(p,` and from `updateArtwork(` to `buildUnderlay(`**
+  (scene.js's `updateArtwork(` to `setView(` until the split, ROADMAP 1.3)
+  and evaluates the text. A method added inside either slice breaks it with
+  a SyntaxError; put new methods elsewhere.
 
 - **`tests/e2e.mjs` fails in this sandbox at the 4096 px PNG, and it fails on
   `main` too.** It waits 30 seconds for the download; a 4096 px render under
