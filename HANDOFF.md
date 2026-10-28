@@ -236,7 +236,21 @@ look at and what to change if it reads wrong.
    play, start here.
 9. **A `home` HDRI** is still missing — an interior with windows on one side.
    That preset falls back procedurally until someone downloads one.
-10. **Clean house (the owner asked, 2026-10-26).** Done: the test tooling
+10. **H.264 exports may declare the wrong level (found 2026-10-28, not
+   fixed).** `tests/view-video.mjs`'s level check had never run (it imported
+   `/src/video.js` from Node; fixed in seam 8, booth-studio#75). It runs only
+   where the browser can encode H.264 — real Chrome and Safari, and this
+   sandbox's Chromium 1243, never CI's 1194, which falls back to VP9. Here a
+   720-size, 24 fps orbit declared `avc1.640028` (level 4.0) where the test
+   expects 3.2 (`0x20`), so view-video fails in the sandbox. Unknown which
+   side is wrong: the test computes its expectation for 1280 × 924, while the
+   viewport is 1280 × 860; or `recordVideo` builds the codec string
+   (`codecsFor` → `h264Level` in `src/video.js`) from a different size than
+   it encodes. Start by logging the recorded width, height and codec from the
+   suite (root-cause skill), then fix whichever is wrong behind that
+   assertion. Low risk to a person meanwhile: a level higher than needed
+   still plays, and 4.0 is what every clip declared before the per-size fix.
+11. **Clean house (the owner asked, 2026-10-26).** Done: the test tooling
    (booth-studio#72, `docs/HISTORY.md`). Found and not yet done, each the
    owner's pick: `npm audit`'s six highs, all dev-only (vite, wrangler), where
    a vite bump may change `npm run bundle:scene`'s bytes and so need the
@@ -325,8 +339,9 @@ at launch under the suites' `--single-process`, so do not point
 Its headless shell runs the view suites, but two checks fail on it, on `main`
 as on a branch (measured both sides, 2026-10-26): e2e, whose browser dies in
 the 4096 px PNG export, and `test:offline`, whose grass texture never comes
-back from the service worker. view-polish fails on it too (its hero-set
-export never finishes; `main` the same, 2026-10-28). Build 1194 can't be fetched here
+back from the service worker. view-polish fails on it at times (its hero-set
+export never finishes; `main` the same, 2026-10-28), and view-video does
+(Next → H.264 level). Build 1194 can't be fetched here
 (`cdn.playwright.dev` is refused), so CI is the verdict for those two: say
 so, never call them flakes.
 
