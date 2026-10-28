@@ -269,8 +269,11 @@ try {
     assert.equal(result.reportedFrames, result.frames, 'and reports its own frame count');
     // The level in the codec string must match what the frame size and rate
     // need — the bug that made a 1440p or 1080p60 clip declare level 4.0.
+    // Node imports it here, not the page, so the path is the file's own:
+    // '/src/video.js' only resolves in the browser, and threw here wherever
+    // the browser could encode H.264 (CI's Chromium cannot, so it never ran).
     if (codec.kind !== 'vp09') {
-      const { h264Level } = await import('/src/video.js');
+      const { h264Level } = await import('../src/video.js');
       const expected = h264Level(1280, Math.round(1280 / (1280 / 924)), 24).toString(16).padStart(2, '0');
       assert.ok(result.codec.endsWith(expected), `codec ${result.codec} should declare level ${expected}`);
     }

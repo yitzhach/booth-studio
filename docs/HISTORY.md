@@ -17,6 +17,19 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-28: `scene.js`'s eighth seam (ROADMAP 1.3).** The render loop,
+  the draft and the shadows — drawing only when asked, the draft a drag
+  drops to, adaptive quality, the backdrop's wider lens, the flare overlay,
+  the drawn drop shadows and releasing a rebuilt booth's old group
+  (`setDraft` … `releaseRetired`, 25 methods) — into
+  `src/scene/render-loop.js` with every module-level helper only they read,
+  installed by `mixin`; the backdrop helpers are still exported from
+  `scene.js`. Unchanged but for a comma after each method, checked line for
+  line. `scene.js` is 939 lines (from 1,748), under the 1,000 gate. Also
+  `tests/view-video.mjs`'s H.264 level check, which imported
+  `/src/video.js` from Node and so had never run, imports
+  `../src/video.js`. Lint, type check, 532 node tests and build green; the
+  whole view chain and e2e in a snapshot (counts in the pull request).
 - **2026-10-28: `scene.js`'s seventh seam (ROADMAP 1.3).** Picking and
   interaction — the canvas's pointer and touch listeners (`bind`), the ray
   into the scene (`point`), which artwork a point lands on (`artFrame`,

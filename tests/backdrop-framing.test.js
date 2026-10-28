@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-// backdropFov lives in scene.js, which imports three and touches the DOM at
+// backdropFov lives in src/scene/render-loop.js, which imports three and touches the DOM at
 // module scope, so the rule is restated here the way render-scale.test.js
 // restates renderScale. What matters is that it is pinned: the bug it fixes is
 // a judgement about how a photograph reads on screen, which no one can see in

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-// renderScale lives in scene.js, which imports three and touches the DOM at
+// renderScale lives in src/scene/render-loop.js, which imports three and touches the DOM at
 // module scope, so the rule is restated here rather than imported. It is four
 // lines; what matters is that it is pinned, because the bug it fixes is
 // invisible in code review and obvious on screen.

@@ -272,3 +272,28 @@ wrong.)
   moved. A script found all 324 removed lines in the two modules but the
   four import lines. No test reads these methods' source. The ratchet is
   1,748 (red on `main`'s 2,066).
+- **2026-10-28, seam 8: the render loop takes its helpers, and the
+  backdrop's lens with them.** Every module-level helper only these
+  methods read moves with them, comments and all: `radialTexture`, the
+  timing constants (`HEARTBEAT_*`, `KICK_MS`, `DRAG_SHADOW_SIZE`,
+  `RETIRE_*`), the drawn shadow's material (`shadowMaterial`,
+  `shadowShader`, `shadowProgramKey`, `placeShadow`) and `disposeTree`.
+  The backdrop block (`BACKDROP_*`, `safeBackdropFov`, `lockedPitch`,
+  `backdropFov`, `isPanorama`, `renderScale`) went too, because only
+  `renderFrame` and `resize` use the functions, though the plan had the
+  exported pure helpers staying: `scene.js` imports `BACKDROP_FRAMING` and
+  `BACKDROP_EDGE_LIMIT` back for the constructor and `update`, and still
+  exports all eight, so `src/actions/booth.js`, `src/panels/layout.js` and
+  anything else import as before. Nine imports leave `scene.js`. A script
+  found all 815 removed lines in the module but the four import lines.
+  `scene.js` is 939 lines, under the 1,000 gate with seam 9 still to go;
+  the ratchet is 939 (red on `main`'s 1,748). The comments in
+  `tests/render-scale.test.js`, `tests/backdrop-framing.test.js` and
+  `tests/view-hdri.mjs` that said where these helpers live now say
+  `src/scene/render-loop.js`; nothing else in them changed.
+- **2026-10-28, seam 8: `tests/view-video.mjs` imports `h264Level` from
+  `'../src/video.js'`.** The line runs in Node, not the page, so
+  `'/src/video.js'` could never resolve: it threw wherever the browser
+  could encode H.264. CI's Chromium 1194 cannot, so the level check had
+  never run; the sandbox's 1243 can, and that is how it was found. The
+  assertion is unchanged. (The owner said include it, 2026-10-28.)

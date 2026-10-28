@@ -185,8 +185,8 @@ look at and what to change if it reads wrong.
    used are in `tools/main-split/`, and the plan's Rulings hold the bugs
    older than the move that the reviews found, for a fix after the split).
    Left for sessions: 1.3 (split `scene.js`, which phase 2 waits on, in
-   nine seams: `SCENE_SPLIT_PHASE.md`; seams 1–7 are in (seam 8, the render loop,
-   the draft and shadows, is next), the scripts are in
+   nine seams: `SCENE_SPLIT_PHASE.md`; seams 1–8 are in and `scene.js` is under
+   the gate at 939 lines (seam 9, the booth build, is next), the scripts are in
    `tools/scene-split/`) and the rest of 1.4 after it — the typing pass over
    `main.js` and the modules the split made, with those fixes. 1.10's site-qa and Dependabot, 1.11 (the
    custom domain) and 1.12 (security headers, which change what the Worker
@@ -325,7 +325,8 @@ at launch under the suites' `--single-process`, so do not point
 Its headless shell runs the view suites, but two checks fail on it, on `main`
 as on a branch (measured both sides, 2026-10-26): e2e, whose browser dies in
 the 4096 px PNG export, and `test:offline`, whose grass texture never comes
-back from the service worker. Build 1194 can't be fetched here
+back from the service worker. view-polish fails on it too (its hero-set
+export never finishes; `main` the same, 2026-10-28). Build 1194 can't be fetched here
 (`cdn.playwright.dev` is refused), so CI is the verdict for those two: say
 so, never call them flakes.
 
