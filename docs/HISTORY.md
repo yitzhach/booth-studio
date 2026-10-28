@@ -17,6 +17,18 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-28: `scene.js`'s ninth and last seam (ROADMAP 1.3 done).** The
+  booth build — the walls, panels, artwork, lights, ground and models
+  `update` rebuilds, the show staged round it, the selection and the hidden
+  tags (`box` … `setHiddenTags`, 14 methods), with `parseModel` and
+  `ART_TEXTURE_MAX` — into `src/scene/build.js`, installed by `mixin`;
+  `ART_TEXTURE_MAX` is still exported from `scene.js`. Unchanged but for a
+  comma after each method, checked line for line.
+  `tests/image-regression.test.js` reads two methods from the new module.
+  `scene.js` is 183 lines (from 939, and 3,531 before the split). HANDOFF's
+  code map names each method's module. Lint, type check, 532 node tests
+  and build green; the whole view chain and e2e in a snapshot (counts in
+  the pull request).
 - **2026-10-28: `scene.js`'s eighth seam (ROADMAP 1.3).** The render loop,
   the draft and the shadows — drawing only when asked, the draft a drag
   drops to, adaptive quality, the backdrop's wider lens, the flare overlay,

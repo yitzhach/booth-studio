@@ -12,7 +12,7 @@ test("null and omitted edits preserve unedited images", () => {
 });
 
 test("unedited image texture loads with the default null adjustment argument", async () => {
-  const source = readFileSync(new URL("../src/scene.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../src/scene/build.js", import.meta.url), "utf8");
   const method = source.slice(source.indexOf("  async texture("), source.indexOf("  update(p,"));
   class TextureStub {
     listeners = [];
@@ -56,7 +56,7 @@ test("unedited image texture loads with the default null adjustment argument", a
 });
 
 test("artwork transforms reuse scene objects without disposing textures", () => {
-  const source = readFileSync(new URL("../src/scene.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../src/scene/build.js", import.meta.url), "utf8");
   const method = source.slice(source.indexOf("  updateArtwork("), source.indexOf("  buildUnderlay("));
   const scene = new Function("IN", "return {" + method + "};")(0.0254);
   let position, scale;

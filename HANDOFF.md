@@ -95,7 +95,8 @@ is true has changed.
 - **How it is built and checked.** Vite and three.js, no framework.
   `src/main.js` (1,438 lines, most of it inside `boot()`, split
   into `src/ui/`, `src/panels/` and `src/actions/`) builds the panels and
-  their actions; `src/scene.js` (3,500) draws the booth. Schema 1
+  their actions; `src/scene.js` (183 lines: the constructor, split by area
+  into `src/scene/`) draws the booth. Schema 1
   is forever: `validateProject` in `src/model.js` opens every backup ever
   written. CI (`.github/workflows/ci.yml`) runs `core` (the node suites, the
   build, the vendored SDK and scene checks, two devices against studio-api,
@@ -184,11 +185,13 @@ look at and what to change if it reads wrong.
    `main.js` is 1,438 lines, under the gate's 1,500. The scripts each seam
    used are in `tools/main-split/`, and the plan's Rulings hold the bugs
    older than the move that the reviews found, for a fix after the split).
-   Left for sessions: 1.3 (split `scene.js`, which phase 2 waits on, in
-   nine seams: `SCENE_SPLIT_PHASE.md`; seams 1–8 are in and `scene.js` is under
-   the gate at 939 lines (seam 9, the booth build, is next), the scripts are in
-   `tools/scene-split/`) and the rest of 1.4 after it — the typing pass over
-   `main.js` and the modules the split made, with those fixes. 1.10's site-qa and Dependabot, 1.11 (the
+   1.3 is done too (2026-10-28): nine seams of `SCENE_SPLIT_PHASE.md` moved
+   `BoothScene`'s methods unchanged, as mixins, into `src/scene/` (the light
+   rig, export, video, camera, props, measuring, interaction, the render
+   loop and the booth build), and `scene.js` is 183 lines; the scripts are
+   in `tools/scene-split/`. Left for sessions: the rest of 1.4 — the typing
+   pass over `main.js`, `scene.js` and the modules both splits made, with
+   those fixes. 1.10's site-qa and Dependabot, 1.11 (the
    custom domain) and 1.12 (security headers, which change what the Worker
    sends) want the owner's yes first.
 4. **The assistant panel on a phone (2026-10-07): built — see `docs/HISTORY.md`.** The
@@ -259,8 +262,8 @@ look at and what to change if it reads wrong.
    suites written minified (`view-city`, `view-lighting`,
    `view-wall-assets`); and inspector HTML built as single lines of thousands
    of characters (`src/ui/render.js`, `src/panels/layout.js`), hard to diff,
-   where reflowing risks whitespace a person could see. The scene split
-   (seams 7–9) and then the typing pass (1.4) come first.
+   where reflowing risks whitespace a person could see. The typing pass
+   (1.4) comes first.
 
 ## Deployment
 
@@ -320,8 +323,8 @@ as it is (`checkJs`, no emit, not strict) from `src/scene-ops.js` and
 everything it imports — what studio-api runs — with the JSDoc as the types
 and a Worker's globals, so a `document` in that code fails it; then, with
 `tsconfig.app.json`, every other module in `src/` against a browser's
-globals, but `main.js` and `scene.js` (until their split, ROADMAP 1.2 and
-1.3) and `studio.js` (it imports the vendored SDK, which has no types). One
+globals, but `main.js`, `scene.js` and what their splits moved out (until
+the typing pass, ROADMAP 1.4) and `studio.js` (it imports the vendored SDK, which has no types). One
 run reports both configs' findings. Both run in
 CI's `lint` job. The view suites run in CI as four shards at once (`views`),
 cut by each suite's recorded time so they finish together
@@ -492,7 +495,7 @@ time out on a click at 3× (it passed alone).
   arithmetic. Both pure, both covered in Node.
 - `src/people.js` — the figures, their canon proportions and their defaults.
 - `applySelection()` / `renderSelection()` — what a click costs, in
-  `src/scene.js` and `src/main.js`. Read both before making selection do
+  `src/scene/build.js` and `src/main.js`. Read both before making selection do
   anything more; they exist to keep a rebuild out of a click.
 - `GROUND_LIBRARY_PHASE.md` — presets and uploaded grounds as one list: the
   widened `booth.ground`, why the library is a filter over the assets rather
@@ -502,13 +505,14 @@ time out on a click at 3× (it passed alone).
 - `src/dropshadow.js` — the two drawn drop shadows on Photoshop's five
   controls, the exact blurred-rectangle maths (and its GLSL twin), and how
   the first version's `booth.dropShadow` is still read. `shadowMaterial` /
-  `placeShadow` / `updateShadows` in `src/scene.js` draw them.
+  `placeShadow` / `updateShadows` in `src/scene/render-loop.js` draw them.
 - `src/swatches.js` — the seven saved colours and the Previous button.
 - `src/adaptive.js` — Auto preview quality's rule. `startLoop` / `tick` /
-  `invalidate` / `watchForChanges` in `src/scene.js` are the on-demand loop;
-  `disposeGroup` / `releaseRetired` keep shaders across a rebuild.
+  `invalidate` / `watchForChanges` in `src/scene/render-loop.js` are the
+  on-demand loop; `disposeGroup` / `releaseRetired` there keep shaders
+  across a rebuild.
 - `src/measure.js` — tape and plan-dimension arithmetic; `refreshGuides` and
-  `placeAnnotations` in `src/scene.js` draw them.
+  `placeAnnotations` in `src/scene/measure-tools.js` draw them.
 - `src/furniture.js` — the furniture shapes; `FURNITURE` in `src/model.js`
   is the list and its default sizes.
 - `src/arrange.js` — even spacing, the 60″ hang line, arrow nudges.
@@ -528,7 +532,8 @@ time out on a click at 3× (it passed alone).
   `src/show-editor.js` — the show floor's drawing board (gestures only);
   `src/show-scene.js` — the show in 3D: the plan as instanced parts, the
   world placed round the open booth, the walk's start and the walkthrough
-  (`setShow` / `stageShow` / `setShowView` in `src/scene.js` draw it);
+  (`setShow` / `stageShow` in `src/scene/build.js` and `setShowView` in
+  `src/scene/camera.js` draw it);
   `src/linked.js` — opening one floor booth as a full design, and why the
   storage is shaped as it is; `FLOOR_TEMPLATES` in `src/show.js`;
   `worker/index.js` — the Worker: booth share links on `/api/*` (R2
@@ -540,15 +545,17 @@ time out on a click at 3× (it passed alone).
   `/pitchdeck/`;
   `src/ai-render.js` — the AI-render hook: the scene in words, the pack,
   the mask's legend, the protected pass and the provider-less adapter
-  (`renderPasses` / `applyPass` in `src/scene.js` render the passes);
+  (`renderPasses` / `applyPass` in `src/scene/export.js` render the passes);
   `src/power.js` — the power and rentals sheet.
 - `src/clearance.js` — clearance geometry; `src/elevations.js` — the
-  to-scale drawings. `buildUnderlay`, `buildModels`, `exportGLB` and the Box
-  tool (`setDrawingBox`) are in `src/scene.js`.
-- `src/views.js` — saved views, tags and walk mode's rules; `applyTags` and
-  `startWalk` / `walk` / `stopWalk` in `src/scene.js` do the work.
+  to-scale drawings. `buildUnderlay` and `buildModels` are in
+  `src/scene/build.js`, `exportGLB` in `src/scene/export.js` and the Box
+  tool (`setDrawingBox`) in `src/scene/measure-tools.js`.
+- `src/views.js` — saved views, tags and walk mode's rules; `applyTags`
+  (`src/scene/build.js`) and `startWalk` / `walk` / `stopWalk`
+  (`src/scene/camera.js`) do the work.
 - `src/guides.js` — smart guides' snapping arithmetic; `showSnap` in
-  `src/scene.js` draws it. `src/align.js` — align and distribute.
+  `src/scene/measure-tools.js` draws it. `src/align.js` — align and distribute.
 - `FUTURE_BUILD.md` — ideas asked for and deliberately not started, each now
   placed in `ROADMAP.md`; Show Hub's v0 and phase 1 came from it and are built.
 - `docs/HDRI-ASSETS.md`, `docs/TEXTURE-ASSETS.md` — adding asset files.

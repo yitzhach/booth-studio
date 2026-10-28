@@ -75,7 +75,7 @@ Cloudflare builds from `main` using `npm run build` and `npx wrangler deploy`. N
 
 - `src/main.js`: interface, actions, inspector and undo/redo.
 - `src/model.js`: schema validation, geometry and wall constraints. `wallSpec()` answers for a perimeter wall and a free-standing panel alike; every wall lookup goes through it.
-- `src/scene.js`: Three.js booth, artwork interaction, lighting, the backdrop pass, and image and video export.
+- `src/scene.js`: the Three.js scene's constructor; its methods live by area in `src/scene/` (`build.js` the booth, `light-rig.js`, `export.js`, `video.js`, `camera.js`, `props.js`, `measure-tools.js`, `interaction.js`, `render-loop.js`), installed on the class with `mixin`.
 - `src/timeline.js`, `src/flare.js`: custom camera timelines and the lens flare's arithmetic. Pure, and covered in Node.
 - `src/camera-path.js`: the filmic camera moves. Pure geometry — no three.js, no DOM — so every move is covered in Node.
 - `src/video.js`: the MP4 muxer and the WebCodecs encoder that feeds it. `muxMp4` is pure bytes-in, bytes-out. The H.264 level is computed from the frame size and rate against the spec's macroblock limits, not assumed.
