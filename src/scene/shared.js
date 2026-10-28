@@ -1,6 +1,7 @@
 // What more than one of src/scene/'s areas reads (SCENE_SPLIT_PHASE.md):
-// where a free-standing wall's frame stands, and the floor plane a drag is
-// measured in. Moved out of src/scene.js as they were.
+// where a free-standing wall's frame stands, the floor plane a drag is
+// measured in, and which wall frame a work hangs on. Moved out of
+// src/scene.js as they were.
 import * as T from "three";
 import { IN } from "../model.js";
 // How far behind its frame plane a wall's slab sits, in metres. Half the
@@ -30,3 +31,12 @@ export function placePanelFrame(g, panel) {
   g.rotation.y = r;
   return g;
 }
+/**
+ * Which wall frame a piece of artwork hangs on. A work in the home booth
+ * names no booth and keys by its wall alone, which is exactly what every
+ * frame was keyed by before rows existed; a work in a row booth is prefixed
+ * with that booth's slot id, because the same three walls stand once per
+ * booth in the aisle.
+ */
+export const frameKey = (a) =>
+  (a.booth ? a.booth + ":" : "") + a.wall + (a.face === "outside" ? "-outside" : "");
