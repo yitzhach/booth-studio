@@ -230,10 +230,12 @@ more small pull requests, each green on every suite before it merges.
       lines, its code moved unchanged but for `ctx.` into `src/ui/`,
       `src/panels/` and `src/actions/`. The bugs older than the move that
       the reviews found are in that file's Rulings, for the typing pass.)*
-- [ ] **1.3 Split `src/scene.js`** the same way: booth build, light rig,
+- [x] **1.3 Split `src/scene.js`** the same way: booth build, light rig,
       picking and interaction, export and render passes.
       *(2026-10-24: planned in `SCENE_SPLIT_PHASE.md` — nine seams, the
-      methods moved unchanged as mixins on the class; gate 1,000 lines.)*
+      methods moved unchanged as mixins on the class; gate 1,000 lines.
+      2026-10-28: all nine in; `scene.js` is 183 lines, the constructor and
+      the `mixin` calls, its methods in `src/scene/`.)*
 - [ ] **1.4 Type checking without a build step.** `// @ts-check` with JSDoc
       types and `tsc --noEmit --checkJs` in CI, starting with the modules
       `npm run bundle:scene` ships to studio-api (`model.js`, `scene-ops.js`,

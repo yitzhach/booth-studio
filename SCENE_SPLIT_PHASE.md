@@ -297,3 +297,22 @@ wrong.)
   could encode H.264. CI's Chromium 1194 cannot, so the level check had
   never run; the sandbox's 1243 can, and that is how it was found. The
   assertion is unchanged. (The owner said include it, 2026-10-28.)
+- **2026-10-28, seam 9: the booth build takes `parseModel` and
+  `ART_TEXTURE_MAX` with it.** The fourteen methods go to
+  `src/scene/build.js` as planned. `parseModel` is read only by
+  `buildModels`, and `ART_TEXTURE_MAX` only by `texture`, so both move with
+  their comments; `scene.js` imports `ART_TEXTURE_MAX` back only to keep
+  exporting it. `WALL_SLAB_OFFSET` and `placePedestal`, which the plan put
+  here, had already gone to `shared.js` and `props.js` in seam 5;
+  `build.js` imports `WALL_SLAB_OFFSET`, `frameKey` and `placePanelFrame`
+  from `shared.js`, `temperature` from the light rig (as seam 1 said it
+  would) and `BACKDROP_FRAMING` from the render loop. Thirty-nine imports
+  leave `scene.js`. `tests/image-regression.test.js` reads `texture` and
+  `updateArtwork` from `src/scene/build.js`, both slices ending where they
+  did (`  update(p,`, `  buildUnderlay(`): red with the move (2 of 5
+  failing), green with the path. A script found all 763 removed lines in
+  the module but the fifteen import lines. The ratchet is 183 (red on
+  `main`'s 939), and stays as the guard that nothing moves back. HANDOFF's
+  code map now names the module each method lives in, as seam 1 said it
+  would at the last seam. What is left is ROADMAP 1.4's typing pass over
+  `scene.js` and `src/scene/**`, still excluded in `tsconfig.app.json`.
