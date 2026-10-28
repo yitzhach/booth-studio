@@ -7,8 +7,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-// After seam 6, measuring, the guides and the box tool.
-const MAX = 2066;
+// After seam 7, picking and interaction.
+const MAX = 1748;
 
 test(`src/scene.js stays at ${MAX} lines or fewer: a seam moves code out, nothing moves back`, () => {
   const text = readFileSync(fileURLToPath(new URL("../src/scene.js", import.meta.url)), "utf8");

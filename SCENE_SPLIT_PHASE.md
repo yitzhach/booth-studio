@@ -263,3 +263,12 @@ wrong.)
   runs the whole chain, in a snapshot (HANDOFF → Testing): note that e2e
   and `test:offline` fail in this sandbox on `main` too, so CI decides
   those two.
+- **2026-10-28, seam 7: `frameKey` goes to `shared.js`.** `pickArt` reads
+  it and so does the booth build that stays (`update`), and no mixin
+  imports `scene.js`, so it moves with its comment beside `FLOOR` and
+  `placePanelFrame`; `scene.js` imports it back and still exports it, for
+  `src/ui/` and the tests. `constrain`, `scalePanel`, `smartSnap`,
+  `sameWall` and `FLOOR` leave `scene.js`'s imports, read only by what
+  moved. A script found all 324 removed lines in the two modules but the
+  four import lines. No test reads these methods' source. The ratchet is
+  1,748 (red on `main`'s 2,066).

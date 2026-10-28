@@ -17,6 +17,16 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-10-28: `scene.js`'s seventh seam (ROADMAP 1.3).** Picking and
+  interaction — the canvas's pointer and touch listeners (`bind`), the ray
+  into the scene (`point`), which artwork a point lands on (`artFrame`,
+  `pickArt`) and where a dragged piece drops on a wall (`wallDrop`) — into
+  `src/scene/interaction.js`, installed by `mixin`. `frameKey`, which the
+  build reads too, went to `src/scene/shared.js`, still exported from
+  `scene.js`. Unchanged but for a comma after each method, checked line for
+  line. `scene.js` is 1,748 lines (from 2,066). Lint, type check, 532 node
+  tests and build green; the whole view chain and e2e run one at a time in
+  a snapshot (counts in the pull request).
 - **2026-10-26: `scene.js`'s sixth seam (ROADMAP 1.3).** Measuring and
   drawing on the booth — the plan's dimension lines and the tape measure
   with its kept tapes, the smart guides, the box tool's preview and the
