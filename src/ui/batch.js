@@ -43,8 +43,8 @@ export function createBatch(ctx) {
   document.addEventListener(
     "click",
     (ev) => {
-      const summary = ev.target?.closest?.("summary");
-      const details = summary?.parentElement;
+      const summary = /** @type {Element} */ (ev.target)?.closest?.("summary");
+      const details = /** @type {HTMLDetailsElement} */ (summary?.parentElement);
       if (details?.dataset?.fold) remember(details.dataset.fold, !details.open);
     },
     true,
@@ -52,7 +52,7 @@ export function createBatch(ctx) {
   document.addEventListener(
     "toggle",
     (ev) => {
-      if (ev.target?.dataset?.fold && ev.target.isConnected) remember(ev.target.dataset.fold, ev.target.open);
+      if (/** @type {HTMLDetailsElement} */ (ev.target)?.dataset?.fold && /** @type {HTMLDetailsElement} */ (ev.target).isConnected) remember(/** @type {HTMLDetailsElement} */ (ev.target).dataset.fold, /** @type {HTMLDetailsElement} */ (ev.target).open);
     },
     true,
   );

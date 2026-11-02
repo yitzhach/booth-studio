@@ -78,6 +78,7 @@ export function createRender(ctx) {
     list[0].sec.before(bar);
     // On a phone the row is one line that scrolls sideways; keep the chosen
     // chip in sight rather than off the edge.
+    /** @type {HTMLElement | null} */
     const on = bar.querySelector(".active");
     if (on && bar.scrollWidth > bar.clientWidth) bar.scrollLeft = Math.max(0, on.offsetLeft - (bar.clientWidth - on.offsetWidth) / 2);
   }
@@ -92,7 +93,8 @@ export function createRender(ctx) {
     applySectionTabs(root);
   }
   document.querySelector("#inspector-content").addEventListener("click", (ev) => {
-    const chip = ev.target.closest?.("[data-subtab]");
+    /** @type {HTMLElement | null} */
+      const chip = /** @type {Element} */ (ev.target).closest?.("[data-subtab]");
     if (!chip) return;
     subTab[ctx.tab] = chip.dataset.subtab;
     const root = document.querySelector("#inspector-content");
@@ -122,7 +124,7 @@ export function createRender(ctx) {
   function renderInspector() {
     document
       .querySelectorAll("[data-tab]")
-      .forEach((b) => b.classList.toggle("active", b.dataset.tab === ctx.tab));
+      .forEach((/** @type {HTMLElement} */ b) => b.classList.toggle("active", b.dataset.tab === ctx.tab));
     applyRole();
     keepTabInSight();
     const root = document.querySelector("#inspector-content");
@@ -219,16 +221,16 @@ export function createRender(ctx) {
       [ctx.videoTimeline, ctx.otherTimeline] = [ctx.otherTimeline, ctx.videoTimeline];
     }
     const flat = ctx.showFloor && !ctx.show3d;
-    document.querySelector("#project-name").value = ctx.p.name;
+    /** @type {HTMLInputElement} */ (document.querySelector("#project-name")).value = ctx.p.name;
     document.body.classList.toggle("show-floor-on", ctx.showFloor);
     document.body.classList.toggle("show-3d-on", ctx.show3d);
-    document.querySelector("#show-floor").hidden = !flat;
-    document.querySelector("#scene").hidden = ctx.p.mode !== "3d" || flat;
-    document.querySelector("#photo").hidden = ctx.p.mode !== "photo" || ctx.showFloor;
-    document.querySelector("#photo-empty").hidden =
+    /** @type {HTMLElement} */ (document.querySelector("#show-floor")).hidden = !flat;
+    /** @type {HTMLElement} */ (document.querySelector("#scene")).hidden = ctx.p.mode !== "3d" || flat;
+    /** @type {HTMLElement} */ (document.querySelector("#photo")).hidden = ctx.p.mode !== "photo" || ctx.showFloor;
+    /** @type {HTMLElement} */ (document.querySelector("#photo-empty")).hidden =
       ctx.p.mode !== "photo" || !!ctx.p.photo.asset || ctx.showFloor;
-    document.querySelector("#view-switch").hidden = ctx.p.mode === "photo" || flat;
-    document.querySelector(".zoom-controls").hidden = ctx.p.mode === "photo";
+    /** @type {HTMLElement} */ (document.querySelector("#view-switch")).hidden = ctx.p.mode === "photo" || flat;
+    /** @type {HTMLElement} */ (document.querySelector(".zoom-controls")).hidden = ctx.p.mode === "photo";
     document.querySelector("#mode-label").textContent =
       ctx.p.mode === "photo" ? "PHOTO COMPOSITION" : "MEASURED WORKSPACE";
     document.querySelector("#scene-title").textContent =
@@ -262,11 +264,11 @@ export function createRender(ctx) {
       });
       if (!ctx.show3d) ctx.showEditor.render();
     }
-    document.querySelector('[data-action="undo"]').disabled = !ctx.history.length;
-    document.querySelector('[data-action="redo"]').disabled = !ctx.future.length;
+    /** @type {HTMLButtonElement} */ (document.querySelector('[data-action="undo"]')).disabled = !ctx.history.length;
+    /** @type {HTMLButtonElement} */ (document.querySelector('[data-action="redo"]')).disabled = !ctx.future.length;
     if (ctx.p.mode !== "3d" && ctx.walking) setWalking(false);
     for (const name of ["move", "select", "snap", "walk"])
-      document.querySelector(`[data-action="${name}"]`).disabled =
+      /** @type {HTMLButtonElement} */ (document.querySelector(`[data-action="${name}"]`)).disabled =
         ctx.p.mode === "photo" || !ctx.scene || ctx.showFloor;
     if (ctx.showFloor) ctx.tab = "hall";
     renderLibrary();
@@ -282,10 +284,10 @@ export function createRender(ctx) {
     // out in the middle of the edit, which was the largest single cost of a
     // click after the rebuild itself. A size that really changed is also
     // caught by the scene's ResizeObserver.
-    if (ctx.scene && !render.resizing) {
-      render.resizing = true;
+    if (ctx.scene && !/** @type {any} */ (render).resizing) {
+      /** @type {any} */ (render).resizing = true;
       requestAnimationFrame(() => {
-        render.resizing = false;
+        /** @type {any} */ (render).resizing = false;
         ctx.scene.resize();
       });
     }

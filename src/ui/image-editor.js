@@ -13,12 +13,12 @@ export function createImageEditor(ctx) {
   let editPreviewRevision = 0;
   const editPreviewSources = new WeakMap();
   function drawImageEditorPreview(a) {
-    const preview = document.querySelector("#image-edit-preview");
+    const preview = /** @type {HTMLCanvasElement} */ (document.querySelector("#image-edit-preview"));
     const asset = ctx.p.assets[a.asset];
     if (!preview || !asset) return;
     const revision = ++editPreviewRevision;
     const paint = (source) => {
-      if (revision !== editPreviewRevision || !document.querySelector("#image-editor").open) return;
+      if (revision !== editPreviewRevision || !/** @type {HTMLDialogElement} */ (document.querySelector("#image-editor")).open) return;
       const edited = applyImageEdits(source, a.edits);
       const box = preview.getBoundingClientRect();
       const pixelRatio = Math.min(devicePixelRatio, 2);
@@ -51,7 +51,7 @@ export function createImageEditor(ctx) {
   }
   function renderImageEditor() {
     const a = currentArtwork();
-    const dialog = document.querySelector("#image-editor");
+    const dialog = /** @type {HTMLDialogElement} */ (document.querySelector("#image-editor"));
     if (!a?.asset) {
       dialog.close();
       return;
@@ -81,8 +81,8 @@ export function createImageEditor(ctx) {
   function scheduleEditedPreview() {
     const a = currentArtwork();
     if (!a) return;
-    cancelAnimationFrame(scheduleEditedPreview.frame);
-    scheduleEditedPreview.frame = requestAnimationFrame(() => drawImageEditorPreview(a));
+    cancelAnimationFrame(/** @type {any} */ (scheduleEditedPreview).frame);
+    /** @type {any} */ (scheduleEditedPreview).frame = requestAnimationFrame(() => drawImageEditorPreview(a));
   }
   function updateEditorEdits(run) {
     const a = currentArtwork();

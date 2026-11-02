@@ -65,6 +65,6 @@ export function createRowEdit(ctx) {
     toast(hung ? `Booth removed, with the ${hung} work${hung === 1 ? "" : "s"} hung in it.` : "Removed from the row.");
   }
   const rowCount = () =>
-    Math.max(1, Math.min(MAX_SLOTS, Math.round(+document.querySelector("#row-count")?.value || 1)));
+    Math.max(1, Math.min(MAX_SLOTS, Math.round(+/** @type {HTMLInputElement} */ (document.querySelector("#row-count"))?.value || 1)));
   return { activeSlot, addRowBooths, addRowSpace, removeRowSlot, rowCount };
 }

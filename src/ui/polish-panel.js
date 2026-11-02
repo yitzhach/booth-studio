@@ -38,12 +38,14 @@ export function createPolishPanel(ctx) {
   }
   function runLook(key) {
     if (ctx.p.mode !== "3d") return;
+    /** @type {ReturnType<typeof applyLook>} */
     let r;
     mutate(() => (r = applyLook(ctx.p, key)));
     if (r) toast(`${LOOKS[r.look].label}.${r.hallOff ? ` ${HALL_OFF_NOTE}` : ""} Undo puts the last look back.`);
   }
   function runPolish() {
     if (ctx.p.mode !== "3d") return;
+    /** @type {ReturnType<typeof polish>} */
     let r;
     mutate(() => (r = polish(ctx.p)));
     ctx.actions["reset-view"]();

@@ -129,11 +129,12 @@ export function createSceneWiring(ctx) {
   // custom size with the new ratio (the long side keeps the custom size's).
   // Live on the guide during the drag, saved and redrawn in the panel after.
   {
-    const guide = document.querySelector(".frame-guide");
+    const guide = /** @type {HTMLElement} */ (document.querySelector(".frame-guide"));
     const MIN = 40;
     let drag = null;
     guide?.addEventListener("pointerdown", (ev) => {
-      const handle = ev.target.closest?.("[data-fg]");
+      /** @type {HTMLElement | null} */
+      const handle = /** @type {Element} */ (ev.target).closest?.("[data-fg]");
       const shape = frameGuideShape();
       const host = document.querySelector("#scene");
       if (!handle || !shape || !host || ev.button !== 0) return;

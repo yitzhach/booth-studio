@@ -15,7 +15,7 @@ export function createWelcome(ctx) {
    * closing it without a choice keeps every tool, so it asks only once.
    */
   function openWelcome({ first = false } = {}) {
-    const d = document.querySelector("#dialog");
+    const d = /** @type {HTMLDialogElement} */ (document.querySelector("#dialog"));
     const current = first ? null : resolveRole(ctx.role);
     const card = (k) => {
       const r = ROLES[k];
@@ -43,9 +43,9 @@ export function createWelcome(ctx) {
   }
   /** Hand the description to the assistant, which shows a card before it changes anything. */
   function describeToAssistant() {
-    const text = document.querySelector("#welcome-describe")?.value.trim() || "";
-    const panel = document.querySelector("studio-assistant");
-    if (!text) return document.querySelector("#welcome-describe")?.focus();
+    const text = /** @type {HTMLTextAreaElement} */ (document.querySelector("#welcome-describe"))?.value.trim() || "";
+    const panel = /** @type {any} */ (document.querySelector("studio-assistant"));
+    if (!text) return /** @type {HTMLTextAreaElement} */ (document.querySelector("#welcome-describe"))?.focus();
     if (!panel) return toast("The assistant isn't connected here.", true);
     const first = ctx.welcomeFirst;
     ctx.welcomeFirst = false;
@@ -54,7 +54,7 @@ export function createWelcome(ctx) {
       ctx.role = ctx.role || "artist";
       writeRole(ctx.role);
     }
-    document.querySelector("#dialog").close();
+    /** @type {HTMLDialogElement} */ (document.querySelector("#dialog")).close();
     renderInspector();
     panel.toggle(true);
     void panel.send(text);
@@ -73,9 +73,9 @@ export function createWelcome(ctx) {
     ctx.role = resolveRole(k);
     writeRole(ctx.role);
     ctx.tabsMore = false;
-    const all = [...document.querySelectorAll(".inspector-tabs [data-tab]")].map((b) => b.dataset.tab);
+    const all = [.../** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll(".inspector-tabs [data-tab]"))].map((b) => b.dataset.tab);
     ctx.tab = tabAfterSwitch(ctx.role, ctx.tab, all, { artShow: isArtShow(ctx.p) });
-    document.querySelector("#dialog").close();
+    /** @type {HTMLDialogElement} */ (document.querySelector("#dialog")).close();
     renderInspector();
     // An artist's first visit goes straight on to the booth; the example on
     // screen is not theirs, so there is nothing to back up first.
@@ -89,30 +89,30 @@ export function createWelcome(ctx) {
    * wizard's Next button is three clicks nobody needs.
    */
   function openQuickStart({ backupFirst = true } = {}) {
-    const d = document.querySelector("#dialog");
+    const d = /** @type {HTMLDialogElement} */ (document.querySelector("#dialog"));
     const templates = readTemplates();
     const starterLabel = (k) => FURNITURE[k].label;
     document.querySelector("#dialog-content").innerHTML =
       `<div class="panel-heading"><h2>Quick start a booth</h2>${btn("qs-cancel", "Close", "x", "icon-only")}</div><form class="quick-start" id="quick-start" onsubmit="return false"><label class="setting-label">Name<input id="qs-name" maxlength="120" placeholder="e.g. Main Street Art Fair" aria-label="Booth name"/></label>${templates.length ? `<label class="setting-label">Start from<select id="qs-template" aria-label="Start from"><option value="">A new booth, set up below</option>${templates.map((t) => `<option value="${e(t.id)}">My template · ${e(t.label)}</option>`).join("")}</select></label>` : ""}<fieldset id="qs-fresh"><label class="setting-label">What kind of show<select id="qs-show" aria-label="Show type">${Object.entries(SHOWS).map(([k, v]) => `<option value="${k}">${e(v.label)}</option>`).join("")}</select></label><label class="setting-label">Booth size<select id="qs-size" aria-label="Booth size">${Object.entries(FOOTPRINTS).map(([k, v]) => `<option value="${k}">${e(v.label)}</option>`).join("")}</select></label><p class="setting-label">Starter furniture</p><div class="qs-starters">${STARTERS.map((k) => `<label class="check-field"><input type="checkbox" data-starter="${k}" ${k === "table6" || k === "chair" ? "checked" : ""}/>${e(starterLabel(k))}</label>`).join("")}</div></fieldset><label class="check-field"><input type="checkbox" id="qs-backup" ${backupFirst ? "checked" : ""}/>Download a backup of the current booth first</label><p class="muted">Everything here is a starting point: the size, the walls, the furniture and the lighting all stay editable. Your artwork library is not carried over.</p><div class="button-row"><button type="button" data-action="qs-cancel">Cancel</button><button type="button" class="primary" data-action="qs-go">Start this booth</button></div>${templates.length ? `<p class="muted">Remove a saved template: ${templates.map((t) => `<button type="button" class="text-button" data-action="qs-forget-${e(t.id)}">${e(t.label)} ×</button>`).join(" ")}</p>` : ""}</form>`;
     const sync = () => {
-      const fresh = document.querySelector("#qs-fresh");
-      if (fresh) fresh.disabled = !!document.querySelector("#qs-template")?.value;
+      const fresh = /** @type {HTMLFieldSetElement} */ (document.querySelector("#qs-fresh"));
+      if (fresh) fresh.disabled = !!/** @type {HTMLSelectElement} */ (document.querySelector("#qs-template"))?.value;
     };
     document.querySelector("#qs-template")?.addEventListener("change", sync);
     refreshIcons();
     d.showModal();
   }
   function runQuickStart() {
-    const d = document.querySelector("#dialog");
-    const name = document.querySelector("#qs-name")?.value || "";
-    const templateId = document.querySelector("#qs-template")?.value || "";
+    const d = /** @type {HTMLDialogElement} */ (document.querySelector("#dialog"));
+    const name = /** @type {HTMLInputElement} */ (document.querySelector("#qs-name"))?.value || "";
+    const templateId = /** @type {HTMLSelectElement} */ (document.querySelector("#qs-template"))?.value || "";
     const template = templateId && readTemplates().find((t) => t.id === templateId);
     const next = template
       ? fromTemplate(template, name)
       : quickStart({
-          show: document.querySelector("#qs-show").value,
-          size: document.querySelector("#qs-size").value,
-          furniture: [...document.querySelectorAll("[data-starter]")].filter((x) => x.checked).map((x) => x.dataset.starter),
+          show: /** @type {HTMLSelectElement} */ (document.querySelector("#qs-show")).value,
+          size: /** @type {HTMLSelectElement} */ (document.querySelector("#qs-size")).value,
+          furniture: [.../** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll("[data-starter]"))].filter((x) => x.checked).map((x) => x.dataset.starter),
           name,
         });
     try {
@@ -121,7 +121,7 @@ export function createWelcome(ctx) {
       toast("That template no longer opens in this version. Start a new booth instead.", true);
       return;
     }
-    if (document.querySelector("#qs-backup")?.checked) backup();
+    if (/** @type {HTMLInputElement} */ (document.querySelector("#qs-backup"))?.checked) backup();
     d.close();
     mutate(() => {
       ctx.p = next;

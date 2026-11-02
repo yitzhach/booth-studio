@@ -98,6 +98,7 @@ export function createLibrary(ctx) {
       addPhotoLayer(template);
       return;
     }
+    /** @type {ReturnType<typeof placementFromTemplate>} */
     let placed;
     mutate(() => {
       placed = placementFromTemplate(template);
@@ -137,12 +138,13 @@ export function createLibrary(ctx) {
     return true;
   }
   document.addEventListener("dragstart", (ev) => {
-    const card = ev.target.closest("[data-source]");
+    /** @type {HTMLElement | null} */
+    const card = /** @type {Element} */ (ev.target).closest("[data-source]");
     if (!card || ctx.p.mode !== "3d") return;
     ev.dataTransfer.setData("application/x-booth-original", card.dataset.source);
     ev.dataTransfer.effectAllowed = "copy";
   });
-  const stage = document.querySelector("#scene");
+  const stage = /** @type {HTMLElement} */ (document.querySelector("#scene"));
   stage.addEventListener("dragover", (ev) => {
     if (ctx.p.mode === "3d" && [...ev.dataTransfer.types].includes("application/x-booth-original")) {
       ev.preventDefault();

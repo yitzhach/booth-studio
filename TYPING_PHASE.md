@@ -208,3 +208,25 @@ wrong.)
   list in task 2's pull request rather than one of its own. *Cost if
   wrong:* none; the order only decides which pull request carries which
   casts.
+- **2026-11-02, task 4: `src/ui/` by cast, and the globals come early.**
+  154 findings in 18 modules, all DOM narrowing but five inference
+  artifacts: a `let` assigned only inside `mutate`'s callback types as
+  `never` (`polish-panel.js`, `library.js`; typed with the function's
+  `ReturnType`), an array of `[name, list]` pairs inferred as one array of
+  either (`show-floor-panel.js`; typed as pairs), and two flags kept as
+  properties of a function (`render.resizing`,
+  `scheduleEditedPreview.frame`), which a checker does not follow on a
+  nested function declaration (cast to `any` where read). No bug. Two
+  ways of casting, both changing nothing that runs: a cast around the
+  expression, or, for an `Element` method's result (`closest`,
+  `querySelector`), a JSDoc type on the `const` it is assigned to, from
+  which TypeScript infers the method's type argument. `sync-inputs.js`
+  writes numbers to `.value`, which the browser turns into the string
+  `.value` holds; that stays, with the number cast to `any`, because
+  `String()` or `valueAsNumber` would change what runs. `test-hooks.js`
+  reads `import.meta.env` and sets `window.__booth`, so `src/globals.d.ts`
+  gains the `window` additions and the build's three globals now rather
+  than in task 6, and tsconfig.app.json reads `vite/client`'s types (the
+  Worker-side tsconfig.json still reads none). A diff check: with every
+  JSDoc comment and parenthesis removed, each changed line in `src/` is
+  the line it replaced, but the declarations in `globals.d.ts`.
