@@ -23,7 +23,12 @@ import { applyEnvPreset } from "../polish.js";
 export function createInputs(ctx) {
   const { checkpoint, currentArtwork, endShadowGesture, fieldTarget, getPlace, goToView, kit, mutate, placeSettled, probeCodec, refreshIcons, refreshPanels, refreshScene, rememberEdge, renderInspector, renderLibrary, renderStatus, renderTimelineDialog, saveViewPrefs, scheduleSave, setDraft, setDraftPolicy, setKit, setPlace, setShadowLive, setTier, showChange, syncArtInputs, syncPanelInputs, syncPedestalInputs, syncQuality, syncShadowInputs, timeline, toast, updateFrameGuide } = ctx;
   document.addEventListener("change", (ev) => {
-    const el = ev.target;
+    // Any of the panels' form controls: an input, a select or a textarea.
+    // Each reads as an input here, since every property this handler reads
+    // is one an input has; `checked` and `files` are read only once `type`
+    // or the control's data attributes have said it is a checkbox or a file
+    // input.
+    const el = /** @type {HTMLInputElement} */ (ev.target);
     if (showChange(el)) return;
     // The slider's own input handler has already made the move and taken the
     // one checkpoint the gesture gets; this only closes it out. Falling
@@ -109,7 +114,7 @@ export function createInputs(ctx) {
     }
     if (el.dataset.jobSet || el.dataset.jobMove !== undefined || el.dataset.jobName !== undefined) {
       const k = kit();
-      const id = el.closest("[data-job]")?.dataset.job;
+      const id = /** @type {HTMLElement | null} */ (el.closest("[data-job]"))?.dataset.job;
       const job = k.queue.find((j) => j.id === id);
       if (!job) return;
       let next = job;
@@ -303,6 +308,10 @@ export function createInputs(ctx) {
     // many stored units one point of the slider is worth, so this is the one
     // place the two meet and everything past it sees the stored number.
     const scale = Number(el.dataset.scale) || 1;
+    // A checkbox's boolean, a number field's number or a text field's
+    // string: whatever the field holds, which each setting below reads as its
+    // own kind.
+    /** @type {any} */
     const value =
       el.type === "checkbox"
         ? el.checked
@@ -432,7 +441,9 @@ export function createInputs(ctx) {
       if (scope === "artShow" && ctx.p.booth.artShow.linked) relinkArtShowWalls(ctx.p);
     });
   });
-  document.addEventListener("input", (ev) => {
+  // As the change handler's: any of the panels' form controls, read as an
+  // input (see there).
+  document.addEventListener("input", (/** @type {Event & { target: HTMLInputElement }} */ ev) => {
     // The frame's size and position sliders: live on the guide, saved on change.
     if (ev.target.dataset?.framePlace) {
       const which = ev.target.dataset.frameWhich === "export" ? "export" : "video";
@@ -441,7 +452,7 @@ export function createInputs(ctx) {
       setPlace(which, normalPlace({ ...getPlace(which), [key]: v }));
       // The same slider can be in the Video tab and in the timeline at once;
       // both follow.
-      document.querySelectorAll(`[data-frame-place="${key}"][data-frame-which="${which}"]`).forEach((input) => {
+      document.querySelectorAll(`[data-frame-place="${key}"][data-frame-which="${which}"]`).forEach((/** @type {HTMLInputElement} */ input) => {
         if (input !== ev.target) input.value = ev.target.value;
         input.closest("label")?.querySelector("output")?.replaceChildren(`${Math.round(Number(ev.target.value))}%`);
       });
@@ -461,8 +472,9 @@ export function createInputs(ctx) {
       ctx.scene?.updateArtwork(a);
       ev.target.closest("label").querySelector("output").textContent = Math.round(a.w / ctx.scaleBase.w * 100) + "%";
       for (const key of ["w", "h", "x", "y"]) {
+        /** @type {HTMLInputElement | null} */
         const input = document.querySelector('[data-scope="art"][data-field="' + key + '"]');
-        if (input) input.value = Number(a[key].toFixed(3));
+        if (input) input.value = /** @type {any} */ (Number(a[key].toFixed(3)));
       }
       return;
     }
@@ -495,6 +507,7 @@ export function createInputs(ctx) {
       // The typed field beside the slider, and the slider's own readout.
       // `.value`, not setAttribute: the attribute is the initial value and an
       // input the user has already touched ignores it.
+      /** @type {HTMLInputElement | null} */
       const typed = document.querySelector(
         `input[type="number"][data-field="${key}"][data-scope="person-${CSS.escape(id)}"]`,
       );
@@ -564,7 +577,7 @@ export function createInputs(ctx) {
       ctx.search = ev.target.value;
       const pos = ev.target.selectionStart;
       renderLibrary();
-      const s = document.querySelector("#search");
+      const s = /** @type {HTMLInputElement} */ (document.querySelector("#search"));
       s.focus();
       s.setSelectionRange(pos, pos);
       refreshIcons();
@@ -576,7 +589,8 @@ export function createInputs(ctx) {
   // A shape in the show floor's library: pressed, it is dragged onto the
   // floor or, tapped, dropped in the middle of the view.
   document.addEventListener("pointerdown", (ev) => {
-    const b = ev.target.closest?.("[data-show-shape]");
+    /** @type {HTMLElement | null} */
+    const b = /** @type {Element} */ (ev.target).closest?.("[data-show-shape]");
     if (!b || !ctx.showEditor || ev.button > 0) return;
     const shape = SHAPES.find((sh) => sh.key === b.dataset.showShape);
     if (shape) ctx.showEditor.libraryPress(ev, shape);
@@ -584,7 +598,8 @@ export function createInputs(ctx) {
   // Photoshop's angle dial: press anywhere on it and drag round. The angle
   // is where the light comes from, so the line points at the pointer.
   document.addEventListener("pointerdown", (ev) => {
-    const dial = ev.target.closest?.("[data-dial]");
+    /** @type {HTMLElement | null} */
+    const dial = /** @type {Element} */ (ev.target).closest?.("[data-dial]");
     if (!dial || ev.button !== 0) return;
     ev.preventDefault();
     dial.focus();

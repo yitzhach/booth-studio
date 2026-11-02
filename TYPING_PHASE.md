@@ -230,3 +230,16 @@ wrong.)
   Worker-side tsconfig.json still reads none). A diff check: with every
   JSDoc comment and parenthesis removed, each changed line in `src/` is
   the line it replaced, but the declarations in `globals.d.ts`.
+- **2026-11-02, task 5: `inputs.js`'s two handlers read their target as an
+  input.** 188 findings, all but three in the document's `change` and
+  `input` listeners, which serve every form control in the panels. The
+  target is read as an `HTMLInputElement` (a cast on `change`'s `el`, and
+  a JSDoc type on `input`'s `ev` parameter, which types its 51 reads of
+  `ev.target` at once) rather than the union of input, select and
+  textarea: every property they read is one an input has, and `checked`
+  and `files` are read only once `type` or a data attribute has said
+  which control it is. A comment above each says so. The setting's
+  `value` is a checkbox's boolean, a number's number or a text's string,
+  so it is typed `any`, with a comment. Two more numbers written to
+  `.value` are cast as in task 4. No bug; with JSDoc and parentheses
+  removed, no changed line differs from the one it replaced.

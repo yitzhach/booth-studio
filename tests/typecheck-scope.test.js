@@ -7,8 +7,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-// After task 4, src/ui/ but the two main.js alone imports.
-const LEFT = ["src/vendor/**", "src/main.js", "src/studio.js", "src/ui/inputs.js", "src/ui/studio-host.js"];
+// After task 5, src/ui/ but studio-host.js, which main.js alone imports.
+const LEFT = ["src/vendor/**", "src/main.js", "src/studio.js", "src/ui/studio-host.js"];
 
 test("tsconfig.app.json skips only what the typing pass has not reached", () => {
   // The file holds // comment lines, whole lines only; JSON.parse takes the rest.
