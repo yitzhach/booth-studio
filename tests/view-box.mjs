@@ -44,6 +44,26 @@ try {
   assert.equal(await page.evaluate(() => window.__booth.scene.drawingBox), null, 'the tool puts itself away');
   assert.equal(await page.evaluate(() => window.__booth.selectedPedestal), drawn.id, 'and the box is selected');
 
+  // At the piece limit a drawn box is refused, and the tool lets go of
+  // itself, so the next drag is not refused again (TYPING_PHASE.md, task 8).
+  await page.evaluate(() => {
+    const b = window.__booth.project.booth;
+    const base = b.pedestals.find((x) => x.kind === 'box');
+    while (b.pedestals.length < 24) b.pedestals.push({ ...base, id: 'fill-' + b.pedestals.length });
+  });
+  await page.click('.toolbar [data-action="draw-box"]');
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(() => window.__booth.project.booth.pedestals.length), 24, 'no box past the limit');
+  assert.equal(await page.evaluate(() => window.__booth.scene.drawingBox), null, 'and the refused tool puts itself away');
+  await page.evaluate(() => {
+    const b = window.__booth.project.booth;
+    b.pedestals = b.pedestals.filter((x) => !String(x.id).startsWith('fill-'));
+  });
+
   // Pull it up.
   const pull = page.locator(`input[type="range"][data-scope="pedestal-${drawn.id}"][data-field="height"]`);
   await pull.fill('30');

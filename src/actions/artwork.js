@@ -69,7 +69,8 @@ export function createArtworkActions(ctx) {
       if (!ctx.editingStart) return;
       ctx.p = fromSnapshot(ctx.editingStart);
       ctx.editingStart = null;
-      clearTimeout(ctx.scheduleEditedPreview.timer);
+      // The editor's pending preview is an animation frame (`.frame`).
+      cancelAnimationFrame(ctx.scheduleEditedPreview.frame);
       /** @type {HTMLDialogElement} */ (document.querySelector("#image-editor")).close();
       render();
       toast("Image edits canceled.");
@@ -113,15 +114,18 @@ export function createArtworkActions(ctx) {
     "upload-art": () => /** @type {HTMLInputElement} */ (document.querySelector("#art-input")).click(),
     "replace-art": () => /** @type {HTMLInputElement} */ (document.querySelector("#replace-input")).click(),
     "upload-photo": () => /** @type {HTMLInputElement} */ (document.querySelector("#photo-input")).click(),
-    "duplicate-art": () =>
+    "duplicate-art": () => {
+      // Refused before mutate(), which takes the undo step first: a refusal
+      // inside it left a step with no change behind it.
+      const a = ctx.p.art.find((a) => a.id === ctx.selected);
+      if (!a) return;
+      if (ctx.p.art.length >= 200) return toast("This prototype supports up to 200 panels.", true);
       mutate(() => {
-        const a = ctx.p.art.find((a) => a.id === ctx.selected);
-        if (!a) return;
-        if (ctx.p.art.length >= 200) { toast("This prototype supports up to 200 panels.", true); return; }
         const copy = { ...a, id: uid(), title: (a.title + " copy").slice(0,200), x: a.x + 6, edits: a.edits ? structuredClone(a.edits) : undefined };
         ctx.p.art.push(copy);
         ctx.selected = copy.id;
-      }),
+      });
+    },
     "delete-art": () =>
       mutate(() => {
         const gone = new Set(ctx.picked.length > 1 ? ctx.picked : [ctx.selected]);

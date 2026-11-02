@@ -110,7 +110,6 @@ export function createIconSet() {
     Redo2,
     MousePointer2,
     Move,
-    Grid2X2,
     Copy,
     Trash2,
     Plus,

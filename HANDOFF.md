@@ -189,9 +189,9 @@ look at and what to change if it reads wrong.
    `BoothScene`'s methods unchanged, as mixins, into `src/scene/` (the light
    rig, export, video, camera, props, measuring, interaction, the render
    loop and the booth build), and `scene.js` is 183 lines; the scripts are
-   in `tools/scene-split/`. Left for sessions: the rest of 1.4 — the typing
-   pass over `main.js`, `scene.js` and the modules both splits made, with
-   those fixes, in nine tasks: `TYPING_PHASE.md` (task 1, the scene, is in). 1.10's site-qa and Dependabot, 1.11 (the
+   in `tools/scene-split/`. 1.4 is done too (2026-11-02, `TYPING_PHASE.md`):
+   `npm run typecheck` checks every module in `src/` but the vendored files,
+   and the bugs the splits' reviews found are fixed behind tests. 1.10's site-qa and Dependabot, 1.11 (the
    custom domain) and 1.12 (security headers, which change what the Worker
    sends) want the owner's yes first.
 4. **The assistant panel on a phone (2026-10-07): built — see `docs/HISTORY.md`.** The
@@ -239,7 +239,15 @@ look at and what to change if it reads wrong.
    play, start here.
 9. **A `home` HDRI** is still missing — an interior with windows on one side.
    That preset falls back procedurally until someone downloads one.
-10. **Clean house (the owner asked, 2026-10-26).** Done: the test tooling
+10. **The typing pass's fixes, by hand (2026-11-02).** Each makes a control
+   do what it says; worth a minute on the live site: Ctrl+D at 200 works says
+   so and leaves nothing to undo; two aisles selected on the show floor offer
+   no "Renumber these"; the Box tool lets go when it refuses; the Video tab's
+   PNG button names Export's Detail size (it said 4096 px and exported at
+   Detail; if it should export at 4096, that is one line in
+   `src/actions/export.js`); Backspace with nothing selected is the
+   browser's again.
+11. **Clean house (the owner asked, 2026-10-26).** Done: the test tooling
    (booth-studio#72, `docs/HISTORY.md`). Found and not yet done, each the
    owner's pick: `npm audit`'s six highs, all dev-only (vite, wrangler), where
    a vite bump may change `npm run bundle:scene`'s bytes and so need the
