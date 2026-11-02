@@ -29,15 +29,16 @@ declare module "../scene.js" {
   interface BoothScene extends Build, Camera, ExportPasses, Interaction, LightRig, MeasureTools, Props, RenderLoop, Video {
     // The state the areas set and read that the constructor does not
     // create: each is assigned first inside a method, so the class alone
-    // does not declare it. Loose where the value is a project's own shape,
+    // does not declare it. Optional (`?`) where the code reads it before
+    // the first assignment can have run, behind `||`, `||=` or `?.`. Loose where the value is a project's own shape,
     // which validateProject (src/model.js) checks at run time instead.
     /** The project being drawn, as `update` was last handed it. */
     p: any;
     /** The selected artwork's id, and the rest of a multiple selection. */
     selected: string | null;
-    also: string[];
+    also?: string[];
     /** Bumped by every `update`; a load that finds it moved on is stale. */
-    revision: number;
+    revision?: number;
     /** Textures still loading, counted by `texture`. */
     loading: number;
     initialized: boolean;
@@ -48,7 +49,7 @@ declare module "../scene.js" {
     artGroups: Map<string, any>;
     frames: Record<string, any>;
     modelFrames: Record<string, any>;
-    modelCache: Map<string, Promise<T.Object3D>>;
+    modelCache?: Map<string, Promise<T.Object3D>>;
     showGroup: T.Object3D | null;
     showChanged: boolean;
     orthoSpan: number;
@@ -73,12 +74,12 @@ declare module "../scene.js" {
     // Guides, the Box tool, the clearance check (main.js hands the issues over).
     guides: T.Group;
     snapGuides: T.Object3D | null;
-    snapNotes: { at: T.Vector3; text: string; kind?: string }[];
+    snapNotes?: { at: T.Vector3; text: string; kind?: string }[];
     boxPreview: T.Object3D | null;
     /** The Box tool's drag: where it started, or null while not drawing. */
     drawingBox: { start: any } | null;
     onDrawBox?: (r: { x: number; z: number; width: number; depth: number }) => void;
-    clearance: any[];
+    clearance?: any[];
     /** Where the export frame sits, as fractions of the viewport (main.js draws the guide). */
     onRenderRect?: (rect: { x: number; y: number; width: number; height: number } | null) => void;
     // The render loop's bookkeeping.
@@ -86,7 +87,7 @@ declare module "../scene.js" {
     lastTick: number;
     drawnAt: number;
     touchedAt: number;
-    framesOwed: number;
+    framesOwed?: number;
     kick: ReturnType<typeof setTimeout> | null;
     shadowsOwed: boolean;
     smallShadows: boolean;
@@ -94,7 +95,7 @@ declare module "../scene.js" {
     groupDrawn: boolean;
     fitAspectFactor: number;
     overlayCache: any;
-    retired: T.Object3D[];
+    retired?: T.Object3D[];
     retiredAt: number;
   }
 }

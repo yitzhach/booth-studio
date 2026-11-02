@@ -11,8 +11,8 @@ import { readFileSync } from "node:fs";
 const LEFT = ["src/vendor/**", "src/main.js", "src/studio.js", "src/ui/**", "src/panels/**", "src/actions/**"];
 
 test("tsconfig.app.json skips only what the typing pass has not reached", () => {
-  // The file opens with a comment; JSON.parse takes what follows it.
+  // The file opens with // comment lines; JSON.parse takes the rest.
   const text = readFileSync(new URL("../tsconfig.app.json", import.meta.url), "utf8");
-  const config = JSON.parse(text.slice(text.indexOf("{")));
+  const config = JSON.parse(text.split("\n").filter((line) => !line.startsWith("//")).join("\n"));
   assert.deepEqual(config.exclude, LEFT, "an area left the exclude list or came back: update LEFT with TYPING_PHASE.md");
 });

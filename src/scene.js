@@ -19,9 +19,9 @@ export class BoothScene {
   /**
    * @param {HTMLElement} host
    * @param {(id: string | null, options?: { add?: boolean }) => void} onSelect
-   * @param {(...args: any[]) => void} onMove
-   * @param {(...args: any[]) => void} onStart
-   * @param {(...args: any[]) => void} [onEnd]
+   * @param {(art: any) => void} onMove
+   * @param {() => void} onStart
+   * @param {() => void} [onEnd]
    * @param {(key: string | null) => void} [onSelectPanel]
    * @param {(panel: any) => void} [onMovePanel]
    * @param {(id: string | null) => void} [onSelectPedestal]
