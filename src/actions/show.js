@@ -182,7 +182,7 @@ export function createShowActions(ctx) {
     "import-design": () => {
       if (!ctx.p.hall || !Number.isInteger(ctx.hallSelected)) return;
       ctx.designTarget = ctx.hallSelected;
-      document.querySelector("#design-input").click();
+      /** @type {HTMLInputElement} */ (document.querySelector("#design-input")).click();
     },
     "show-open-own": () => {
       if (!ctx.p.hall?.designs?.[OWN]) return;

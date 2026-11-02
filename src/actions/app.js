@@ -15,7 +15,7 @@ import { LOOKS } from "../polish.js";
 export function createAppActions(ctx) {
   const { applyRole, backup, btn, chooseRole, confirmAction, describeToAssistant, fromSnapshot, keepKit, loadStudio, mutate, openQuickStart, openWelcome, refreshIcons, render, renderInspector, runLook, runPolish, runQuickStart, scheduleSave, setDraft, setDraftPolicy, setMeasuring, setPanTool, setSheet, setShow3d, setTier, setWalking, shortcutHelp, snapshot, toast, welcomeDismissed } = ctx;
   return {
-    import: () => document.querySelector("#backup-input").click(),
+    import: () => /** @type {HTMLInputElement} */ (document.querySelector("#backup-input")).click(),
     backup,
     pan: () => setPanTool(!ctx.panTool),
     "clear-tapes": () => ctx.scene?.clearTapes(),
@@ -84,21 +84,21 @@ export function createAppActions(ctx) {
       ctx.scene?.setView("perspective");
       document
         .querySelectorAll("[data-view]")
-        .forEach((b) =>
+        .forEach((/** @type {HTMLElement} */ b) =>
           b.classList.toggle("active", b.dataset.view === "perspective"),
         );
     },
     "quick-start": () => openQuickStart(),
     "qs-go": () => runQuickStart(),
-    "qs-cancel": () => document.querySelector("#dialog").close(),
+    "qs-cancel": () => /** @type {HTMLDialogElement} */ (document.querySelector("#dialog")).close(),
     "welcome-describe": () => describeToAssistant(),
     "welcome-sign-in": () => {
-      document.querySelector("#dialog").close();
+      /** @type {HTMLDialogElement} */ (document.querySelector("#dialog")).close();
       welcomeDismissed();
       ctx.actions["studio-account"]();
     },
     "welcome-close": () => {
-      document.querySelector("#dialog").close();
+      /** @type {HTMLDialogElement} */ (document.querySelector("#dialog")).close();
       welcomeDismissed();
     },
     "save-template": () => {
@@ -138,19 +138,19 @@ export function createAppActions(ctx) {
       );
     },
     help: () => {
-      const d = document.querySelector("#dialog");
+      const d = /** @type {HTMLDialogElement} */ (document.querySelector("#dialog"));
       document.querySelector("#dialog-content").innerHTML =
         `<div class="panel-heading"><h2>Welcome to Booth Studio</h2>${btn("close-help", "Close", "x", "icon-only")}</div><p>Start with Layout, upload your original artwork, and enter its actual dimensions. Sample panels are dimension placeholders, not artwork.</p><ol><li><strong>Arrange:</strong> select a work in the library. Set its wall, left edge, and bottom edge. Use Move to drag along the wall, or Center to align.</li><li><strong>Art show booth:</strong> the Art show tool switches this booth to an indoor convention booth — seamless white walls, a light bar with directional heads spotting each wall, and a white exhibition hall around you. Booth size, wall sizes and the individual display panel are all typed in inches there.</li><li><strong>Free-standing walls and pedestals:</strong> add them in the Walls tool, then click a wall — or double-click a pedestal — in the booth to pick it up. Drag it across the floor, or use its left/right and front/back sliders. Snap keeps a drag on whole inches.</li><li><strong>Navigate:</strong> drag empty space to orbit, scroll to zoom, right-drag to pan. On touch, use one finger to orbit and two to pan/zoom. Wall and Plan views give precise views.</li><li><strong>Light:</strong> adjust ambient light and each spotlight’s position, target, power, and temperature.</li><li><strong>Photo:</strong> upload a booth shot, select uploaded library artwork to add it, then drag its four corners. Lighting is a visual overlay. Existing photo objects remain baked in.</li><li><strong>Keep:</strong> autosave is on this browser/device only. Download a full backup to transfer or archive a project.</li><li><strong>Export:</strong> PNG captures the current view; the hanging guide gives measured artwork edges.</li></ol><p class="muted">Ctrl/⌘ Z: undo · Ctrl/⌘ Shift Z: redo · Delete: remove selected artwork · Arrows: nudge 1″ (Shift: 1′) · R / Shift R: turn a pedestal or wall 15° · Ctrl/⌘ D: duplicate · V: select · M: move · T: tape measure · Esc: put the tape away · / or Ctrl/⌘ K: find a tool.</p>${shortcutHelp()}<p class="muted">No AI calls. Single images do not supply surface relief; baked-in lighting remains. Photorealism and exact display color are not guaranteed.</p>`;
       refreshIcons();
       d.showModal();
     },
-    "close-help": () => document.querySelector("#dialog").close(),
+    "close-help": () => /** @type {HTMLDialogElement} */ (document.querySelector("#dialog")).close(),
     // The phone's way into search: the box is in the header, out of a
     // thumb's reach, so a button in the viewport's corner focuses it.
     // The studio assistant's other two doors (src/studio-assistant.js): the
     // header's button and, on a phone, the icon above Find a tool. Both show
     // only while the panel's own button would (body.assistant-on).
-    assistant: () => document.querySelector("studio-assistant")?.toggle(),
+    assistant: () => /** @type {any} */ (document.querySelector("studio-assistant"))?.toggle(),
     // The inspector's More: every tab, then back to the workspace's own.
     "tabs-more": () => {
       ctx.tabsMore = !ctx.tabsMore;
@@ -169,7 +169,7 @@ export function createAppActions(ctx) {
       document.querySelector('.toolbar [data-action="tools-more"]').setAttribute("aria-expanded", String(open));
     },
     "find-tool": () => {
-      const box = document.querySelector("#tool-search");
+      const box = /** @type {HTMLInputElement} */ (document.querySelector("#tool-search"));
       box.focus();
       box.select();
     },

@@ -76,8 +76,11 @@ one (`render-loop.js` comparing a number with a string, two callbacks
   branches of the same name. *My call.*
 - **Order: smallest and most separate first,** so the declarations each
   later area needs exist when it arrives: the scene, the actions, the
-  panels and `main.js` with the globals, `src/ui/` but `inputs.js`,
-  `inputs.js`, `studio.js`; then the bugs.
+  panels, `src/ui/` but `inputs.js` and `studio-host.js`, `inputs.js`, and
+  last `main.js` with `studio.js`; then the bugs. (`main.js` comes last
+  because a checked module's imports are checked too, excluded or not, and
+  `main.js` imports all of `src/ui/` and, through `studio-host.js`,
+  `studio.js` and the SDK: Rulings, 2026-11-02, task 3.)
 
 ## Files
 
@@ -107,16 +110,17 @@ snapshot for 4–6); `git diff` adds only comments, casts and declarations.
 2. **The actions** — `src/actions/**`. Mostly `dialog.close` on an
    `Element` and timeline keys the JSDoc misses. Suites: view-tier,
    view-batch, view-timeline, view-video, view-share.
-3. **The panels and `main.js`** — `src/panels/**` (no findings today),
-   `src/main.js`, `src/globals.d.ts`, `vite/client` in tsconfig.app.json.
-   Suites: the whole chain.
-4. **`src/ui/` but `inputs.js`.** Suites: the whole chain.
+3. **The panels** — `src/panels/**`: no findings, so it rides task 2's
+   pull request.
+4. **`src/ui/` but `inputs.js` and `studio-host.js`.** Exclude becomes
+   those two by name. Suites: the whole chain.
 5. **`src/ui/inputs.js`.** Suites: the whole chain.
-6. **`studio.js`.** Art-Talk-Back first: `bundle:esm` writes
-   `studio-sdk.d.ts` and its `--check` compares it; then here, vendored
-   beside the `.js`, CI's comparison step covers both files, and
-   `src/studio.js` leaves `exclude`. Gate: `LEFT` is `src/vendor/**`.
-   Suites: two-devices, view-share, the chain.
+6. **`studio.js`, `studio-host.js` and `main.js`.** Art-Talk-Back first:
+   `bundle:esm` writes `studio-sdk.d.ts` and its `--check` compares it;
+   then here, vendored beside the `.js`, CI's comparison step covers both
+   files. `src/globals.d.ts` gains the build's globals and `window`
+   additions, and tsconfig.app.json `vite/client`. Gate: `LEFT` is
+   `src/vendor/**`. Suites: two-devices, view-share, the chain.
 7. **Undo steps with nothing in them.** At the 200-placement limit,
    `duplicate-art` refuses inside `mutate()` and leaves an empty undo step;
    "Renumber these" with no booth among the pieces does the same and is
@@ -184,3 +188,23 @@ wrong.)
   (`tests/scene-size.test.js`) goes from 183 to 198, noted there; the
   split's gate is 1,000. The scene had 21 findings before `this` was
   typed and 0 after; none was a bug.
+- **2026-11-02, task 2: the actions, by cast alone.** 41 findings, all but
+  one a `querySelector` read as an `Element` where the code calls a
+  dialog's `close`/`showModal`, an input's `click`/`value`, or an
+  element's `dataset`/`style`/`hidden`. Each is cast once, to the kind the
+  markup has (`#export-size` is a `<select>`, `.report-text` a
+  `<textarea>`, `#underlay-real` an `<input>`), and `<studio-assistant>`,
+  a custom element with no declaration, to `any`. The one other: a
+  timeline key added in the dialog may carry `place`, which `keyFrom`'s
+  return type does not name, so `added` is typed with it. No bug.
+- **2026-11-02, task 3: `main.js` goes last, and the panels ride task 2.**
+  Taking `main.js` out of the exclude list brought 508 findings, not its
+  108: a module the check reads has its imports read too, excluded or
+  not, and `main.js` imports all of `src/ui/` and, through
+  `studio-host.js`'s `import("../studio.js")`, the vendored SDK (48 of
+  them). So `main.js` moves to the last typing task, with `studio.js`, and
+  `studio-host.js` waits with it; nothing else in `src/` imports either
+  (checked). `src/panels/` alone has no findings, so it left the exclude
+  list in task 2's pull request rather than one of its own. *Cost if
+  wrong:* none; the order only decides which pull request carries which
+  casts.

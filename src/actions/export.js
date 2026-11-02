@@ -34,12 +34,12 @@ export function createExportActions(ctx) {
         await navigator.clipboard.writeText(text);
         toast("Problem report copied. Paste it into a message to whoever looks after Booth Studio.");
       } catch {
-        const d = document.querySelector("#dialog");
+        const d = /** @type {HTMLDialogElement} */ (document.querySelector("#dialog"));
         document.querySelector("#dialog-content").innerHTML =
           `<h2>Problem report</h2><p class="muted">Select it all and copy it into a message. Nothing has been sent.</p><textarea class="report-text" readonly rows="14" aria-label="Problem report">${e(text)}</textarea><div class="button-row"><button class="primary" id="report-close">Done</button></div>`;
-        document.querySelector("#report-close").onclick = () => d.close();
+        /** @type {HTMLElement} */ (document.querySelector("#report-close")).onclick = () => d.close();
         d.showModal();
-        document.querySelector(".report-text")?.select();
+        /** @type {HTMLTextAreaElement} */ (document.querySelector(".report-text"))?.select();
       }
     },
     // The one place persist() is asked: Firefox answers with a permission
@@ -75,7 +75,7 @@ export function createExportActions(ctx) {
     "export-image": async () => {
       if (ctx.busy) return toast("Another export is still running: try again in a moment.");
       ctx.busy = true;
-      const b = document.querySelector('[data-action="export-image"]');
+      const b = /** @type {HTMLButtonElement} */ (document.querySelector('[data-action="export-image"]'));
       b.disabled = true;
       b.textContent = "Rendering…";
       try {
@@ -85,7 +85,7 @@ export function createExportActions(ctx) {
         // The Video tab offers the same PNG without the size menu beside it,
         // so the menu is read when it is there and the remembered setting
         // used when it is not.
-        const long = Number(document.querySelector("#export-size")?.value) || ctx.exportLong,
+        const long = Number(/** @type {HTMLSelectElement} */ (document.querySelector("#export-size"))?.value) || ctx.exportLong,
           // A photograph has a shape of its own — its own pixels — and a
           // frame here would crop or letterbox it, so the frame is the 3D
           // booth's alone and photo mode keeps taking a width.

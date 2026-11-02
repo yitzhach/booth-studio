@@ -15,7 +15,7 @@ export function createVideoActions(ctx) {
   const { addJobs, clipJob, currentClip, currentPose, followPlayhead, getPlace, grabThumb, keyName, kit, placeSettled, probeCodec, refreshPanels, renderInspector, renderTimelineDialog, runClips, saveViewPrefs, setKit, setPlace, showKey, stillJob, syncAutoPan, timeline, timelineOpen, toast, updateFrameGuide } = ctx;
   return {
     "autopan-menu": () => {
-      const menu = document.querySelector(".autopan-menu");
+      const menu = /** @type {HTMLElement} */ (document.querySelector(".autopan-menu"));
       if (!menu) return;
       menu.hidden = !menu.hidden;
       if (!menu.hidden) syncAutoPan();
@@ -208,12 +208,12 @@ export function createVideoActions(ctx) {
       // show(), not showModal(). A modal would block the viewport, and the
       // viewport is where keyframes come from: the whole loop is compose a
       // shot, press Add, orbit, press Add again.
-      const panel = document.querySelector("#timeline-dialog");
+      const panel = /** @type {HTMLDialogElement} */ (document.querySelector("#timeline-dialog"));
       if (!panel.open) panel.show();
       updateFrameGuide();
     },
     "close-timeline": () => {
-      document.querySelector("#timeline-dialog").close();
+      /** @type {HTMLDialogElement} */ (document.querySelector("#timeline-dialog")).close();
       ctx.scene?.clearMoment();
       ctx.livePlace = null;
       // Emptied, so the batch and frame controls it repeats are not in the
@@ -230,6 +230,7 @@ export function createVideoActions(ctx) {
       // the end key, which would be a zero-length segment.
       const previous = tl.keys.at(-2).t;
       // Between the last two keys, wherever the end has been slid to.
+      /** @type {ReturnType<typeof keyFrom> & { place?: any }} */
       const added = { ...keyFrom(position, target), t: (previous + tl.keys.at(-1).t) / 2 };
       // A keyframed frame: the new key takes the frame as it is shown now.
       if (tl.frameKeys) added.place = { ...getPlace("video") };
@@ -311,7 +312,7 @@ export function createVideoActions(ctx) {
             ? (t) => {
                 ctx.tlPlayhead = t * custom.seconds;
                 followPlayhead(custom, t);
-                const head = document.querySelector("#timeline-content .tl-playhead");
+                const head = /** @type {HTMLElement} */ (document.querySelector("#timeline-content .tl-playhead"));
                 if (head) {
                   head.style.left = `${(t * 100).toFixed(3)}%`;
                   head.firstElementChild.textContent = `${ctx.tlPlayhead.toFixed(1)}s`;
@@ -349,7 +350,7 @@ export function createVideoActions(ctx) {
           onProgress: (t) => {
             ctx.tlPlayhead = t * tl.seconds;
             followPlayhead(tl, t);
-            const head = document.querySelector("#timeline-content .tl-playhead");
+            const head = /** @type {HTMLElement} */ (document.querySelector("#timeline-content .tl-playhead"));
             if (head) {
               head.style.left = `${(t * 100).toFixed(3)}%`;
               head.firstElementChild.textContent = `${ctx.tlPlayhead.toFixed(1)}s`;
@@ -362,7 +363,7 @@ export function createVideoActions(ctx) {
       } finally {
         ctx.busyPreview = false;
         renderInspector();
-        if (document.querySelector("#timeline-dialog")?.open) {
+        if (/** @type {HTMLDialogElement} */ (document.querySelector("#timeline-dialog"))?.open) {
           renderTimelineDialog();
           ctx.scene.showMoment(tl, ctx.tlPlayhead / tl.seconds);
           followPlayhead(tl, ctx.tlPlayhead / tl.seconds);

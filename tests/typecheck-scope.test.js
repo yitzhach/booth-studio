@@ -7,8 +7,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-// After task 1, the scene.
-const LEFT = ["src/vendor/**", "src/main.js", "src/studio.js", "src/ui/**", "src/panels/**", "src/actions/**"];
+// After tasks 2 and 3, the actions and the panels.
+const LEFT = ["src/vendor/**", "src/main.js", "src/studio.js", "src/ui/**"];
 
 test("tsconfig.app.json skips only what the typing pass has not reached", () => {
   // The file opens with // comment lines; JSON.parse takes the rest.
