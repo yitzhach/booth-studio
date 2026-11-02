@@ -40,6 +40,7 @@ async function parseModel(dataUrl) {
   const gltf = await new GLTFLoader().parseAsync(buffer, "");
   return gltf.scene;
 }
+/** @satisfies {ThisType<import("../scene.js").BoothScene>} */
 export const build = {
   box(w, h, d, x, y, z, mat, parent = this.group) {
     const o = new T.Mesh(new T.BoxGeometry(w, h, d), mat);

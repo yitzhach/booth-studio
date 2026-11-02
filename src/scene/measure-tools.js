@@ -9,6 +9,7 @@ import { distanceInches, formatLength, planDimensions } from "../measure.js";
 import { FLOOR } from "./shared.js";
 // How many kept tapes the tape measure shows at once (Keep every tape).
 export const MAX_TAPES = 24;
+/** @satisfies {ThisType<import("../scene.js").BoothScene>} */
 export const measureTools = {
   /**
    * The plan view's dimension lines and the tape measure, rebuilt from the
@@ -166,7 +167,7 @@ export const measureTools = {
     if (!list.length) return;
     const w = this.host.clientWidth, h = this.host.clientHeight, v = new T.Vector3();
     list.forEach((note, i) => {
-      const el = layer.children[i];
+      const el = /** @type {HTMLElement} */ (layer.children[i]);
       v.copy(note.at).project(this.camera);
       el.className = "scene-label-note " + note.kind;
       if (el.textContent !== note.text) el.textContent = note.text;

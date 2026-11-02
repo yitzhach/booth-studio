@@ -130,6 +130,7 @@ export const isPanorama = (background) =>
 // cost is per pixel and a phone does not need 9x the fragments.
 // "auto" asks for the same factor Balanced does; the scene then measures its
 // way down from there (see src/adaptive.js).
+/** @param {number | "auto"} [quality] */
 export const renderScale = (quality = 2) =>
   Math.min(Math.max(devicePixelRatio || 1, quality === AUTO_QUALITY ? 2 : quality), 3);
 // How long the viewport keeps a once-a-second heartbeat after the last thing
@@ -226,6 +227,7 @@ function disposeTree(group) {
     o.userData.dispose?.();
   });
 }
+/** @satisfies {ThisType<import("../scene.js").BoothScene>} */
 export const renderLoop = {
   // The live loop, in one place: the video recorder stops it so that nothing
   // renders between the frames it is encoding, and starts it again afterwards.

@@ -7,6 +7,7 @@ import * as T from "three";
 import { SURFACES, TAG_SURFACE } from "../ai-render.js";
 import { DEFAULT_FRAME, FRAMES, frameSize, placeRect } from "../framing.js";
 const FRAMES_WITH_SHAPE = (id) => !!FRAMES[id] && id !== DEFAULT_FRAME;
+/** @satisfies {ThisType<import("../scene.js").BoothScene>} */
 export const exportPasses = {
   /**
    * The booth as a binary glTF (.glb), for SketchUp, Blender, an AR viewer or
@@ -203,6 +204,9 @@ export const exportPasses = {
    * get the camera set up for it. A camera whose aspect is not the canvas's is
    * the whole bug behind a stretched export, so it is set here and restored in
    * the finally beside everything else.
+   *
+   * @param {number} long
+   * @param {{ frame?: string, custom?: { width: number, height: number }, place?: any, pose?: any, pass?: string }} [options]
    */
   async export(long, { frame = DEFAULT_FRAME, custom, place, pose, pass = "beauty" } = {}) {
     await Promise.allSettled(this.textureCache.pending());
