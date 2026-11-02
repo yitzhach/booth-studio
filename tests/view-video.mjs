@@ -241,9 +241,12 @@ try {
       const entryStart = stsd.start + 8; // version, flags, entry count
       const entry = String.fromCharCode(...bytes.slice(entryStart + 4, entryStart + 8));
       const configuration = String.fromCharCode(...bytes.slice(entryStart + 8 + 78 + 4, entryStart + 8 + 78 + 8));
+      // A visual sample entry's width and height sit 24 bytes into its body,
+      // after the reserved bytes, the data reference and the pre-defined ones.
+      const entryWidth = dv.getUint16(entryStart + 8 + 24), entryHeight = dv.getUint16(entryStart + 8 + 26);
       const stsz = walk(level.start, level.end, 'stsz');
       const samples = dv.getUint32(stsz.start + 8);
-      return { type: blob.type, bytes: bytes.length, boxes, progress, frames: progress.length, entry, configuration, samples, kind: recorded.kind, codec: recorded.codec, label: recorded.label, reportedFrames: recorded.frames };
+      return { type: blob.type, bytes: bytes.length, boxes, progress, frames: progress.length, entry, configuration, entryWidth, entryHeight, width: recorded.width, height: recorded.height, samples, kind: recorded.kind, codec: recorded.codec, label: recorded.label, reportedFrames: recorded.frames };
     });
     assert.equal(result.type, 'video/mp4', 'the recording is an MP4');
     assert.deepEqual(result.boxes.map((b) => b.type), ['ftyp', 'mdat', 'moov'], `top-level boxes were ${JSON.stringify(result.boxes)}`);
@@ -267,17 +270,23 @@ try {
     assert.equal(result.kind, codec.kind, 'the recording reports which codec encoded it');
     assert.ok(result.label, 'and names it for the user');
     assert.equal(result.reportedFrames, result.frames, 'and reports its own frame count');
+    // The file says what size it holds, and the recording reports the same.
+    assert.deepEqual([result.entryWidth, result.entryHeight], [result.width, result.height], 'the sample entry carries the clip\'s own size');
     // The level in the codec string must match what the frame size and rate
     // need — the bug that made a 1440p or 1080p60 clip declare level 4.0.
-    // Node imports it here, not the page, so the path is the file's own:
+    // The size is the one in the file, not one assumed here: "This window"
+    // follows the canvas's shape, which follows the layout (this assumed
+    // 1280 x 924 until 2026-11-02, while the canvas had become 742 x 667 and
+    // the clip 1280 x 1152, which level 4.0 is right for). Node imports
+    // h264Level here, not the page, so the path is the file's own:
     // '/src/video.js' only resolves in the browser, and threw here wherever
     // the browser could encode H.264 (CI's Chromium cannot, so it never ran).
     if (codec.kind !== 'vp09') {
       const { h264Level } = await import('../src/video.js');
-      const expected = h264Level(1280, Math.round(1280 / (1280 / 924)), 24).toString(16).padStart(2, '0');
-      assert.ok(result.codec.endsWith(expected), `codec ${result.codec} should declare level ${expected}`);
+      const expected = h264Level(result.entryWidth, result.entryHeight, 24).toString(16).padStart(2, '0');
+      assert.ok(result.codec.endsWith(expected), `codec ${result.codec} should declare level ${expected} for ${result.entryWidth} x ${result.entryHeight}`);
     }
-    console.log(`     encoded ${result.frames} frames with ${codec.codec} into ${(result.bytes / 1024).toFixed(0)} kB, as ${result.entry}/${result.configuration}`);
+    console.log(`     encoded ${result.frames} frames, ${result.entryWidth} x ${result.entryHeight}, with ${result.codec} into ${(result.bytes / 1024).toFixed(0)} kB, as ${result.entry}/${result.configuration}`);
 
     // A chosen frame, not the browser window's. The reported bug was that a
     // clip came out the shape of the viewport; a vertical frame in a

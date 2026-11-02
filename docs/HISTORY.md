@@ -17,6 +17,21 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-11-02: the H.264 level was right; the test's size was stale.**
+  `tests/view-video.mjs` expected level 3.2 for a 720-size clip because it
+  assumed the canvas, and so the "This window" frame, was 1280 × 924. In a
+  1280 × 860 window the canvas is 742 × 667 now, the clip 1280 × 1152
+  (5,760 macroblocks, over 3.2's 5,120), and the `avc1.640028` (level 4.0)
+  the app declared is correct. The suite now reads the clip's width and
+  height from the file's own sample entry, checks they match what
+  `recordVideo` reports, and expects the level for that size. Checked
+  against a mutant: a codec string fixed at level 5.2 fails it ("should
+  declare level 28 for 1280 x 1152"). One at level 3.2 never reaches it:
+  this sandbox's encoder refuses a level too low for the frame and the
+  export falls back, which the codec probe's own assertion catches first.
+  The check runs only where the browser encodes H.264 (this sandbox's
+  Chromium 1243, real Chrome and Safari), never CI's 1194; view-video now
+  passes here. HANDOFF → Next 10 is closed.
 - **2026-10-28: `scene.js`'s ninth and last seam (ROADMAP 1.3 done).** The
   booth build — the walls, panels, artwork, lights, ground and models
   `update` rebuilds, the show staged round it, the selection and the hidden
