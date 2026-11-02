@@ -20,6 +20,7 @@ function placePedestal(g, ped) {
   g.rotation.y = ((ped.rotation || 0) * Math.PI) / 180;
   return g;
 }
+/** @satisfies {ThisType<import("../scene.js").BoothScene>} */
 export const props = {
   /**
    * Pedestals: a plinth with a solid top for cards, a tablet or a guest book.

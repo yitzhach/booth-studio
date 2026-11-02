@@ -15,6 +15,7 @@ export function temperature(k) {
     T.SRGBColorSpace,
   );
 }
+/** @satisfies {ThisType<import("../scene.js").BoothScene>} */
 export const lightRig = {
   /**
    * Whether the light bar's heads cast shadows. Nine shadow-casting spots are

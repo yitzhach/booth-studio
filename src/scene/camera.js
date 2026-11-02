@@ -18,6 +18,7 @@ export const MAX_POLAR = Math.PI * 0.82;
 // camera cannot pull it back. 62 degrees against the old 44 shows about half
 // as much again, and frames more of the booth with it.
 export const FOV = 62;
+/** @satisfies {ThisType<import("../scene.js").BoothScene>} */
 export const camera = {
   // Allow the lowest polar angle that still keeps the camera above the floor
   // at its current distance, so orbiting down slides along the ground instead
@@ -198,6 +199,9 @@ export const camera = {
    * distance (linear by default; timeline.js EASES for the others). Any press, wheel or key
    * in the viewport stops it where it is; `onDone(finished)` says whether it
    * ran its full distance. Returns a stop function.
+   *
+   * @param {{ inches: number, seconds: number, dir?: number, ease?: (t: number) => number }} move
+   * @param {(finished: boolean) => void} [onDone]
    */
   autoPan({ inches, seconds, dir = 1, ease = (t) => t }, onDone = () => {}) {
     this.stopAutoPan();

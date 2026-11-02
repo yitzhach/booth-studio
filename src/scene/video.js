@@ -7,6 +7,7 @@ import { frameTimes, resolveMove, samplePath } from "../camera-path.js";
 import { fadeAt, isTimeline, sampleTimeline, timelineSeconds } from "../timeline.js";
 import { DEFAULT_SIZE, SIZES, evenSize, recordMp4, videoSupported } from "../video.js";
 import { DEFAULT_FRAME, frameSize } from "../framing.js";
+/** @satisfies {ThisType<import("../scene.js").BoothScene>} */
 export const video = {
   // The framing as a keyframe would hold it, and the way back to one. Both are
   // here rather than in main.js because the camera and its controls are this
@@ -62,6 +63,9 @@ export const video = {
   // that is correct here for the same reason it is wrong there: a preview
   // should take the number of seconds it claims even if the machine drops
   // frames doing it, whereas a file must contain every frame it promises.
+  /**
+   * @param {{ move?: any, seconds?: number, from?: number, onProgress?: (t: number) => void, signal?: AbortSignal }} [options]
+   */
   previewMove({ move, seconds, from = 0, onProgress = () => {}, signal } = {}) {
     // Any preview already running is stopped *before* the framing is read,
     // because stopping it is what puts the camera back. Reading first would
@@ -156,6 +160,9 @@ export const video = {
       step();
     });
   },
+  /**
+   * @param {{ move?: any, seconds?: number, fps?: number, size?: number, frame?: string, custom?: { width: number, height: number }, place?: any, settle?: boolean, onProgress?: (t: number) => void, signal?: AbortSignal }} [options]
+   */
   async recordVideo({ move, seconds, fps, size, frame = DEFAULT_FRAME, custom, place, settle = true, onProgress = () => {}, signal } = {}) {
     if (!videoSupported())
       throw new Error(

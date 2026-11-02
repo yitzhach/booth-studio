@@ -7,8 +7,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-// After seam 9, the booth build: the last seam.
-const MAX = 183;
+// After seam 9, the booth build: the last seam (183). The typing pass
+// (TYPING_PHASE.md, task 1) added the constructor's JSDoc: 15 lines of types,
+// no code.
+const MAX = 198;
 
 test(`src/scene.js stays at ${MAX} lines or fewer: a seam moves code out, nothing moves back`, () => {
   const text = readFileSync(fileURLToPath(new URL("../src/scene.js", import.meta.url)), "utf8");

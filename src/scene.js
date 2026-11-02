@@ -16,6 +16,17 @@ import { frameKey } from "./scene/shared.js";
 import { build, ART_TEXTURE_MAX } from "./scene/build.js";
 import { FrameBudget, startScale } from "./adaptive.js";
 export class BoothScene {
+  /**
+   * @param {HTMLElement} host
+   * @param {(id: string | null, options?: { add?: boolean }) => void} onSelect
+   * @param {(...args: any[]) => void} onMove
+   * @param {(...args: any[]) => void} onStart
+   * @param {(...args: any[]) => void} [onEnd]
+   * @param {(key: string | null) => void} [onSelectPanel]
+   * @param {(panel: any) => void} [onMovePanel]
+   * @param {(id: string | null) => void} [onSelectPedestal]
+   * @param {(pedestal: any) => void} [onMovePedestal]
+   */
   constructor(
     host,
     onSelect,
@@ -53,6 +64,7 @@ export class BoothScene {
     this.personFrames = {};
     // Double-clicking a figure. Set by main.js after construction rather than
     // added to the constructor's long list of positional callbacks.
+    /** @type {(person: any) => void} */
     this.onSelectPerson = () => {};
     // Tags hidden right now (see src/views.js). A view setting: main.js owns
     // the set and hands it over; `applyTags` does the hiding.
@@ -91,11 +103,13 @@ export class BoothScene {
     // Supersampling does not ask permission.
     // The Export panel's Preview quality, kept here rather than only in the
     // inspector because draft mode has to be able to put it back.
+    /** @type {number | "auto"} */
     this.quality = 2;
     // Auto quality's current rung and the frame budget that moves it. Set by
     // `setQuality(AUTO_QUALITY)`; unused at a fixed quality.
     this.autoScale = startScale(devicePixelRatio);
     this.budget = new FrameBudget();
+    /** @type {(scale: number) => void} */
     this.onAdapt = () => {};
     // Light-bar heads draw their shadows in exports always, and in the live
     // viewport only at High detail. See `setBarShadows`.
@@ -154,6 +168,7 @@ export class BoothScene {
     // `points` is the tape being laid; with `keep` on, each finished tape is
     // kept in `kept` when the next one starts, so several can be read at once.
     this.measure = { on: false, points: [], kept: [], keep: false };
+    /** @type {(inches: number | null) => void} */
     this.onMeasure = () => {};
     this.watchForChanges();
     this.startLoop();

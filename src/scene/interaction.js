@@ -8,6 +8,7 @@ import { IN, constrain, findPanel, findPedestal, isPanelKey, scalePanel, wallSpe
 import { smartSnap } from "../guides.js";
 import { sameWall } from "../arrange.js";
 import { FLOOR, frameKey } from "./shared.js";
+/** @satisfies {ThisType<import("../scene.js").BoothScene>} */
 export const interaction = {
   point(e) {
     const r = this.renderer.domElement.getBoundingClientRect();

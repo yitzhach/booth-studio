@@ -191,7 +191,7 @@ look at and what to change if it reads wrong.
    loop and the booth build), and `scene.js` is 183 lines; the scripts are
    in `tools/scene-split/`. Left for sessions: the rest of 1.4 — the typing
    pass over `main.js`, `scene.js` and the modules both splits made, with
-   those fixes. 1.10's site-qa and Dependabot, 1.11 (the
+   those fixes, in nine tasks: `TYPING_PHASE.md` (task 1, the scene, is in). 1.10's site-qa and Dependabot, 1.11 (the
    custom domain) and 1.12 (security headers, which change what the Worker
    sends) want the owner's yes first.
 4. **The assistant panel on a phone (2026-10-07): built — see `docs/HISTORY.md`.** The
