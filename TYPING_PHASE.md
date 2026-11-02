@@ -270,3 +270,10 @@ wrong.)
   casts that would have taken a line of their own are inline. The gate is
   met: `tsconfig.app.json` excludes `src/vendor/**` alone. With JSDoc and
   parentheses removed, no changed line differs from the one it replaced.
+- **2026-11-02, tasks 4–6 ship as one pull request.** All three are casts
+  and declarations, checked the same way (with JSDoc and parentheses
+  removed, no changed line differs), and each was built on the one before
+  while task 2's pull request was in CI. One pull request runs the chain
+  and CI once for the three instead of three times. Each keeps its own
+  commit, so each reads on its own. *Cost if wrong:* a bigger diff to read
+  at once.
