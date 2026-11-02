@@ -145,6 +145,16 @@ try {
   h = await hall();
   assert.deepEqual([h.venue.kind, h.venue.width], ['outdoor', 2400]);
 
+  // ---- Renumbering is offered for a selection with a booth in it ----------
+  // Two pieces that are not booths have nothing to renumber: the button is
+  // not offered, rather than renumbering nothing from Infinity and leaving
+  // an empty undo step (TYPING_PHASE.md, task 7).
+  const others = h.items.filter((i) => i.kind !== 'booth').slice(0, 2).map((i) => i.id);
+  assert.equal(others.length, 2, 'the floor has two pieces that are not booths');
+  await page.evaluate((ids) => window.__booth.showEditor.select(ids), others);
+  await page.waitForTimeout(100);
+  assert.equal(await page.locator('[data-action="show-renumber"]', { hasText: 'Renumber these' }).count(), 0, 'no Renumber these for pieces that are not booths');
+
   // ---- Renumber the whole floor -------------------------------------------
   await page.keyboard.press('Escape');
   await page.click('#show-floor svg', { position: { x: 5, y: 5 } });

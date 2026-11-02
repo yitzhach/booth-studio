@@ -277,3 +277,33 @@ wrong.)
   and CI once for the three instead of three times. Each keeps its own
   commit, so each reads on its own. *Cost if wrong:* a bigger diff to read
   at once.
+- **2026-11-02, tasks 7–9: the bugs, each behind a test that failed
+  first.** Fixed, with the check that went red without the fix:
+  `duplicate-art` refuses before `mutate()` takes its undo step
+  (view-arrange, "nothing to undo for it"); "Renumber these" is offered
+  only with a booth among the pieces, and the action says so instead of
+  renumbering nothing from Infinity (view-show); the Box tool lets go of
+  itself when it refuses (view-box); the Video tab's PNG button names the
+  size it exports at, Export's Detail (view-frame) — the code's two
+  comments disagreed and came in the same commit, so the label follows
+  the behaviour rather than the reverse, which would change people's
+  files; Delete and Backspace take the key only when something goes
+  (view-arrange); a drag that starts on text throws nothing (view-arrange,
+  `ev.target.closest is not a function`). Fixed without a view test, none
+  being reachable from the suites: a saved view's Update toasts only when
+  there was a scene to take a pose from; a studio version opened clears
+  the selected wall, pedestal, figure, multiple selection and row booth as
+  an opened backup does (render already dropped ids the new project
+  lacks); `editor-cancel` cancels the pending animation frame, `.frame`,
+  instead of a `.timer` nothing set; the icon table registers `Grid2X2`
+  once. Not fixed, as they do not reproduce: a Box click under 1″ cannot
+  save a box, because the scene sends only footprints of 4″ or more (since
+  booth-studio#21); and the frame guide's corner can only overrun with a
+  frame under 40 px, which neither a drag (its 40 px minimum) nor the
+  scale slider makes. Left, as tidy-ups that change no behaviour and were
+  not bugs: the 200-placement limit written out in four places, the three
+  sync loops written three times.
+- **2026-11-02: the chain's view-responsive failure was this sandbox's
+  load.** On tasks 4–6's tree it failed "Auto starts at Balanced" while I
+  ran the type check and the node suites beside it, against HANDOFF →
+  Testing; alone on the same tree it passed (165 s), and CI passed it.

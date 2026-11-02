@@ -214,9 +214,11 @@ export function createSceneWiring(ctx) {
     // A footprint drawn with the Box tool becomes a box on the floor, 12″
     // high to start: selected, so the Walls tool's Pull up is right there.
     ctx.scene.onDrawBox = (r) => {
-      if (!allowed("box")) return toast("Draw a box is part of Booth Studio Pro.", true);
+      // A refusal lets go of the tool as a box drawn does, or every drag
+      // after it would be refused again.
+      if (!allowed("box")) return setDrawingBox(false), toast("Draw a box is part of Booth Studio Pro.", true);
       const list = boothPedestals(ctx.p);
-      if (list.length >= MAX_PEDESTALS) return toast(`${MAX_PEDESTALS} pieces is the limit.`, true);
+      if (list.length >= MAX_PEDESTALS) return setDrawingBox(false), toast(`${MAX_PEDESTALS} pieces is the limit.`, true);
       const n = list.filter((x) => furnitureKind(x) === "box").length + 1;
       const piece = { id: uid(), name: "Box " + n, kind: "box", x: r.x, z: r.z, width: Math.min(BOX_LIMITS.width[1], r.width), depth: Math.min(BOX_LIMITS.depth[1], r.depth), height: FURNITURE.box.height, rotation: 0 };
       mutate(() => {

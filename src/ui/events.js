@@ -57,7 +57,8 @@ export function createEvents(ctx) {
         else if (action.startsWith("view-update-")) {
           const id = action.slice(12);
           const pose = ctx.scene?.pose();
-          if (pose) mutate(() => (ctx.p.views = (ctx.p.views || []).map((v) => (v.id === id ? { ...v, ...newView(pose, id), name: v.name } : v))));
+          if (!pose) return;
+          mutate(() => (ctx.p.views = (ctx.p.views || []).map((v) => (v.id === id ? { ...v, ...newView(pose, id), name: v.name } : v))));
           toast("View replaced with what the camera shows now.");
         }
         else if (action.startsWith("view-delete-")) {
@@ -285,9 +286,10 @@ export function createEvents(ctx) {
       ctx.actions[ev.shiftKey ? "redo" : "undo"]();
     }
     if (ev.key === "Delete" || ev.key === "Backspace") {
-      ev.preventDefault();
-      if (ctx.p.mode === "photo" && ctx.photoSelected) ctx.actions["photo-delete"]();
-      else if (ctx.p.mode === "3d" && ctx.selected) ctx.actions["delete-art"]();
+      // The key is taken only when something goes; with nothing selected it
+      // is left to the browser.
+      if (ctx.p.mode === "photo" && ctx.photoSelected) ev.preventDefault(), ctx.actions["photo-delete"]();
+      else if (ctx.p.mode === "3d" && ctx.selected) ev.preventDefault(), ctx.actions["delete-art"]();
     }
     // +/- zoom the viewport, matching the on-screen zoom buttons. Both rows of
     // keys count: "=" is the unshifted key "+" lives on, and the numpad sends

@@ -139,7 +139,8 @@ export function createLibrary(ctx) {
   }
   document.addEventListener("dragstart", (ev) => {
     /** @type {HTMLElement | null} */
-    const card = /** @type {Element} */ (ev.target).closest("[data-source]");
+    // A drag of selected text starts on a Text node, which has no closest().
+    const card = /** @type {Element} */ (ev.target).closest?.("[data-source]");
     if (!card || ctx.p.mode !== "3d") return;
     ev.dataTransfer.setData("application/x-booth-original", card.dataset.source);
     ev.dataTransfer.effectAllowed = "copy";

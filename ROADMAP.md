@@ -236,7 +236,7 @@ more small pull requests, each green on every suite before it merges.
       methods moved unchanged as mixins on the class; gate 1,000 lines.
       2026-10-28: all nine in; `scene.js` is 183 lines, the constructor and
       the `mixin` calls, its methods in `src/scene/`.)*
-- [ ] **1.4 Type checking without a build step.** `// @ts-check` with JSDoc
+- [x] **1.4 Type checking without a build step.** `// @ts-check` with JSDoc
       types and `tsc --noEmit --checkJs` in CI, starting with the modules
       `npm run bundle:scene` ships to studio-api (`model.js`, `scene-ops.js`,
       `placement.js`, `quickstart.js`, `arrange.js`), because a mistake there
@@ -248,7 +248,9 @@ more small pull requests, each green on every suite before it merges.
       and `scene.js` wait for their split (1.2, 1.3) — 493 findings between
       them on the day — and `studio.js` imports the vendored SDK, which has
       no types of its own (the route: Art-Talk-Back's SDK bundle step writing
-      a `.d.ts` beside it). Left: those three.)*
+      a `.d.ts` beside it). Left: those three. 2026-11-02: done —
+      `TYPING_PHASE.md`; every module in `src/` but `src/vendor/` is
+      checked, the SDK typed by a declaration a test holds to it.)*
 - [x] **1.5 A linter in CI.** ESLint's flat config with its recommended
       rules plus `no-undef` and `no-unused-vars`. Fix what it finds in the
       same pull request, or turn the rule off with a reason.

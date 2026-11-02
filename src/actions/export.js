@@ -80,9 +80,6 @@ export function createExportActions(ctx) {
       b.textContent = "Rendering…";
       try {
         // The Video tab offers the same PNG without the size menu beside it,
-        // so the menu is read when it is there and the high setting assumed
-        // when it is not.
-        // The Video tab offers the same PNG without the size menu beside it,
         // so the menu is read when it is there and the remembered setting
         // used when it is not.
         const long = Number(/** @type {HTMLSelectElement} */ (document.querySelector("#export-size"))?.value) || ctx.exportLong,

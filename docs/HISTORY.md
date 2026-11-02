@@ -17,6 +17,17 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-11-02: the typing pass (ROADMAP 1.4 done).** `TYPING_PHASE.md`,
+  in four pull requests (booth-studio#79, #80, #81 and this one): the scene
+  (its mixins declared on `BoothScene` by `src/scene/types.d.ts`), the
+  actions, the panels, `src/ui/`, `main.js` and `studio.js` (the vendored
+  SDK typed by `src/vendor/studio-sdk.d.ts`, held to the module by
+  `tests/studio-sdk-types.test.js`) joined the type check, by casts and
+  declarations only: with JSDoc and parentheses removed, no changed line
+  differed. 570 findings, none a bug. Then the bugs the splits' reviews
+  found, each behind a view check that failed first (Rulings, tasks 7–9),
+  two of them not reproducing. `tests/typecheck-scope.test.js` holds the
+  exclude list at `src/vendor/**`.
 - **2026-11-02: the H.264 level was right; the test's size was stale.**
   `tests/view-video.mjs` expected level 3.2 for a 720-size clip because it
   assumed the canvas, and so the "This window" frame, was 1280 × 924. In a

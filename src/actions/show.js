@@ -86,6 +86,9 @@ export function createShowActions(ctx) {
     "show-align-left": () => showAlign("l"),
     "show-renumber": () => {
       const pieces = showPieces().length > 1 ? showPieces() : toFloor(ctx.p.hall).items;
+      // No booth among them, nothing to renumber: say so rather than take an
+      // undo step and renumber nothing from Infinity.
+      if (!pieces.some((i) => i.kind === "booth")) return toast("There are no booths among these pieces to renumber.", true);
       const from = Math.min(...pieces.filter((i) => i.kind === "booth").map((i) => i.number));
       const start = pieces === ctx.p.hall.items ? ctx.p.hall.start : from;
       const next = renumber(pieces, start);

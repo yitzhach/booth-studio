@@ -41,6 +41,23 @@ try {
   assert.equal((await project()).art.length, before + 1, 'Ctrl+D duplicates');
   await press('Control+z');
 
+  // --- At the 200-placement limit Ctrl+D refuses, and the refusal leaves no
+  // undo step behind it (TYPING_PHASE.md, task 7).
+  await page.evaluate(() => {
+    const p = window.__booth.project;
+    while (p.art.length < 200) p.art.push({ ...p.art[0], id: 'fill-' + p.art.length });
+  });
+  await page.evaluate((id) => window.__booth.scene.onSelect(id), first.id);
+  await page.waitForTimeout(100);
+  const depth = await page.evaluate(() => window.__booth.history.length);
+  await press('Control+d');
+  assert.equal((await project()).art.length, 200, 'nothing past the limit');
+  assert.equal(await page.evaluate(() => window.__booth.history.length), depth, 'and nothing to undo for it');
+  await page.evaluate(() => {
+    const p = window.__booth.project;
+    p.art = p.art.filter((a) => !String(a.id).startsWith('fill-'));
+  });
+
   // --- The wall buttons.
   await page.evaluate((id) => window.__booth.scene.onSelect(id), first.id);
   await page.click('[data-tab="art"]');
@@ -83,6 +100,22 @@ try {
   assert.equal(await page.evaluate(() => window.__booth.scene.move), true, 'M is Move');
   await press('v');
   assert.equal(await page.evaluate(() => window.__booth.scene.move), false, 'V is Select');
+
+  // Delete and Backspace keep their default with nothing selected to delete,
+  // and a drag that starts on text, not an element, throws nothing
+  // (TYPING_PHASE.md, task 9).
+  await page.evaluate(() => window.__booth.scene.onSelect(null));
+  await page.waitForTimeout(100);
+  await page.evaluate(() => {
+    window.__keyPrevented = null;
+    window.addEventListener('keydown', (ev) => { if (ev.key === 'Backspace') window.__keyPrevented = ev.defaultPrevented; }, { once: true });
+  });
+  await page.locator('body').press('Backspace');
+  assert.equal(await page.evaluate(() => window.__keyPrevented), false, 'Backspace with nothing selected is left to the browser');
+  await page.evaluate(() => {
+    const text = [...document.querySelector('.panel-heading h2').childNodes].find((n) => n.nodeType === Node.TEXT_NODE);
+    text.dispatchEvent(new DragEvent('dragstart', { bubbles: true }));
+  });
 
   // Typing in a field is never a shortcut.
   const field = page.locator('#project-name');

@@ -111,6 +111,14 @@ try {
   await page.waitForFunction(() => !!window.__booth?.scene);
   assert.equal(await page.evaluate(() => window.__booth.framePlace.export.x), -1, 'a placed frame is remembered');
 
+  // The Video tab's PNG has no size menu beside it, so it exports at the
+  // Export tab's Detail and its button says which (TYPING_PHASE.md, task 9;
+  // it said "4096 px" whatever Detail was).
+  await page.click('[data-tab="export"]');
+  await page.selectOption('#export-size', '2048');
+  await page.click('[data-tab="video"]');
+  assert.match(await page.locator('#inspector-content [data-action="export-image"]').textContent(), /2048 px/, 'the Video tab names the size it exports at');
+
   // On a phone the footer is gone, so the stamp shows in the viewport.
   await page.setViewportSize({ width: 390, height: 800 });
   await page.waitForTimeout(300);

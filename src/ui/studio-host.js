@@ -92,6 +92,12 @@ export function createStudioHost(ctx) {
         ctx.p = next;
         tagAssetRoles(ctx.p);
         ctx.selected = ctx.p.art[0]?.id;
+        // Nothing else stays selected from the project it replaced.
+        ctx.picked = [];
+        ctx.selectedPanel = null;
+        ctx.selectedPedestal = null;
+        ctx.selectedPerson = null;
+        ctx.activeBooth = null;
         ctx.photoSelected = null;
         ctx.lightIndex = 0;
         ctx.photoLightIndex = 0;
