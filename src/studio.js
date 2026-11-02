@@ -398,7 +398,7 @@ export function connect(host) {
   function showCard() {
     const p = host.project();
     card = { deviceCopy: { ...sceneOf(p), assets: { ...p.assets } } };
-    let el = document.querySelector("#studio-card");
+    let el = /** @type {HTMLElement} */ (document.querySelector("#studio-card"));
     if (!el) {
       el = document.createElement("div");
       el.id = "studio-card";
@@ -409,7 +409,8 @@ export function connect(host) {
     el.innerHTML = `<strong>This booth changed on another device too</strong><p>The studio kept the other device's version, and that is what's open now. This device's version is kept here until you choose.</p><div class="button-row"><button data-studio="use-mine">Use this device's</button><button data-studio="keep" class="primary">Keep the studio's</button></div>`;
     el.hidden = false;
     el.onclick = (ev) => {
-      const b = ev.target.closest("[data-studio]");
+      /** @type {HTMLElement | null} */
+      const b = /** @type {Element} */ (ev.target).closest("[data-studio]");
       if (!b) return;
       el.hidden = true;
       const copy = card?.deviceCopy;

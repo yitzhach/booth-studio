@@ -96,7 +96,7 @@ export function createStudioHost(ctx) {
         ctx.lightIndex = 0;
         ctx.photoLightIndex = 0;
       });
-      const name = document.querySelector("#project-name");
+      const name = /** @type {HTMLInputElement} */ (document.querySelector("#project-name"));
       if (name) name.value = ctx.p.name;
       backfillThumbnails();
     },

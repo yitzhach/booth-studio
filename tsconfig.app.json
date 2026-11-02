@@ -1,19 +1,12 @@
 // The page's own modules (ROADMAP.md 1.4, second half): everything in src/
 // that tsconfig.json does not already check, against a browser's globals
-// rather than a Worker's. `npm run typecheck` runs both. The typing pass
-// (TYPING_PHASE.md) takes in what the two splits left out, an area per pull
-// request, and tests/typecheck-scope.test.js holds the exclude list to what
-// is left. In: src/scene.js and src/scene/ (task 1), whose mixins
-// src/scene/types.d.ts puts on BoothScene, src/actions/ and src/panels/
-// (tasks 2 and 3), and src/ui/ (tasks 4 and 5) but studio-host.js, which
-// only main.js imports. Not checked yet: studio-host.js, src/main.js and
-// src/studio.js, which imports the vendored SDK —
-// generated in Art-Talk-Back with no types of its own, so its JavaScript
-// would be checked here, and it is never edited by hand. (A
-// checked module that imports one of the three pulls it back in: that is the
-// moment to check it too.) `npm run typecheck` reports both configs' findings
-// in one run, whichever fails. Same rules as tsconfig.json otherwise: JSDoc
-// as the types, not strict.
+// rather than a Worker's. `npm run typecheck` runs both. Since the typing
+// pass (TYPING_PHASE.md) that is every module but the vendored files, and
+// tests/typecheck-scope.test.js holds the exclude list there. The scene's
+// mixins are put on BoothScene by src/scene/types.d.ts; the vendored SDK,
+// generated in Art-Talk-Back, is typed by src/vendor/studio-sdk.d.ts beside
+// it, which tests/studio-sdk-types.test.js holds to the module's exports.
+// Same rules as tsconfig.json otherwise: JSDoc as the types, not strict.
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
@@ -23,5 +16,5 @@
   },
   "files": [],
   "include": ["src/**/*.js", "src/globals.d.ts", "src/scene/types.d.ts"],
-  "exclude": ["src/vendor/**", "src/main.js", "src/studio.js", "src/ui/studio-host.js"]
+  "exclude": ["src/vendor/**"]
 }

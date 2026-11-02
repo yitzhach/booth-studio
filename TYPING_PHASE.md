@@ -73,7 +73,8 @@ one (`render-loop.js` comparing a number with a string, two callbacks
   `bundle:esm` writes `studio-sdk.d.ts` beside it from the SDK's own
   TypeScript, both repositories' CI compare it, and then `studio.js` leaves
   the exclude list. Platform first (its contract is new), app second, on
-  branches of the same name. *My call.*
+  branches of the same name. *My call.* (Reversed in task 6, for a
+  hand-written declaration held to the module by a test: Rulings.)
 - **Order: smallest and most separate first,** so the declarations each
   later area needs exist when it arrives: the scene, the actions, the
   panels, `src/ui/` but `inputs.js` and `studio-host.js`, `inputs.js`, and
@@ -243,3 +244,29 @@ wrong.)
   so it is typed `any`, with a comment. Two more numbers written to
   `.value` are cast as in task 4. No bug; with JSDoc and parentheses
   removed, no changed line differs from the one it replaced.
+- **2026-11-02, task 6: the SDK's types are written here, and a test holds
+  them to the module.** The plan had Art-Talk-Back's `bundle:esm` write
+  the declaration. Looked at, that is a declaration bundler added to the
+  platform as a dependency (the SDK's types name `@studio/core`'s zod
+  schemas, which a `.d.ts` here could not resolve), a paired pull request
+  on both repositories, and the platform's default branch, which is not
+  `main` (`claude/next-steps-y4vrwv`). Instead `src/vendor/studio-sdk.d.ts`
+  is written by hand from the SDK's source (`client.ts`, `store.ts`,
+  `studio.ts`), the platform's own shapes loose, and
+  `tests/studio-sdk-types.test.js` imports the vendored module and fails
+  if an export or a class member the declaration names is missing, or the
+  module exports one it leaves out (checked against a mutant: a declared
+  `nope()` fails it). A changed argument or answer is not seen by the type
+  check; `tests/two-devices.mjs` runs the real SDK against studio-api and
+  is what catches that. *Cost if wrong:* an SDK update that changes a
+  signature but no name passes the type check until someone updates the
+  declaration. With it, the vendored module's own 48 findings leave the
+  check, since its import now resolves to the declaration. `main.js`'s 102
+  findings: 57 `ctx` wrappers spreading `...args` into functions with
+  fixed parameters, which only a cast of the function called silences (a
+  type on `ctx`, or on the rest parameter, does not: tried); the rest DOM
+  narrowing, and `toast.timer`, a property on a function, as in task 4.
+  `main.js` stays at 1,438 lines, its size ratchet's number, because the
+  casts that would have taken a line of their own are inline. The gate is
+  met: `tsconfig.app.json` excludes `src/vendor/**` alone. With JSDoc and
+  parentheses removed, no changed line differs from the one it replaced.
