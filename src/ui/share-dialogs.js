@@ -85,12 +85,12 @@ export function createShareDialogs(ctx) {
   }
   /** The link a share made, to copy and send. */
   function showShareLink(link) {
-    const d = document.querySelector("#dialog");
+    const d = /** @type {HTMLDialogElement} */ (document.querySelector("#dialog"));
     document.querySelector("#dialog-content").innerHTML =
       `<h2>Your booth's link</h2><p>Send this to the show's promoter. It opens your booth in Booth Studio; the link lasts ${SHARE_DAYS_SHOWN} days. Export → Send to the show keeps it, to send a changed booth to the same link or to delete it.</p><input id="share-link" readonly value="${e(link)}" aria-label="Booth link"/><div class="button-row"><button id="share-close">Close</button><button class="primary" id="share-copy">Copy link</button></div>`;
-    document.querySelector("#share-close").onclick = () => d.close();
-    document.querySelector("#share-copy").onclick = () => {
-      document.querySelector("#share-link").select();
+    /** @type {HTMLButtonElement} */ (document.querySelector("#share-close")).onclick = () => d.close();
+    /** @type {HTMLButtonElement} */ (document.querySelector("#share-copy")).onclick = () => {
+      /** @type {HTMLInputElement} */ (document.querySelector("#share-link")).select();
       copyLink(link);
     };
     d.showModal();
@@ -114,11 +114,11 @@ export function createShareDialogs(ctx) {
     const floor = pro && ctx.p.hall;
     const numbers = floor ? showItems(ctx.p.hall).filter((i) => i.kind === "booth").map((i) => i.number) : [];
     const guess = numbers.includes(file.number) ? file.number : numbers[0];
-    const d = document.querySelector("#dialog");
+    const d = /** @type {HTMLDialogElement} */ (document.querySelector("#dialog"));
     document.querySelector("#dialog-content").innerHTML =
       `<h2>${e(who)}</h2><p>${pro ? "The booth someone sent you, with its original images." : "A preview of the booth someone sent you. Booth Studio Pro opens it with its original images and puts it on your show floor."}</p>${floor ? `<label class="setting-label">On booth<select id="share-number" aria-label="Booth number">${numbers.map((n) => `<option value="${n}" ${n === guess ? "selected" : ""}>${n}</option>`).join("")}</select></label>` : ""}<div class="button-row"><button id="share-cancel">Not now</button><button id="share-look">Look at it</button>${floor ? '<button class="primary" id="share-place">Put it on my show floor</button>' : ""}</div>`;
-    document.querySelector("#share-cancel").onclick = () => d.close();
-    document.querySelector("#share-look").onclick = () => {
+    /** @type {HTMLButtonElement} */ (document.querySelector("#share-cancel")).onclick = () => d.close();
+    /** @type {HTMLButtonElement} */ (document.querySelector("#share-look")).onclick = () => {
       d.close();
       backup();
       mutate(() => {
@@ -135,8 +135,8 @@ export function createShareDialogs(ctx) {
       toast(`${who}'s booth is open. Your project was downloaded as a backup first.`);
     };
     if (floor)
-      document.querySelector("#share-place").onclick = () => {
-        const n = Number(document.querySelector("#share-number").value);
+      /** @type {HTMLButtonElement} */ (document.querySelector("#share-place")).onclick = () => {
+        const n = Number(/** @type {HTMLSelectElement} */ (document.querySelector("#share-number")).value);
         d.close();
         const go = () => {
           let err = null;

@@ -70,8 +70,8 @@ export function createUpload(ctx) {
     ["replace-input", "replace"],
     ["photo-input", "photo"],
   ])
-    document.querySelector("#" + id).onchange = async (ev) => {
-      const files = [...ev.target.files];
+    /** @type {HTMLInputElement} */ (document.querySelector("#" + id)).onchange = async (ev) => {
+      const files = [.../** @type {HTMLInputElement} */ (ev.target).files];
       if (type === "photo" && ctx.p.photo.asset) {
         confirmAction(
           "Replace booth photograph?",
@@ -82,21 +82,21 @@ export function createUpload(ctx) {
           },
         );
       } else await upload(files, type);
-      ev.target.value = "";
+      /** @type {HTMLInputElement} */ (ev.target).value = "";
     };
   // An exhibitor's booth design file, onto the floor booth chosen when Import
   // was pressed (src/booth-file.js), or the one it was dropped on.
-  document.querySelector("#design-input").onchange = async (ev) => {
-    const f = ev.target.files[0];
-    ev.target.value = "";
+  /** @type {HTMLInputElement} */ (document.querySelector("#design-input")).onchange = async (ev) => {
+    const f = /** @type {HTMLInputElement} */ (ev.target).files[0];
+    /** @type {HTMLInputElement} */ (ev.target).value = "";
     const n = ctx.designTarget;
     ctx.designTarget = null;
     await importDesignFile(f, n);
   };
   // A file dragged over the 2D floor: the booth under the pointer is where it
   // will land, and is outlined while it is held there.
-  const floorHost = document.querySelector("#show-floor");
-  const boothUnder = (ev) => document.elementsFromPoint(ev.clientX, ev.clientY).map((el) => el.closest?.("#show-floor [data-hall-booth]")).find(Boolean) || null;
+  const floorHost = /** @type {HTMLElement} */ (document.querySelector("#show-floor"));
+  const boothUnder = (ev) => /** @type {HTMLElement | null} */ (document.elementsFromPoint(ev.clientX, ev.clientY).map((el) => el.closest?.("#show-floor [data-hall-booth]")).find(Boolean) || null);
   const markDrop = (g) => {
     for (const x of floorHost.querySelectorAll(".sf-drop")) if (x !== g) x.classList.remove("sf-drop");
     g?.classList.add("sf-drop");
@@ -109,7 +109,7 @@ export function createUpload(ctx) {
     markDrop(g);
   });
   floorHost.addEventListener("dragleave", (ev) => {
-    if (!floorHost.contains(ev.relatedTarget)) markDrop(null);
+    if (!floorHost.contains(/** @type {Node} */ (ev.relatedTarget))) markDrop(null);
   });
   floorHost.addEventListener("drop", async (ev) => {
     if (!ctx.showFloor || ctx.show3d || !ctx.p.hall || ![...ev.dataTransfer.types].includes("Files")) return;
@@ -147,9 +147,9 @@ export function createUpload(ctx) {
     if (hasDesign(ctx.p.hall, n)) confirmAction(`Replace booth ${n}'s design?`, `${from} replaces the design booth ${n} has now. Undo brings it back.`, go);
     else go();
   }
-  document.querySelector("#backup-input").onchange = async (ev) => {
-    const f = ev.target.files[0];
-    ev.target.value = "";
+  /** @type {HTMLInputElement} */ (document.querySelector("#backup-input")).onchange = async (ev) => {
+    const f = /** @type {HTMLInputElement} */ (ev.target).files[0];
+    /** @type {HTMLInputElement} */ (ev.target).value = "";
     if (!f) return;
     try {
       if (f.size > 200 * 1024 * 1024)

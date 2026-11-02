@@ -21,7 +21,7 @@ import { PRO_FEATURES, actionFeature } from "../tier.js";
 export function createEvents(ctx) {
   const { addCatalogPlacement, allowed, applyColor, applyTemplate, confirmAction, copyLink, deletePanel, deletePedestal, endShadowGesture, goToView, mutate, nudgeSelection, openQuickStart, removeLink, removeRowSlot, renderInspector, rotateSelection, saveViewPrefs, sendToLink, setDrawingBox, setMeasuring, setShadowLive, setSheet, setWalking, show3dKey, showClearance, showFloorKey, startFrom, toast } = ctx;
   document.addEventListener("click", (ev) => {
-    const b = ev.target.closest("button");
+    const b = /** @type {Element} */ (ev.target).closest("button");
     if (!b) return;
     if (b.dataset.action) {
       try {
@@ -72,7 +72,7 @@ export function createEvents(ctx) {
         else if (action.startsWith("show-template-")) applyTemplate(action.slice(14));
         else if (action.startsWith("hall-orphan-move-")) {
           const from = Number(action.slice(17));
-          const to = Number(document.querySelector(`[data-orphan-to="${from}"]`)?.value);
+          const to = Number(/** @type {HTMLSelectElement} */ (document.querySelector(`[data-orphan-to="${from}"]`))?.value);
           let moved = false;
           mutate(() => (moved = moveSale(ctx.p.hall, from, to)));
           toast(moved ? `Booth ${from}'s sale is on booth ${to} now. Undo puts it back.` : `Booth ${to} has a sale of its own, or is not on the floor.`, !moved);
@@ -201,7 +201,7 @@ export function createEvents(ctx) {
     }
   });
   document.addEventListener("keydown", (ev) => {
-    if (document.querySelector("#image-editor").open) {
+    if (/** @type {HTMLDialogElement} */ (document.querySelector("#image-editor")).open) {
       if (ev.key === "Escape") {
         ev.preventDefault();
         ctx.actions["editor-cancel"]();
@@ -210,7 +210,7 @@ export function createEvents(ctx) {
     }
     if (
       typingIn(ev) ||
-      document.querySelector("#dialog").open
+      /** @type {HTMLDialogElement} */ (document.querySelector("#dialog")).open
     )
       return;
     // The show in 3D: walking, and the way back to the plan.
@@ -225,13 +225,13 @@ export function createEvents(ctx) {
     }
     // The shadow angle dial, focused: arrows turn it a degree, Shift fifteen,
     // counterclockwise for Up and Right the way the angle is measured.
-    if (ev.target.dataset?.dial) {
+    if (/** @type {HTMLElement} */ (ev.target).dataset?.dial) {
       const turn = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[ev.key];
       if (!turn) return;
       ev.preventDefault();
-      const kind = SHADOW_KINDS.find((k) => SHADOW_FIELD[k] === ev.target.dataset.dial);
+      const kind = SHADOW_KINDS.find((k) => SHADOW_FIELD[k] === /** @type {HTMLElement} */ (ev.target).dataset.dial);
       if (!kind) return;
-      setShadowLive(ev.target.dataset.dial, "angle", shadowSpec(ctx.p.booth, kind).angle + turn * (ev.shiftKey ? 15 : 1));
+      setShadowLive(/** @type {HTMLElement} */ (ev.target).dataset.dial, "angle", shadowSpec(ctx.p.booth, kind).angle + turn * (ev.shiftKey ? 15 : 1));
       endShadowGesture();
       return;
     }

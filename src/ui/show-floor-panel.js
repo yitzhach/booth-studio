@@ -310,6 +310,7 @@ export function createShowFloorPanel(ctx) {
       const rd = Math.max(3, d * s);
       return `<svg viewBox="0 0 40 40" aria-hidden="true"><rect x="${20 - rw / 2}" y="${20 - rd / 2}" width="${rw}" height="${rd}" rx="${sh.kind === "column" ? rw / 2 : 1}" fill="${k.fill === "none" ? "#fff" : k.fill}" stroke="${k.line === "none" ? "#9aa3ad" : k.line}"/>${sh.style === "tent" ? `<path d="M${20 - rw / 2} ${20 - rd / 2}L${20 + rw / 2} ${20 + rd / 2}M${20 + rw / 2} ${20 - rd / 2}L${20 - rw / 2} ${20 + rd / 2}" stroke="#aab3bd"/>` : ""}${sh.kind === "label" ? '<text x="20" y="25" font-size="13" text-anchor="middle" fill="#1d232b">Aa</text>' : ""}</svg>`;
     };
+    /** @type {[string, typeof SHAPES][]} */
     const groups = [["Booths", SHAPES.filter((sh) => sh.kind === "booth")], ["Floor", SHAPES.filter((sh) => ["aisle", "pavilion", "wall", "door", "column"].includes(sh.kind))], ["Features", SHAPES.filter((sh) => ["stage", "table", "desk", "food", "restroom", "label"].includes(sh.kind))]];
     return `<div class="panel-heading"><h2>Shapes</h2>${icon("shapes")}</div><p class="muted show-lib-note">Drag a shape onto the floor, or tap it to drop it in the middle.</p>${groups.map(([name, list]) => `<section class="show-lib"><h3>${name}</h3><div class="show-shapes">${list.map((sh) => `<button class="show-shape" data-show-shape="${sh.key}" title="${e(sh.label || KINDS[sh.kind].label)}">${swatch(sh)}<span>${e(sh.label || KINDS[sh.kind].label)}</span></button>`).join("")}</div></section>`).join("")}`;
   }

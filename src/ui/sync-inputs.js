@@ -18,11 +18,11 @@ export function createSyncInputs(ctx) {
   /** One work's placement, in both its number field and its slider. */
   function syncArtInputs(a, except = null) {
     for (const key of ["x", "y"]) {
-      for (const input of document.querySelectorAll(
+      for (const input of /** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll(
         `[data-field="${key}"][data-scope="art"], [data-field="${key}"][data-scope="art-position"]`,
-      )) {
+      ))) {
         if (input === except) continue;
-        input.value = Number(a[key].toFixed(3));
+        input.value = /** @type {any} */ (Number(a[key].toFixed(3)));
         input
           .closest("label")
           ?.querySelector("output")
@@ -35,11 +35,11 @@ export function createSyncInputs(ctx) {
   // touched has to follow rather than sit at a stale number.
   function syncPanelInputs(panel, except = null) {
     for (const key of ["x", "z"]) {
-      for (const input of document.querySelectorAll(
+      for (const input of /** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll(
         `[data-scope="panel-${CSS.escape(panel.id)}"][data-field="${key}"]`,
-      )) {
+      ))) {
         if (input === except) continue;
-        input.value = Number(panel[key].toFixed(3));
+        input.value = /** @type {any} */ (Number(panel[key].toFixed(3)));
         input
           .closest("label")
           ?.querySelector("output")
@@ -67,11 +67,11 @@ export function createSyncInputs(ctx) {
   /** One pedestal's X and Z, in both its number field and its slider. */
   function syncPedestalInputs(ped, except = null) {
     for (const key of ["x", "z"]) {
-      for (const input of document.querySelectorAll(
+      for (const input of /** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll(
         `[data-scope="pedestal-${CSS.escape(ped.id)}"][data-field="${key}"]`,
-      )) {
+      ))) {
         if (input === except) continue;
-        input.value = Number(ped[key].toFixed(3));
+        input.value = /** @type {any} */ (Number(ped[key].toFixed(3)));
         input
           .closest("label")
           ?.querySelector("output")
@@ -93,10 +93,10 @@ export function createSyncInputs(ctx) {
     for (const kind of SHADOW_KINDS) {
       const s = shadowSpec(ctx.p.booth, kind),
         scope = SHADOW_FIELD[kind];
-      for (const input of document.querySelectorAll(`[data-fx-live][data-scope="${scope}"]`)) {
+      for (const input of /** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll(`[data-fx-live][data-scope="${scope}"]`))) {
         if (input === except) continue;
         const v = s[input.dataset.field];
-        if (typeof v === "number") input.value = input.dataset.field === "angle" ? Math.round(v) : Number(v.toFixed(2));
+        if (typeof v === "number") input.value = /** @type {any} */ (input.dataset.field === "angle" ? Math.round(v) : Number(v.toFixed(2)));
       }
       const dial = document.querySelector(`[data-dial="${scope}"]`);
       if (dial) {

@@ -78,8 +78,8 @@ export function createFindTool(ctx) {
     return [...byWhere].map(([where, names]) => `${where}: ${names.join(", ")}`).join("\n").slice(0, 15000);
   }
   function renderToolHits() {
-    const box = document.querySelector("#tool-search"),
-      ul = document.querySelector("#tool-results");
+    const box = /** @type {HTMLInputElement} */ (document.querySelector("#tool-search")),
+      ul = /** @type {HTMLElement} */ (document.querySelector("#tool-results"));
     const q = box.value;
     ctx.toolHits = q.trim() ? rankTools(ctx.toolIndex || (ctx.toolIndex = buildToolIndex()), q) : [];
     ctx.toolAt = Math.min(ctx.toolAt, Math.max(0, ctx.toolHits.length - 1));
@@ -112,7 +112,7 @@ export function createFindTool(ctx) {
     );
   }
   function openTool(hit, { press = true } = {}) {
-    const box = document.querySelector("#tool-search");
+    const box = /** @type {HTMLInputElement} */ (document.querySelector("#tool-search"));
     box.value = "";
     box.blur();
     let target = hit.el || null;
@@ -149,14 +149,14 @@ export function createFindTool(ctx) {
     setTimeout(() => shown.classList.remove("found"), 1800);
   }
   {
-    const box = document.querySelector("#tool-search"),
-      ul = document.querySelector("#tool-results");
+    const box = /** @type {HTMLInputElement} */ (document.querySelector("#tool-search")),
+      ul = /** @type {HTMLElement} */ (document.querySelector("#tool-results"));
     // Its own events stop here: the page's input and change handlers read
     // every field in the document as booth settings.
     for (const type of ["input", "change"]) box.addEventListener(type, (ev) => ev.stopPropagation());
     // Keep every tape: a view setting on the scene, not a booth field, so its
     // events stop here like the search box's.
-    const keep = document.querySelector("#keep-tapes");
+    const keep = /** @type {HTMLInputElement} */ (document.querySelector("#keep-tapes"));
     keep.addEventListener("input", (ev) => ev.stopPropagation());
     keep.addEventListener("change", (ev) => {
       ev.stopPropagation();
@@ -196,7 +196,8 @@ export function createFindTool(ctx) {
     // mousedown, not click: a click would blur the box first and the list
     // would be gone before it landed.
     ul.addEventListener("mousedown", (ev) => {
-      const li = ev.target.closest("[data-hit]");
+      /** @type {HTMLElement | null} */
+      const li = /** @type {Element} */ (ev.target).closest("[data-hit]");
       ev.preventDefault();
       if (li) openTool(ctx.toolHits[Number(li.dataset.hit)]);
     });

@@ -72,7 +72,7 @@ export function createViewPrefs(ctx) {
     const draft = !!ctx.scene?.draft;
     document.querySelector('[data-action="measure"]')?.classList.toggle("active", !!ctx.scene?.measure.on);
     for (const el of document.querySelectorAll('.toolbar [data-action="pan"]')) el.classList.toggle("active", ctx.panTool);
-    const keep = document.querySelector("#keep-tapes");
+    const keep = /** @type {HTMLInputElement} */ (document.querySelector("#keep-tapes"));
     if (keep) keep.checked = !!ctx.scene?.measure.keep;
     document.querySelector('.toolbar [data-action="walk"]')?.classList.toggle("active", ctx.walking);
     document.querySelector('.toolbar [data-action="draw-box"]')?.classList.toggle("active", !!ctx.scene?.drawingBox);
@@ -81,14 +81,14 @@ export function createViewPrefs(ctx) {
       ?.classList.toggle("active", !!ctx.scene?.snap);
     for (const el of document.querySelectorAll('[data-action="draft"]'))
       el.classList.toggle("active", draft);
-    for (const el of document.querySelectorAll("[data-draft]")) el.checked = draft;
+    for (const el of /** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll("[data-draft]"))) el.checked = draft;
     const lockLabels = {
       auto: ["Auto", "Fast edit follows the gesture: on while you arrange a work, off when you let go."],
       on: ["On", "Fast edit is held on. Shadows and supersampling stay off until you unlock it."],
       off: ["Off", "Fast edit is held off. Arranging a work will not drop the quality."],
     };
     const [text, title] = lockLabels[ctx.draftPolicy] || lockLabels.auto;
-    for (const el of document.querySelectorAll('[data-action="draft-lock"]')) {
+    for (const el of /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('[data-action="draft-lock"]'))) {
       el.classList.toggle("active", ctx.draftPolicy !== "auto");
       el.classList.toggle("locked-off", ctx.draftPolicy === "off");
       el.title = title;
@@ -96,7 +96,7 @@ export function createViewPrefs(ctx) {
       const span = el.querySelector("span");
       if (span) span.textContent = text;
     }
-    for (const el of document.querySelectorAll("[data-draft-policy]"))
+    for (const el of /** @type {NodeListOf<HTMLSelectElement>} */ (document.querySelectorAll("[data-draft-policy]")))
       el.value = ctx.draftPolicy;
   }
   /**
@@ -209,7 +209,7 @@ export function createViewPrefs(ctx) {
    */
   function frameGuideShape() {
     if (!ctx.scene || ctx.p.mode === "photo") return null;
-    const timelineOpen = document.querySelector("#timeline-dialog")?.open;
+    const timelineOpen = /** @type {HTMLDialogElement} */ (document.querySelector("#timeline-dialog"))?.open;
     const which = ctx.tab === "export" ? "export" : ctx.tab === "video" || timelineOpen || ctx.busyPreview ? "video" : null;
     const id = which === "export" ? ctx.exportFrame : which === "video" ? ctx.videoFrameShape : null;
     if (!id || id === "view" || !FRAMES[id]) return null;
@@ -217,8 +217,8 @@ export function createViewPrefs(ctx) {
     return { id, which, aspect, label: id === "custom" ? `${ctx.customFrame.width} × ${ctx.customFrame.height}` : FRAMES[id].label.split(" · ")[1] || FRAMES[id].label };
   }
   function updateFrameGuide() {
-    const guide = document.querySelector(".frame-guide");
-    const host = document.querySelector("#scene");
+    const guide = /** @type {HTMLElement} */ (document.querySelector(".frame-guide"));
+    const host = /** @type {HTMLElement} */ (document.querySelector("#scene"));
     if (!guide || !host) return;
     const shape = frameGuideShape();
     guide.hidden = !shape;
@@ -235,7 +235,7 @@ export function createViewPrefs(ctx) {
       width: `${host.clientWidth}px`,
       height: `${host.clientHeight}px`,
     });
-    Object.assign(guide.firstElementChild.style, {
+    Object.assign(/** @type {HTMLElement} */ (guide.firstElementChild).style, {
       left: `${r.x}px`,
       top: `${r.y}px`,
       width: `${r.width}px`,

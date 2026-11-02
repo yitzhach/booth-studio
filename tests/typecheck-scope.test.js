@@ -7,12 +7,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-// After tasks 2 and 3, the actions and the panels.
-const LEFT = ["src/vendor/**", "src/main.js", "src/studio.js", "src/ui/**"];
+// After task 6, only the vendored files: the gate.
+const LEFT = ["src/vendor/**"];
 
 test("tsconfig.app.json skips only what the typing pass has not reached", () => {
-  // The file opens with // comment lines; JSON.parse takes the rest.
+  // The file holds // comment lines, whole lines only; JSON.parse takes the rest.
   const text = readFileSync(new URL("../tsconfig.app.json", import.meta.url), "utf8");
-  const config = JSON.parse(text.split("\n").filter((line) => !line.startsWith("//")).join("\n"));
+  const config = JSON.parse(text.split("\n").filter((line) => !line.trim().startsWith("//")).join("\n"));
   assert.deepEqual(config.exclude, LEFT, "an area left the exclude list or came back: update LEFT with TYPING_PHASE.md");
 });

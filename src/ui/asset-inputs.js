@@ -60,9 +60,9 @@ export function createAssetInputs(ctx) {
       thickness:.1, offset:.2};
     mutate(()=>{ctx.p.art.push(constrain(ctx.p,a));ctx.selected=a.id;ctx.tab="art";});
   }
-  document.querySelector("#model-input").onchange = async (ev) => {
-    const file = ev.target.files[0];
-    ev.target.value = "";
+  /** @type {HTMLInputElement} */ (document.querySelector("#model-input")).onchange = async (ev) => {
+    const file = /** @type {HTMLInputElement} */ (ev.target).files[0];
+    /** @type {HTMLInputElement} */ (ev.target).value = "";
     if (!file) return;
     if (!allowed("glb")) return toast("3D model import is part of Booth Studio Pro.", true);
     try {
@@ -91,9 +91,9 @@ export function createAssetInputs(ctx) {
       toast(err.message, true);
     }
   };
-  document.querySelector("#underlay-input").onchange = async (ev) => {
-    const file = ev.target.files[0];
-    ev.target.value = "";
+  /** @type {HTMLInputElement} */ (document.querySelector("#underlay-input")).onchange = async (ev) => {
+    const file = /** @type {HTMLInputElement} */ (ev.target).files[0];
+    /** @type {HTMLInputElement} */ (ev.target).value = "";
     if (!file) return;
     if (!allowed("underlay")) return toast("The floor plan underlay is part of Booth Studio Pro.", true);
     try {
@@ -110,15 +110,15 @@ export function createAssetInputs(ctx) {
         ctx.p.booth.underlay = { asset: id, width: Math.min(24000, ctx.p.booth.width * 10), x: 0, z: 0, rotation: 0, opacity: 0.6, on: true };
       });
       ctx.scene?.setView("plan");
-      document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === "plan"));
+      document.querySelectorAll("[data-view]").forEach((/** @type {HTMLElement} */ b) => b.classList.toggle("active", b.dataset.view === "plan"));
       toast("Floor plan laid under the booth. Measure something you know with the tape (T), then Scale plan.");
     } catch (err) {
       toast(err.message, true);
     }
   };
   for(const [input,key] of [["surround-input","surroundAsset"],["ground-input","groundAsset"]]){
-    document.querySelector("#"+input).onchange=async ev=>{
-      const file=ev.target.files[0];ev.target.value="";if(!file)return;
+    /** @type {HTMLInputElement} */ (document.querySelector("#"+input)).onchange=async ev=>{
+      const file=/** @type {HTMLInputElement} */ (ev.target).files[0];/** @type {HTMLInputElement} */ (ev.target).value="";if(!file)return;
       try{
         if(Object.keys(ctx.p.assets).length>=250)throw new Error("This prototype supports up to 250 images.");
         const asset=await readImage(file);

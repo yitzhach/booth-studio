@@ -498,9 +498,9 @@ async function boot() {
     set chunkNoticeUntil(v) { chunkNoticeUntil = v; },
     get tier() { return tier; },
     get studioHost() { return studioHost; },
-    activeSlot: (...args) => activeSlot(...args),
+    activeSlot: (...args) => /** @type {any} */ (activeSlot)(...args),
     addPhotoLayer: (...args) => addPhotoLayer(...args),
-    showLibraryHTML: (...args) => showLibraryHTML(...args),
+    showLibraryHTML: (...args) => /** @type {any} */ (showLibraryHTML)(...args),
     addPerson,
     addRowBooths: (...args) => addRowBooths(...args),
     addRowSpace: (...args) => addRowSpace(...args),
@@ -518,7 +518,7 @@ async function boot() {
     field: (...args) => field(...args),
     currentArtwork,
     deviceStore: () => deviceStore(),
-    endShadowGesture: (...args) => endShadowGesture(...args),
+    endShadowGesture: (...args) => /** @type {any} */ (endShadowGesture)(...args),
     fieldTarget: (...args) => fieldTarget(...args),
     goToView,
     fromSnapshot,
@@ -527,15 +527,15 @@ async function boot() {
     keepKit,
     kit: () => kit(),
     makeAiPack,
-    libraryItems: (...args) => libraryItems(...args),
+    libraryItems: (...args) => /** @type {any} */ (libraryItems)(...args),
     mutate,
-    probeCodec: (...args) => probeCodec(...args),
+    probeCodec: (...args) => /** @type {any} */ (probeCodec)(...args),
     proLock: (...args) => proLock(...args),
     readTemplates,
     refreshIcons,
     refreshScene,
     rememberEdge: (...args) => rememberEdge(...args),
-    renderLibrary: (...args) => renderLibrary(...args),
+    renderLibrary: (...args) => /** @type {any} */ (renderLibrary)(...args),
     renderSelection,
     runClips: (...args) => runClips(...args),
     safeName,
@@ -546,7 +546,7 @@ async function boot() {
     setSheet,
     setShadowLive: (...args) => setShadowLive(...args),
     setTier,
-    saveViewPrefs: (...args) => saveViewPrefs(...args),
+    saveViewPrefs: (...args) => /** @type {any} */ (saveViewPrefs)(...args),
     scaleSelected,
     setPanTool,
     tagAssetRoles,
@@ -557,9 +557,9 @@ async function boot() {
     syncArtInputs: (...args) => syncArtInputs(...args),
     syncPanelInputs: (...args) => syncPanelInputs(...args),
     syncPedestalInputs: (...args) => syncPedestalInputs(...args),
-    syncQuality: (...args) => syncQuality(...args),
+    syncQuality: (...args) => /** @type {any} */ (syncQuality)(...args),
     syncShadowInputs: (...args) => syncShadowInputs(...args),
-    syncTools: (...args) => syncTools(...args),
+    syncTools: (...args) => /** @type {any} */ (syncTools)(...args),
     toast,
     addCatalogPlacement: (...args) => addCatalogPlacement(...args),
     applyColor: (...args) => applyColor(...args),
@@ -569,11 +569,11 @@ async function boot() {
     removeRowSlot: (...args) => removeRowSlot(...args),
     rotateSelection,
     showClearance,
-    frameGuideShape: (...args) => frameGuideShape(...args),
-    loadViewPrefs: (...args) => loadViewPrefs(...args),
+    frameGuideShape: (...args) => /** @type {any} */ (frameGuideShape)(...args),
+    loadViewPrefs: (...args) => /** @type {any} */ (loadViewPrefs)(...args),
     reveal: (...args) => reveal(...args),
-    revealPanelFields: (...args) => revealPanelFields(...args),
-    revealPedestalFields: (...args) => revealPedestalFields(...args),
+    revealPanelFields: (...args) => /** @type {any} */ (revealPanelFields)(...args),
+    revealPedestalFields: (...args) => /** @type {any} */ (revealPedestalFields)(...args),
     // Declared after ctx (consts, or a module's functions), so wrapped.
     batchSection: () => batchSection(),
     progressHTML: () => progressHTML(),
@@ -596,37 +596,37 @@ async function boot() {
     updateEditorEdits: (...args) => updateEditorEdits(...args),
     addJobs: (...args) => addJobs(...args),
     clipJob: (...args) => clipJob(...args),
-    currentClip: (...args) => currentClip(...args),
-    currentPose: (...args) => currentPose(...args),
+    currentClip: (...args) => /** @type {any} */ (currentClip)(...args),
+    currentPose: (...args) => /** @type {any} */ (currentPose)(...args),
     followPlayhead: (...args) => followPlayhead(...args),
     grabThumb: (...args) => grabThumb(...args),
     keyName: (...args) => keyName(...args),
-    placeSettled: (...args) => placeSettled(...args),
+    placeSettled: (...args) => /** @type {any} */ (placeSettled)(...args),
     setKit: (...args) => setKit(...args),
     setPlace: (...args) => setPlace(...args),
     showKey: (...args) => showKey(...args),
     stillJob: (...args) => stillJob(...args),
     paintKeepSafe: (...args) => paintKeepSafe(...args),
-    runHeroSet: (...args) => runHeroSet(...args),
+    runHeroSet: (...args) => /** @type {any} */ (runHeroSet)(...args),
     renumberBooths: (...args) => renumberBooths(...args),
     showAlign: (...args) => showAlign(...args),
-    showDelete: (...args) => showDelete(...args),
-    showDuplicate: (...args) => showDuplicate(...args),
+    showDelete: (...args) => /** @type {any} */ (showDelete)(...args),
+    showDuplicate: (...args) => /** @type {any} */ (showDuplicate)(...args),
     showMirror: (...args) => showMirror(...args),
-    showPieces: (...args) => showPieces(...args),
+    showPieces: (...args) => /** @type {any} */ (showPieces)(...args),
     showRotate: (...args) => showRotate(...args),
-    shareFile: (...args) => shareFile(...args),
+    shareFile: (...args) => /** @type {any} */ (shareFile)(...args),
     showShareLink: (...args) => showShareLink(...args),
-    rowCount: (...args) => rowCount(...args),
+    rowCount: (...args) => /** @type {any} */ (rowCount)(...args),
     chooseRole: (...args) => chooseRole(...args),
-    describeToAssistant: (...args) => describeToAssistant(...args),
+    describeToAssistant: (...args) => /** @type {any} */ (describeToAssistant)(...args),
     openQuickStart: (...args) => openQuickStart(...args),
     openWelcome: (...args) => openWelcome(...args),
-    runQuickStart: (...args) => runQuickStart(...args),
-    welcomeDismissed: (...args) => welcomeDismissed(...args),
+    runQuickStart: (...args) => /** @type {any} */ (runQuickStart)(...args),
+    welcomeDismissed: (...args) => /** @type {any} */ (welcomeDismissed)(...args),
     runLook: (...args) => runLook(...args),
-    runPolish: (...args) => runPolish(...args),
-    shortcutHelp: (...args) => shortcutHelp(...args),
+    runPolish: (...args) => /** @type {any} */ (runPolish)(...args),
+    shortcutHelp: (...args) => /** @type {any} */ (shortcutHelp)(...args),
     showChange: (...args) => showChange(...args),
     applyTemplate: (...args) => applyTemplate(...args),
     copyLink: (...args) => copyLink(...args),
@@ -635,53 +635,53 @@ async function boot() {
     show3dKey: (...args) => show3dKey(...args),
     showFloorKey: (...args) => showFloorKey(...args),
     startFrom: (...args) => startFrom(...args),
-    loadStudio: (...args) => loadStudio(...args),
+    loadStudio: (...args) => /** @type {any} */ (loadStudio)(...args),
     appMapText: (...args) => appMapText(...args),
-    buildToolIndex: (...args) => buildToolIndex(...args),
+    buildToolIndex: (...args) => /** @type {any} */ (buildToolIndex)(...args),
     openTool: (...args) => openTool(...args),
     placeHit: (...args) => placeHit(...args),
-    qualityOptions: (...args) => qualityOptions(...args),
+    qualityOptions: (...args) => /** @type {any} */ (qualityOptions)(...args),
     scaleControl,
     syncSavedViews,
-    render: (...args) => render(...args),
-    renderStatus: (...args) => renderStatus(...args),
-    renderInspector: (...args) => renderInspector(...args),
-    inspectorHTML: (...args) => inspectorHTML(...args),
+    render: (...args) => /** @type {any} */ (render)(...args),
+    renderStatus: (...args) => /** @type {any} */ (renderStatus)(...args),
+    renderInspector: (...args) => /** @type {any} */ (renderInspector)(...args),
+    inspectorHTML: (...args) => /** @type {any} */ (inspectorHTML)(...args),
     showSection: (...args) => showSection(...args),
-    aiSection: (...args) => aiSection(...args),
-    artShowHTML: (...args) => artShowHTML(...args),
+    aiSection: (...args) => /** @type {any} */ (aiSection)(...args),
+    artShowHTML: (...args) => /** @type {any} */ (artShowHTML)(...args),
     artSlider: (...args) => artSlider(...args),
     artThumb: (...args) => artThumb(...args),
-    clearanceSection: (...args) => clearanceSection(...args),
-    draftSection: (...args) => draftSection(...args),
+    clearanceSection: (...args) => /** @type {any} */ (clearanceSection)(...args),
+    draftSection: (...args) => /** @type {any} */ (draftSection)(...args),
     edgeColorFields: (...args) => edgeColorFields(...args),
     findableName: (...args) => findableName(...args),
-    groundFields: (...args) => groundFields(...args),
-    hallPanel: (...args) => hallPanel(...args),
-    heroSection: (...args) => heroSection(...args),
-    keepSafeHTML: (...args) => keepSafeHTML(...args),
+    groundFields: (...args) => /** @type {any} */ (groundFields)(...args),
+    hallPanel: (...args) => /** @type {any} */ (hallPanel)(...args),
+    heroSection: (...args) => /** @type {any} */ (heroSection)(...args),
+    keepSafeHTML: (...args) => /** @type {any} */ (keepSafeHTML)(...args),
     libraryHTML: (...args) => libraryHTML(...args),
     locationOptions: (...args) => locationOptions(...args),
-    looksSection: (...args) => looksSection(...args),
-    modelsSection: (...args) => modelsSection(...args),
-    multiSection: (...args) => multiSection(...args),
-    panelFields: (...args) => panelFields(...args),
-    pedestalFields: (...args) => pedestalFields(...args),
-    peopleSection: (...args) => peopleSection(...args),
-    powerSection: (...args) => powerSection(...args),
-    rowSection: (...args) => rowSection(...args),
-    sentLinksHTML: (...args) => sentLinksHTML(...args),
+    looksSection: (...args) => /** @type {any} */ (looksSection)(...args),
+    modelsSection: (...args) => /** @type {any} */ (modelsSection)(...args),
+    multiSection: (...args) => /** @type {any} */ (multiSection)(...args),
+    panelFields: (...args) => /** @type {any} */ (panelFields)(...args),
+    pedestalFields: (...args) => /** @type {any} */ (pedestalFields)(...args),
+    peopleSection: (...args) => /** @type {any} */ (peopleSection)(...args),
+    powerSection: (...args) => /** @type {any} */ (powerSection)(...args),
+    rowSection: (...args) => /** @type {any} */ (rowSection)(...args),
+    sentLinksHTML: (...args) => /** @type {any} */ (sentLinksHTML)(...args),
     shadowSection: (...args) => shadowSection(...args),
     showSelected: (...args) => showSelected(...args),
     signFields: (...args) => signFields(...args),
-    surroundingsFields: (...args) => surroundingsFields(...args),
-    tagsSection: (...args) => tagsSection(...args),
-    underlaySection: (...args) => underlaySection(...args),
-    videoSection: (...args) => videoSection(...args),
-    viewsSection: (...args) => viewsSection(...args),
+    surroundingsFields: (...args) => /** @type {any} */ (surroundingsFields)(...args),
+    tagsSection: (...args) => /** @type {any} */ (tagsSection)(...args),
+    underlaySection: (...args) => /** @type {any} */ (underlaySection)(...args),
+    videoSection: (...args) => /** @type {any} */ (videoSection)(...args),
+    viewsSection: (...args) => /** @type {any} */ (viewsSection)(...args),
     range: (...args) => range(...args),
     scheduleSave,
-    updateFrameGuide: (...args) => updateFrameGuide(...args),
+    updateFrameGuide: (...args) => /** @type {any} */ (updateFrameGuide)(...args),
   };
   try {
     p = await load();
@@ -787,8 +787,8 @@ async function boot() {
     history.push(snapshot());
     if (history.length > 35) history.shift();
     future = [];
-    document.querySelector('[data-action="undo"]').disabled = false;
-    document.querySelector('[data-action="redo"]').disabled = true;
+    /** @type {HTMLButtonElement} */ (document.querySelector('[data-action="undo"]')).disabled = false;
+    /** @type {HTMLButtonElement} */ (document.querySelector('[data-action="redo"]')).disabled = true;
   }
   function mutate(fn) {
     checkpoint();
@@ -824,8 +824,8 @@ async function boot() {
     const t = document.querySelector("#toast");
     t.textContent = message;
     t.className = "show" + (error ? " error" : "");
-    clearTimeout(toast.timer);
-    toast.timer = setTimeout(() => (t.className = ""), ms);
+    clearTimeout(/** @type {any} */ (toast).timer);
+    /** @type {any} */ (toast).timer = setTimeout(() => (t.className = ""), ms);
   }
   function refreshScene() {
     prunePicked();
@@ -923,7 +923,7 @@ async function boot() {
   })();
   let autoPanRunning = false;
   function syncAutoPan() {
-    const a = autoPanSettings, q = (id) => document.getElementById(id);
+    const a = autoPanSettings, q = (id) => /** @type {HTMLInputElement} */ (document.getElementById(id));
     if (!q("autopan-dir")) return;
     q("autopan-dir").value = String(a.dir);
     q("autopan-ease").value = a.ease;
@@ -946,9 +946,9 @@ async function boot() {
     syncAutoPan();
   }
   document.addEventListener("change", (ev) => {
-    const id = ev.target?.id || "";
-    if (id === "autopan-ease") setAutoPan("ease", ev.target.value);
-    else if (id.startsWith("autopan-")) setAutoPan(id.slice(8), Number(ev.target.value));
+    const id = /** @type {HTMLInputElement} */ (ev.target)?.id || "";
+    if (id === "autopan-ease") setAutoPan("ease", /** @type {HTMLInputElement} */ (ev.target).value);
+    else if (id.startsWith("autopan-")) setAutoPan(id.slice(8), Number(/** @type {HTMLInputElement} */ (ev.target).value));
   });
   let measureHint = MEASURE_HINT;
   function setMeasuring(on) {
@@ -957,7 +957,7 @@ async function boot() {
     if (on && panTool) setPanTool(false);
     scene.setMeasuring(on);
     measureHint = MEASURE_HINT;
-    const bar = document.querySelector(".measure-bar");
+    const bar = /** @type {HTMLElement} */ (document.querySelector(".measure-bar"));
     if (bar) bar.hidden = !on;
     document.querySelector("#scene").classList.toggle("measuring", !!on);
     renderStatus();
@@ -1018,7 +1018,7 @@ async function boot() {
    */
   function setSheet(folded) {
     document.body.classList.toggle("sheet-collapsed", !!folded);
-    const toggle = document.querySelector(".sheet-toggle");
+    const toggle = /** @type {HTMLElement} */ (document.querySelector(".sheet-toggle"));
     if (toggle) {
       const text = folded ? "Unfold the panel" : "Fold the panel away";
       toggle.setAttribute("aria-label", text);
@@ -1061,7 +1061,7 @@ async function boot() {
   /** The three passes of this view and the pack made from them. */
   async function makeAiPack() {
     if (!scene) throw new Error("3D is not available, so there is no view to render.");
-    aiLong = Number(document.querySelector("#ai-size")?.value) || aiLong;
+    aiLong = Number(/** @type {HTMLSelectElement} */ (document.querySelector("#ai-size"))?.value) || aiLong;
     const passes = await scene.renderPasses(aiLong, { frame: exportFrame, custom: customFrame, place: framePlace.export });
     // The protected pass: the frame's own pixels where the mask says artwork
     // or a sign, transparent elsewhere (AI_EXPORT_PHASE.md).
@@ -1103,7 +1103,7 @@ async function boot() {
   }
   /** The View menu under the booth: the saved views, when there are any. */
   function syncSavedViews() {
-    const pick = document.querySelector(".saved-view-pick");
+    const pick = /** @type {HTMLElement} */ (document.querySelector(".saved-view-pick"));
     const select = document.querySelector("#saved-view");
     const views = p.mode === "3d" ? p.views || [] : [];
     if (!pick || !select) return;
@@ -1124,7 +1124,7 @@ async function boot() {
       if (id.startsWith("pedestal:")) { selectedPedestal = id.slice(9); selectedPanel = null; }
       else { selectedPanel = id; selectedPedestal = null; }
       scene?.setView("plan");
-      document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === "plan"));
+      document.querySelectorAll("[data-view]").forEach((/** @type {HTMLElement} */ b) => b.classList.toggle("active", b.dataset.view === "plan"));
     }
     renderSelection();
   }
@@ -1134,7 +1134,7 @@ async function boot() {
     if (walking) setWalking(false);
     scene.setView("perspective");
     scene.applyPose(v);
-    document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === "perspective"));
+    document.querySelectorAll("[data-view]").forEach((/** @type {HTMLElement} */ b) => b.classList.toggle("active", b.dataset.view === "perspective"));
   }
   /** The Box tool on or off: the next press-and-drag on the floor draws one. */
   function setDrawingBox(on) {
@@ -1159,7 +1159,7 @@ async function boot() {
     if (on === show3d) return;
     if (on && (!scene || !p.hall)) return toast("3D is not available on this device, so the show cannot be walked. The plan still works.", true);
     if (walking) setWalking(false);
-    if (document.querySelector("#timeline-dialog")?.open) actions["close-timeline"]();
+    if (/** @type {HTMLDialogElement} */ (document.querySelector("#timeline-dialog"))?.open) actions["close-timeline"]();
     [videoTimeline, otherTimeline] = [otherTimeline, videoTimeline];
     tlSelected = null;
     tlPlayhead = 0;
@@ -1169,21 +1169,21 @@ async function boot() {
     // Photo mode switches it over. Not an edit: nothing about the booth moved.
     if (on && p.mode !== "3d") p.mode = "3d";
     render();
-    document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === "perspective"));
+    document.querySelectorAll("[data-view]").forEach((/** @type {HTMLElement} */ b) => b.classList.toggle("active", b.dataset.view === "perspective"));
   }
   /** Walk mode on or off, with its pad on screen and its hint in the status bar. */
   // The phone's one-line view picker (CSS shows it below 700 px in place of
   // the five view buttons). It presses the matching button, so every view
   // change still goes one way, and follows whichever button is lit.
   {
-    const quick = document.querySelector("#view-quick");
-    const sync = () => (quick.value = document.querySelector("#view-switch [data-view].active")?.dataset.view || "");
-    quick.addEventListener("change", () => document.querySelector(`#view-switch [data-view="${quick.value}"]`)?.click());
+    const quick = /** @type {HTMLSelectElement} */ (document.querySelector("#view-quick"));
+    const sync = () => (quick.value = /** @type {HTMLElement} */ (document.querySelector("#view-switch [data-view].active"))?.dataset.view || "");
+    quick.addEventListener("change", () => /** @type {HTMLElement} */ (document.querySelector(`#view-switch [data-view="${quick.value}"]`))?.click());
     new MutationObserver(sync).observe(document.querySelector("#view-switch"), { subtree: true, attributes: true, attributeFilter: ["class"] });
     sync();
   }
   document.querySelector(".tool-search").addEventListener("click", (ev) => {
-    if (ev.target.id !== "tool-search") document.querySelector("#tool-search").focus();
+    if (/** @type {Element} */ (ev.target).id !== "tool-search") /** @type {HTMLInputElement} */ (document.querySelector("#tool-search")).focus();
   });
   let walking = false;
   function setWalking(on) {
@@ -1193,10 +1193,10 @@ async function boot() {
       if (scene.measure.on) setMeasuring(false);
       scene.startWalk();
     } else scene.stopWalk();
-    document.querySelector(".walk-pad").hidden = !walking;
+    /** @type {HTMLElement} */ (document.querySelector(".walk-pad")).hidden = !walking;
     document.querySelector("#scene").classList.toggle("walking", walking);
     document.body.classList.toggle("walking-on", walking);
-    document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", !walking && b.dataset.view === "perspective"));
+    document.querySelectorAll("[data-view]").forEach((/** @type {HTMLElement} */ b) => b.classList.toggle("active", !walking && b.dataset.view === "perspective"));
     renderStatus();
     syncTools();
   }
@@ -1218,12 +1218,12 @@ async function boot() {
    * the header's label. Nothing else changes with it.
    */
   function applyRole() {
-    const buttons = [...document.querySelectorAll(".inspector-tabs [data-tab]")];
+    const buttons = [.../** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll(".inspector-tabs [data-tab]"))];
     const all = buttons.map((b) => b.dataset.tab);
     const opts = { active: tab, more: tabsMore, artShow: isArtShow(p) };
     const shown = new Set(visibleTabs(role, all, opts));
     for (const b of buttons) b.hidden = !shown.has(b.dataset.tab);
-    const more = document.querySelector(".inspector-tabs .tabs-more");
+    const more = /** @type {HTMLElement} */ (document.querySelector(".inspector-tabs .tabs-more"));
     if (more) {
       more.hidden = !hasMoreTabs(role, all, opts);
       more.setAttribute("aria-expanded", String(tabsMore));
@@ -1231,7 +1231,7 @@ async function boot() {
       more.querySelector("span").textContent = tabsMore ? "Fewer" : "More";
     }
     const hide = new Set(hiddenActions(role));
-    document.querySelectorAll(".toolbar [data-action]").forEach((b) => b.classList.toggle("role-hidden", hide.has(b.dataset.action)));
+    document.querySelectorAll(".toolbar [data-action]").forEach((/** @type {HTMLElement} */ b) => b.classList.toggle("role-hidden", hide.has(b.dataset.action)));
     document.body.dataset.role = resolveRole(role);
     const label = document.querySelector("#workspace-label");
     if (label) {
@@ -1252,11 +1252,11 @@ async function boot() {
   // The booth link's dialogs: src/ui/share-dialogs.js.
   const { shareFile, sentLinksHTML, copyLink, sendToLink, removeLink, showShareLink, openShareLink } = createShareDialogs(ctx);
   function confirmAction(title, text, run) {
-    const d = document.querySelector("#dialog");
+    const d = /** @type {HTMLDialogElement} */ (document.querySelector("#dialog"));
     document.querySelector("#dialog-content").innerHTML =
       `<h2>${e(title)}</h2><p>${e(text)}</p><div class="button-row"><button id="confirm-cancel">Cancel</button><button class="primary" id="confirm-go">Continue</button></div>`;
-    document.querySelector("#confirm-cancel").onclick = () => d.close();
-    document.querySelector("#confirm-go").onclick = () => {
+    /** @type {HTMLButtonElement} */ (document.querySelector("#confirm-cancel")).onclick = () => d.close();
+    /** @type {HTMLButtonElement} */ (document.querySelector("#confirm-go")).onclick = () => {
       d.close();
       run();
     };
@@ -1343,18 +1343,18 @@ async function boot() {
   }
   // A booth on the hall map is an SVG group, not a button.
   document.addEventListener("click", (ev) => {
-    const cell = ev.target.closest?.("[data-hall-booth]");
+    const cell = /** @type {HTMLElement | null} */ (/** @type {Element} */ (ev.target).closest?.("[data-hall-booth]"));
     if (!cell || cell.closest("#show-floor")) return;
     hallSelected = Number(cell.dataset.hallBooth);
     renderInspector();
   });
   document.addEventListener("keydown", (ev) => {
-    const cell = ev.target.closest?.("[data-hall-booth]");
+    const cell = /** @type {HTMLElement | null} */ (/** @type {Element} */ (ev.target).closest?.("[data-hall-booth]"));
     if (!cell || (ev.key !== "Enter" && ev.key !== " ")) return;
     ev.preventDefault();
     hallSelected = Number(cell.dataset.hallBooth);
     renderInspector();
-    document.querySelector(`[data-hall-booth="${hallSelected}"]`)?.focus();
+    /** @type {HTMLElement} */ (document.querySelector(`[data-hall-booth="${hallSelected}"]`))?.focus();
   });
 
 
@@ -1372,7 +1372,7 @@ async function boot() {
   });
   // Where the tab strip scrolls (a phone; 701–1200 px), a mouse wheel turned
   // over it moves it sideways: a mouse has no other way along it.
-  const tabStrip = document.querySelector(".inspector-tabs");
+  const tabStrip = /** @type {HTMLElement} */ (document.querySelector(".inspector-tabs"));
   tabStrip?.addEventListener(
     "wheel",
     (ev) => {

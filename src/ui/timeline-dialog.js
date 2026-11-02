@@ -36,7 +36,7 @@ export function createTimelineDialog(ctx) {
   // scrubbing or playing, the one sampled at the playhead — so the Video
   // tab's sliders, the timeline's and the guide's handles all edit that key.
   // Otherwise it is the Video tab's own, for the whole clip.
-  const timelineOpen = () => !!document.querySelector("#timeline-dialog")?.open;
+  const timelineOpen = () => !!/** @type {HTMLDialogElement} */ (document.querySelector("#timeline-dialog"))?.open;
   const frameKeyed = () => ctx.videoMove === CUSTOM_MOVE && !!ctx.videoTimeline?.frameKeys && (timelineOpen() || ctx.busyPreview);
   const selectedKey = () => ctx.videoTimeline?.keys.find((k) => k.id === ctx.tlSelected) || ctx.videoTimeline?.keys[0];
   function selectedKeyName() {
@@ -250,7 +250,7 @@ export function createTimelineDialog(ctx) {
   // is never replaced) and capturing on the track itself, whose children are
   // redrawn on every move of a drag.
   {
-    const content = document.querySelector("#timeline-content");
+    const content = /** @type {HTMLElement} */ (document.querySelector("#timeline-content"));
     let dragging = null;
     const secondsAt = (ev, track) => {
       const r = track.getBoundingClientRect();
@@ -261,10 +261,12 @@ export function createTimelineDialog(ctx) {
       if (track) track.innerHTML = timelineTrackHTML();
     };
     content.addEventListener("pointerdown", (ev) => {
-      const track = ev.target.closest?.("[data-tl-track]");
+      /** @type {HTMLElement | null} */
+      const track = /** @type {Element} */ (ev.target).closest?.("[data-tl-track]");
       if (!track || ev.button !== 0) return;
       ev.preventDefault();
-      const keyEl = ev.target.closest("[data-tl-key]");
+      /** @type {HTMLElement | null} */
+      const keyEl = /** @type {Element} */ (ev.target).closest("[data-tl-key]");
       const tl = timeline();
       const index = keyEl ? tl.keys.findIndex((k) => k.id === keyEl.dataset.tlKey) : -1;
       if (index >= 0) {
