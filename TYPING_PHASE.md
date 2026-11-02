@@ -184,3 +184,12 @@ wrong.)
   (`tests/scene-size.test.js`) goes from 183 to 198, noted there; the
   split's gate is 1,000. The scene had 21 findings before `this` was
   typed and 0 after; none was a bug.
+- **2026-11-02, task 2: the actions, by cast alone.** 41 findings, all but
+  one a `querySelector` read as an `Element` where the code calls a
+  dialog's `close`/`showModal`, an input's `click`/`value`, or an
+  element's `dataset`/`style`/`hidden`. Each is cast once, to the kind the
+  markup has (`#export-size` is a `<select>`, `.report-text` a
+  `<textarea>`, `#underlay-real` an `<input>`), and `<studio-assistant>`,
+  a custom element with no declaration, to `any`. The one other: a
+  timeline key added in the dialog may carry `place`, which `keyFrom`'s
+  return type does not name, so `added` is typed with it. No bug.

@@ -51,7 +51,7 @@ export function createArtworkActions(ctx) {
       ctx.editingStart = snapshot();
       a.edits = normalizeImageEdits(a.edits);
       renderImageEditor();
-      document.querySelector("#image-editor").showModal();
+      /** @type {HTMLDialogElement} */ (document.querySelector("#image-editor")).showModal();
       requestAnimationFrame(() => drawImageEditorPreview(a));
     },
     "editor-save": () => {
@@ -60,7 +60,7 @@ export function createArtworkActions(ctx) {
       if (ctx.history.length > 35) ctx.history.shift();
       ctx.future = [];
       ctx.editingStart = null;
-      document.querySelector("#image-editor").close();
+      /** @type {HTMLDialogElement} */ (document.querySelector("#image-editor")).close();
       render();
       scheduleSave();
       toast("Image edits saved to this placement.");
@@ -70,7 +70,7 @@ export function createArtworkActions(ctx) {
       ctx.p = fromSnapshot(ctx.editingStart);
       ctx.editingStart = null;
       clearTimeout(ctx.scheduleEditedPreview.timer);
-      document.querySelector("#image-editor").close();
+      /** @type {HTMLDialogElement} */ (document.querySelector("#image-editor")).close();
       render();
       toast("Image edits canceled.");
     },
@@ -103,16 +103,16 @@ export function createArtworkActions(ctx) {
     "face-view": () => {
       const a=ctx.p.art.find(a=>a.id===ctx.selected); if(!a)return;
       ctx.scene?.focusWall(a.wall,a.face);
-      document.querySelectorAll("[data-view]").forEach(b=>b.classList.toggle("active",a.face!=="outside"&&b.dataset.view===a.wall));
+      document.querySelectorAll("[data-view]").forEach((/** @type {HTMLElement} */ b)=>b.classList.toggle("active",a.face!=="outside"&&b.dataset.view===a.wall));
     },
     "clear-samples": () =>
       mutate(() => {
         ctx.p.art = ctx.p.art.filter((a) => a.asset || a.kind);
         ctx.selected = ctx.p.art[0]?.id;
       }),
-    "upload-art": () => document.querySelector("#art-input").click(),
-    "replace-art": () => document.querySelector("#replace-input").click(),
-    "upload-photo": () => document.querySelector("#photo-input").click(),
+    "upload-art": () => /** @type {HTMLInputElement} */ (document.querySelector("#art-input")).click(),
+    "replace-art": () => /** @type {HTMLInputElement} */ (document.querySelector("#replace-input")).click(),
+    "upload-photo": () => /** @type {HTMLInputElement} */ (document.querySelector("#photo-input")).click(),
     "duplicate-art": () =>
       mutate(() => {
         const a = ctx.p.art.find((a) => a.id === ctx.selected);

@@ -16,8 +16,8 @@ import { assetInDesigns } from "../linked.js";
 export function createBoothActions(ctx) {
   const { addPerson, addRowBooths, addRowSpace, mutate, renderInspector, rowCount, setDrawingBox, syncTools, toast } = ctx;
   return {
-    "upload-surround": () => document.querySelector("#surround-input").click(),
-    "upload-ground": () => document.querySelector("#ground-input").click(),
+    "upload-surround": () => /** @type {HTMLInputElement} */ (document.querySelector("#surround-input")).click(),
+    "upload-ground": () => /** @type {HTMLInputElement} */ (document.querySelector("#ground-input")).click(),
     "clear-surround": () => mutate(()=>{ctx.p.booth.surroundAsset=null;}),
     // Removing an upload deletes that library entry; the floor falls back to
     // the last preset rather than leaving an empty slot behind.
@@ -165,8 +165,8 @@ export function createBoothActions(ctx) {
         toast(`${label} added near the entrance. Double-click it in the booth to pick it up, or use the sliders.`);
       }),
     "draw-box": () => setDrawingBox(!ctx.scene?.drawingBox),
-    "upload-model": () => document.querySelector("#model-input").click(),
-    "upload-underlay": () => document.querySelector("#underlay-input").click(),
+    "upload-model": () => /** @type {HTMLInputElement} */ (document.querySelector("#model-input")).click(),
+    "upload-underlay": () => /** @type {HTMLInputElement} */ (document.querySelector("#underlay-input")).click(),
     "remove-underlay": () =>
       mutate(() => {
         const id = ctx.p.booth.underlay?.asset;
@@ -179,7 +179,7 @@ export function createBoothActions(ctx) {
       const pts = ctx.scene?.measure.points;
       if (!u || pts?.length !== 2) return toast("Measure a known distance on the plan with the tape (T) first.", true);
       const taped = distanceInches(pts[0], pts[1], 0.0254);
-      const real = Number(document.querySelector("#underlay-real")?.value);
+      const real = Number(/** @type {HTMLInputElement} */ (document.querySelector("#underlay-real"))?.value);
       if (!(taped > 0.5) || !(real > 0)) return toast("Type the real length of the distance you taped.", true);
       const factor = real / taped;
       const width = Math.max(12, Math.min(24000, u.width * factor));
