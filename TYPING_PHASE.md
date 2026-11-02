@@ -1,0 +1,186 @@
+# The typing pass (ROADMAP 1.4, second half)
+
+**Goal:** `npm run typecheck` checks every module in `src/` but the vendored
+files, with the JSDoc as the types, and the bugs older than the two splits
+that their reviews found are fixed, each behind a test. It delivers ROADMAP
+1.4's "Left: those three" (`main.js`, `scene.js`, `studio.js`) and the
+modules the splits made out of them (`src/ui/`, `src/panels/`,
+`src/actions/`, `src/scene/`).
+
+**Gate:** `tsconfig.app.json` excludes only `src/vendor/**`, and
+`npm run typecheck` exits 0 in CI. `tests/typecheck-scope.test.js` holds the
+exclude list at what is left, so it can only shrink. Every suite green on
+every pull request.
+
+## Constraints
+
+- Schema 1 only gains optional fields. Nothing here touches the schema.
+- Local-first: signed out, the app works with no network, as it always has.
+- The app runs with `public/assets` empty.
+- `npm run bundle:scene` is untouched: what it ships (`scene-ops.js` and
+  its imports) is already checked by `tsconfig.json`, and a change there
+  would need the Art-Talk-Back copy updated.
+- **A typing pull request changes no behaviour.** It adds JSDoc, casts and
+  declarations only. A finding whose fix would change what runs is a bug:
+  it is recorded in Rulings and fixed in its own commit behind a failing
+  test (tasks 7–9), never folded into a type fix.
+
+## Measured (2026-11-02, `main` at 2b2fb17)
+
+Everything in `src/` but `src/vendor/` against tsconfig.app.json's settings:
+570 findings. By area: `src/ui/` 343 (`inputs.js` 188), `main.js` 108,
+`src/vendor/studio-sdk.js` 48 (pulled in by `studio.js`), `src/actions/`
+41, `src/scene/` 16, `studio.js` 9, `scene.js` 5, `src/panels/` 0. By
+kind: 362 are DOM narrowing (`.value`, `.dataset`, `.closest` on an
+`EventTarget` or `Element`), 57 spreads of an untyped array, 33
+`dialog.close` on an `Element`; the rest are JSDoc that went stale (an
+options object documented with half its keys), defaults that typed a
+parameter too narrowly (`quality = 2` compared with `"auto"`), the build's
+globals and `window` additions, and the scene's mixins, which the class
+does not know about. None of the 570 was a bug; the three that looked like
+one (`render-loop.js` comparing a number with a string, two callbacks
+"called with an argument they take none of") are inferred defaults.
+
+## Decisions (all the agent's; the owner has none to make here)
+
+- **The scene's mixins are typed by declaration merging, not rewritten.**
+  `src/scene/types.d.ts` declares `interface BoothScene extends …` with
+  `typeof lightRig` and the other eight, in a `declare module "../scene.js"`
+  block, and each mixin's object gets
+  `/** @satisfies {ThisType<import("../scene.js").BoothScene>} */`. So
+  `this.x` inside a mixin and `scene.x()` from `src/ui/` are both checked
+  against the whole scene, and no moved line changes. Proven in a spike
+  before planning: an unknown `this.nope()` and a wrong argument type are
+  both reported. *My call.* Cost if wrong: a declaration file to delete.
+- **A DOM target is cast once, where it is first named**
+  (`const el = /** @type {HTMLInputElement} */ (ev.target);`), never at
+  each use, and never through a typed `$` helper that would hide a wrong
+  element kind. Where one handler serves several kinds of control, the
+  cast is to the union it serves. *My call.*
+- **`ctx` stays untyped** (`any`), as the factories receive it today.
+  Typing it is a declaration of ~200 names that would restate `boot()`;
+  each factory's own code is checked either way. *My call; cost if wrong:
+  a wrong `ctx.` name is still caught by ESLint's no-undef only where
+  destructured, and by the view suites.*
+- **The build's globals and `window` additions** (`__APP_VERSION__`,
+  `__COMMIT_SHA__`, `__BUILD_TIME__`, `window.BOOTH_BUILD`,
+  `window.__booth`) are declared in `src/globals.d.ts`, beside
+  `BOOTH_ASSETS`. `import.meta.env` comes from `vite/client`'s types in
+  `tsconfig.app.json` only, so the Worker-side check stays free of it.
+- **`studio.js` waits for the SDK's own declarations.** The vendored
+  `src/vendor/studio-sdk.js` is compared byte for byte with Art-Talk-Back's
+  build, so a hand-written `.d.ts` here would drift. Art-Talk-Back's
+  `bundle:esm` writes `studio-sdk.d.ts` beside it from the SDK's own
+  TypeScript, both repositories' CI compare it, and then `studio.js` leaves
+  the exclude list. Platform first (its contract is new), app second, on
+  branches of the same name. *My call.*
+- **Order: smallest and most separate first,** so the declarations each
+  later area needs exist when it arrives: the scene, the actions, the
+  panels and `main.js` with the globals, `src/ui/` but `inputs.js`,
+  `inputs.js`, `studio.js`; then the bugs.
+
+## Files
+
+- `tsconfig.app.json` — each task removes its area from `exclude`; the
+  header comment says what is left.
+- `tests/typecheck-scope.test.js` (new) — the exclude list equals the
+  `LEFT` it names; each task shrinks `LEFT` first (red), then its area
+  type-checks (green).
+- `src/scene/types.d.ts` (new) — `BoothScene` gains the mixins' methods.
+- `src/globals.d.ts` — the build's globals and `window` additions.
+- The area's own modules: JSDoc and casts only.
+
+## Tasks
+
+Each is one pull request. Each: `LEFT` shrinks in
+`tests/typecheck-scope.test.js` and `node --test
+tests/typecheck-scope.test.js` is red; the area leaves `exclude`;
+`npm run typecheck` shows its findings; they are fixed;
+`npm run typecheck`, `npm run lint`, `npm test` and `npm run build` exit 0;
+the area's view suites run here one at a time (the whole chain in a
+snapshot for 4–6); `git diff` adds only comments, casts and declarations.
+
+1. **The scene** — `src/scene.js`, `src/scene/**`. `src/scene/types.d.ts`,
+   the nine `@satisfies` lines, the stale option JSDoc of `recordVideo`,
+   `previewMove`, `export` and the defaults' types. Suites: view-video,
+   view-timeline, view-frame, view-lighting, view-measure, view-people.
+2. **The actions** — `src/actions/**`. Mostly `dialog.close` on an
+   `Element` and timeline keys the JSDoc misses. Suites: view-tier,
+   view-batch, view-timeline, view-video, view-share.
+3. **The panels and `main.js`** — `src/panels/**` (no findings today),
+   `src/main.js`, `src/globals.d.ts`, `vite/client` in tsconfig.app.json.
+   Suites: the whole chain.
+4. **`src/ui/` but `inputs.js`.** Suites: the whole chain.
+5. **`src/ui/inputs.js`.** Suites: the whole chain.
+6. **`studio.js`.** Art-Talk-Back first: `bundle:esm` writes
+   `studio-sdk.d.ts` and its `--check` compares it; then here, vendored
+   beside the `.js`, CI's comparison step covers both files, and
+   `src/studio.js` leaves `exclude`. Gate: `LEFT` is `src/vendor/**`.
+   Suites: two-devices, view-share, the chain.
+7. **Undo steps with nothing in them.** At the 200-placement limit,
+   `duplicate-art` refuses inside `mutate()` and leaves an empty undo step;
+   "Renumber these" with no booth among the pieces does the same and is
+   offered anyway. Test first: a view-suite check that undo's depth is
+   unchanged after each refusal, and that the button is hidden with no
+   booth selected.
+8. **The Box tool and the frame guide.** The Box tool stays armed after it
+   refuses (Lite, or the piece limit), so every later drag repeats the
+   refusal; a click or a drag under 1″ saves a box of no width, because
+   only the limit's maximum is applied; a frame-guide corner dragged within
+   40 px of the viewport's edge lets the 40 px minimum push the frame past
+   it. Tests first in view-box and view-frame.
+9. **The rest.** The Video tab's "Export PNG · 4096 px" exports at Export's
+   remembered size, not 4096 px, as its comment says; a saved view's
+   "Update" toasts "View replaced" with no scene to take a pose from;
+   Delete and Backspace cancel the key's default with nothing selected; a
+   studio version opened resets the selected work and lights but not the
+   selected wall, pedestal or figure, the multiple selection or the row's
+   booth; the document's `dragstart` calls `ev.target.closest` on a Text
+   node and throws; `editor-cancel` clears `scheduleEditedPreview.timer`,
+   which nothing sets (the pending frame is `.frame`); the icon table
+   registers `Grid2X2` twice. A test first for each that a person could
+   meet (all but the last two).
+
+## Review focus
+
+- **A cast that lies.** `/** @type {HTMLInputElement} */` on a target that
+  can be a `<select>` or a `<button>` compiles and hides a wrong `.checked`.
+  The cast names every kind the handler serves; the review reads each
+  against the selector or the listener it guards.
+- **A type fix that changes behaviour.** A `?.` added, a `String()` around
+  a value, a default changed to satisfy a type: each changes what runs.
+  None is allowed in tasks 1–6; `git diff` of a typing PR is read for any
+  line that is not a comment, a cast or a declaration.
+- **The Worker-side check.** `tsconfig.json` keeps `"types": []` and a
+  worker's globals; nothing added for the page reaches it.
+
+## For the owner
+
+Tasks 1–6: nothing to check, nothing changes. Tasks 7–9 change what a
+person meets, each as the control already says it should: HANDOFF.md →
+Next gets the list when they land.
+
+## Rulings
+
+(Each judgement call made on the way: what was decided, why, and its cost if
+wrong.)
+
+- **2026-11-02, the plan: no questions for the owner.** Every decision
+  above is the agent's: the typing changes nothing a person sees, and each
+  bug fix makes a control do what its own label or comment already says.
+- **2026-11-02, task 1: the scene's own state is declared beside its
+  methods.** With `this` typed as the scene, 319 findings were the 52
+  fields an area assigns first inside a method (`this.p`, `this.drag`,
+  `this.revision`, …), which the class alone does not declare.
+  `src/scene/types.d.ts` declares them in the same interface as the
+  mixins, each with the type its assignments give it, loose (`any`) only
+  where the value is a project's own shape, which `validateProject` checks
+  at run time. The constructor's callbacks and `quality` get JSDoc in
+  `scene.js` (a callback defaulting to `() => {}` otherwise types as taking
+  no argument, and `quality = 2` as never `"auto"`), as do the options of
+  `previewMove`, `recordVideo`, `export` and `autoPan`. One cast, in the
+  annotation layer's loop. Everything else in the diff is comments and
+  declarations. `scene.js` grew 15 lines of JSDoc, so its size ratchet
+  (`tests/scene-size.test.js`) goes from 183 to 198, noted there; the
+  split's gate is 1,000. The scene had 21 findings before `this` was
+  typed and 0 after; none was a bug.
