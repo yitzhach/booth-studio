@@ -17,6 +17,58 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-11-13: discovery with the owner, and the demo build planned
+  (`DEMO_PHASE.md`).** No code changed. Over two days the owner asked for a
+  high-level audit and for ideas: a simple free tool for an artist's 10 × 10
+  or 10 × 20 (panel colour, wall layout, lights, hang the work), a
+  photoreal fly-in from the sky to a booth in a real park, and versions for
+  promoters of art shows and of other trade shows. What was found, and
+  where each finding rests:
+  - *Seen on the live site* (a headless browser, desktop and a 390 px
+    phone, build `9224e10`): the page loads in about a second with no
+    errors; a first visit reaches a 10 × 10 booth in three clicks (welcome →
+    My booth → Start this booth); it then lands on the Layout tab with 106
+    controls on screen (89 on the phone) and an empty booth, the only hint a
+    toast. An earlier claim in the same conversation, read from the
+    documents, that a new user had no clear first five minutes, was wrong
+    and was withdrawn: the gap is after the door.
+  - *Read from the repository:* nobody but the owner has used the app; the
+    twenty calls in `docs/DECISIONS.md` → Still open were all still open;
+    booth records hold a name, a note, a status and a price, and there is
+    no way to bring an exhibitor list in, only out.
+  - *From web searches only* (no vendor's page opened; `artplacer.com`,
+    `expofp.com` and `developers.google.com` are blocked here): how two
+    fairs place artists, what shows are said to pay ZAPP and Eventeny, the
+    trade-show assistants that answer exhibitors, and that nobody counts
+    art fairs reliably — all in ROADMAP.md → The market.
+  The owner's answers, in his words: the aim for six months is "maybe a few
+  paid users and shows, and 100+ subscribed from the free version", the
+  free version earning its keep by "the value in building a core set of
+  users" and "not spammy ads", perhaps growing into "a forum for pro
+  artists to chat, network"; "I have only used it"; "I know about 5 show
+  directors or have ins with the shows to ask"; and nothing is off the
+  table now. He doubted a paid tool is viable "in this day and age of easy
+  to create software", which the plan answers by selling the finished job
+  to the first shows by hand. Then: "you make the important decisions",
+  "I don't want to be going in to github, or having to approve a bunch of
+  things", "only very important checks for me to look at", and "a product
+  ready to demo to shows". From that: `DEMO_PHASE.md` (stage A, the
+  artist's guided booth; stage B, the director's job on the device; stage
+  C, a front page; three checkpoints that are all the owner is asked);
+  ROADMAP.md → The order from here, its market notes and sources;
+  `HANDOFF.md` → Now and Next; B-100 to B-102; and CLAUDE.md → What is being
+  built now. An audit prompt the owner shared was used for its evidence
+  labels and its brief, and its read-only rule was kept until he asked for
+  this push. Checked: `npm test` (the handoff's pointers and length among
+  them); nothing else runs for documents.
+  **And CI's runner is pinned.** The pull request's first run failed in
+  every browser job within a minute, on documents alone: `ubuntu-latest`
+  had become Ubuntu 26.04 that day, where Playwright 1.56.1 will not
+  install the Chromium build the suites are written against ("does not
+  support chromium on ubuntu26.04-x64"). `core` and `views` now say
+  `ubuntu-24.04`, the image they always ran on. Moving to the new image
+  needs a newer Playwright and Chromium checked against every view suite;
+  it is in `DEMO_PHASE.md` → Rulings, not done here.
 - **2026-11-02: the typing pass (ROADMAP 1.4 done).** `TYPING_PHASE.md`,
   in four pull requests (booth-studio#79, #80, #81 and this one): the scene
   (its mixins declared on `BoothScene` by `src/scene/types.d.ts`), the

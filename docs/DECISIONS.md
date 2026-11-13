@@ -456,6 +456,30 @@ naming who asked, where the context makes it the owner's.
   commit messages and the handoff stay in full prose. — "**B extremely
   concise.** Sacrifice grammar for concision." — *CLAUDE.md → How to report
   to me.*
+- **B-100** · 2026-11-12 · The aim for the next six months: a few paying
+  artists and shows, and a hundred or more people signed up from the free
+  version; the free version pays its way through the people it gathers, never
+  through adverts, and may grow into a place for professional artists to
+  talk. Built on as `DEMO_PHASE.md`: artists free, shows pay. — "maybe a few
+  paid users and shows, and 100+ subscribed from the free version" —
+  *docs/HISTORY.md: 2026-11-13: discovery with the owner, and the demo build
+  planned (`DEMO_PHASE.md`).*
+- **B-101** · 2026-11-12 · Where the product stands with people: only the
+  owner has used it; he knows about five show directors, or has a way in to
+  their shows, to ask; and nothing is off the table now. A session's
+  reading of the last, not the owner's words: money, payments and new
+  server-side work are open to being asked, and are still asked first. — "I
+  know about 5 show directors or have ins with the shows to ask" —
+  *docs/HISTORY.md: 2026-11-13: discovery with the owner, and the demo build
+  planned (`DEMO_PHASE.md`).*
+- **B-102** · 2026-11-13 · A hands-off build to a product ready to
+  demonstrate to shows and artists: sessions make the important decisions
+  and ship their own work; the owner does not go into GitHub or approve
+  things one by one, and is shown only very important checks — the three
+  checkpoints of `DEMO_PHASE.md`. High-level questions are still put to
+  him. — "I don't want to be going in to github, or having to approve a
+  bunch of things" — *docs/HISTORY.md: 2026-11-13: discovery with the owner,
+  and the demo build planned (`DEMO_PHASE.md`).*
 
 ## Still open
 
@@ -498,9 +522,14 @@ above, with the next number, and leaves this list.
 - 2026-10-19 · Rev 2 (the hosted Show Hub) needs the owner's yes on payments
   and server work, after Rev 1's gate of three artists and one promoter; Rev 3
   (exhibitions) waits on the owner too.
-- 2026-10-20 · ROADMAP phase 0: who pays first.
+- 2026-10-20 · ROADMAP phase 0: who pays first. (2026-11-13: `DEMO_PHASE.md`
+  builds on a session's default — shows pay, artists free — until the owner
+  says otherwise; B-100 points the same way.)
 - 2026-10-20 · ROADMAP phase 0: the name — "Booth Studio" is taken on the App
   Store.
+- 2026-11-13 · `DEMO_PHASE.md` checkpoint 3: the name and domain; and, after
+  the five directors' conversations, a yes or no to the hosted show's server
+  work and to payments.
 - 2026-10-20 · ROADMAP phase 0: what stays free.
 - 2026-10-20 · ROADMAP phase 0: error reports — a Worker route that receives
   problem reports (Copy a problem report sends nothing today).

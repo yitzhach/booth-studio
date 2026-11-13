@@ -32,6 +32,17 @@ from, & it says which `docs/` file to read before touching what it covers.
 `docs/HISTORY.md` (every round) & `docs/DECISIONS.md` (the owner's answers)
 are the record of what was decided & why.
 
+## What is being built now
+
+`DEMO_PHASE.md` (2026-11-13): a product ready to demo to artists & show
+directors. Start at its first unticked task.
+
+**Hands-off, at the owner's word (B-102):** sessions make the product &
+engineering decisions, and open, review, merge & verify their own PRs. Don't
+ask the owner to pick btwn options a session can weigh. Ask him only at that
+plan's 3 checkpoints — or 1st, in one batch, for: money, secrets, payments,
+new server-side work, deleting data or Workers, the name & domain.
+
 ## Rules that bite
 
 - `main` is prod (Cloudflare Git integration). Merging = deploying. GH Actions

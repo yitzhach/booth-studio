@@ -26,6 +26,16 @@ is true has changed.
   the rules that bite. It does not need to be asked for again. That rule is
   about chat only: code comments, commit messages and this file stay in full
   prose, because a cold session has nothing else to read.
+- **What is being built now (2026-11-13): `DEMO_PHASE.md`.** A product the
+  owner can demonstrate to an artist in five minutes and to a show director
+  in ten: a guided path for the artist's booth (stage A), the director's job
+  — the accepted list in, everyone placed by rule, a packet each, a map for
+  the public (stage B) — and a front page (stage C). Start at its first
+  unticked task. **The owner asked for a hands-off build** (B-102): sessions
+  decide, open, review, merge and check their own pull requests, and ask the
+  owner only at that plan's three checkpoints, or first for money, a
+  secret, payments, new server-side work, deleting anything, or the name
+  and domain. Why this order: ROADMAP.md → The order from here.
 - **Where it is.** Repository https://github.com/yitzhach/booth-studio;
   production https://booth-studio.bobdylan2000.workers.dev, built and
   deployed by Cloudflare's Git integration from `main` — merging is the
@@ -115,7 +125,16 @@ Diffusion first, then the show floor, the Video tab, the roadmap's tools,
 the speed levers, Show Hub's limits and Pro gating — are in
 `docs/OPEN-CHECKS.md`, verbatim: none needs a session, and each says what to
 look at and what to change if it reads wrong.
-1. **2026-10-20: the owner's to try, on real devices (no session can).**
+1. **2026-11-13: the owner's half of the demo build.** Nothing to look at
+   yet. As each stage of `DEMO_PHASE.md` lands, its checkpoint is written
+   here as a short list to try on the live site: checkpoint 1 on his phone
+   (the artist's demonstration), checkpoint 2 on his laptop (the
+   director's), checkpoint 3 once before anyone outside is sent a link (the
+   name and domain, and a yes or no to server work and payments). Beside
+   the build, his alone: the five show directors he knows (B-101) — the
+   questions are in `DEMO_PHASE.md`, "The owner's half" — and a few artists
+   to try the guided booth when checkpoint 1 is ready.
+2. **2026-10-20: the owner's to try, on real devices (no session can).**
    - On an iPad, portrait and landscape: the inspector's tabs scroll
      sideways inside the right-hand panel now, instead of the whole page
      (booth-studio#34). Is that findable, or should the labels go and leave
@@ -137,9 +156,9 @@ look at and what to change if it reads wrong.
    - Offline: open the live site once on the iPad (and on a phone), then
      turn on airplane mode and open it again — does it come up with your
      booths? Then Share → Add to Home Screen, and open it from there.
-2. **Rev 1 (parts A, B and C) is merged and live (2026-10-19), untested by
-   a person.** The owner said merge now and test later. This and item 1
-   are where the next session with the owner starts. His checklist, on the live site in a private window (a
+3. **Rev 1 (parts A, B and C) is merged and live (2026-10-19), untested by
+   a person.** The owner said merge now and test later. This and the
+   item above are where the next session with the owner starts. His checklist, on the live site in a private window (a
    fresh browser is a first visit):
    - The welcome: do the three cards read right? Pick My booth: does Quick
      start follow, and are Artwork, Layout, Walls, Lighting, Export the right
@@ -158,54 +177,29 @@ look at and what to change if it reads wrong.
    anything else. Then the Rev 1 gate: three artists and one promoter use it
    on their own devices; after that, Rev 2 (hosted Show Hub) needs the
    owner's yes on payments and server work.
-3. **`ROADMAP.md` (2026-10-20) is the plan from here.** Its phase 0 is the
+4. **`ROADMAP.md` (2026-10-20) is the plan from here.** Its phase 0 is the
    checklist above plus five watched sessions, ten organizer conversations
    and the owner's decisions (who pays first, the name — "Booth Studio" is
    taken on the App Store — what stays free, error reports, payments, the
-   image service). Its phase 1 (foundations) needs none of those. Done: 1.1
-   (this file's split), 1.2, 1.5, 1.7, 1.8 and 1.9; half done: 1.4 (every module
-   in `src/` is type-checked but `main.js`, `scene.js`, `studio.js` and what
-   the split moved out of `main.js`) and 1.6. 1.2 took 21 seams of
-   `MAIN_SPLIT_PHASE.md`: the share dialogs, the welcome, Keep your work
-   and the templates, the looks and the image editor, the timeline dialog
-   and the batch, the show-floor panel, Find a tool and the app map,
-   upload and import, and every tab's section builders in `src/panels/`;
-   the whole action table, by area, in `src/actions/`; the panels'
-   listeners in `src/ui/inputs.js`; the click dispatch and the keyboard in
-   `src/ui/events.js`; the scene's wiring, the studio host and
-   `window.__booth` in `src/ui/scene-wiring.js`, `src/ui/studio-host.js`
-   and `src/ui/test-hooks.js`; `render`, `renderStatus`, the inspector
-   (`inspectorHTML`, which lays each tab out) and the section chips in
-   `src/ui/render.js`; the view prefs, the toolbar's state and the frame
-   guide in `src/ui/view-prefs.js`; the library with its drag onto the
-   stage in `src/ui/library.js`; and the icons, the field builders, the
-   input sync, the clips, the asset inputs and the row's edits in
-   `src/ui/icons.js`, `src/panels/fields.js`, `src/ui/sync-inputs.js`,
-   `src/ui/clips.js`, `src/ui/asset-inputs.js` and `src/ui/row-edit.js` —
-   `main.js` is 1,438 lines, under the gate's 1,500. The scripts each seam
-   used are in `tools/main-split/`, and the plan's Rulings hold the bugs
-   older than the move that the reviews found, for a fix after the split).
-   1.3 is done too (2026-10-28): nine seams of `SCENE_SPLIT_PHASE.md` moved
-   `BoothScene`'s methods unchanged, as mixins, into `src/scene/` (the light
-   rig, export, video, camera, props, measuring, interaction, the render
-   loop and the booth build), and `scene.js` is 183 lines; the scripts are
-   in `tools/scene-split/`. 1.4 is done too (2026-11-02, `TYPING_PHASE.md`):
-   `npm run typecheck` checks every module in `src/` but the vendored files,
-   and the bugs the splits' reviews found are fixed behind tests. 1.10's site-qa and Dependabot, 1.11 (the
-   custom domain) and 1.12 (security headers, which change what the Worker
-   sends) want the owner's yes first.
-4. **The assistant panel on a phone (2026-10-07): built — see `docs/HISTORY.md`.** The
+   image service). Its phase 1 (foundations) is done but for 1.6 (a lighter
+   first load), 1.10's site-qa and Dependabot, 1.11 (the custom domain) and
+   1.12 (security headers, which change what the Worker sends): each note in
+   ROADMAP.md says what was built and what is left, and the rounds are in
+   `docs/HISTORY.md` (`MAIN_SPLIT_PHASE.md`, `SCENE_SPLIT_PHASE.md`,
+   `TYPING_PHASE.md`). Since 2026-11-13 the demo build comes before phase 2,
+   and 1.11 is checkpoint 3's.
+5. **The assistant panel on a phone (2026-10-07): built — see `docs/HISTORY.md`.** The
    owner's to try on his phone: Backspace, the two new doors, dragging,
    resizing and shrinking the panel. The Show Tracker's panel
    (art-show-tracker `tracker/studio-assistant.js`) got the same changes
    (art-show-tracker#5), and "take me to …" too (art-show-tracker#7). Both
    apps' take-me-to waits on the owner's "Deploy production assistant" run.
-5. **Render with AI needs a provider (asked 2026-10-07).** `provider` is
+6. **Render with AI needs a provider (asked 2026-10-07).** `provider` is
    `null` in `src/ai-render.js`; the pack download works. Plugging one in
    needs an image model (not Claude) whose key sits behind a studio Worker
    route, never in this app: the owner picks the service and OKs the
    spend first.
-6. **The studio, by hand (2026-10-05).** Everything in
+7. **The studio, by hand (2026-10-05).** Everything in
    `docs/STUDIO-PLATFORM.md` is tested here with two browser contexts against a local
    studio-api; none of it has been used by a person. On
    `studio-booth-studio-staging` first, then production: sign in from
@@ -220,7 +214,7 @@ look at and what to change if it reads wrong.
    deploy of `studio-assistant`, which is the owner's. Without it, an agent
    can already build and change booths and show floors through the studio
    API (seventeenth round); the panel adds the chat.
-7. **The two shipped backdrops are 1024×512 and read soft.** This is the one
+8. **The two shipped backdrops are 1024×512 and read soft.** This is the one
    open bug with a known fix. Both were prepped from Poly Haven's **1K** HDRI,
    and `tools/hdri-prep.mjs` will not stretch a backdrop past its source. Re-prep
    from the **4K** download and the softness goes:
@@ -231,15 +225,15 @@ look at and what to change if it reads wrong.
    **No agent session can do this** — polyhaven.com is refused by the sandbox
    egress proxy (the workers.dev hosts, refused before, are reachable since
    2026-10-20). It needs a human with a browser. `docs/HDRI-ASSETS.md` is step by step.
-8. **H.264 output is unverified on real hardware.** Open Chromium builds ship no
+9. **H.264 output is unverified on real hardware.** Open Chromium builds ship no
    H.264 *encoder*, so every sandbox run exercises the VP9 fallback instead.
    That does prove the whole encoder-to-muxer pipeline with real encoder bytes,
    and mp4box.js validated the container — but nobody has opened an
    `avc1`/`avcC` file from Chrome or Safari in QuickTime. If a clip will not
    play, start here.
-9. **A `home` HDRI** is still missing — an interior with windows on one side.
+10. **A `home` HDRI** is still missing — an interior with windows on one side.
    That preset falls back procedurally until someone downloads one.
-10. **The typing pass's fixes, by hand (2026-11-02).** Each makes a control
+11. **The typing pass's fixes, by hand (2026-11-02).** Each makes a control
    do what it says; worth a minute on the live site: Ctrl+D at 200 works says
    so and leaves nothing to undo; two aisles selected on the show floor offer
    no "Renumber these"; the Box tool lets go when it refuses; the Video tab's
@@ -247,7 +241,7 @@ look at and what to change if it reads wrong.
    Detail; if it should export at 4096, that is one line in
    `src/actions/export.js`); Backspace with nothing selected is the
    browser's again.
-11. **Clean house (the owner asked, 2026-10-26).** Done: the test tooling
+12. **Clean house (the owner asked, 2026-10-26).** Done: the test tooling
    (booth-studio#72, `docs/HISTORY.md`). Found and not yet done, each the
    owner's pick: `npm audit`'s six highs, all dev-only (vite, wrangler), where
    a vite bump may change `npm run bundle:scene`'s bytes and so need the
@@ -471,6 +465,9 @@ time out on a click at 3× (it passed alone).
 - `docs/LESSONS.md` — things learned the hard way, and why the code is the
   way it is.
 - `ROADMAP.md` — the phases to a product people pay for, ticked as work lands.
+- `DEMO_PHASE.md` — what is being built now: the artist's guided booth, the
+  show director's job, and the three checkpoints that are all the owner is
+  asked.
 - `docs/WORKFLOW.md` — how a session works here, and the skills in
   `.claude/skills/`.
 - `README.md` — commands, architecture, stable behavior.
