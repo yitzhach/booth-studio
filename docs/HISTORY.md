@@ -61,6 +61,14 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
   labels and its brief, and its read-only rule was kept until he asked for
   this push. Checked: `npm test` (the handoff's pointers and length among
   them); nothing else runs for documents.
+  **And CI's runner is pinned.** The pull request's first run failed in
+  every browser job within a minute, on documents alone: `ubuntu-latest`
+  had become Ubuntu 26.04 that day, where Playwright 1.56.1 will not
+  install the Chromium build the suites are written against ("does not
+  support chromium on ubuntu26.04-x64"). `core` and `views` now say
+  `ubuntu-24.04`, the image they always ran on. Moving to the new image
+  needs a newer Playwright and Chromium checked against every view suite;
+  it is in `DEMO_PHASE.md` → Rulings, not done here.
 - **2026-11-02: the typing pass (ROADMAP 1.4 done).** `TYPING_PHASE.md`,
   in four pull requests (booth-studio#79, #80, #81 and this one): the scene
   (its mixins declared on `BoothScene` by `src/scene/types.d.ts`), the

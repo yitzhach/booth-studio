@@ -372,6 +372,13 @@ stays as it is and none of it blocks this phase.
 Judgement calls made while building: what was decided, why, and what it
 costs if wrong. Newest first.
 
+- 2026-11-13 · CI's `core` and `views` jobs are pinned to `ubuntu-24.04`
+  (`.github/workflows/ci.yml`), because `ubuntu-latest` became 26.04 and
+  Playwright 1.56.1 will not install Chromium build 1194 there. Cheap and
+  safe now; the cost if left is an image that one day goes away. Moving on
+  is its own small task for a quiet moment: a Playwright that supports the
+  new image, its Chromium build in `BOOTH_TEST_CHROMIUM`, and all view
+  suites green on it before the pin is lifted.
 - 2026-11-13 · This plan was written from the code's structure, the live
   site seen in a headless browser, and web search results; no competitor's
   page could be opened and no artist or director has been asked. Every rule
