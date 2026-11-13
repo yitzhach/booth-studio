@@ -20,6 +20,54 @@ marked **Owner:** with the default this plan proposes, so a session can see
 what it may build and what it must wait for. `HANDOFF.md` stays the record of
 what is built; this file is the record of where it is going.
 
+## The order from here (2026-11-13)
+
+Two days of discovery with the owner changed the order, not the direction.
+**`DEMO_PHASE.md` is what is being built now**, ahead of phase 2: a product
+the owner can demonstrate to an artist in five minutes and to a show
+director in ten. What it settled, and why:
+
+- **The goal for six months is small and concrete** (B-100): a few paying
+  artists and shows, and a hundred or more people signed up from the free
+  version. At that size artist subscriptions are not the income — a hundred
+  free users make a handful of paying ones — and one show at a few dollars a
+  booth is worth more than all of them. So: artists free, shows pay.
+- **Software alone is not what a director will pay for.** A 2D booth map
+  already comes with what shows pay for today (ZAPP's booth management,
+  Eventeny's map), and a copy of any screen is cheap to make now. What is
+  not cheap is the finished job at the busy moment: every accepted artist
+  placed by the show's own rules, a packet for each, a map for the public.
+  The first shows get that done for them by hand, from their map and their
+  list, with this app as the tool; it becomes self-serve after three have
+  paid.
+- **The artist's side becomes a guided path** — size, walls and colour,
+  light, hang, share — a face on the same app, not a second one. Seen on the
+  live site on 2026-11-13: a first visit reaches a booth in three clicks,
+  and then lands on a tab with 106 controls. The gap is after the door, not
+  the door.
+- **Pulled forward from phase 3, without a server:** bringing the accepted
+  list in (3.2), each exhibitor's packet (3.6), load-in windows (3.7), and
+  the public map as a file the show hosts itself (3.8). New: placing
+  everyone by rule. The hosted show — invitations, each artist's own door,
+  submitted designs — stays phase 3 and waits for what directors say.
+- **Parked, each for a reason.** The fly-in from the sky to a booth in a
+  real park: buildable (real aerial 3D tiles, a scan of the venue, measured
+  booths inside it), but costly, online-only, and no one has asked for it;
+  one venue as a showpiece, later. A trade-show edition: that market has
+  its floor-plan vendors and, since 2026, assistants that answer exhibitors'
+  questions; the owner has no way in there and five ways in to art fairs.
+  A forum: artists already talk elsewhere and an empty forum is worse than
+  none; a gallery of booths artists choose to publish is the better seed.
+- **No rebuild, and no change of engine.** three.js in the browser is the
+  only stack that gives a phone, no install and no network at once. The
+  limit on realism is the models and materials, not the renderer.
+- **How it is built** (B-102): sessions decide and ship; the owner is asked
+  only at `DEMO_PHASE.md`'s three checkpoints.
+
+Phase 0's people work — the owner's five directors and a few artists — runs
+beside the build and is its gate. Phase 1's open items (1.6, 1.10's site-qa,
+1.11, 1.12) wait behind the demonstration; none blocks it.
+
 ## Where it stands
 
 The engine is broad and unusually deep for one product. What is built and on
@@ -61,6 +109,9 @@ What holds it back from being a product:
    is one 1,087 KB script (318 KB gzipped). `HANDOFF.md` is 3,208 lines
    (223 KB) and every session reads it first. Tests are strong — 479 Node
    tests and 41 browser suites — and are what make the clean-up below safe.
+   *(2026-11-13: retired by phase 1 — `main.js` is 1,438 lines, `scene.js`
+   183, `HANDOFF.md` under 600, every module type-checked; 60 Node test
+   files and 45 view suites.)*
 
 ## The market (as of 2026-10-20)
 
@@ -99,6 +150,32 @@ What this says:
   Pro in-app purchase on Apple's App Store (released Dec 2024). Settle the
   name before any public launch (phase 0).
 
+**Added 2026-11-13** (search results only; `artplacer.com`, `expofp.com`
+and `developers.google.com` could not be opened from this sandbox, so no
+figure here is one to quote):
+
+- **How directors place artists today.** Two 2026 articles in Sunshine
+  Artist describe it: one fair prints the map large and moves coloured
+  sticky notes until it is right; another weighs each artist's medium, to
+  keep similar work apart, with the jury's scores. Corners and double
+  booths are paid upgrades with too few to go round, given by score or
+  seniority. Packets go to artists two to three weeks before the show.
+  This is the job `DEMO_PHASE.md` stage B does.
+- **What shows already pay.** A competitor's comparison page puts ZAPP at
+  about $2,700 a year, $1,500 to set up and $1.99 an application; ZAPP has
+  booth assignment of its own. Eventeny's tiers were reported between free
+  and $360 a month, with a map on which booths are assigned or picked.
+- **Assistants that answer exhibitors** exist for trade shows since 2026
+  (Eventflow, Grip, Swapcard): they answer from the event's own manual and
+  hand over to a person. None was found for art fairs. One here would be
+  worth having only because it knows each artist's booth, neighbours and
+  load-in time, not for the chat.
+- **How many shows there are** is not known: Art Fair SourceBook reviews
+  700 or more; craft directories claim between 3,500 and 16,800 and
+  disagree with themselves. Fifty shows at $500–1,500 each is $25,000 to
+  $75,000 a year — a good business for one person, not a venture.
+- **BoothFlow** is on the Mac as well as the iPad, at version 1.5.
+
 ## Positioning
 
 **The show's official floor plan, with every exhibitor's real booth in it.**
@@ -130,7 +207,8 @@ work — export always works.
 ```
 Phase 0  Prove it and decide ........ owner-led    ─┐ run together
 Phase 1  Foundations ................ agents        ─┘
-Phase 2  The artist's season ........ after 1's split of main.js
+Now      The demo build ............. DEMO_PHASE.md (2026-11-13)
+Phase 2  The artist's season ........ after the demo build
 Phase 3  The show's official floor .. owner: yes to server work      (Rev 2)
 Phase 4  Paid ....................... owner: yes to payments          (Rev 2)
 Phase 5  Exhibitions & institutions . can move ahead of 3–4          (Rev 3)
@@ -439,6 +517,8 @@ exhibitor's.
       ZAPP, Eventeny, EntryThingy or a spreadsheet, with a column matcher.
       Assign booths by drag or automatically; send invitations by email
       through the platform (its phase 4 email, Resend).
+      *(2026-11-13: the import, the matcher and placing by rule come first,
+      on the device, as `DEMO_PHASE.md` B1–B5. Invitations stay here.)*
 - [ ] **3.3 The exhibitor's door.** The invitation opens their booth already
       set: size, number, neighbours, which walls they may use, and the
       show's rules. They design it — Quick start, the assistant, Make it
@@ -458,14 +538,20 @@ exhibitor's.
 - [ ] **3.6 Each exhibitor's kit.** One page each: the map with their booth
       marked, their load-in time, the rules, the power they ordered, and
       their own hanging guide.
+      *(2026-11-13: a printed packet without the power and the hanging
+      guide is `DEMO_PHASE.md` B7.)*
 - [ ] **3.7 Load-in.** Time slots by door and aisle, so vans don't all
       arrive at once; a printable schedule; a change tells the people it
       moves.
+      *(2026-11-13: windows by aisle, in the packet, are `DEMO_PHASE.md`
+      B6. Telling people of a change needs the hosted show.)*
 - [ ] **3.8 The public map.** A published page: the floor, a searchable list
       of exhibitors (name, medium, booth), a 3D preview, made for phones,
       with a QR code for the entrance and a snippet for the show's own
       website. Served as a static snapshot from the Worker, so it stays fast
       and cheap on show day.
+      *(2026-11-13: first as one HTML file the show hosts itself,
+      `DEMO_PHASE.md` B8. Serving it from the Worker stays here.)*
 - [ ] **3.9 Price booths from data.** The attention map from 2.9 run over the
       whole floor: footfall and visibility per booth, so the organizer can
       price corners and end caps from evidence.
@@ -669,3 +755,20 @@ decides? Would you pilot this at your next show?
 - Kunstmatrix free and public exhibitions: https://www.kunstmatrix.com/en/info/faqs/what-is-a-public-3d-exhibition-what-does-public-mean
 - "Booth Studio" on the App Store: https://apps.apple.com/us/app/booth-studio/id6738711990
 - WebKit's 7-day storage cap: https://bugs.webkit.org/show_bug.cgi?id=211775
+
+Added 2026-11-13 (search results; not opened in this sandbox):
+
+- Sunshine Artist, "The Layout Puzzle": https://sunshineartist.com/articles/2026/3/the-layout-puzzle
+- Sunshine Artist, "Planning a Festival's Layout": https://sunshineartist.com/articles/2026/3/planning-a-festival-s-layout
+- ZAPP booth management: https://help.zapplication.org/booth-management/
+- Eventeny against ZAPP (Eventeny's own page): https://www.eventeny.com/compare/eventeny-vs-zapplication/
+- Eventflow's assistant: https://eventtechnology.org/2026/04/27/eventflow-unveils-ai-assistant-to-automate-exhibitor-queries/
+- Grip's assistant: https://www.international-confex.com/news/grip-launches-ai-assistant-resolve-up-80-event-participant-queries
+- Swapcard's assistant: https://www.swapcard.com/features/event-virtual-ai-agent
+- Map Your Show's builder: https://www.mapyourshow.com/show-builder
+- Art Fair SourceBook: https://artfairsourcebook.com/about
+- TheCraftMap's counts: https://www.thecraftmap.com/stats
+- BoothFlow on the App Store: https://apps.apple.com/app/id6757063620
+- Spark, a Gaussian-splat renderer for three.js: https://sparkjs.dev/
+- World Labs' API pricing: https://docs.worldlabs.ai/api/pricing
+- Map Tiles API usage and billing: https://developers.google.com/maps/documentation/tile/usage_limits
