@@ -138,7 +138,7 @@ Commit messages in the repository's voice: what changed and why.
 
 ### Stage A — the artist's guided booth
 
-- [ ] **A1. The steps, as data.** `src/guided.js`: `STEPS` — `booth`,
+- [x] **A1. The steps, as data.** `src/guided.js`: `STEPS` — `booth`,
   `walls`, `light`, `hang`, `share` — each with a title, one line of help,
   the list of controls it shows (eight at most), and `done(p)`.
   `GUIDED_KEY = "booth.guided"`, a view setting per browser like the
@@ -372,6 +372,30 @@ stays as it is and none of it blocks this phase.
 Judgement calls made while building: what was decided, why, and what it
 costs if wrong. Newest first.
 
+- 2026-11-23 · A1: a step's controls are names, and where the tabs already
+  have the control its name is the existing action (`polish`, `look-gallery`,
+  `guide`, `share-design`, `studio-account`), so a step's button runs exactly
+  what the tab's does and nothing is built twice. New names (`booth-kind`,
+  `wall-layout`, `add-pictures`, `save-picture` …) are A2–A6's to draw. Cost
+  if wrong: a rename in one table.
+- 2026-11-23 · A1: `done(p)` says whether the booth already has what the
+  step makes, read from the project alone. So `booth` is always done (Quick
+  start built it), `walls` while any wall shows, `light` while the booth is
+  in one of the four looks (`currentLook`), `hang` once a work of this booth
+  — not a sign, a label or a neighbour's in the booth row — is on a wall
+  that shows, and `share` never: a picture or a link leaves the project and
+  the project cannot say it was sent. The ticks are a guide, not a gate;
+  Next is never blocked by them.
+- 2026-11-23 · A1: step 1 has no canopy switch. The kind of booth carries
+  the canopy, as Quick start's three kinds do (fair tent, indoor panels,
+  trade show without a canopy), because a canopy switched on turns an
+  indoor panel booth back into an outdoor one (the warning in the Layout
+  tab). Cost if wrong: an artist who wants an outdoor booth without a tent
+  picks the trade-show kind, or All tools.
+- 2026-11-23 · A1: `booth.guided` holds the step the artist is on, or `off`
+  once All tools is chosen; absent means the steps were never started.
+  Anything else read back is treated as absent, and only a step or `off` is
+  ever written, as `booth.role` does.
 - 2026-11-13 · CI's `core` and `views` jobs are pinned to `ubuntu-24.04`
   (`.github/workflows/ci.yml`), because `ubuntu-latest` became 26.04 and
   Playwright 1.56.1 will not install Chromium build 1194 there. Cheap and
