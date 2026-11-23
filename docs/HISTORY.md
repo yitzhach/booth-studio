@@ -17,6 +17,18 @@ sections are `docs/DIAGNOSING.md`, "Things learned the hard way" is
 `docs/LESSONS.md`, and the Next items from before 2026-10-19 are
 `docs/OPEN-CHECKS.md`.
 
+- **2026-11-23: the hand-over to the next chat.** No code changed. The
+  owner asked for the ideal prompt to start a new chat, with the
+  repositories to attach and where the project stands, and whether this
+  was the last chat on it. It was: nothing had been pushed to this
+  repository since booth-studio#83 (2026-11-13), and of Art-Talk-Back's
+  nineteen commits since, none touched the SDK or the vendored scene this
+  app shares with it. `docs/CONTINUE.md`, the first session's September
+  notes and long stale (it still said "Deploy: npx wrangler deploy" and
+  "no cross-device sync"), is rewritten as the way to start the next chat:
+  the state, the repositories (Art-Talk-Back's default branch is
+  `claude/next-steps-y4vrwv`; it has no `main`) and the prompt. `HANDOFF.md`
+  → Now and its Read map point to it.
 - **2026-11-13: discovery with the owner, and the demo build planned
   (`DEMO_PHASE.md`).** No code changed. Over two days the owner asked for a
   high-level audit and for ideas: a simple free tool for an artist's 10 × 10

@@ -36,6 +36,9 @@ is true has changed.
   owner only at that plan's three checkpoints, or first for money, a
   secret, payments, new server-side work, deleting anything, or the name
   and domain. Why this order: ROADMAP.md → The order from here.
+- **Starting a new chat:** `docs/CONTINUE.md` — where it stands in a few
+  lines, the repositories to attach, and the prompt to paste. The last
+  chat ended on 2026-11-23 with `DEMO_PHASE.md` not yet started.
 - **Where it is.** Repository https://github.com/yitzhach/booth-studio;
   production https://booth-studio.bobdylan2000.workers.dev, built and
   deployed by Cloudflare's Git integration from `main` — merging is the
@@ -465,6 +468,8 @@ time out on a click at 3× (it passed alone).
 - `docs/LESSONS.md` — things learned the hard way, and why the code is the
   way it is.
 - `ROADMAP.md` — the phases to a product people pay for, ticked as work lands.
+- `docs/CONTINUE.md` — how to start the next chat: the state, the
+  repositories and the prompt.
 - `DEMO_PHASE.md` — what is being built now: the artist's guided booth, the
   show director's job, and the three checkpoints that are all the owner is
   asked.
