@@ -10,6 +10,7 @@
 // boot's state, read and set through it, and the helpers these call.
 import { boothSlots, slotLabel } from "../row.js";
 import { uid, groundLibrary, constrain, openSpot, PLACEMENT_GAP, wallLabel } from "../model.js";
+import { followTab } from "./guided-panel.js";
 
 export function createLibrary(ctx) {
   const { activeSlot, addPhotoLayer, libraryHTML, mutate, showLibraryHTML, toast } = ctx;
@@ -105,7 +106,7 @@ export function createLibrary(ctx) {
       ctx.p.art.push(placed);
       ctx.selected = placed.id;
       // Hanging from the library keeps the guided steps on screen.
-      if (ctx.tab !== "guided") ctx.tab = "art";
+      followTab(ctx, "art");
     });
     const inBooth = placed.booth
       ? " of " + slotLabel(boothSlots(ctx.p.booth).find((b) => b.id === placed.booth) || {})
@@ -133,7 +134,7 @@ export function createLibrary(ctx) {
     mutate(() => {
       ctx.p.art.push(placed);
       ctx.selected = placed.id;
-      if (ctx.tab !== "guided") ctx.tab = "art";
+      followTab(ctx, "art");
     });
     toast("New copy placed on " + wallLabel(ctx.p, placed.wall) + " · " + placed.face + ". Double-tap to adjust.");
     return true;

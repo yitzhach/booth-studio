@@ -17,12 +17,19 @@
 // the same handlers and the same undo as the tab's. A name with no drawing
 // yet draws nothing, which is how a later task (A3–A6) adds its control.
 import { escapeHTML as e, isArtShow } from "../model.js";
-import { LOOKS, currentLook } from "../polish.js";
 import { FOOTPRINTS, SHOWS } from "../quickstart.js";
 import { resolveRole } from "../roles.js";
-import { GUIDED_OFF, GUIDED_SIZES, STEPS, applyBoothChoice, boothChoiceOf, firstStep, hungWorks, readGuided, stepAfter, stepBefore, stepIndex, stepOf, writeGuided } from "../guided.js";
+import { GUIDED_OFF, GUIDED_SIZES, GUIDED_TAB, STEPS, applyBoothChoice, boothChoiceOf, firstStep, hungWorks, readGuided, stepAfter, stepBefore, stepIndex, stepOf, writeGuided } from "../guided.js";
+import { lookGrid } from "./polish-panel.js";
 
-export const GUIDED_TAB = "guided";
+/**
+ * Open a tab because of a selection or a new piece — a work clicked, a
+ * picture added — which is not a reason to leave the guided steps. A tab
+ * pressed, searched for or asked for still leaves them, by setting ctx.tab.
+ */
+export const followTab = (ctx, tab) => {
+  if (ctx.tab !== GUIDED_TAB) ctx.tab = tab;
+};
 /**
  * The tab All tools opens from each step: where that step's tools live. An
  * indoor booth's footprint and walls are in Art show, not Layout.
@@ -31,40 +38,39 @@ const TAB_FOR = { booth: "layout", walls: "walls", light: "lighting", hang: "art
 const tabFor = (key, p) => (key === "booth" && isArtShow(p) ? "show" : TAB_FOR[key] || "layout");
 
 export function createGuidedPanel(ctx) {
-  const { btn, icon, mutate } = ctx;
+  const { btn, mutate } = ctx;
   let step = readGuided();
   const onStep = () => stepIndex(step) >= 0;
+  /** The step on screen, or step 1 when none is. */
+  const current = () => (onStep() ? step : firstStep);
+  const remember = (v) => {
+    step = v;
+    writeGuided(v);
+  };
   const artist = () => resolveRole(ctx.role) === "artist";
   // A browser part-way through the steps opens on its step.
   if (artist() && onStep()) ctx.tab = GUIDED_TAB;
 
-  /** @param {string} key @param {string} label @param {string} options */
-  const select = (key, label, options) => `<label class="setting-label">${e(label)}<select data-guided="${key}" aria-label="${e(label)}">${options}</select></label>`;
+  /** @param {string} attrs @param {string} label @param {string} options */
+  const select = (attrs, label, options) => `<label class="setting-label">${e(label)}<select ${attrs} aria-label="${e(label)}">${options}</select></label>`;
   const option = (value, label, on) => `<option value="${e(value)}"${on ? " selected" : ""}>${e(label)}</option>`;
 
   /** Each control a step may name, as markup. */
   const CONTROLS = {
     "booth-kind": (p) => {
       const now = boothChoiceOf(p).show;
-      return select("show", "Kind of show", Object.entries(SHOWS).map(([k, s]) => option(k, s.label, k === now)).join(""));
+      return select('data-guided="show"', "Kind of show", Object.entries(SHOWS).map(([k, s]) => option(k, s.label, k === now)).join(""));
     },
     "booth-size": (p) => {
       const now = boothChoiceOf(p).size;
       // A booth of another size says so, rather than showing a size it is not.
       const other = GUIDED_SIZES.includes(now) ? "" : option("", `${Math.round(p.booth.width / 12)} × ${Math.round(p.booth.depth / 12)} ft, as it is`, true);
-      return select("size", "Size", other + GUIDED_SIZES.map((k) => option(k, FOOTPRINTS[k].label, k === now)).join(""));
+      return select('data-guided="size"', "Size", other + GUIDED_SIZES.map((k) => option(k, FOOTPRINTS[k].label, k === now)).join(""));
     },
     "project-name": (p) => `<label class="setting-label">Name<input type="text" data-guided="name" maxlength="120" value="${e(p.name)}" aria-label="Booth name"/></label>`,
     "panel-color": (p) => `<label class="color-field">Panel colour<input type="color" data-field="color" data-scope="booth" aria-label="Panel colour" value="${e(p.booth.color)}"/></label>`,
-    "wall-finish": (p) =>
-      `<label class="setting-label">Panel finish<select data-field="wallFinish" data-scope="booth" aria-label="Panel finish">${option("smooth", "Smooth", (p.booth.wallFinish || "smooth") === "smooth")}${option("fabric", "Fabric", p.booth.wallFinish === "fabric")}</select></label>`,
+    "wall-finish": (p) => select('data-field="wallFinish" data-scope="booth"', "Panel finish", option("smooth", "Smooth", (p.booth.wallFinish || "smooth") === "smooth") + option("fabric", "Fabric", p.booth.wallFinish === "fabric")),
     polish: () => btn("polish", "Make it beautiful", "sparkles", "primary wide"),
-    ...Object.fromEntries(
-      Object.entries(LOOKS).map(([k, l]) => [
-        `look-${k}`,
-        (p) => `<button type="button" data-action="look-${k}" class="${currentLook(p) === k ? "active" : ""}" aria-pressed="${currentLook(p) === k}" title="${e(l.blurb)}" aria-label="Look: ${e(l.label)}"><strong>${e(l.label)}</strong><span>${e(l.blurb)}</span></button>`,
-      ]),
-    ),
     "add-pictures": () => btn("upload-art", "Add my pictures", "image-plus", "primary wide"),
     "hung-list": (p) => {
       const n = hungWorks(p).length;
@@ -76,24 +82,19 @@ export function createGuidedPanel(ctx) {
     "studio-account": () => btn("studio-account", "Open it on my phone", "user-round", "wide"),
   };
 
-  /** The step's controls, the looks grouped as the Lighting tab groups them. */
+  /**
+   * The step's controls. The four looks are one card grid, the Lighting
+   * tab's own (src/ui/polish-panel.js), drawn where the first look is named.
+   */
   function controlsHTML(s, p) {
-    const looks = s.controls.filter((c) => c.startsWith("look-"));
-    let html = "";
-    for (const c of s.controls) {
-      if (c.startsWith("look-")) {
-        if (c === looks[0]) html += `<div class="look-grid">${looks.map((k) => CONTROLS[k]?.(p) || "").join("")}</div>`;
-        continue;
-      }
-      html += CONTROLS[c]?.(p) || "";
-    }
-    return html;
+    const firstLook = s.controls.find((c) => c.startsWith("look-"));
+    return s.controls.map((c) => (c === firstLook ? lookGrid(p) : c.startsWith("look-") ? "" : CONTROLS[c]?.(p) || "")).join("");
   }
 
   /** The inspector's markup while the steps show. */
   function guidedHTML() {
     const p = ctx.p;
-    const s = stepOf(step) || STEPS[0];
+    const s = stepOf(current());
     const i = stepIndex(s.key);
     const after = stepAfter(s.key);
     const steps = STEPS.map((x, n) => {
@@ -105,13 +106,12 @@ export function createGuidedPanel(ctx) {
       p.mode === "3d"
         ? `<div class="guided-controls">${controlsHTML(s, p)}</div>`
         : `<p class="muted">The steps work on the 3D booth.</p>${btn("mode-3d", "Back to the 3D booth", "box", "wide")}`;
-    return `<div class="guided" data-step="${s.key}"><ol class="guided-steps" aria-label="Steps">${steps}</ol><div class="panel-heading"><h2><small>Step ${i + 1} of ${STEPS.length}</small> ${e(s.title)}</h2></div><p class="muted guided-help">${e(s.help)}</p>${body}<div class="guided-nav">${i > 0 ? btn("guided-back", "Back", "arrow-left") : "<span></span>"}${after ? btn("guided-next", `Next: ${stepOf(after).title}`, null, "primary") : ""}</div>${btn("guided-all", "All tools", "layers", "text-button guided-all")}</div>`;
+    return `<div class="guided" data-step="${s.key}"><ol class="guided-steps" aria-label="Steps">${steps}</ol><div class="panel-heading"><h2><small>Step ${i + 1} of ${STEPS.length}</small> ${e(s.title)}</h2></div><p class="muted guided-help">${e(s.help)}</p>${body}<div class="guided-nav">${i > 0 ? btn("guided-back", "Back", "arrow-left") : "<span></span>"}${after ? btn("guided-next", `Next: ${stepOf(after).title}`, null, "primary") : ""}</div>${btn("guided-all", "All tools", null, "text-button guided-all")}</div>`;
   }
 
   /** Show a step: remembered, and drawn. */
   function go(key) {
-    step = key;
-    writeGuided(key);
+    remember(key);
     ctx.tab = GUIDED_TAB;
     ctx.tabsMore = false;
     ctx.renderInspector();
@@ -126,12 +126,11 @@ export function createGuidedPanel(ctx) {
    * never one that chose All tools, and never someone who came with a booth
    * of their own and opened Quick start from Layout. Returns whether the
    * steps took over.
-   * @param {boolean} [firstVisit]
+   * @param {boolean} firstVisit
    */
-  function startAfterQuickStart(firstVisit = false) {
+  function startAfterQuickStart(firstVisit) {
     if (!artist() || step === GUIDED_OFF || (step === null && !firstVisit)) return false;
-    step = firstStep;
-    writeGuided(step);
+    remember(firstStep);
     ctx.tab = GUIDED_TAB;
     return true;
   }
@@ -139,19 +138,15 @@ export function createGuidedPanel(ctx) {
   /**
    * Before each draw: the steps only in the Artist workspace (a switch to any
    * other leaves them for Layout), the strip hidden while they show, and the
-   * Guided button beside More whenever an artist is on a tab.
+   * Guided button beside More (in the strip's markup, src/main.js) whenever
+   * an artist is on a tab.
    */
+  const guidedButton = /** @type {HTMLElement | null} */ (document.querySelector(".inspector-tabs .tabs-guided"));
   function applyGuided() {
     if (ctx.tab === GUIDED_TAB && !(artist() && onStep())) ctx.tab = "layout";
     const on = ctx.tab === GUIDED_TAB;
     document.body.classList.toggle("guided-on", on);
-    const strip = document.querySelector(".inspector-tabs");
-    let b = /** @type {HTMLElement | null} */ (strip?.querySelector(".tabs-guided"));
-    if (strip && !b) {
-      strip.insertAdjacentHTML("beforeend", `<button class="tabs-guided" data-action="tabs-guided" title="The guided steps" aria-label="Guided steps" hidden>${icon("route")}<span>Guided</span></button>`);
-      b = strip.querySelector(".tabs-guided");
-    }
-    if (b) b.hidden = on || !artist();
+    if (guidedButton) guidedButton.hidden = on || !artist();
     return on;
   }
 
@@ -187,13 +182,12 @@ export function createGuidedPanel(ctx) {
     // All tools: the tabs as they always were, opened where this step's
     // tools live, and remembered, so the steps do not come back by themselves.
     "guided-all": () => {
-      const from = onStep() ? step : firstStep;
-      step = GUIDED_OFF;
-      writeGuided(GUIDED_OFF);
+      const from = current();
+      remember(GUIDED_OFF);
       ctx.tab = tabFor(from, ctx.p);
       ctx.renderInspector();
     },
-    "tabs-guided": () => go(onStep() ? step : firstStep),
+    "tabs-guided": () => go(current()),
     // Not a button: how Quick start (src/ui/welcome.js) hands over to step 1.
     "guided-from-quick-start": (opts) => startAfterQuickStart(opts?.firstVisit === true),
   };

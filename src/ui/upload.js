@@ -8,6 +8,7 @@ import { uid, validateProject } from "../model.js";
 import { readImage } from "../storage.js";
 import { importDesign, readDesignFile } from "../booth-file.js";
 import { mergeFloorTemplates } from "./templates.js";
+import { followTab } from "./guided-panel.js";
 import { hasDesign, liveNumber } from "../linked.js";
 
 export function createUpload(ctx) {
@@ -53,7 +54,7 @@ export function createUpload(ctx) {
           }
         }
         // The guided steps stay: Add my pictures is the hang step's own.
-        if (ctx.tab !== "guided") ctx.tab = "art";
+        followTab(ctx, "art");
       });
       toast(
         type === "photo"

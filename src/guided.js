@@ -14,11 +14,13 @@
 // setting kept per browser, never in a project or a backup: the same booth
 // opens the same with or without them, and "All tools" is one tap and stays
 // chosen. `done` only reads the project; it never writes to it.
-import { applyVenue, constrain, constrainPanel, constrainPedestal, isArtShow, isShown, wallSpec } from "./model.js";
+import { applyVenue, boothPanels, boothPedestals, constrain, constrainPanel, constrainPedestal, isArtShow, isShown, wallSpec } from "./model.js";
 import { currentLook } from "./polish.js";
-import { FOOTPRINTS, SHOWS } from "./quickstart.js";
+import { FOOTPRINTS, SHOWS, quickStart } from "./quickstart.js";
 
 export const GUIDED_KEY = "booth.guided";
+/** The inspector's view while the steps show: a tab with no button of its own. */
+export const GUIDED_TAB = "guided";
 /** The stored value that says the artist chose All tools. */
 export const GUIDED_OFF = "off";
 /** The most controls a step may show, so a step is never a toolbox again. */
@@ -81,7 +83,7 @@ export const STEPS = deepFreeze([
     title: "Hang your work",
     help: "Add pictures of your work, give each its width, and the app hangs them.",
     controls: ["add-pictures", "space-evenly", "hung-list"],
-    done: (p) => hungWorks(p).length > 0,
+    done: (p) => (p.art || []).some((a) => hungWork(p, a)),
   },
   {
     key: "share",
@@ -143,12 +145,8 @@ export function boothChoiceOf(p) {
   return { show, size };
 }
 
-/** The name Quick start gives a booth of this kind and size (src/quickstart.js), or null. */
-export function boothName(show, size) {
-  const fp = FOOTPRINTS[size];
-  if (!fp || !SHOWS[show]) return null;
-  return `${fp.label} ${SHOWS[show].venue === "artshow" ? "art show" : show === "tradeshow" ? "trade show" : "art fair"} booth`;
-}
+/** The name Quick start gives a booth of this kind and size, or null. */
+export const boothName = (show, size) => (SHOWS[show] && FOOTPRINTS[size] ? quickStart({ show, size }).name : null);
 
 /**
  * Step 1's change: a booth of another kind or size, keeping what is in it.
@@ -171,37 +169,25 @@ export function applyBoothChoice(p, { show, size } = {}) {
   const now = boothChoiceOf(p);
   const b = p.booth;
   const spec = SHOWS[show] && show !== now.show ? SHOWS[show] : null;
-  const sizeKey = FOOTPRINTS[size] ? size : now.size;
   const named = p.name === boothName(now.show, now.size);
-  if (spec) {
-    if (spec.venue !== (b.venue || "outdoor")) {
-      const kept = { width: b.width, depth: b.depth, back: b.walls.back.width, left: b.walls.left.width, right: b.walls.right.width };
-      applyVenue(p, spec.venue);
-      if (!sizeKey) {
-        b.width = kept.width;
-        b.depth = kept.depth;
-        b.walls.back = { ...b.walls.back, width: kept.back };
-        b.walls.left = { ...b.walls.left, width: kept.left };
-        b.walls.right = { ...b.walls.right, width: kept.right };
-      }
-    }
-    if (spec.venue === "outdoor") {
-      b.tent = spec.tent;
-      b.envPreset = spec.envPreset;
-    }
+  // The footprint it ends with: the size chosen, else the one it has, which
+  // a change of venue would otherwise reset to that venue's default.
+  const fp = FOOTPRINTS[size] || { width: b.width, depth: b.depth, back: b.walls.back.width, side: [b.walls.left.width, b.walls.right.width] };
+  if (spec && spec.venue !== (b.venue || "outdoor")) applyVenue(p, spec.venue);
+  if (spec?.venue === "outdoor") {
+    b.tent = spec.tent;
+    b.envPreset = spec.envPreset;
   }
-  const fp = FOOTPRINTS[sizeKey];
-  if (fp) {
-    b.width = fp.width;
-    b.depth = fp.depth;
-    b.walls.back = { ...b.walls.back, width: fp.width };
-    b.walls.left = { ...b.walls.left, width: fp.depth };
-    b.walls.right = { ...b.walls.right, width: fp.depth };
-  }
+  b.width = fp.width;
+  b.depth = fp.depth;
+  b.walls.back = { ...b.walls.back, width: fp.back ?? fp.width };
+  b.walls.left = { ...b.walls.left, width: fp.side?.[0] ?? fp.depth };
+  b.walls.right = { ...b.walls.right, width: fp.side?.[1] ?? fp.depth };
   p.art = p.art.map((a) => constrain(p, a));
-  b.panels = (b.panels || []).map((panel) => constrainPanel(p, panel));
-  b.pedestals = (b.pedestals || []).map((ped) => constrainPedestal(p, ped));
+  b.panels = boothPanels(p).map((panel) => constrainPanel(p, panel));
+  b.pedestals = boothPedestals(p).map((ped) => constrainPedestal(p, ped));
   const after = boothChoiceOf(p);
-  if (named && boothName(after.show, after.size)) p.name = boothName(after.show, after.size);
+  const name = named && boothName(after.show, after.size);
+  if (name) p.name = name;
   return p;
 }

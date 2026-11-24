@@ -6,6 +6,7 @@
 import { FURNITURE, escapeHTML as e, isArtShow, validateProject } from "../model.js";
 import { FOOTPRINTS, SHOWS, STARTERS, fromTemplate, quickStart } from "../quickstart.js";
 import { ROLES, resolveRole, tabAfterSwitch, writeRole } from "../roles.js";
+import { GUIDED_TAB } from "../guided.js";
 
 export function createWelcome(ctx) {
   const { applyRole, backup, btn, icon, mutate, readTemplates, refreshIcons, renderInspector, toast } = ctx;
@@ -77,7 +78,7 @@ export function createWelcome(ctx) {
     ctx.tabsMore = false;
     const all = [.../** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll(".inspector-tabs [data-tab]"))].map((b) => b.dataset.tab);
     // An artist in the guided steps who picks Artist again stays in them.
-    if (!(ctx.tab === "guided" && ctx.role === "artist")) ctx.tab = tabAfterSwitch(ctx.role, ctx.tab, all, { artShow: isArtShow(ctx.p) });
+    if (!(ctx.tab === GUIDED_TAB && ctx.role === "artist")) ctx.tab = tabAfterSwitch(ctx.role, ctx.tab, all, { artShow: isArtShow(ctx.p) });
     /** @type {HTMLDialogElement} */ (document.querySelector("#dialog")).close();
     renderInspector();
     // An artist's first visit goes straight on to the booth; the example on
