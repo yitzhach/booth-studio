@@ -21,7 +21,8 @@ import { FOOTPRINTS, SHOWS } from "../quickstart.js";
 import { resolveRole } from "../roles.js";
 import { GUIDED_OFF, GUIDED_SIZES, GUIDED_TAB, STEPS, applyBoothChoice, boothChoiceOf, firstStep, hungWorks, readGuided, stepAfter, stepBefore, stepIndex, stepOf, writeGuided } from "../guided.js";
 import { LAYOUTS, LAYOUT_KEYS, PANEL_COLORS, applyWallLayout, currentLayout, layoutFits, layoutPlan } from "../wall-layouts.js";
-import { evenHang } from "../polish.js";
+import { evenHang, heroShots } from "../polish.js";
+import { download } from "../storage.js";
 import { createHangDialog } from "./hang-dialog.js";
 import { lookGrid } from "./polish-panel.js";
 
@@ -38,6 +39,8 @@ export const followTab = (ctx, tab) => {
  * indoor booth's footprint and walls are in Art show, not Layout.
  */
 const TAB_FOR = { booth: "layout", walls: "walls", light: "lighting", hang: "art", share: "export" };
+/** The long side of Save a picture, in pixels. */
+const PICTURE_PX = 2048;
 const tabFor = (key, p) => (key === "booth" && isArtShow(p) ? "show" : TAB_FOR[key] || "layout");
 
 export function createGuidedPanel(ctx) {
@@ -109,10 +112,10 @@ export function createGuidedPanel(ctx) {
       const n = hungWorks(p).length;
       return `<p class="muted guided-count">${n ? `${n} work${n === 1 ? "" : "s"} on the walls.` : "Nothing on the walls yet."}</p>`;
     },
-    "save-picture": () => btn("export-image", "Save a picture", "download", "wide"),
+    "save-picture": () => btn("guided-picture", "Save a picture", "image", "primary wide") + `<p class="muted guided-note">The front of your booth as the app draws it: a rendering, and its file name says so.</p>`,
     guide: () => btn("guide", "Hanging guide", "ruler", "wide"),
-    "share-design": () => btn("share-design", "Send a link", "send", "wide"),
-    "studio-account": () => btn("studio-account", "Open it on my phone", "user-round", "wide"),
+    "share-design": () => btn("guided-link", "Send a link", "send", "wide"),
+    "studio-account": () => btn("studio-account", "Open it on my phone", "user-round", "wide") + `<p class="muted guided-note">With a studio account, this booth opens on your other devices.</p>`,
   };
 
   /**
@@ -266,6 +269,40 @@ export function createGuidedPanel(ctx) {
     },
     "tabs-guided": () => go(current()),
     "guided-add-pictures": () => hang.pick(),
+    // The hero set's front shot alone, at 2048 px: quick on a phone, and
+    // named a rendering, since a picture made by the app must say so.
+    "guided-picture": async () => {
+      // A preview or a clip drives the same camera: one at a time, as every export does.
+      if (ctx.busy || ctx.busyVideo || ctx.busyPreview) return ctx.toast("Another export is still running: try again in a moment.");
+      if (!ctx.scene || ctx.p.mode !== "3d") return ctx.toast("3D is not available, so there is no booth to draw.", true);
+      ctx.busy = true;
+      const b = /** @type {HTMLButtonElement | null} */ (document.querySelector('#inspector-content [data-action="guided-picture"]'));
+      if (b) {
+        b.disabled = true;
+        b.querySelector("span").textContent = "Drawing your booth…";
+      }
+      try {
+        const host = document.querySelector("#scene");
+        const aspect = host?.clientWidth && host?.clientHeight ? host.clientWidth / host.clientHeight : 16 / 9;
+        const front = heroShots(ctx.p, { aspect })[0];
+        const blob = await ctx.scene.export(PICTURE_PX, { frame: "desktop", pose: front.pose });
+        if (!blob) throw new Error("The picture could not be drawn on this device.");
+        const name = `${ctx.safeName()}-rendering-front.png`;
+        download(blob, name);
+        ctx.toast(`Saved ${name}: a rendering of your booth, not a photograph.`);
+      } catch (err) {
+        ctx.toast(err.message, true);
+      } finally {
+        ctx.busy = false;
+        ctx.renderInspector();
+      }
+    },
+    // The share link as it is (Export → Send my booth), asked first: it is
+    // the one thing on this step that sends the booth off the device.
+    "guided-link": () =>
+      ctx.sharing
+        ? ctx.toast("Already uploading your booth: the link comes when it is done.")
+        : ctx.confirmAction("Send a link to this booth?", "The booth and its pictures are uploaded to Booth Studio's share service, and anyone with the link can open it. Nothing else leaves this device.", () => ctx.actions["share-design"]()),
     // Make it beautiful's even hang alone: each wall's work spaced evenly on the 60″ line.
     "guided-space": () => {
       // Counted on a copy first, so a booth with nothing evenHang would move

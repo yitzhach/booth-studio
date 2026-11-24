@@ -183,7 +183,7 @@ Commit messages in the repository's voice: what changed and why.
   beautiful** — the existing actions, nothing new behind them. Test in
   `tests/view-guided.mjs`: choosing a look marks it as the booth's look
   (`currentLook`); undo restores the one before.
-- [ ] **A6. Share.** Step 5: **Save a picture** (the hero set's front
+- [x] **A6. Share.** Step 5: **Save a picture** (the hero set's front
   shot), **Hanging guide**, **Send a link** (the share link as it is), and
   **Open it on my phone** (Studio account, as it is — the reason to sign
   up). Read `docs/STUDIO-PLATFORM.md` first; if a stranger cannot create an
@@ -372,6 +372,23 @@ stays as it is and none of it blocks this phase.
 Judgement calls made while building: what was decided, why, and what it
 costs if wrong. Newest first.
 
+- 2026-11-24 · A6: **a stranger cannot make a studio account in
+  production today.** Signing in with the emailed code makes a user, but
+  only an address in studio-api's `OWNER_EMAILS` is given a studio
+  (Art-Talk-Back D-022, `workers/studio-api/src/routes/auth.ts`), and a
+  booth syncs only into a studio; the sender is also Resend's onboarding
+  address. So **Open it on my phone** works for the owner and for no one
+  else yet. It stays on the step as it is, with one line saying it needs a
+  studio account, and nothing is built around it: letting artists sign up
+  is new server-side work and the owner's call (checkpoint 1, checkpoint 3).
+- 2026-11-24 · A6: **Save a picture** is the hero set's front shot alone at
+  2048 px (quick on a phone; the hero set's four 4096 px shots stay in
+  Export), named `<booth>-rendering-front.png` and announced as "a
+  rendering of your booth, not a photograph". **Send a link** is the share
+  link as it is, but asked first, because it is the step's one thing that
+  sends the booth off the device. The Export tab's own "Send my booth to
+  the promoter" still uploads without asking, as it did before this phase;
+  bringing it under the same rule is a follow-up for C3.
 - 2026-11-24 · A5: step 3 is the Lighting tab's own: the same four look
   cards (`lookGrid`, shared since A2, so the mark and its words for a
   screen reader are the tab's) and the same Make it beautiful, whose

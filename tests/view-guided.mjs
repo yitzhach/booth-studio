@@ -55,7 +55,7 @@ const noSideways = (page, what) => page.evaluate(() => document.documentElement.
 const settle = (page) => page.waitForFunction(() => document.querySelector('#save-status')?.textContent !== 'Saving…');
 
 try {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
   const page = await context.newPage();
   const errors = [];
   const counts = [];
@@ -94,6 +94,31 @@ try {
       }
     }
     assert.equal(await page.evaluate(() => localStorage.getItem('booth.guided')), 'share');
+
+    // --- Step 5 (A6): a picture named a rendering and the hanging guide, offline too;
+    // the link asks before anything leaves the device.
+    const saved = async (action) => {
+      const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 90000 }), page.click(`#inspector-content [data-action="${action}"]`)]);
+      return dl.suggestedFilename();
+    };
+    assert.match(await saved('guided-picture'), /-rendering-front\.png$/, `${at}: the picture's name says it is a rendering`);
+    assert.match(await saved('guide'), /hanging-guide\.html$/, `${at}: the hanging guide`);
+    // Anything sent anywhere but the local dev server, or anything but a read, is leaving the device.
+    const leaving = [];
+    const watch = (r) => (new URL(r.url()).hostname !== '127.0.0.1' || r.method() !== 'GET') && leaving.push(`${r.method()} ${r.url()}`);
+    page.on('request', watch);
+    await page.click('#inspector-content [data-action="guided-link"]');
+    assert.ok(await page.locator('#dialog[open]').count(), `${at}: Send a link asks first`);
+    assert.match(await page.locator('#dialog-content').textContent(), /uploaded/);
+    await page.click('#confirm-cancel');
+    await page.waitForTimeout(300);
+    page.off('request', watch);
+    assert.deepEqual(leaving, [], `${at}: nothing left the device`);
+    await context.setOffline(true);
+    assert.match(await saved('guided-picture'), /rendering/, `${at}: offline, the picture still saves`);
+    assert.match(await saved('guide'), /hanging-guide/, `${at}: offline, the guide still saves`);
+    await context.setOffline(false);
+    assert.equal(await step(page), 'share', `${at}: still on the share step`);
     await page.click('#inspector-content [data-action="guided-back"]');
     assert.equal(await step(page), 'hang', `${at}: Back returns a step`);
     // The tabs' upload (#art-input), reached from the steps, files the pictures and keeps the step on screen.
