@@ -271,7 +271,8 @@ export function createGuidedPanel(ctx) {
       // Counted on a copy first, so a booth with nothing evenHang would move
       // (no work, or each wall shared with a sign) gets no empty undo step.
       const dry = evenHang({ ...ctx.p, art: ctx.p.art.map((a) => ({ ...a })) });
-      if (!hungWorks(ctx.p).length || !dry) return ctx.toast("Add your pictures first, then they can be spaced.", true);
+      if (!hungWorks(ctx.p).length) return ctx.toast("Add your pictures first, then they can be spaced.", true);
+      if (!dry) return ctx.toast("Nothing to space: each wall with work also holds a sign or a label, which stay where they are. Arrange those walls in the Artwork tab.", true);
       /** @type {number} */
       let walls = 0;
       mutate(() => (walls = evenHang(ctx.p)));
