@@ -179,7 +179,7 @@ Commit messages in the repository's voice: what changed and why.
   `src/polish.js`). Test in `tests/view-guided.mjs`: three fixture images
   in, three works on walls, none overlapping, none out of bounds, each the
   width typed; cancelling the size leaves the library unchanged.
-- [ ] **A5. Light.** Step 3: the four looks as cards and **Make it
+- [x] **A5. Light.** Step 3: the four looks as cards and **Make it
   beautiful** — the existing actions, nothing new behind them. Test in
   `tests/view-guided.mjs`: choosing a look marks it as the booth's look
   (`currentLook`); undo restores the one before.
@@ -372,6 +372,13 @@ stays as it is and none of it blocks this phase.
 Judgement calls made while building: what was decided, why, and what it
 costs if wrong. Newest first.
 
+- 2026-11-24 · A5: step 3 is the Lighting tab's own: the same four look
+  cards (`lookGrid`, shared since A2, so the mark and its words for a
+  screen reader are the tab's) and the same Make it beautiful, whose
+  promise is one undo. Nothing new is behind them, so the step's whole job
+  is pinned by `tests/view-guided.mjs`: a look chosen is the booth's look,
+  the next replaces it, undo restores the one before and the one before
+  that, and Make it beautiful keeps the step and undoes in one.
 - 2026-11-24 · A4: Add my pictures has its own file input and asks every
   picture's width in one dialog (a row each, the height shown as it
   follows the picture's shape), then hangs them all in one undo step
