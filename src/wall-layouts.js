@@ -6,8 +6,8 @@
 // `enabled` and `width` in `booth.walls`, and free-standing walls in
 // `booth.panels` (WALLS_PHASE.md). The walls a layout adds carry ids that
 // begin "layout-", which is how applying another layout finds and replaces
-// them; every free-standing wall the artist added by hand is left exactly as
-// it is. So a layout is an ordinary booth afterwards — every wall can still
+// them, hidden or not; every free-standing wall the artist added by hand is
+// left exactly as it is. So a layout is an ordinary booth afterwards — every wall can still
 // be moved, resized or hidden in the Walls tab — and applying the same one
 // twice changes nothing the second time.
 //
@@ -16,7 +16,7 @@
 // side wall's or the centre wall's to the back), placed clear of what is
 // already there (`openSpot`). Pure — no DOM, no scene — and not in the
 // platform's scene bundle, so the platform's copy is untouched.
-import { MAX_PANELS, boothPanels, constrain, openSpot, panelKey, wallSpec } from "./model.js";
+import { MAX_PANELS, boothPanels, constrain, isShown, openSpot, panelKey, wallSpec } from "./model.js";
 
 /** The four layouts, in the order the step shows them. */
 export const LAYOUTS = Object.freeze({
@@ -45,6 +45,8 @@ const PREFIX = "layout-";
 const isLayoutPanel = (panel) => typeof panel.id === "string" && panel.id.startsWith(PREFIX);
 /** How far inside the front edge a wing stands, in inches: clear of the canopy's legs. */
 const WING_INSET = 3;
+/** How far a wing's outer end stops short of the side wall, so the two never cut into each other. */
+const WING_GAP = 2;
 
 /**
  * The free-standing walls a layout adds, measured to this booth: a wing is
@@ -57,7 +59,7 @@ function panelsFor(p, key) {
   const height = b.walls.back.height;
   if (key === "wings") {
     const width = Math.round(b.width / 5);
-    const x = b.width / 2 - width / 2;
+    const x = b.width / 2 - WING_GAP - width / 2;
     const z = b.depth / 2 - WING_INSET;
     return [
       { id: `${PREFIX}wing-left`, name: "Left wing", width, height, x: -x, z, rotation: 0 },
@@ -136,7 +138,8 @@ export function applyWallLayout(p, key) {
  */
 export function currentLayout(p) {
   const w = p.booth.walls;
-  const ids = boothPanels(p).filter(isLayoutPanel).map((panel) => panel.id).sort().join(" ");
+  // A layout wall the artist hid is not standing, so the booth reads as the layout without it.
+  const ids = boothPanels(p).filter((panel) => isLayoutPanel(panel) && isShown(panel)).map((panel) => panel.id).sort().join(" ");
   if (!w.back.enabled || !w.left.enabled) return null;
   for (const key of LAYOUT_KEYS) {
     const want = panelsFor(p, key).map((panel) => panel.id).sort().join(" ");
@@ -159,7 +162,7 @@ export function layoutPlan(key, { width, depth }) {
   if (key === "wings") {
     const wing = Math.round(width / 5);
     const y = depth - WING_INSET;
-    lines.push([0, y, wing, y], [width - wing, y, width, y]);
+    lines.push([WING_GAP, y, WING_GAP + wing, y], [width - WING_GAP - wing, y, width - WING_GAP, y]);
   }
   if (key === "centre") {
     const half = Math.min(96, Math.round(width * 0.4)) / 2;

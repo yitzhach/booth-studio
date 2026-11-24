@@ -168,3 +168,23 @@ test("layoutFits says beforehand what applyWallLayout will refuse", () => {
   assert.equal(layoutFits(p, "centre"), true);
   assert.equal(layoutFits(p, "u"), true);
 });
+
+test("a layout wall the artist hid is not standing: the booth reads without it, and the next layout takes it with its work", () => {
+  const p = quickStart({ show: "artfair", size: "10x10" });
+  applyWallLayout(p, "centre");
+  p.art.push(work("c", { wall: "panel:layout-centre", x: 4 }));
+  p.booth.panels[0].hidden = true;
+  assert.equal(currentLayout(p), "u");
+  applyWallLayout(p, "u");
+  assert.equal(p.booth.panels.length, 0);
+  assert.equal(p.art[0].wall, "back", "its work moved, not lost");
+  validateProject(p);
+});
+
+test("a wing stops short of the side wall beside it", () => {
+  for (const size of SIZES) {
+    const p = quickStart({ show: "artfair", size });
+    applyWallLayout(p, "wings");
+    for (const panel of p.booth.panels) assert.ok(Math.abs(panel.x) + panel.width / 2 <= p.booth.width / 2 - 1, size);
+  }
+});

@@ -181,7 +181,45 @@ export function createGuidedPanel(ctx) {
 
   // Step 1's own controls: a change of kind or size keeps the work, and a
   // name. Heard here, before the page-wide handler, which has no field for them.
-  document.querySelector("#inspector-content")?.addEventListener("change", (ev) => {
+  const content = document.querySelector("#inspector-content");
+  /** A layout, if it fits; the row redrawn either way, focus kept on it. */
+  function useLayout(key) {
+    // Refused before anything changes, so there is no empty undo step.
+    if (layoutFits(ctx.p, key)) mutate(() => applyWallLayout(ctx.p, key));
+    else {
+      ctx.toast(`A booth holds ${MAX_PANELS} free-standing walls at most. Take one out in the Walls tab first.`, true);
+      ctx.renderInspector();
+    }
+    refocus("guided-layout");
+  }
+  // The redraw replaced the row; the keyboard stays where it was.
+  const refocus = (name) => /** @type {HTMLElement | null} */ (content?.querySelector(`input[name="${name}"]:checked`))?.focus();
+  // Arrow keys move along the layouts without building each one they pass:
+  // a layout moves work off the walls it takes away, so it is built on a
+  // click, Enter or Space, never on the way past. Leaving the row unbuilt
+  // puts the mark back on the layout the booth is in.
+  let arrowing = false;
+  content?.addEventListener("keydown", (/** @type {KeyboardEvent} */ ev) => {
+    const el = /** @type {HTMLInputElement} */ (ev.target);
+    if (el.dataset?.guided !== "layout") return;
+    if (ev.key.startsWith("Arrow")) {
+      arrowing = true;
+      setTimeout(() => (arrowing = false));
+    } else if (ev.key === "Enter" || ev.key === " ") {
+      ev.preventDefault();
+      useLayout(el.value);
+    }
+  });
+  content?.addEventListener("focusout", (/** @type {FocusEvent} */ ev) => {
+    const el = /** @type {HTMLInputElement} */ (ev.target);
+    if (el.dataset?.guided !== "layout" || /** @type {HTMLInputElement | null} */ (ev.relatedTarget)?.name === el.name) return;
+    // After the event, so a redraw never runs inside another one.
+    setTimeout(() => {
+      const marked = /** @type {HTMLInputElement | null} */ (content.querySelector('input[name="guided-layout"]:checked'));
+      if (marked && marked.value !== currentLayout(ctx.p)) ctx.renderInspector();
+    });
+  });
+  content?.addEventListener("change", (ev) => {
     const el = /** @type {HTMLInputElement} */ (ev.target);
     const which = el.dataset?.guided;
     if (!which) return;
@@ -193,13 +231,11 @@ export function createGuidedPanel(ctx) {
       else mutate(() => (ctx.p.name = name));
     }
     else if (which === "layout") {
-      // Refused before anything changes, so there is no empty undo step.
-      if (layoutFits(ctx.p, el.value)) mutate(() => applyWallLayout(ctx.p, el.value));
-      else {
-        ctx.toast(`A booth holds ${MAX_PANELS} free-standing walls at most. Take one out in the Walls tab first.`, true);
-        ctx.renderInspector();
-      }
-    } else if (which === "color") mutate(() => (ctx.p.booth.color = el.value));
+      if (!arrowing) useLayout(el.value);
+    } else if (which === "color") {
+      mutate(() => (ctx.p.booth.color = el.value));
+      refocus("guided-color");
+    }
     else if (which === "show" || which === "size") {
       if (!el.value) return;
       mutate(() => applyBoothChoice(ctx.p, { [which]: el.value }));
