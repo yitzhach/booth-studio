@@ -184,8 +184,10 @@ export function createGuidedPanel(ctx) {
   const content = document.querySelector("#inspector-content");
   /** A layout, if it fits; the row redrawn either way, focus kept on it. */
   function useLayout(key) {
-    // Refused before anything changes, so there is no empty undo step.
-    if (layoutFits(ctx.p, key)) mutate(() => applyWallLayout(ctx.p, key));
+    // The layout it is in already, or one refused before anything changes:
+    // no empty undo step either way.
+    if (key === currentLayout(ctx.p)) ctx.renderInspector();
+    else if (layoutFits(ctx.p, key)) mutate(() => applyWallLayout(ctx.p, key));
     else {
       ctx.toast(`A booth holds ${MAX_PANELS} free-standing walls at most. Take one out in the Walls tab first.`, true);
       ctx.renderInspector();
@@ -210,6 +212,13 @@ export function createGuidedPanel(ctx) {
       useLayout(el.value);
     }
   });
+  // A click (or a tap) builds the layout, the marked one included: after
+  // arrowing, the mark can sit on a layout the booth is not in yet. Arrow
+  // keys fire a click of their own, which is the one skipped.
+  content?.addEventListener("click", (ev) => {
+    const el = /** @type {HTMLInputElement} */ (ev.target);
+    if (el.dataset?.guided === "layout" && !arrowing) useLayout(el.value);
+  });
   content?.addEventListener("focusout", (/** @type {FocusEvent} */ ev) => {
     const el = /** @type {HTMLInputElement} */ (ev.target);
     if (el.dataset?.guided !== "layout" || /** @type {HTMLInputElement | null} */ (ev.relatedTarget)?.name === el.name) return;
@@ -230,9 +239,8 @@ export function createGuidedPanel(ctx) {
       if (!name || name === ctx.p.name) el.value = ctx.p.name;
       else mutate(() => (ctx.p.name = name));
     }
-    else if (which === "layout") {
-      if (!arrowing) useLayout(el.value);
-    } else if (which === "color") {
+    // A layout is built on its click (above), never on the change that follows.
+    else if (which === "color") {
       mutate(() => (ctx.p.booth.color = el.value));
       refocus("guided-color");
     }

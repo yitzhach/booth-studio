@@ -144,6 +144,14 @@ try {
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => window.__booth.project.booth.panels.filter((x) => x.id.startsWith('layout-wing')).length === 2);
     assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('value')), 'wings', `${at}: focus stays on the row`);
+    // Arrowed to, then clicked: the marked card is built too.
+    await page.keyboard.press('ArrowLeft');
+    await page.waitForTimeout(150);
+    assert.equal(await page.evaluate(() => window.__booth.project.booth.walls.right.enabled), true, `${at}: L passed, not built`);
+    await page.click('#inspector-content .layout-card:has(input[value="l"])');
+    await page.waitForFunction(() => window.__booth.project.booth.walls.right.enabled === false);
+    await page.click('#inspector-content .layout-card:has(input[value="wings"])');
+    await page.waitForFunction(() => window.__booth.project.booth.walls.right.enabled === true);
     await page.click('#inspector-content .swatch-choice:has(input[value="#263247"])');
     await page.waitForFunction(() => window.__booth.project.booth.color === '#263247');
     assert.equal(await page.locator('#inspector-content input[data-guided="color"][value="#263247"]').isChecked(), true, `${at}: Navy is marked`);
