@@ -221,6 +221,37 @@ try {
     await noSideways(page, `${at}, walls`);
     await page.click('#inspector-content [data-action="guided-back"]');
 
+    // --- Step 3: the four looks as cards and Make it beautiful, the Lighting tab's own (A5).
+    await page.click('#inspector-content [data-action="guided-next"]');
+    await page.click('#inspector-content [data-action="guided-next"]');
+    assert.equal(await step(page), 'light');
+    assert.equal(await page.locator('#inspector-content .look-grid [data-action^="look-"]').count(), 4, `${at}: four looks as cards`);
+    const marked = () => page.evaluate(() => [...document.querySelectorAll('#inspector-content .look-grid [aria-current="true"]')].map((b) => b.dataset.action));
+    const lookOf = () => page.evaluate(() => ({ env: window.__booth.project.booth.envPreset, ambient: window.__booth.project.ambient }));
+    const start = { marked: await marked(), look: await lookOf() };
+    await page.click('#inspector-content [data-action="look-gallery"]');
+    await page.waitForFunction(() => window.__booth.project.ambient === 1.25 && window.__booth.project.booth.envPreset === 'studio');
+    assert.deepEqual(await marked(), ['look-gallery'], `${at}: the look chosen is the booth's look`);
+    await page.click('#inspector-content [data-action="look-evening"]');
+    await page.waitForFunction(() => window.__booth.project.ambient === 0.8);
+    assert.deepEqual(await marked(), ['look-evening'], `${at}: and the next one replaces it`);
+    await page.click('[data-action="undo"]');
+    await page.waitForFunction(() => window.__booth.project.ambient === 1.25);
+    assert.deepEqual(await marked(), ['look-gallery'], `${at}: undo restores the look before`);
+    assert.equal(await step(page), 'light', `${at}: undo stays in the step`);
+    await page.click('[data-action="undo"]');
+    await page.waitForFunction((a) => window.__booth.project.ambient === a, start.look.ambient);
+    assert.deepEqual(await marked(), start.marked, `${at}: and the one before that`);
+    assert.deepEqual(await lookOf(), start.look);
+    await page.click('#inspector-content [data-action="polish"]');
+    await page.waitForFunction(() => document.querySelectorAll('#inspector-content .look-grid [aria-current="true"]').length === 1);
+    assert.equal(await step(page), 'light', `${at}: Make it beautiful keeps the step`);
+    await page.click('[data-action="undo"]');
+    await page.waitForFunction((a) => window.__booth.project.ambient === a, start.look.ambient);
+    assert.deepEqual(await marked(), start.marked, `${at}: one undo puts all of it back`);
+    await page.click('#inspector-content [data-action="guided-back"]');
+    await page.click('#inspector-content [data-action="guided-back"]');
+
     // --- A work clicked in the booth is selected; the step stays on screen.
     await page.evaluate(() => {
       window.__booth.project.art.push({ id: 'guided-w', title: 'Harbour', asset: null, wall: 'back', x: 10, y: 40, w: 24, h: 18, thickness: 1.5, offset: 0.5 });
