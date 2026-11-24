@@ -159,7 +159,7 @@ Commit messages in the repository's voice: what changed and why.
   today); Next reaches step 5; All tools brings the five tabs back; a
   reload returns to the same step; no sideways scroll.
   `node tests/run-views.mjs guided roles quickstart`.
-- [ ] **A3. Walls and colour.** `src/wall-layouts.js`: `LAYOUTS` and
+- [x] **A3. Walls and colour.** `src/wall-layouts.js`: `LAYOUTS` and
   `applyWallLayout(p, key)` for both booth kinds and both sizes the step
   offers (10 × 10, 10 × 20), using only what schema 1 has (`booth.walls`,
   `booth.panels`, `booth.color`); read `wallSpec`, `constrainPanel` and
@@ -372,6 +372,31 @@ stays as it is and none of it blocks this phase.
 Judgement calls made while building: what was decided, why, and what it
 costs if wrong. Newest first.
 
+- 2026-11-24 · A3: the four layouts. **L** keeps the back and the left
+  wall and opens the right (the aisle side a corner booth usually opens).
+  **Wings** are two free-standing walls a fifth of the booth wide (24″ on a
+  10 × 10, 48″ on a 10 × 20), 3″ inside the front corners, facing the
+  aisle. The **centre wall** is 40% of the width, 8 ft at most, across the
+  middle facing the entrance. All four put the three perimeter walls back to
+  full width. The walls a layout adds have ids beginning `layout-`, which
+  is how the next layout replaces them; walls the artist added by hand are
+  never touched, and a layout that would pass the eight-wall limit is
+  refused before anything changes. Every size is a guess from no artist;
+  each is one number in `src/wall-layouts.js`.
+- 2026-11-24 · A3: work on a wall a layout takes away goes to the nearest
+  wall that remains — a wing's to the side wall beside it, a side wall's
+  or the centre wall's to the back, at the end nearest where it was —
+  walked clear of what is there (`openSpot`). A wall the artist hid is not
+  taken away; its work stays on it, as in the Walls tab.
+- 2026-11-24 · A3: the six colours are black `#1f2022`, charcoal `#45474a`
+  (the outdoor booth's default), grey `#8b8e92`, white `#f4f3f0` (the art
+  show's default), tan `#c9b593` and navy `#263247`; Other beside them is
+  the tab's own colour field, for a colour that is none of them.
+  Checkpoint 1 asks whether these are the ones artists own.
+- 2026-11-24 · A3: a row of cards or swatches is a group of native radio
+  buttons, so it is one keyboard stop and one control for a screen reader;
+  `tests/view-guided.mjs` counts it as one of the twelve. The walls step
+  holds seven: layouts, colours, Other, finish, Back, Next, All tools.
 - 2026-11-23 · A2: the steps are the inspector's `guided` view, a tab with
   no button. Everything that already opens a tab (tool search, the
   assistant's take-me-to, the toolbar's Export, a double-clicked figure)

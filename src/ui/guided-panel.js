@@ -16,10 +16,11 @@
 // same data-action, the same data-field — so the step's control runs through
 // the same handlers and the same undo as the tab's. A name with no drawing
 // yet draws nothing, which is how a later task (A3–A6) adds its control.
-import { escapeHTML as e, isArtShow } from "../model.js";
+import { MAX_PANELS, escapeHTML as e, isArtShow } from "../model.js";
 import { FOOTPRINTS, SHOWS } from "../quickstart.js";
 import { resolveRole } from "../roles.js";
 import { GUIDED_OFF, GUIDED_SIZES, GUIDED_TAB, STEPS, applyBoothChoice, boothChoiceOf, firstStep, hungWorks, readGuided, stepAfter, stepBefore, stepIndex, stepOf, writeGuided } from "../guided.js";
+import { LAYOUTS, LAYOUT_KEYS, PANEL_COLORS, applyWallLayout, currentLayout, layoutFits, layoutPlan } from "../wall-layouts.js";
 import { lookGrid } from "./polish-panel.js";
 
 /**
@@ -54,6 +55,19 @@ export function createGuidedPanel(ctx) {
   /** @param {string} attrs @param {string} label @param {string} options */
   const select = (attrs, label, options) => `<label class="setting-label">${e(label)}<select ${attrs} aria-label="${e(label)}">${options}</select></label>`;
   const option = (value, label, on) => `<option value="${e(value)}"${on ? " selected" : ""}>${e(label)}</option>`;
+  /**
+   * A choice of several drawn as cards or swatches: native radio buttons,
+   * so the whole row is one stop for the keyboard (arrows move along it) and
+   * one control for a screen reader, however many cards it shows.
+   */
+  const choice = (legend, cls, items) => `<fieldset class="guided-choice"><legend>${e(legend)}</legend><div class="${cls}">${items}</div></fieldset>`;
+  const radio = (name, value, on, which) => `<input type="radio" name="${name}" value="${e(value)}" data-guided="${which}"${on ? " checked" : ""}/>`;
+  /** A layout's plan from above, the back wall at the top: src/wall-layouts.js layoutPlan. */
+  function planSVG(key, b) {
+    const lines = layoutPlan(key, b);
+    const pad = b.width / 16;
+    return `<svg class="layout-plan" viewBox="${-pad} ${-pad} ${b.width + 2 * pad} ${b.depth + 2 * pad}" aria-hidden="true"><rect x="0" y="0" width="${b.width}" height="${b.depth}" class="plan-floor"/>${lines.map(([x1, y1, x2, y2]) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke-width="${pad * 0.9}"/>`).join("")}</svg>`;
+  }
 
   /** Each control a step may name, as markup. */
   const CONTROLS = {
@@ -68,7 +82,22 @@ export function createGuidedPanel(ctx) {
       return select('data-guided="size"', "Size", other + GUIDED_SIZES.map((k) => option(k, FOOTPRINTS[k].label, k === now)).join(""));
     },
     "project-name": (p) => `<label class="setting-label">Name<input type="text" data-guided="name" maxlength="120" value="${e(p.name)}" aria-label="Booth name"/></label>`,
-    "panel-color": (p) => `<label class="color-field">Panel colour<input type="color" data-field="color" data-scope="booth" aria-label="Panel colour" value="${e(p.booth.color)}"/></label>`,
+    "wall-layout": (p) => {
+      const now = currentLayout(p);
+      const b = { width: p.booth.width, depth: p.booth.depth };
+      return choice(
+        "Walls",
+        "layout-grid",
+        LAYOUT_KEYS.map((k) => `<label class="layout-card" title="${e(LAYOUTS[k].blurb)}">${radio("guided-layout", k, k === now, "layout")}${planSVG(k, b)}<span>${e(LAYOUTS[k].label)}</span></label>`).join(""),
+      );
+    },
+    // Six plain colours, and Other for the colour a booth already has that
+    // is none of them (the tab's own colour field, its handler and undo).
+    "panel-color": (p) => {
+      const now = (p.booth.color || "").toLowerCase();
+      const swatches = PANEL_COLORS.map((c) => `<label class="swatch-choice">${radio("guided-color", c.hex, c.hex === now, "color")}<span class="chip" style="background:${c.hex}" aria-hidden="true"></span><span>${e(c.name)}</span></label>`).join("");
+      return choice("Panel colour", "swatch-row", swatches + `<label class="swatch-choice swatch-other"><input type="color" data-field="color" data-scope="booth" aria-label="Another panel colour" value="${e(now)}"/><span>Other</span></label>`);
+    },
     "wall-finish": (p) => select('data-field="wallFinish" data-scope="booth"', "Panel finish", option("smooth", "Smooth", (p.booth.wallFinish || "smooth") === "smooth") + option("fabric", "Fabric", p.booth.wallFinish === "fabric")),
     polish: () => btn("polish", "Make it beautiful", "sparkles", "primary wide"),
     "add-pictures": () => btn("upload-art", "Add my pictures", "image-plus", "primary wide"),
@@ -163,6 +192,14 @@ export function createGuidedPanel(ctx) {
       if (!name || name === ctx.p.name) el.value = ctx.p.name;
       else mutate(() => (ctx.p.name = name));
     }
+    else if (which === "layout") {
+      // Refused before anything changes, so there is no empty undo step.
+      if (layoutFits(ctx.p, el.value)) mutate(() => applyWallLayout(ctx.p, el.value));
+      else {
+        ctx.toast(`A booth holds ${MAX_PANELS} free-standing walls at most. Take one out in the Walls tab first.`, true);
+        ctx.renderInspector();
+      }
+    } else if (which === "color") mutate(() => (ctx.p.booth.color = el.value));
     else if (which === "show" || which === "size") {
       if (!el.value) return;
       mutate(() => applyBoothChoice(ctx.p, { [which]: el.value }));

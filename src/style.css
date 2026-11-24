@@ -2443,3 +2443,22 @@ body.guided-on .inspector-tabs {display:none;}
   .guided-name {display:none;}
   .guided-steps li.current .guided-name {display:block;}
 }
+
+/* The walls step (src/wall-layouts.js): the four layouts as small plans and
+   the six panel colours as swatches, each row a group of radio buttons. */
+.guided-choice {border:0;margin:0;padding:0;min-width:0;}
+.guided-choice legend {padding:0;margin:0 0 6px;font-size:12px;color:var(--muted);}
+.layout-grid {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;}
+.layout-card {position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px 6px;border:1px solid var(--line);border-radius:6px;cursor:pointer;font-size:11px;line-height:1.2;text-align:center;color:var(--muted);}
+.layout-card:has(input:checked) {border-color:var(--blue);background:var(--selected);color:#f2f5f7;}
+.layout-plan {width:100%;max-height:48px;}
+.layout-plan .plan-floor {fill:none;stroke:var(--line);stroke-width:2;stroke-dasharray:6 6;}
+.layout-plan line {stroke:currentColor;stroke-linecap:round;}
+.swatch-row {display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;}
+.swatch-choice {position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;color:var(--muted);cursor:pointer;}
+.swatch-choice .chip {width:30px;height:30px;border-radius:50%;border:2px solid var(--line);}
+.swatch-choice:has(input:checked) {color:#f2f5f7;}
+.swatch-choice:has(input:checked) .chip {border-color:var(--blue);box-shadow:0 0 0 2px var(--blue);}
+.layout-card input[type="radio"], .swatch-choice input[type="radio"] {position:absolute;opacity:0;width:1px;height:1px;margin:0;}
+.layout-card:has(input:focus-visible), .swatch-choice:has(input:focus-visible) {outline:2px solid var(--blue);outline-offset:2px;}
+.swatch-other input[type="color"] {width:30px;height:30px;padding:0;border-radius:50%;}
