@@ -196,37 +196,29 @@ export function createGuidedPanel(ctx) {
   }
   // The redraw replaced the row; the keyboard stays where it was.
   const refocus = (name) => /** @type {HTMLElement | null} */ (content?.querySelector(`input[name="${name}"]:checked`))?.focus();
-  // Arrow keys move along the layouts without building each one they pass:
-  // a layout moves work off the walls it takes away, so it is built on a
-  // click, Enter or Space, never on the way past. Leaving the row unbuilt
-  // puts the mark back on the layout the booth is in.
-  let arrowing = false;
+  // Arrow keys move the focus along the layouts without choosing any: a
+  // layout moves work off the walls it takes away, so it is built only on a
+  // click, Enter or Space, never on the way past. The browser's own arrow
+  // keys would check each radio they pass, leaving the mark on a layout the
+  // booth is not in, so they are taken over here (the roving focus of a
+  // toolbar) and the mark always shows the booth as it is.
   content?.addEventListener("keydown", (/** @type {KeyboardEvent} */ ev) => {
     const el = /** @type {HTMLInputElement} */ (ev.target);
     if (el.dataset?.guided !== "layout") return;
-    if (ev.key.startsWith("Arrow")) {
-      arrowing = true;
-      setTimeout(() => (arrowing = false));
+    const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[ev.key];
+    if (step) {
+      ev.preventDefault();
+      const row = /** @type {HTMLInputElement[]} */ ([...content.querySelectorAll('input[name="guided-layout"]')]);
+      row[(row.indexOf(el) + step + row.length) % row.length]?.focus();
     } else if (ev.key === "Enter" || ev.key === " ") {
       ev.preventDefault();
       useLayout(el.value);
     }
   });
-  // A click (or a tap) builds the layout, the marked one included: after
-  // arrowing, the mark can sit on a layout the booth is not in yet. Arrow
-  // keys fire a click of their own, which is the one skipped.
+  // A click or a tap builds the layout.
   content?.addEventListener("click", (ev) => {
     const el = /** @type {HTMLInputElement} */ (ev.target);
-    if (el.dataset?.guided === "layout" && !arrowing) useLayout(el.value);
-  });
-  content?.addEventListener("focusout", (/** @type {FocusEvent} */ ev) => {
-    const el = /** @type {HTMLInputElement} */ (ev.target);
-    if (el.dataset?.guided !== "layout" || /** @type {HTMLInputElement | null} */ (ev.relatedTarget)?.name === el.name) return;
-    // After the event, so a redraw never runs inside another one.
-    setTimeout(() => {
-      const marked = /** @type {HTMLInputElement | null} */ (content.querySelector('input[name="guided-layout"]:checked'));
-      if (marked && marked.value !== currentLayout(ctx.p)) ctx.renderInspector();
-    });
+    if (el.dataset?.guided === "layout") useLayout(el.value);
   });
   content?.addEventListener("change", (ev) => {
     const el = /** @type {HTMLInputElement} */ (ev.target);

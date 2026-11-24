@@ -136,17 +136,17 @@ try {
     await page.click('#inspector-content .layout-card:has(input[value="centre"])');
     await page.waitForFunction(() => (window.__booth.project.booth.panels || []).some((x) => x.id === 'layout-centre' && x.hidden !== true));
     assert.equal(await page.locator('#inspector-content input[data-guided="layout"][value="centre"]').isChecked(), true, `${at}: U with a centre wall puts a free-standing wall in the booth`);
-    // Arrow keys move along the layouts; only Enter builds one, and the keyboard stays on the row.
+    // Arrow keys move the focus along the layouts and build none; Enter builds the one in focus,
+    // the keyboard stays on the row, and the mark only ever shows the booth's own layout.
     await page.focus('#inspector-content input[data-guided="layout"]:checked');
     await page.keyboard.press('ArrowLeft');
-    await page.waitForTimeout(150);
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('value')), 'wings', `${at}: an arrow moves the focus`);
     assert.ok(await page.evaluate(() => window.__booth.project.booth.panels.some((x) => x.id === 'layout-centre')), `${at}: passing a layout does not build it`);
+    assert.equal(await page.locator('#inspector-content input[data-guided="layout"][value="centre"]').isChecked(), true, `${at}: and the mark stays on the booth's layout`);
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => window.__booth.project.booth.panels.filter((x) => x.id.startsWith('layout-wing')).length === 2);
     assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('value')), 'wings', `${at}: focus stays on the row`);
-    // Arrowed to, then clicked: the marked card is built too.
     await page.keyboard.press('ArrowLeft');
-    await page.waitForTimeout(150);
     assert.equal(await page.evaluate(() => window.__booth.project.booth.walls.right.enabled), true, `${at}: L passed, not built`);
     await page.click('#inspector-content .layout-card:has(input[value="l"])');
     await page.waitForFunction(() => window.__booth.project.booth.walls.right.enabled === false);
