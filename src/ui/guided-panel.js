@@ -21,6 +21,8 @@ import { FOOTPRINTS, SHOWS } from "../quickstart.js";
 import { resolveRole } from "../roles.js";
 import { GUIDED_OFF, GUIDED_SIZES, GUIDED_TAB, STEPS, applyBoothChoice, boothChoiceOf, firstStep, hungWorks, readGuided, stepAfter, stepBefore, stepIndex, stepOf, writeGuided } from "../guided.js";
 import { LAYOUTS, LAYOUT_KEYS, PANEL_COLORS, applyWallLayout, currentLayout, layoutFits, layoutPlan } from "../wall-layouts.js";
+import { evenHang } from "../polish.js";
+import { createHangDialog } from "./hang-dialog.js";
 import { lookGrid } from "./polish-panel.js";
 
 /**
@@ -40,6 +42,7 @@ const tabFor = (key, p) => (key === "booth" && isArtShow(p) ? "show" : TAB_FOR[k
 
 export function createGuidedPanel(ctx) {
   const { btn, mutate } = ctx;
+  const hang = createHangDialog(ctx);
   let step = readGuided();
   const onStep = () => stepIndex(step) >= 0;
   /** The step on screen, or step 1 when none is. */
@@ -100,7 +103,8 @@ export function createGuidedPanel(ctx) {
     },
     "wall-finish": (p) => select('data-field="wallFinish" data-scope="booth"', "Panel finish", option("smooth", "Smooth", (p.booth.wallFinish || "smooth") === "smooth") + option("fabric", "Fabric", p.booth.wallFinish === "fabric")),
     polish: () => btn("polish", "Make it beautiful", "sparkles", "primary wide"),
-    "add-pictures": () => btn("upload-art", "Add my pictures", "image-plus", "primary wide"),
+    "add-pictures": () => btn("guided-add-pictures", "Add my pictures", "image-plus", "primary wide"),
+    "space-evenly": () => btn("guided-space", "Space them evenly", "align-horizontal-distribute-center", "wide"),
     "hung-list": (p) => {
       const n = hungWorks(p).length;
       return `<p class="muted guided-count">${n ? `${n} work${n === 1 ? "" : "s"} on the walls.` : "Nothing on the walls yet."}</p>`;
@@ -261,6 +265,19 @@ export function createGuidedPanel(ctx) {
       ctx.renderInspector();
     },
     "tabs-guided": () => go(current()),
+    "guided-add-pictures": () => hang.pick(),
+    // Make it beautiful's even hang alone: each wall's work spaced evenly on the 60″ line.
+    "guided-space": () => {
+      // Counted on a copy first, so a booth with nothing evenHang would move
+      // (no work, or each wall shared with a sign) gets no empty undo step.
+      const dry = evenHang({ ...ctx.p, art: ctx.p.art.map((a) => ({ ...a })) });
+      if (!hungWorks(ctx.p).length) return ctx.toast("Add your pictures first, then they can be spaced.", true);
+      if (!dry) return ctx.toast("Nothing to space: each wall with work also holds a sign or a label, which stay where they are. Arrange those walls in the Artwork tab.", true);
+      /** @type {number} */
+      let walls = 0;
+      mutate(() => (walls = evenHang(ctx.p)));
+      ctx.toast(`${walls} wall${walls === 1 ? "" : "s"} spaced evenly on the 60″ line. Undo puts them back.`);
+    },
     // Not a button: how Quick start (src/ui/welcome.js) hands over to step 1.
     "guided-from-quick-start": (opts) => startAfterQuickStart(opts?.firstVisit === true),
   };

@@ -96,7 +96,7 @@ try {
     assert.equal(await page.evaluate(() => localStorage.getItem('booth.guided')), 'share');
     await page.click('#inspector-content [data-action="guided-back"]');
     assert.equal(await step(page), 'hang', `${at}: Back returns a step`);
-    // Add my pictures files the pictures and keeps the step on screen.
+    // The tabs' upload (#art-input), reached from the steps, files the pictures and keeps the step on screen.
     const png = Buffer.from(await page.evaluate(() => {
       const cv = document.createElement('canvas');
       cv.width = 64;
@@ -108,6 +108,64 @@ try {
     await page.setInputFiles('#art-input', { name: 'harbour.png', mimeType: 'image/png', buffer: png });
     await page.waitForFunction((n) => Object.keys(window.__booth.project.assets).length > n, before);
     assert.equal(await step(page), 'hang', `${at}: an upload from the hang step stays in it`);
+
+    // --- Add my pictures (A4): three at once, each one's width asked once, all hung.
+    const shot = async (w, h, color) => Buffer.from(await page.evaluate(([w, h, c]) => {
+      const cv = document.createElement('canvas');
+      cv.width = w;
+      cv.height = h;
+      const x = cv.getContext('2d');
+      x.fillStyle = c;
+      x.fillRect(0, 0, w, h);
+      return cv.toDataURL('image/png').split(',')[1];
+    }, [w, h, color]), 'base64');
+    const pictures = [
+      { name: 'harbour.png', mimeType: 'image/png', buffer: await shot(64, 48, '#a33') },
+      { name: 'dunes.png', mimeType: 'image/png', buffer: await shot(48, 64, '#3a3') },
+      { name: 'square.png', mimeType: 'image/png', buffer: await shot(50, 50, '#33a') },
+    ];
+    const count = () => page.evaluate(() => ({ art: window.__booth.project.art.length, assets: Object.keys(window.__booth.project.assets).length }));
+    const before4 = await count();
+    await page.setInputFiles('#guided-input', pictures);
+    await page.waitForSelector('#dialog[open] #hang-form');
+    assert.equal(await page.locator('#dialog .hang-row').count(), 3, `${at}: one row a picture`);
+    for (const [i, w] of ['20', '30', '16'].entries()) await page.fill(`[data-hang="${i}"]`, w);
+    assert.match(await page.locator('[data-hang-height="0"]').textContent(), /20″ × 15″/, `${at}: the height follows the shape`);
+    await page.click('#hang-go');
+    await page.waitForFunction((n) => window.__booth.project.art.length === n + 3, before4.art);
+    const hung = await page.evaluate(() => {
+      const p = window.__booth.project;
+      const wallOf = (k) => (k.startsWith('panel:') ? p.booth.panels.find((x) => `panel:${x.id}` === k) : p.booth.walls[k]);
+      const mine = p.art.slice(-3);
+      const inBounds = mine.every((a) => { const w = wallOf(a.wall); return w && a.x >= 0 && a.y >= 0 && a.x + a.w <= w.width + 0.001 && a.y + a.h <= w.height + 0.001; });
+      const hit = (a, b) => a.wall === b.wall && (a.face || 'inside') === (b.face || 'inside') && a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+      const overlaps = p.art.some((a) => p.art.some((b) => a !== b && hit(a, b)));
+      return { widths: mine.map((a) => a.w), titles: mine.map((a) => a.title), inBounds, overlaps, assets: mine.every((a) => !!p.assets[a.asset]) };
+    });
+    assert.deepEqual(hung.widths, [20, 30, 16], `${at}: each the width typed`);
+    assert.deepEqual(hung.titles, ['harbour', 'dunes', 'square']);
+    assert.ok(hung.inBounds, `${at}: none out of bounds`);
+    assert.equal(hung.overlaps, false, `${at}: none overlapping`);
+    assert.ok(hung.assets);
+    assert.equal(await step(page), 'hang', `${at}: still on the hang step`);
+    assert.match(await page.locator('#inspector-content .guided-count').textContent(), /\d+ works? on the walls/);
+    // Space them evenly: every wall hung evenly, still inside its walls.
+    await page.click('#inspector-content [data-action="guided-space"]');
+    await page.waitForTimeout(200);
+    assert.ok(await page.evaluate(() => window.__booth.project.art.slice(-3).every((a) => Math.abs(a.y + a.h / 2 - 60) < 0.5)), `${at}: on the 60″ line`);
+    // Cancelling the size leaves the library and the walls as they were; an empty width is asked for.
+    const before5 = await count();
+    await page.setInputFiles('#guided-input', [pictures[0]]);
+    await page.waitForSelector('#dialog[open] #hang-form');
+    await page.click('#hang-go');
+    assert.ok(await page.locator('#dialog[open] .hang-error:not([hidden])').count(), `${at}: a width is asked for`);
+    await page.click('#hang-cancel');
+    assert.equal(await page.locator('#dialog[open]').count(), 0);
+    assert.deepEqual(await count(), before5, `${at}: Cancel adds nothing`);
+    await page.click('[data-action="undo"]');
+    await page.click('[data-action="undo"]');
+    await page.waitForFunction((n) => window.__booth.project.art.length === n, before4.art);
+    assert.equal(await page.evaluate(() => Object.keys(window.__booth.project.assets).length), before4.assets, `${at}: one undo takes the even spacing, one the whole hang`);
 
     // --- Step 1's own controls change the booth and keep it a booth.
     await page.click('#inspector-content [data-action="guided-back"]');

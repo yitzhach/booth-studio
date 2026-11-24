@@ -172,7 +172,7 @@ Commit messages in the repository's voice: what changed and why.
   layout. Step 2 shows the layouts as four small plan drawings and the
   colours as swatches; `tests/view-guided.mjs` gains: choosing U with a
   centre wall puts a free-standing wall in the booth.
-- [ ] **A4. Hang.** Step 4: **Add my pictures** takes several files at once
+- [x] **A4. Hang.** Step 4: **Add my pictures** takes several files at once
   (`src/ui/upload.js`), asks each one's width in inches once (the height
   follows the picture's shape), places each in the first open spot
   (`openSpot`) and offers **Space them evenly** (`evenHang` in
@@ -372,6 +372,20 @@ stays as it is and none of it blocks this phase.
 Judgement calls made while building: what was decided, why, and what it
 costs if wrong. Newest first.
 
+- 2026-11-24 · A4: Add my pictures has its own file input and asks every
+  picture's width in one dialog (a row each, the height shown as it
+  follows the picture's shape), then hangs them all in one undo step
+  (`src/hang.js`, `src/ui/hang-dialog.js`). The width is the work as it
+  hangs, frame included. The images reach the project only when Hang them
+  is pressed, so Cancel or Esc leaves the library as it was. The tabs'
+  upload still only files pictures in the library, as it always has.
+- 2026-11-24 · A4: new work goes first onto the 60″ hang line of the back
+  wall, then the left, the right and each free-standing wall that shows,
+  and only when every hang line is full above or below one (`openSpot`'s
+  rows). Nothing already hung moves. Space them evenly is Make it
+  beautiful's even hang alone (`evenHang`), with no change to the light.
+  A width is held to the widest wall, and a picture taller than the walls
+  to their height, its shape kept.
 - 2026-11-24 · A3: the four layouts. **L** keeps the back and the left
   wall and opens the right (the aisle side a corner booth usually opens).
   **Wings** are two free-standing walls a fifth of the booth wide (24″ on a

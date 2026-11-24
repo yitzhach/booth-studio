@@ -2463,3 +2463,13 @@ body.guided-on .inspector-tabs {display:none;}
 .layout-card input[type="radio"], .swatch-choice input[type="radio"] {position:absolute;opacity:0;width:1px;height:1px;margin:0;}
 .layout-card:has(input:focus-visible), .swatch-choice:has(input:focus-visible) {outline:2px solid var(--blue);outline-offset:2px;}
 .swatch-other input[type="color"] {width:30px;height:30px;padding:0;border-radius:50%;}
+
+/* Add my pictures (src/ui/hang-dialog.js): a row a picture, its width typed. */
+.hang-form {display:grid;gap:10px;margin-top:12px;}
+.hang-row {display:grid;grid-template-columns:64px 1fr;gap:12px;align-items:center;}
+.hang-row img {width:64px;height:64px;object-fit:contain;background:#11151a;border-radius:4px;}
+.hang-row strong {display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;}
+.hang-width {display:flex;align-items:center;gap:6px;margin:4px 0 2px;font-size:13px;}
+.hang-width input {width:90px;font-size:16px;}
+.hang-row output {font-size:12px;}
+.hang-error {color:#ffb4a8;margin:0;}
