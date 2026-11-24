@@ -16,10 +16,11 @@
 // same data-action, the same data-field — so the step's control runs through
 // the same handlers and the same undo as the tab's. A name with no drawing
 // yet draws nothing, which is how a later task (A3–A6) adds its control.
-import { escapeHTML as e, isArtShow } from "../model.js";
+import { MAX_PANELS, escapeHTML as e, isArtShow } from "../model.js";
 import { FOOTPRINTS, SHOWS } from "../quickstart.js";
 import { resolveRole } from "../roles.js";
 import { GUIDED_OFF, GUIDED_SIZES, GUIDED_TAB, STEPS, applyBoothChoice, boothChoiceOf, firstStep, hungWorks, readGuided, stepAfter, stepBefore, stepIndex, stepOf, writeGuided } from "../guided.js";
+import { LAYOUTS, LAYOUT_KEYS, PANEL_COLORS, applyWallLayout, currentLayout, layoutFits, layoutPlan } from "../wall-layouts.js";
 import { lookGrid } from "./polish-panel.js";
 
 /**
@@ -54,6 +55,19 @@ export function createGuidedPanel(ctx) {
   /** @param {string} attrs @param {string} label @param {string} options */
   const select = (attrs, label, options) => `<label class="setting-label">${e(label)}<select ${attrs} aria-label="${e(label)}">${options}</select></label>`;
   const option = (value, label, on) => `<option value="${e(value)}"${on ? " selected" : ""}>${e(label)}</option>`;
+  /**
+   * A choice of several drawn as cards or swatches: native radio buttons,
+   * so the whole row is one stop for the keyboard (arrows move along it) and
+   * one control for a screen reader, however many cards it shows.
+   */
+  const choice = (legend, cls, items) => `<fieldset class="guided-choice"><legend>${e(legend)}</legend><div class="${cls}">${items}</div></fieldset>`;
+  const radio = (name, value, on, which) => `<input type="radio" name="${name}" value="${e(value)}" data-guided="${which}"${on ? " checked" : ""}/>`;
+  /** A layout's plan from above, the back wall at the top: src/wall-layouts.js layoutPlan. */
+  function planSVG(key, b) {
+    const lines = layoutPlan(key, b);
+    const pad = b.width / 16;
+    return `<svg class="layout-plan" viewBox="${-pad} ${-pad} ${b.width + 2 * pad} ${b.depth + 2 * pad}" aria-hidden="true"><rect x="0" y="0" width="${b.width}" height="${b.depth}" class="plan-floor"/>${lines.map(([x1, y1, x2, y2]) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke-width="${pad * 0.9}"/>`).join("")}</svg>`;
+  }
 
   /** Each control a step may name, as markup. */
   const CONTROLS = {
@@ -68,7 +82,22 @@ export function createGuidedPanel(ctx) {
       return select('data-guided="size"', "Size", other + GUIDED_SIZES.map((k) => option(k, FOOTPRINTS[k].label, k === now)).join(""));
     },
     "project-name": (p) => `<label class="setting-label">Name<input type="text" data-guided="name" maxlength="120" value="${e(p.name)}" aria-label="Booth name"/></label>`,
-    "panel-color": (p) => `<label class="color-field">Panel colour<input type="color" data-field="color" data-scope="booth" aria-label="Panel colour" value="${e(p.booth.color)}"/></label>`,
+    "wall-layout": (p) => {
+      const now = currentLayout(p);
+      const b = { width: p.booth.width, depth: p.booth.depth };
+      return choice(
+        "Walls",
+        "layout-grid",
+        LAYOUT_KEYS.map((k) => `<label class="layout-card" title="${e(LAYOUTS[k].blurb)}">${radio("guided-layout", k, k === now, "layout")}${planSVG(k, b)}<span>${e(LAYOUTS[k].label)}</span></label>`).join(""),
+      );
+    },
+    // Six plain colours, and Other for the colour a booth already has that
+    // is none of them (the tab's own colour field, its handler and undo).
+    "panel-color": (p) => {
+      const now = (p.booth.color || "").toLowerCase();
+      const swatches = PANEL_COLORS.map((c) => `<label class="swatch-choice">${radio("guided-color", c.hex, c.hex === now, "color")}<span class="chip" style="background:${c.hex}" aria-hidden="true"></span><span>${e(c.name)}</span></label>`).join("");
+      return choice("Panel colour", "swatch-row", swatches + `<label class="swatch-choice swatch-other"><input type="color" data-field="color" data-scope="booth" aria-label="Another panel colour" value="${e(now)}"/><span>Other</span></label>`);
+    },
     "wall-finish": (p) => select('data-field="wallFinish" data-scope="booth"', "Panel finish", option("smooth", "Smooth", (p.booth.wallFinish || "smooth") === "smooth") + option("fabric", "Fabric", p.booth.wallFinish === "fabric")),
     polish: () => btn("polish", "Make it beautiful", "sparkles", "primary wide"),
     "add-pictures": () => btn("upload-art", "Add my pictures", "image-plus", "primary wide"),
@@ -152,7 +181,46 @@ export function createGuidedPanel(ctx) {
 
   // Step 1's own controls: a change of kind or size keeps the work, and a
   // name. Heard here, before the page-wide handler, which has no field for them.
-  document.querySelector("#inspector-content")?.addEventListener("change", (ev) => {
+  const content = document.querySelector("#inspector-content");
+  /** A layout, if it fits; the row redrawn either way, focus kept on it. */
+  function useLayout(key) {
+    // The layout it is in already, or one refused before anything changes:
+    // no empty undo step either way.
+    if (key === currentLayout(ctx.p)) ctx.renderInspector();
+    else if (layoutFits(ctx.p, key)) mutate(() => applyWallLayout(ctx.p, key));
+    else {
+      ctx.toast(`A booth holds ${MAX_PANELS} free-standing walls at most. Take one out in the Walls tab first.`, true);
+      ctx.renderInspector();
+    }
+    refocus("guided-layout");
+  }
+  // The redraw replaced the row; the keyboard stays where it was.
+  const refocus = (name) => /** @type {HTMLElement | null} */ (content?.querySelector(`input[name="${name}"]:checked`))?.focus();
+  // Arrow keys move the focus along the layouts without choosing any: a
+  // layout moves work off the walls it takes away, so it is built only on a
+  // click, Enter or Space, never on the way past. The browser's own arrow
+  // keys would check each radio they pass, leaving the mark on a layout the
+  // booth is not in, so they are taken over here (the roving focus of a
+  // toolbar) and the mark always shows the booth as it is.
+  content?.addEventListener("keydown", (/** @type {KeyboardEvent} */ ev) => {
+    const el = /** @type {HTMLInputElement} */ (ev.target);
+    if (el.dataset?.guided !== "layout") return;
+    const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[ev.key];
+    if (step) {
+      ev.preventDefault();
+      const row = /** @type {HTMLInputElement[]} */ ([...content.querySelectorAll('input[name="guided-layout"]')]);
+      row[(row.indexOf(el) + step + row.length) % row.length]?.focus();
+    } else if (ev.key === "Enter" || ev.key === " ") {
+      ev.preventDefault();
+      useLayout(el.value);
+    }
+  });
+  // A click or a tap builds the layout.
+  content?.addEventListener("click", (ev) => {
+    const el = /** @type {HTMLInputElement} */ (ev.target);
+    if (el.dataset?.guided === "layout") useLayout(el.value);
+  });
+  content?.addEventListener("change", (ev) => {
     const el = /** @type {HTMLInputElement} */ (ev.target);
     const which = el.dataset?.guided;
     if (!which) return;
@@ -162,6 +230,11 @@ export function createGuidedPanel(ctx) {
       // An empty or unchanged name is no edit: nothing to undo, nothing to save.
       if (!name || name === ctx.p.name) el.value = ctx.p.name;
       else mutate(() => (ctx.p.name = name));
+    }
+    // A layout is built on its click (above), never on the change that follows.
+    else if (which === "color") {
+      mutate(() => (ctx.p.booth.color = el.value));
+      refocus("guided-color");
     }
     else if (which === "show" || which === "size") {
       if (!el.value) return;

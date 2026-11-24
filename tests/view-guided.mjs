@@ -40,10 +40,16 @@ const forget = async (page) => {
 };
 const visible = (page, sel) => page.evaluate((s) => { const el = document.querySelector(s); return !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden'; }, sel);
 const shownTabs = (page) => page.evaluate(() => [...document.querySelectorAll('.inspector-tabs [data-tab]')].filter((b) => b.getClientRects().length > 0).map((b) => b.dataset.tab));
-// What a person can press or type into in the inspector, as they see it.
-const controls = (page) => page.evaluate(() => [...document.querySelectorAll('.inspector button, .inspector input, .inspector select, .inspector textarea, .inspector a[href]')]
-  .filter((el) => !el.closest('.sheet-toggle') && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden' && el.type !== 'hidden')
-  .map((el) => el.dataset.action || el.dataset.tab || el.dataset.guided || el.dataset.field || el.tagName.toLowerCase()));
+// What a person can press or type into in the inspector, as they see it. A
+// row of radio buttons (the layouts, the swatches) is one control: one stop
+// for the keyboard, one choice for a screen reader.
+const controls = (page) => page.evaluate(() => {
+  const groups = new Set();
+  return [...document.querySelectorAll('.inspector button, .inspector input, .inspector select, .inspector textarea, .inspector a[href]')]
+    .filter((el) => !el.closest('.sheet-toggle') && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden' && el.type !== 'hidden')
+    .filter((el) => el.type !== 'radio' || (!groups.has(el.name) && groups.add(el.name)))
+    .map((el) => (el.type === 'radio' ? `radio:${el.name}` : el.dataset.action || el.dataset.tab || el.dataset.guided || el.dataset.field || el.tagName.toLowerCase()));
+});
 const step = (page) => page.evaluate(() => document.querySelector('#inspector-content .guided')?.dataset.step || null);
 const noSideways = (page, what) => page.evaluate(() => document.documentElement.scrollWidth - innerWidth).then((d) => assert.ok(d <= 1, `${what}: ${d}px of sideways scroll`));
 const settle = (page) => page.waitForFunction(() => document.querySelector('#save-status')?.textContent !== 'Saving…');
@@ -120,6 +126,42 @@ try {
     await page.click('[data-action="undo"]');
     await page.waitForFunction(() => window.__booth.project.name !== 'Harbour show');
     assert.equal(await step(page), 'booth', `${at}: undo stays in the steps`);
+
+    // --- Step 2: a layout from its plan, a colour from its swatch (A3).
+    await page.click('#inspector-content [data-action="guided-next"]');
+    assert.equal(await step(page), 'walls');
+    assert.equal(await page.locator('#inspector-content .layout-card').count(), 4, `${at}: four layouts`);
+    assert.equal(await page.locator('#inspector-content .layout-card svg line').count() >= 8, true, `${at}: each drawn as a plan`);
+    assert.equal(await page.locator('#inspector-content input[data-guided="layout"][value="u"]').isChecked(), true, `${at}: a quick-started booth is a U`);
+    await page.click('#inspector-content .layout-card:has(input[value="centre"])');
+    await page.waitForFunction(() => (window.__booth.project.booth.panels || []).some((x) => x.id === 'layout-centre' && x.hidden !== true));
+    assert.equal(await page.locator('#inspector-content input[data-guided="layout"][value="centre"]').isChecked(), true, `${at}: U with a centre wall puts a free-standing wall in the booth`);
+    // Arrow keys move the focus along the layouts and build none; Enter builds the one in focus,
+    // the keyboard stays on the row, and the mark only ever shows the booth's own layout.
+    await page.focus('#inspector-content input[data-guided="layout"]:checked');
+    await page.keyboard.press('ArrowLeft');
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('value')), 'wings', `${at}: an arrow moves the focus`);
+    assert.ok(await page.evaluate(() => window.__booth.project.booth.panels.some((x) => x.id === 'layout-centre')), `${at}: passing a layout does not build it`);
+    assert.equal(await page.locator('#inspector-content input[data-guided="layout"][value="centre"]').isChecked(), true, `${at}: and the mark stays on the booth's layout`);
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => window.__booth.project.booth.panels.filter((x) => x.id.startsWith('layout-wing')).length === 2);
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('value')), 'wings', `${at}: focus stays on the row`);
+    await page.keyboard.press('ArrowLeft');
+    assert.equal(await page.evaluate(() => window.__booth.project.booth.walls.right.enabled), true, `${at}: L passed, not built`);
+    await page.click('#inspector-content .layout-card:has(input[value="l"])');
+    await page.waitForFunction(() => window.__booth.project.booth.walls.right.enabled === false);
+    await page.click('#inspector-content .layout-card:has(input[value="wings"])');
+    await page.waitForFunction(() => window.__booth.project.booth.walls.right.enabled === true);
+    await page.click('#inspector-content .swatch-choice:has(input[value="#263247"])');
+    await page.waitForFunction(() => window.__booth.project.booth.color === '#263247');
+    assert.equal(await page.locator('#inspector-content input[data-guided="color"][value="#263247"]').isChecked(), true, `${at}: Navy is marked`);
+    const walls = await controls(page);
+    assert.ok(walls.length <= 12, `${at}, walls with its choices made: ${walls.length}`);
+    await page.click('[data-action="undo"]');
+    await page.waitForFunction(() => window.__booth.project.booth.color !== '#263247');
+    assert.equal(await step(page), 'walls', `${at}: undo stays in the step`);
+    await noSideways(page, `${at}, walls`);
+    await page.click('#inspector-content [data-action="guided-back"]');
 
     // --- A work clicked in the booth is selected; the step stays on screen.
     await page.evaluate(() => {
