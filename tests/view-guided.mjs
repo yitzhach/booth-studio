@@ -227,7 +227,7 @@ try {
     assert.equal(await step(page), 'light');
     assert.equal(await page.locator('#inspector-content .look-grid [data-action^="look-"]').count(), 4, `${at}: four looks as cards`);
     const marked = () => page.evaluate(() => [...document.querySelectorAll('#inspector-content .look-grid [aria-current="true"]')].map((b) => b.dataset.action));
-    const lookOf = () => page.evaluate(() => ({ env: window.__booth.project.booth.envPreset, ambient: window.__booth.project.ambient }));
+    const lookOf = () => page.evaluate(() => ({ env: window.__booth.project.booth.envPreset, ambient: window.__booth.project.ambient, lights: window.__booth.project.lights.map((l) => [l.kelvin, l.power, l.tx, l.ty, l.tz]) }));
     const start = { marked: await marked(), look: await lookOf() };
     await page.click('#inspector-content [data-action="look-gallery"]');
     await page.waitForFunction(() => window.__booth.project.ambient === 1.25 && window.__booth.project.booth.envPreset === 'studio');
@@ -246,9 +246,10 @@ try {
     await page.click('#inspector-content [data-action="polish"]');
     await page.waitForFunction(() => document.querySelectorAll('#inspector-content .look-grid [aria-current="true"]').length === 1);
     assert.equal(await step(page), 'light', `${at}: Make it beautiful keeps the step`);
+    assert.notDeepEqual(await lookOf(), start.look, `${at}: Make it beautiful changed the light`);
     await page.click('[data-action="undo"]');
-    await page.waitForFunction((a) => window.__booth.project.ambient === a, start.look.ambient);
-    assert.deepEqual(await marked(), start.marked, `${at}: one undo puts all of it back`);
+    assert.deepEqual(await lookOf(), start.look, `${at}: one undo puts all of it back`);
+    assert.deepEqual(await marked(), start.marked);
     await page.click('#inspector-content [data-action="guided-back"]');
     await page.click('#inspector-content [data-action="guided-back"]');
 
