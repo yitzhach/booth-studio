@@ -80,3 +80,33 @@ test("the 200-placement limit is kept", () => {
   assert.equal(p.art.length, 200);
   validateProject(p);
 });
+
+test("no side under an inch: a narrow panorama or a tiny width still makes a booth that opens", () => {
+  const p = quickStart({ show: "artfair", size: "10x10" });
+  hangNew(p, [picture(p, "pano", 2, [4000, 1000]), picture(p, "tiny", 1, [64, 48])]);
+  assert.equal(p.art.length, 2);
+  for (const a of p.art) assert.ok(a.w >= 1 && a.h >= 1, `${a.title}: ${a.w} × ${a.h}`);
+  assert.ok(Math.abs(p.art[0].w / p.art[0].h - 4) < 0.01, "the panorama keeps its shape");
+  validateProject(p);
+});
+
+test("a picture as wide as a wall finds the next empty wall instead of covering work", () => {
+  const p = quickStart({ show: "artfair", size: "10x10" });
+  hangNew(p, [picture(p, "small", 20)]);
+  hangNew(p, [picture(p, "wide", 120, [120, 40])]);
+  const [small, wide] = p.art;
+  assert.ok(!overlap(small, wide), `wide went to ${wide.wall} at ${wide.x}`);
+  assert.equal(boundWarning(p, wide), "");
+  validateProject(p);
+});
+
+test("sizes are fitted wall by wall, never to a mix of one wall's width and another's height", () => {
+  const p = quickStart({ show: "artfair", size: "10x10" });
+  for (const k of ["back", "left", "right"]) p.booth.walls[k].height = 84;
+  p.booth.panels.push({ id: "tall", width: 48, height: 96, x: 0, z: 0, rotation: 0 });
+  hangNew(p, [picture(p, "sq", 100, [50, 50])]);
+  const a = p.art[0];
+  assert.equal(boundWarning(p, a), "", `${a.wall}: ${a.w} × ${a.h} at ${a.x}, ${a.y}`);
+  assert.equal(a.w, 84, "the largest a wall can take it, square");
+  validateProject(p);
+});

@@ -39,12 +39,21 @@ function open(p, a) {
   return !p.art.some((o) => o.wall === a.wall && (o.face || "inside") === "inside" && !o.booth && a.x < o.x + o.w && o.x < a.x + a.w && a.y < o.y + o.h && o.y < a.y + a.h);
 }
 
+/** The size a picture can hang at on a wall: as asked, or shrunk to fit it, its shape kept; never under 1″ a side. */
+function fitTo(size, wall) {
+  const s = Math.min(1, wall.width / size.w, wall.height / size.h);
+  return { w: round(size.w * s), h: round(size.h * s) };
+}
+
 /**
  * Hang pictures: `pictures` is a list of `{ asset, width }`, an asset id in
  * `p.assets` and the width in inches the artist typed. Each becomes a
  * placement pushed onto `p.art`, titled from its file name; one with no
- * image or no width is skipped. A width is held to what the booth's walls
- * can take, the shape kept. The 200-placement limit is kept. Returns the
+ * image or no width is skipped. A picture keeps the width typed on any wall
+ * that can take it; one too big for every wall is shrunk, its shape kept, to
+ * the largest size a wall can take, and goes there. Neither side is ever
+ * under an inch (schema 1's least), so a narrow panorama at a small width
+ * grows to one inch high. The 200-placement limit is kept. Returns the
  * placements made.
  * @param {any} p
  * @param {{ asset: string, width: number }[]} pictures
@@ -53,36 +62,42 @@ export function hangNew(p, pictures) {
   const walls = wallsInOrder(p);
   const placed = [];
   if (!walls.length) return placed;
-  const widest = Math.max(...walls.map((k) => wallSpec(p, k).width));
-  const tallest = Math.max(...walls.map((k) => wallSpec(p, k).height));
   for (const pic of pictures) {
     if (p.art.length >= MAX_PLACEMENTS) break;
     const asset = p.assets[pic.asset];
     if (!asset || !(asset.width > 0) || !(asset.height > 0) || !(pic.width > 0)) continue;
-    let w = Math.min(pic.width, MAX_WIDTH, widest);
-    let h = heightFor(asset, w);
-    if (h > tallest) {
-      h = tallest;
-      w = round((h * asset.width) / asset.height);
+    // As typed, then grown until neither side is under an inch.
+    let size = { w: Math.min(pic.width, MAX_WIDTH), h: heightFor(asset, Math.min(pic.width, MAX_WIDTH)) };
+    const grow = Math.max(1, 1 / size.w, 1 / size.h);
+    size = { w: round(size.w * grow), h: round(size.h * grow) };
+    // The walls it fits as asked; if none, the wall that takes it largest.
+    const fits = (k) => fitTo(size, wallSpec(p, k));
+    let candidates = walls.filter((k) => fits(k).w === size.w);
+    if (!candidates.length) {
+      const best = walls.reduce((a, k) => (fits(k).w > fits(a).w ? k : a), walls[0]);
+      size = fits(best);
+      candidates = walls.filter((k) => fitTo(size, wallSpec(p, k)).w === size.w);
     }
+    if (size.w < 1 || size.h < 1) continue;
     const work = {
       id: uid(),
-      title: (asset.name || "").replace(/\.[^.]+$/, "").slice(0, 200) || "Artwork",
+      title: (asset.name || "").replace(/\.[^.]+$/, "").slice(0, 120) || "Artwork",
       asset: pic.asset,
       face: "inside",
-      w: round(w),
-      h: round(h),
+      w: size.w,
+      h: size.h,
       thickness: 1.5,
       offset: 0.75,
     };
     const start = (wall) => {
       const spec = wallSpec(p, wall);
-      return { ...work, wall, x: PLACEMENT_GAP, y: round(clamp(HANG_LINE - work.h / 2, 0, spec.height - work.h)) };
+      // A work nearly as wide as its wall starts at its left end, not the usual gap in.
+      return { ...work, wall, x: round(clamp(PLACEMENT_GAP, 0, spec.width - work.w)), y: round(clamp(HANG_LINE - work.h / 2, 0, spec.height - work.h)) };
     };
     // First every wall's hang line, then any row of any wall.
     let spot = null;
     for (const onLine of [true, false]) {
-      for (const wall of walls) {
+      for (const wall of candidates) {
         const s = start(wall);
         const c = openSpot(p, s);
         if (open(p, c) && (!onLine || c.y === s.y)) {
@@ -92,9 +107,9 @@ export function hangNew(p, pictures) {
       }
       if (spot) break;
     }
-    // Every wall full: on the back wall anyway, as openSpot gives up, rather
-    // than a picture that seems not to have arrived.
-    spot ||= constrain(p, start(walls[0]));
+    // Every wall full: on the first wall it fits anyway, as openSpot gives
+    // up, rather than a picture that seems not to have arrived.
+    spot ||= constrain(p, start(candidates[0]));
     p.art.push(spot);
     placed.push(spot);
   }

@@ -96,7 +96,7 @@ try {
     assert.equal(await page.evaluate(() => localStorage.getItem('booth.guided')), 'share');
     await page.click('#inspector-content [data-action="guided-back"]');
     assert.equal(await step(page), 'hang', `${at}: Back returns a step`);
-    // Add my pictures files the pictures and keeps the step on screen.
+    // The tabs' upload (#art-input), reached from the steps, files the pictures and keeps the step on screen.
     const png = Buffer.from(await page.evaluate(() => {
       const cv = document.createElement('canvas');
       cv.width = 64;

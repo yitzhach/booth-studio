@@ -268,7 +268,10 @@ export function createGuidedPanel(ctx) {
     "guided-add-pictures": () => hang.pick(),
     // Make it beautiful's even hang alone: each wall's work spaced evenly on the 60″ line.
     "guided-space": () => {
-      if (!hungWorks(ctx.p).length) return ctx.toast("Add your pictures first, then they can be spaced.", true);
+      // Counted on a copy first, so a booth with nothing evenHang would move
+      // (no work, or each wall shared with a sign) gets no empty undo step.
+      const dry = evenHang({ ...ctx.p, art: ctx.p.art.map((a) => ({ ...a })) });
+      if (!hungWorks(ctx.p).length || !dry) return ctx.toast("Add your pictures first, then they can be spaced.", true);
       /** @type {number} */
       let walls = 0;
       mutate(() => (walls = evenHang(ctx.p)));

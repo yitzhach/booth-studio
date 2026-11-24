@@ -46,11 +46,11 @@ export function createHangDialog(ctx) {
     const rows = assets
       .map(
         (a, i) =>
-          `<div class="hang-row"><img src="${e(a.thumb || a.data)}" alt=""/><div><strong>${e(a.name)}</strong><label class="hang-width">Width<input type="number" data-hang="${i}" min="1" max="${MAX_WIDTH}" step="0.25" inputmode="decimal" required aria-label="Width of ${e(a.name)} in inches"/><small>in</small></label><output data-hang-height="${i}" class="muted">Height follows the picture</output></div></div>`,
+          `<div class="hang-row"><img src="${e(a.thumb || a.data)}" alt=""/><div><strong>${e(a.name)}</strong><label class="hang-width">Width<input type="number" data-hang="${i}" min="1" max="${MAX_WIDTH}" step="any" inputmode="decimal" required aria-label="Width of ${e(a.name)} in inches"/><small>in</small></label><output data-hang-height="${i}" class="muted">Height follows the picture</output></div></div>`,
       )
       .join("");
     document.querySelector("#dialog-content").innerHTML =
-      `<h2>How wide is each one?</h2><p class="muted">In inches, as the work hangs, frame included. The height follows the picture's shape.</p><form id="hang-form" class="hang-form" onsubmit="return false">${rows}<p class="hang-error" role="alert" hidden>Give each picture its width, from 1 to ${MAX_WIDTH} inches.</p><div class="button-row"><button type="button" id="hang-cancel">Cancel</button><button type="submit" class="primary" id="hang-go">Hang ${assets.length === 1 ? "it" : "them"}</button></div></form>`;
+      `<h2>How wide is each one?</h2><p class="muted">In inches, as the work hangs, frame included. The height follows the picture's shape.</p><form id="hang-form" class="hang-form" novalidate>${rows}<p class="hang-error" role="alert" hidden>Give each picture its width, from 1 to ${MAX_WIDTH} inches.</p><div class="button-row"><button type="button" id="hang-cancel">Cancel</button><button type="submit" class="primary" id="hang-go">Hang ${assets.length === 1 ? "it" : "them"}</button></div></form>`;
     const field = (i) => /** @type {HTMLInputElement} */ (document.querySelector(`[data-hang="${i}"]`));
     const width = (i) => {
       const v = Number(field(i).value);
@@ -63,7 +63,10 @@ export function createHangDialog(ctx) {
       document.querySelector(`[data-hang-height="${i}"]`).textContent = Number.isFinite(w) ? `${inches(w)} × ${inches(heightFor(assets[+i], w))} high` : "Height follows the picture";
     });
     /** @type {HTMLButtonElement} */ (document.querySelector("#hang-cancel")).onclick = () => d.close();
-    /** @type {HTMLButtonElement} */ (document.querySelector("#hang-go")).onclick = () => {
+    // The form's own submit (Hang them, or Enter in a width), checked here
+    // rather than by the browser, whose bubble would say something else.
+    /** @type {HTMLFormElement} */ (document.querySelector("#hang-form")).onsubmit = (ev) => {
+      ev.preventDefault();
       const missing = assets.findIndex((_, i) => !Number.isFinite(width(i)));
       if (missing >= 0) {
         /** @type {HTMLElement} */ (document.querySelector(".hang-error")).hidden = false;

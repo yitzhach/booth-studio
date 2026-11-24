@@ -53,7 +53,8 @@ export function createUpload(ctx) {
             break;
           }
         }
-        // The guided steps stay: Add my pictures is the hang step's own.
+        // The guided steps stay on screen if they are open: an upload is a
+        // new piece, not a request for the Artwork tab.
         followTab(ctx, "art");
       });
       toast(
