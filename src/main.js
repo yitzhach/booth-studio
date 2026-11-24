@@ -1211,7 +1211,7 @@ async function boot() {
   const { kit, setKit, refreshPanels, batchSection, currentClip, addJobs, clipJob, stillJob } = createBatch(ctx);
 
   // What the page draws from the project, and the inspector's sub-tabs: src/ui/render.js.
-  const { render, renderStatus, inspectorHTML, renderInspector, showSection } = createRender(ctx);
+  const { render, renderStatus, inspectorHTML, renderInspector, showSection, guidedActions } = createRender(ctx);
   /**
    * The workspace (src/roles.js) on the page: the inspector tabs it shows,
    * the More button when it leaves some out, the toolbar tools it hides and
@@ -1314,7 +1314,7 @@ async function boot() {
   // The action table: every button's handler under its data-action, put
   // together from its areas in src/actions/ (MAIN_SPLIT_PHASE.md, seams 12–15).
   const actions = {};
-  Object.assign(actions, createArtworkActions(ctx), createVideoActions(ctx), createExportActions(ctx), createShowActions(ctx), createBoothActions(ctx), createAppActions(ctx));
+  Object.assign(actions, createArtworkActions(ctx), createVideoActions(ctx), createExportActions(ctx), createShowActions(ctx), createBoothActions(ctx), createAppActions(ctx), guidedActions);
   // Removing a pedestal takes nothing with it: nothing hangs on one.
   function deletePedestal(id) {
     mutate(() => {

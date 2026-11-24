@@ -147,7 +147,7 @@ Commit messages in the repository's voice: what changed and why.
   quick-started booth for `hang` and true once a work is on a wall; a
   project is byte-identical before and after reading its steps.
   `node --test tests/guided.test.js`.
-- [ ] **A2. The steps on screen.** `src/ui/guided-panel.js`, wired in
+- [x] **A2. The steps on screen.** `src/ui/guided-panel.js`, wired in
   `src/ui/render.js`: in the Artist workspace, after Quick start, the
   inspector shows the current step in place of the tab strip, with Back,
   Next and **All tools** (which shows the tabs as today, and **Guided**
@@ -372,6 +372,33 @@ stays as it is and none of it blocks this phase.
 Judgement calls made while building: what was decided, why, and what it
 costs if wrong. Newest first.
 
+- 2026-11-23 · A2: the steps are the inspector's `guided` view, a tab with
+  no button. Everything that already opens a tab (tool search, the
+  assistant's take-me-to, the toolbar's Export, a double-clicked figure)
+  still works and simply leaves the steps; the strip comes back with
+  **Guided** beside More, which returns to the step. A work, a wall or a
+  pedestal clicked in the booth is selected without leaving the step
+  (`src/ui/scene-wiring.js`). Cost if wrong: an artist who meant a click to
+  open Artwork taps All tools.
+- 2026-11-23 · A2: "someone with a saved project never sees it" is read as
+  *never unasked*. Quick start opens step 1 only in the Artist workspace,
+  and only from a first visit (welcome → My booth → Start this booth) or
+  for a browser that has been in the steps before; once All tools is
+  chosen, and for anyone who opens Quick start from Layout without having
+  started the steps, it opens Layout as it always did. **Guided** beside More is shown to every artist
+  on a tab, so a returning artist can ask for the steps. Cost if wrong: one
+  button in the strip for artists who never want it.
+- 2026-11-23 · A2: All tools opens the tab where that step's tools live
+  (Your booth → Layout, Walls → Walls, Light → Lighting, Hang → Artwork,
+  Share → Export), not a fixed one: the artist asked for more of what they
+  were looking at.
+- 2026-11-23 · A2: steps 2–5 show the tab's own controls until their tasks
+  land: panel colour as a colour field and the finish as a select (A3
+  brings layouts and swatches), Add my pictures as today's upload (A4 asks
+  each width), Save a picture as Export PNG of the view (A6 makes it the
+  front shot). Production between tasks is a working, plainer step, never
+  a missing one. The step list at the top is read, not pressed: Back and
+  Next move, so a step never counts five buttons toward its twelve.
 - 2026-11-23 · A1: a step's controls are names, and where the tabs already
   have the control its name is the existing action (`polish`, `look-gallery`,
   `guide`, `share-design`, `studio-account`), so a step's button runs exactly
