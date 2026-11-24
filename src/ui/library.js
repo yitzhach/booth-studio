@@ -104,7 +104,8 @@ export function createLibrary(ctx) {
       placed = placementFromTemplate(template);
       ctx.p.art.push(placed);
       ctx.selected = placed.id;
-      ctx.tab = "art";
+      // Hanging from the library keeps the guided steps on screen.
+      if (ctx.tab !== "guided") ctx.tab = "art";
     });
     const inBooth = placed.booth
       ? " of " + slotLabel(boothSlots(ctx.p.booth).find((b) => b.id === placed.booth) || {})
@@ -132,7 +133,7 @@ export function createLibrary(ctx) {
     mutate(() => {
       ctx.p.art.push(placed);
       ctx.selected = placed.id;
-      ctx.tab = "art";
+      if (ctx.tab !== "guided") ctx.tab = "art";
     });
     toast("New copy placed on " + wallLabel(ctx.p, placed.wall) + " · " + placed.face + ". Double-tap to adjust.");
     return true;

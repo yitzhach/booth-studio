@@ -90,6 +90,18 @@ try {
     assert.equal(await page.evaluate(() => localStorage.getItem('booth.guided')), 'share');
     await page.click('#inspector-content [data-action="guided-back"]');
     assert.equal(await step(page), 'hang', `${at}: Back returns a step`);
+    // Add my pictures files the pictures and keeps the step on screen.
+    const png = Buffer.from(await page.evaluate(() => {
+      const cv = document.createElement('canvas');
+      cv.width = 64;
+      cv.height = 48;
+      cv.getContext('2d').fillRect(0, 0, 64, 48);
+      return cv.toDataURL('image/png').split(',')[1];
+    }), 'base64');
+    const before = await page.evaluate(() => Object.keys(window.__booth.project.assets).length);
+    await page.setInputFiles('#art-input', { name: 'harbour.png', mimeType: 'image/png', buffer: png });
+    await page.waitForFunction((n) => Object.keys(window.__booth.project.assets).length > n, before);
+    assert.equal(await step(page), 'hang', `${at}: an upload from the hang step stays in it`);
 
     // --- Step 1's own controls change the booth and keep it a booth.
     await page.click('#inspector-content [data-action="guided-back"]');

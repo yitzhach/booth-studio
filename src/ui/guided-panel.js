@@ -16,15 +16,19 @@
 // same data-action, the same data-field — so the step's control runs through
 // the same handlers and the same undo as the tab's. A name with no drawing
 // yet draws nothing, which is how a later task (A3–A6) adds its control.
-import { escapeHTML as e } from "../model.js";
+import { escapeHTML as e, isArtShow } from "../model.js";
 import { LOOKS, currentLook } from "../polish.js";
 import { FOOTPRINTS, SHOWS } from "../quickstart.js";
 import { resolveRole } from "../roles.js";
-import { GUIDED_OFF, GUIDED_SIZES, STEPS, applyBoothChoice, boothChoiceOf, firstStep, readGuided, stepAfter, stepBefore, stepIndex, stepOf, writeGuided } from "../guided.js";
+import { GUIDED_OFF, GUIDED_SIZES, STEPS, applyBoothChoice, boothChoiceOf, firstStep, hungWorks, readGuided, stepAfter, stepBefore, stepIndex, stepOf, writeGuided } from "../guided.js";
 
 export const GUIDED_TAB = "guided";
-/** The tab All tools opens from each step: where that step's tools live. */
+/**
+ * The tab All tools opens from each step: where that step's tools live. An
+ * indoor booth's footprint and walls are in Art show, not Layout.
+ */
 const TAB_FOR = { booth: "layout", walls: "walls", light: "lighting", hang: "art", share: "export" };
+const tabFor = (key, p) => (key === "booth" && isArtShow(p) ? "show" : TAB_FOR[key] || "layout");
 
 export function createGuidedPanel(ctx) {
   const { btn, icon, mutate } = ctx;
@@ -63,7 +67,7 @@ export function createGuidedPanel(ctx) {
     ),
     "add-pictures": () => btn("upload-art", "Add my pictures", "image-plus", "primary wide"),
     "hung-list": (p) => {
-      const n = p.art.filter((a) => (a.kind || "art") === "art" && !a.booth).length;
+      const n = hungWorks(p).length;
       return `<p class="muted guided-count">${n ? `${n} work${n === 1 ? "" : "s"} on the walls.` : "Nothing on the walls yet."}</p>`;
     },
     "save-picture": () => btn("export-image", "Save a picture", "download", "wide"),
@@ -158,7 +162,12 @@ export function createGuidedPanel(ctx) {
     const which = el.dataset?.guided;
     if (!which) return;
     ev.stopPropagation();
-    if (which === "name") mutate(() => (ctx.p.name = el.value.trim().slice(0, 120) || ctx.p.name));
+    if (which === "name") {
+      const name = el.value.trim().slice(0, 120);
+      // An empty or unchanged name is no edit: nothing to undo, nothing to save.
+      if (!name || name === ctx.p.name) el.value = ctx.p.name;
+      else mutate(() => (ctx.p.name = name));
+    }
     else if (which === "show" || which === "size") {
       if (!el.value) return;
       mutate(() => applyBoothChoice(ctx.p, { [which]: el.value }));
@@ -181,7 +190,7 @@ export function createGuidedPanel(ctx) {
       const from = onStep() ? step : firstStep;
       step = GUIDED_OFF;
       writeGuided(GUIDED_OFF);
-      ctx.tab = TAB_FOR[from] || "layout";
+      ctx.tab = tabFor(from, ctx.p);
       ctx.renderInspector();
     },
     "tabs-guided": () => go(onStep() ? step : firstStep),

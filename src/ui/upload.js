@@ -52,7 +52,8 @@ export function createUpload(ctx) {
             break;
           }
         }
-        ctx.tab = "art";
+        // The guided steps stay: Add my pictures is the hang step's own.
+        if (ctx.tab !== "guided") ctx.tab = "art";
       });
       toast(
         type === "photo"

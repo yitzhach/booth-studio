@@ -76,7 +76,8 @@ export function createWelcome(ctx) {
     writeRole(ctx.role);
     ctx.tabsMore = false;
     const all = [.../** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll(".inspector-tabs [data-tab]"))].map((b) => b.dataset.tab);
-    ctx.tab = tabAfterSwitch(ctx.role, ctx.tab, all, { artShow: isArtShow(ctx.p) });
+    // An artist in the guided steps who picks Artist again stays in them.
+    if (!(ctx.tab === "guided" && ctx.role === "artist")) ctx.tab = tabAfterSwitch(ctx.role, ctx.tab, all, { artShow: isArtShow(ctx.p) });
     /** @type {HTMLDialogElement} */ (document.querySelector("#dialog")).close();
     renderInspector();
     // An artist's first visit goes straight on to the booth; the example on
@@ -91,7 +92,8 @@ export function createWelcome(ctx) {
    * wizard's Next button is three clicks nobody needs.
    */
   function openQuickStart({ backupFirst = true, first = false } = {}) {
-    firstVisit = first;
+    // Redrawn from inside itself (a template forgotten), it stays the visit it was.
+    if (!document.querySelector("#dialog[open] #quick-start")) firstVisit = first;
     const d = /** @type {HTMLDialogElement} */ (document.querySelector("#dialog"));
     const templates = readTemplates();
     const starterLabel = (k) => FURNITURE[k].label;

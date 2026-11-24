@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { GUIDED_KEY, GUIDED_OFF, GUIDED_SIZES, STEPS, STEP_KEYS, MAX_CONTROLS, applyBoothChoice, boothChoiceOf, firstStep, readGuided, stepAfter, stepBefore, stepIndex, writeGuided } from "../src/guided.js";
+import { GUIDED_KEY, GUIDED_OFF, GUIDED_SIZES, STEPS, STEP_KEYS, MAX_CONTROLS, applyBoothChoice, boothChoiceOf, boothName, firstStep, hungWorks, readGuided, stepAfter, stepBefore, stepIndex, writeGuided } from "../src/guided.js";
 import { quickStart } from "../src/quickstart.js";
 import { blankProject, validateProject } from "../src/model.js";
 import { applyLook } from "../src/polish.js";
@@ -163,4 +163,51 @@ test("choosing the size a booth already has, or nothing known, changes nothing",
   applyBoothChoice(p, { show: "nonsense", size: "nonsense" });
   applyBoothChoice(p, {});
   assert.equal(JSON.stringify(p), before, "the colour is not reset by choosing the same kind");
+});
+
+test("between the fair and the trade show only the canopy changes: the colour and walls stay", () => {
+  const p = quickStart({ show: "artfair", size: "10x10" });
+  p.booth.color = "#112233";
+  p.booth.walls.back.height = 84;
+  applyBoothChoice(p, { show: "tradeshow" });
+  assert.equal(p.booth.tent, false);
+  assert.equal(p.booth.envPreset, "tradeshow");
+  assert.equal(p.booth.color, "#112233");
+  assert.equal(p.booth.walls.back.height, 84);
+  applyBoothChoice(p, { show: "artfair" });
+  assert.equal(p.booth.tent, true);
+  assert.equal(p.booth.color, "#112233");
+  validateProject(p);
+});
+
+test("a booth of a size step 1 does not offer keeps it across a change of kind", () => {
+  const p = quickStart({ show: "artfair", size: "10x10" });
+  p.booth.width = 132;
+  p.booth.walls.back.width = 132;
+  applyBoothChoice(p, { show: "artshow" });
+  assert.equal(p.booth.venue, "artshow");
+  assert.equal(p.booth.width, 132);
+  assert.equal(p.booth.walls.back.width, 132);
+  assert.equal(boothChoiceOf(p).size, null);
+  validateProject(p);
+});
+
+test("a name Quick start gave follows the booth; a name the artist typed stays", () => {
+  const p = quickStart({ show: "artfair", size: "10x20" });
+  assert.equal(p.name, boothName("artfair", "10x20"));
+  applyBoothChoice(p, { size: "10x10" });
+  assert.equal(p.name, "10 × 10 ft art fair booth");
+  applyBoothChoice(p, { show: "artshow" });
+  assert.equal(p.name, "10 × 10 ft art show booth");
+  p.name = "Riverside";
+  applyBoothChoice(p, { size: "10x20" });
+  assert.equal(p.name, "Riverside");
+});
+
+test("the hang step counts by the rule its tick uses", () => {
+  const p = quickStart();
+  p.art.push(work(), work({ id: "w2", wall: "left" }), work({ id: "s", kind: "sign" }));
+  assert.equal(hungWorks(p).length, 2);
+  p.booth.walls.left.enabled = false;
+  assert.equal(hungWorks(p).length, 1);
 });

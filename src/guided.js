@@ -30,6 +30,8 @@ export const MAX_CONTROLS = 8;
  * guide follow) on a wall that shows.
  */
 const hungWork = (p, a) => (a.kind || "art") === "art" && !a.booth && !!wallSpec(p, a.wall)?.enabled;
+/** The works the hang step counts, by the rule its tick uses. */
+export const hungWorks = (p) => (p.art || []).filter((a) => hungWork(p, a));
 const someWallShows = (p) => ["back", "left", "right"].some((k) => p.booth.walls[k]?.enabled) || (p.booth.panels || []).some(isShown);
 
 /** Freeze a list of steps, each step and its controls: one table, read by all. */
@@ -79,7 +81,7 @@ export const STEPS = deepFreeze([
     title: "Hang your work",
     help: "Add pictures of your work, give each its width, and the app hangs them.",
     controls: ["add-pictures", "space-evenly", "hung-list"],
-    done: (p) => (p.art || []).some((a) => hungWork(p, a)),
+    done: (p) => hungWorks(p).length > 0,
   },
   {
     key: "share",
@@ -141,40 +143,65 @@ export function boothChoiceOf(p) {
   return { show, size };
 }
 
+/** The name Quick start gives a booth of this kind and size (src/quickstart.js), or null. */
+export function boothName(show, size) {
+  const fp = FOOTPRINTS[size];
+  if (!fp || !SHOWS[show]) return null;
+  return `${fp.label} ${SHOWS[show].venue === "artshow" ? "art show" : show === "tradeshow" ? "trade show" : "art fair"} booth`;
+}
+
 /**
  * Step 1's change: a booth of another kind or size, keeping what is in it.
- * Quick start's own rules (src/quickstart.js) — the venue first, then the
+ * Quick start's own rules (src/quickstart.js) — the venue, then the
  * footprint and the three walls cut to it — applied to the booth already
  * there rather than to a new one, so the work, the furniture and the lights
- * stay, each pulled back inside the walls it now has. A kind that is not a
- * change leaves the venue's defaults (its colour, its light bar) alone, so
- * choosing a size never repaints the walls. Unknown keys change nothing.
- * Written here, not in quickstart.js, because that module is bundled for
- * the platform and compared byte for byte (DEMO_PHASE.md → Constraints).
+ * stay, each pulled back inside the walls it now has. Only a change of
+ * venue resets the venue's defaults (its colour, wall height, light bar):
+ * the fair and the trade show are one venue with and without the canopy,
+ * so moving between them keeps the colour chosen in step 2. A booth of a
+ * size the step does not offer keeps that size across a change of kind. A
+ * name Quick start gave follows the booth; a name the artist typed stays.
+ * Unknown keys change nothing. Written here, not in quickstart.js, because
+ * that module is bundled for the platform and compared byte for byte
+ * (DEMO_PHASE.md → Constraints).
  * @param {any} p
  * @param {{ show?: string, size?: string }} choice
  */
 export function applyBoothChoice(p, { show, size } = {}) {
   const now = boothChoiceOf(p);
-  const spec = SHOWS[show];
   const b = p.booth;
-  if (spec && show !== now.show) {
-    applyVenue(p, spec.venue);
+  const spec = SHOWS[show] && show !== now.show ? SHOWS[show] : null;
+  const sizeKey = FOOTPRINTS[size] ? size : now.size;
+  const named = p.name === boothName(now.show, now.size);
+  if (spec) {
+    if (spec.venue !== (b.venue || "outdoor")) {
+      const kept = { width: b.width, depth: b.depth, back: b.walls.back.width, left: b.walls.left.width, right: b.walls.right.width };
+      applyVenue(p, spec.venue);
+      if (!sizeKey) {
+        b.width = kept.width;
+        b.depth = kept.depth;
+        b.walls.back = { ...b.walls.back, width: kept.back };
+        b.walls.left = { ...b.walls.left, width: kept.left };
+        b.walls.right = { ...b.walls.right, width: kept.right };
+      }
+    }
     if (spec.venue === "outdoor") {
       b.tent = spec.tent;
       b.envPreset = spec.envPreset;
     }
   }
-  const fp = FOOTPRINTS[size] || FOOTPRINTS[now.size];
+  const fp = FOOTPRINTS[sizeKey];
   if (fp) {
     b.width = fp.width;
     b.depth = fp.depth;
     b.walls.back = { ...b.walls.back, width: fp.width };
     b.walls.left = { ...b.walls.left, width: fp.depth };
     b.walls.right = { ...b.walls.right, width: fp.depth };
-    p.art = p.art.map((a) => constrain(p, a));
-    b.panels = (b.panels || []).map((panel) => constrainPanel(p, panel));
-    b.pedestals = (b.pedestals || []).map((ped) => constrainPedestal(p, ped));
   }
+  p.art = p.art.map((a) => constrain(p, a));
+  b.panels = (b.panels || []).map((panel) => constrainPanel(p, panel));
+  b.pedestals = (b.pedestals || []).map((ped) => constrainPedestal(p, ped));
+  const after = boothChoiceOf(p);
+  if (named && boothName(after.show, after.size)) p.name = boothName(after.show, after.size);
   return p;
 }
