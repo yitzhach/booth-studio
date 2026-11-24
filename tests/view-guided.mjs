@@ -101,15 +101,19 @@ try {
       const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 90000 }), page.click(`#inspector-content [data-action="${action}"]`)]);
       return dl.suggestedFilename();
     };
-    const uploads = [];
-    page.on('request', (r) => r.url().includes('/api/share') && uploads.push(r.url()));
     assert.match(await saved('guided-picture'), /-rendering-front\.png$/, `${at}: the picture's name says it is a rendering`);
     assert.match(await saved('guide'), /hanging-guide\.html$/, `${at}: the hanging guide`);
+    // Anything sent anywhere but the local dev server, or anything but a read, is leaving the device.
+    const leaving = [];
+    const watch = (r) => (new URL(r.url()).hostname !== '127.0.0.1' || r.method() !== 'GET') && leaving.push(`${r.method()} ${r.url()}`);
+    page.on('request', watch);
     await page.click('#inspector-content [data-action="guided-link"]');
     assert.ok(await page.locator('#dialog[open]').count(), `${at}: Send a link asks first`);
     assert.match(await page.locator('#dialog-content').textContent(), /uploaded/);
     await page.click('#confirm-cancel');
-    assert.deepEqual(uploads, [], `${at}: nothing left the device`);
+    await page.waitForTimeout(300);
+    page.off('request', watch);
+    assert.deepEqual(leaving, [], `${at}: nothing left the device`);
     await context.setOffline(true);
     assert.match(await saved('guided-picture'), /rendering/, `${at}: offline, the picture still saves`);
     assert.match(await saved('guide'), /hanging-guide/, `${at}: offline, the guide still saves`);

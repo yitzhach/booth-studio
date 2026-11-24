@@ -272,9 +272,15 @@ export function createGuidedPanel(ctx) {
     // The hero set's front shot alone, at 2048 px: quick on a phone, and
     // named a rendering, since a picture made by the app must say so.
     "guided-picture": async () => {
-      if (ctx.busy) return ctx.toast("Another export is still running: try again in a moment.");
+      // A preview or a clip drives the same camera: one at a time, as every export does.
+      if (ctx.busy || ctx.busyVideo || ctx.busyPreview) return ctx.toast("Another export is still running: try again in a moment.");
       if (!ctx.scene || ctx.p.mode !== "3d") return ctx.toast("3D is not available, so there is no booth to draw.", true);
       ctx.busy = true;
+      const b = /** @type {HTMLButtonElement | null} */ (document.querySelector('#inspector-content [data-action="guided-picture"]'));
+      if (b) {
+        b.disabled = true;
+        b.querySelector("span").textContent = "Drawing your booth…";
+      }
       try {
         const host = document.querySelector("#scene");
         const aspect = host?.clientWidth && host?.clientHeight ? host.clientWidth / host.clientHeight : 16 / 9;
@@ -288,12 +294,15 @@ export function createGuidedPanel(ctx) {
         ctx.toast(err.message, true);
       } finally {
         ctx.busy = false;
+        ctx.renderInspector();
       }
     },
     // The share link as it is (Export → Send my booth), asked first: it is
     // the one thing on this step that sends the booth off the device.
     "guided-link": () =>
-      ctx.confirmAction("Send a link to this booth?", "The booth and its pictures are uploaded to Booth Studio's share service, and anyone with the link can open it. Nothing else leaves this device.", () => ctx.actions["share-design"]()),
+      ctx.sharing
+        ? ctx.toast("Already uploading your booth: the link comes when it is done.")
+        : ctx.confirmAction("Send a link to this booth?", "The booth and its pictures are uploaded to Booth Studio's share service, and anyone with the link can open it. Nothing else leaves this device.", () => ctx.actions["share-design"]()),
     // Make it beautiful's even hang alone: each wall's work spaced evenly on the 60″ line.
     "guided-space": () => {
       // Counted on a copy first, so a booth with nothing evenHang would move
