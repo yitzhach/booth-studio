@@ -11,6 +11,7 @@ import { uid, constrainPedestal, boothPanels, MAX_PEDESTALS, FURNITURE, BOX_LIMI
 import { BoothScene } from "../scene.js";
 import { AUTO_QUALITY, startScale } from "../adaptive.js";
 import { formatLength } from "../measure.js";
+import { followTab } from "./guided-panel.js";
 
 export function createSceneWiring(ctx) {
   const { allowed, checkpoint, frameGuideShape, getPlace, loadViewPrefs, mutate, placeSettled, refreshScene, renderInspector, renderSelection, renderStatus, reveal, revealPanelFields, revealPedestalFields, saveViewPrefs, scheduleSave, setDrawingBox, setPlace, syncPanelInputs, syncPedestalInputs, syncQuality, toast, updateFrameGuide } = ctx;
@@ -41,7 +42,9 @@ export function createSceneWiring(ctx) {
         // which left the panel on "Make room for your work" — reported, and
         // asked to land on Layout instead. Any other tab stays where it is,
         // so orbiting from Video or Lighting does not throw the panel away.
-        if (id) ctx.tab = "art";
+        // The guided steps stay too: a work clicked while hanging is
+        // selected in the booth, not a reason to leave the step.
+        if (id) followTab(ctx, "art");
         else if (ctx.tab === "art") ctx.tab = "layout";
         renderSelection();
       },
@@ -63,7 +66,7 @@ export function createSceneWiring(ctx) {
       (key) => {
         if (ctx.selectedPanel === key) return;
         ctx.selectedPanel = key;
-        if (key) { ctx.selectedPedestal = null; ctx.selectedPerson = null; ctx.tab = "walls"; }
+        if (key) { ctx.selectedPedestal = null; ctx.selectedPerson = null; followTab(ctx, "walls"); }
         renderSelection();
         if (key) revealPanelFields();
       },
@@ -82,7 +85,7 @@ export function createSceneWiring(ctx) {
       (id) => {
         if (ctx.selectedPedestal === id) return;
         ctx.selectedPedestal = id;
-        if (id) { ctx.selectedPanel = null; ctx.selected = null; ctx.selectedPerson = null; ctx.tab = "walls"; }
+        if (id) { ctx.selectedPanel = null; ctx.selected = null; ctx.selectedPerson = null; followTab(ctx, "walls"); }
         renderSelection();
         if (id) revealPedestalFields();
       },

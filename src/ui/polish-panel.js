@@ -11,13 +11,21 @@ import { HERO_CLIP, LOOKS, applyLook, currentLook, heroShots, polish } from "../
 const POLISH_NOTE = "The look for this venue, every wall hung evenly on the 60″ line, and the spotlights aimed at the work. One undo puts it all back.";
 export const HALL_OFF_NOTE = "Exhibition hall switched off: this booth now stands in the photographed environment. Art show → Exhibition hall brings it back.";
 
+/**
+ * The four looks as cards, the one the booth is in marked until a value of
+ * it is changed by hand. Lighting's Looks section and the guided light step
+ * (src/ui/guided-panel.js) both draw this, so the two cannot drift apart.
+ */
+export function lookGrid(p) {
+  const now = currentLook(p);
+  return `<div class="look-grid">${Object.entries(LOOKS).map(([k, l]) => `<button type="button" data-action="look-${k}" title="${e(l.blurb)}" aria-label="Look: ${e(l.label)}${k === now ? " (this booth's look now)" : ""}"${k === now ? ' class="active" aria-current="true"' : ""}><strong>${e(l.label)}</strong><span>${e(l.blurb)}</span></button>`).join("")}</div>`;
+}
+
 export function createPolishPanel(ctx) {
   const { allowed, btn, kit, mutate, runClips, toast } = ctx;
   // Looks and Make it beautiful (src/polish.js).
   function looksSection() {
-    // The look the booth is in stays marked until a value of it is changed by hand.
-    const now = currentLook(ctx.p);
-    return `<section><h3>Looks</h3>${btn("polish", "Make it beautiful", "sparkles", "primary wide")}<p class="muted">${e(POLISH_NOTE)}</p><div class="look-grid">${Object.entries(LOOKS).map(([k, l]) => `<button type="button" data-action="look-${k}" title="${e(l.blurb)}" aria-label="Look: ${e(l.label)}${k === now ? " (this booth's look now)" : ""}"${k === now ? ' class="active" aria-current="true"' : ""}><strong>${e(l.label)}</strong><span>${e(l.blurb)}</span></button>`).join("")}</div><p class="muted">A look sets the environment, the room light and the spotlights' colour and power together. Every value stays editable below.</p></section>`;
+    return `<section><h3>Looks</h3>${btn("polish", "Make it beautiful", "sparkles", "primary wide")}<p class="muted">${e(POLISH_NOTE)}</p>${lookGrid(ctx.p)}<p class="muted">A look sets the environment, the room light and the spotlights' colour and power together. Every value stays editable below.</p></section>`;
   }
   /** Export's first section: polish, then the hero set in one press. */
   function heroSection() {

@@ -14,10 +14,13 @@
 // setting kept per browser, never in a project or a backup: the same booth
 // opens the same with or without them, and "All tools" is one tap and stays
 // chosen. `done` only reads the project; it never writes to it.
-import { isShown, wallSpec } from "./model.js";
+import { applyVenue, boothPanels, boothPedestals, constrain, constrainPanel, constrainPedestal, isArtShow, isShown, wallSpec } from "./model.js";
 import { currentLook } from "./polish.js";
+import { FOOTPRINTS, SHOWS, quickStart } from "./quickstart.js";
 
 export const GUIDED_KEY = "booth.guided";
+/** The inspector's view while the steps show: a tab with no button of its own. */
+export const GUIDED_TAB = "guided";
 /** The stored value that says the artist chose All tools. */
 export const GUIDED_OFF = "off";
 /** The most controls a step may show, so a step is never a toolbox again. */
@@ -29,6 +32,8 @@ export const MAX_CONTROLS = 8;
  * guide follow) on a wall that shows.
  */
 const hungWork = (p, a) => (a.kind || "art") === "art" && !a.booth && !!wallSpec(p, a.wall)?.enabled;
+/** The works the hang step counts, by the rule its tick uses. */
+export const hungWorks = (p) => (p.art || []).filter((a) => hungWork(p, a));
 const someWallShows = (p) => ["back", "left", "right"].some((k) => p.booth.walls[k]?.enabled) || (p.booth.panels || []).some(isShown);
 
 /** Freeze a list of steps, each step and its controls: one table, read by all. */
@@ -123,4 +128,66 @@ export function writeGuided(value, storage = globalThis.localStorage) {
   } catch {
     return false;
   }
+}
+
+/** Step 1's two sizes: the spaces outdoor and indoor shows sell. */
+export const GUIDED_SIZES = Object.freeze(["10x10", "10x20"]);
+
+/**
+ * The kind (a key of Quick start's SHOWS) and size (a key of FOOTPRINTS, or
+ * null when the footprint is none of them) a booth reads as, the inverse of
+ * applyBoothChoice: indoor panels are the art show, a canopy is the fair,
+ * an outdoor booth without one is the trade show.
+ */
+export function boothChoiceOf(p) {
+  const show = isArtShow(p) ? "artshow" : p.booth.tent ? "artfair" : "tradeshow";
+  const size = Object.keys(FOOTPRINTS).find((k) => FOOTPRINTS[k].width === p.booth.width && FOOTPRINTS[k].depth === p.booth.depth) || null;
+  return { show, size };
+}
+
+/** The name Quick start gives a booth of this kind and size, or null. */
+export const boothName = (show, size) => (SHOWS[show] && FOOTPRINTS[size] ? quickStart({ show, size }).name : null);
+
+/**
+ * Step 1's change: a booth of another kind or size, keeping what is in it.
+ * Quick start's own rules (src/quickstart.js) — the venue, then the
+ * footprint and the three walls cut to it — applied to the booth already
+ * there rather than to a new one, so the work, the furniture and the lights
+ * stay, each pulled back inside the walls it now has. Only a change of
+ * venue resets the venue's defaults (its colour, wall height, light bar):
+ * the fair and the trade show are one venue with and without the canopy,
+ * so moving between them keeps the colour chosen in step 2. A booth of a
+ * size the step does not offer keeps that size across a change of kind. A
+ * name Quick start gave follows the booth; a name the artist typed stays.
+ * Unknown keys change nothing. Written here, not in quickstart.js, because
+ * that module is bundled for the platform and compared byte for byte
+ * (DEMO_PHASE.md → Constraints).
+ * @param {any} p
+ * @param {{ show?: string, size?: string }} choice
+ */
+export function applyBoothChoice(p, { show, size } = {}) {
+  const now = boothChoiceOf(p);
+  const b = p.booth;
+  const spec = SHOWS[show] && show !== now.show ? SHOWS[show] : null;
+  const named = p.name === boothName(now.show, now.size);
+  // The footprint it ends with: the size chosen, else the one it has, which
+  // a change of venue would otherwise reset to that venue's default.
+  const fp = FOOTPRINTS[size] || { width: b.width, depth: b.depth, back: b.walls.back.width, side: [b.walls.left.width, b.walls.right.width] };
+  if (spec && spec.venue !== (b.venue || "outdoor")) applyVenue(p, spec.venue);
+  if (spec?.venue === "outdoor") {
+    b.tent = spec.tent;
+    b.envPreset = spec.envPreset;
+  }
+  b.width = fp.width;
+  b.depth = fp.depth;
+  b.walls.back = { ...b.walls.back, width: fp.back ?? fp.width };
+  b.walls.left = { ...b.walls.left, width: fp.side?.[0] ?? fp.depth };
+  b.walls.right = { ...b.walls.right, width: fp.side?.[1] ?? fp.depth };
+  p.art = p.art.map((a) => constrain(p, a));
+  b.panels = boothPanels(p).map((panel) => constrainPanel(p, panel));
+  b.pedestals = boothPedestals(p).map((ped) => constrainPedestal(p, ped));
+  const after = boothChoiceOf(p);
+  const name = named && boothName(after.show, after.size);
+  if (name) p.name = name;
+  return p;
 }

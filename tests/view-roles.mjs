@@ -69,6 +69,10 @@ try {
     assert.equal(p.name, 'Riverside Fair');
     assert.equal(await page.evaluate(() => localStorage.getItem('booth.role')), 'artist');
     assert.ok(!('role' in p) && !JSON.stringify(p).includes('"organizer"'), 'the workspace is never in the project');
+    // Quick start hands the artist to the guided steps (tests/view-guided.mjs);
+    // All tools is the artist's tabs, which is what this suite is about.
+    assert.ok(await page.locator('#inspector-content .guided').count(), 'the guided steps follow Quick start');
+    await page.click('#inspector-content [data-action="guided-all"]');
 
     assert.deepEqual(await shownTabs(page), ['art', 'layout', 'walls', 'lighting', 'export'], "the artist's tabs");
     assert.ok(await shown(page, '.inspector-tabs .tabs-more'), 'More is offered');

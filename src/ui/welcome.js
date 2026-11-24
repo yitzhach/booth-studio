@@ -6,9 +6,12 @@
 import { FURNITURE, escapeHTML as e, isArtShow, validateProject } from "../model.js";
 import { FOOTPRINTS, SHOWS, STARTERS, fromTemplate, quickStart } from "../quickstart.js";
 import { ROLES, resolveRole, tabAfterSwitch, writeRole } from "../roles.js";
+import { GUIDED_TAB } from "../guided.js";
 
 export function createWelcome(ctx) {
   const { applyRole, backup, btn, icon, mutate, readTemplates, refreshIcons, renderInspector, toast } = ctx;
+  // Whether the Quick start on screen is a first visit's (welcome, then My booth).
+  let firstVisit = false;
   /**
    * The welcome, and the Workspace button's dialog: which tools to show
    * (src/roles.js). On a first visit it is the first thing on screen, and
@@ -74,12 +77,13 @@ export function createWelcome(ctx) {
     writeRole(ctx.role);
     ctx.tabsMore = false;
     const all = [.../** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll(".inspector-tabs [data-tab]"))].map((b) => b.dataset.tab);
-    ctx.tab = tabAfterSwitch(ctx.role, ctx.tab, all, { artShow: isArtShow(ctx.p) });
+    // An artist in the guided steps who picks Artist again stays in them.
+    if (!(ctx.tab === GUIDED_TAB && ctx.role === "artist")) ctx.tab = tabAfterSwitch(ctx.role, ctx.tab, all, { artShow: isArtShow(ctx.p) });
     /** @type {HTMLDialogElement} */ (document.querySelector("#dialog")).close();
     renderInspector();
     // An artist's first visit goes straight on to the booth; the example on
     // screen is not theirs, so there is nothing to back up first.
-    if (first && ctx.role === "artist") openQuickStart({ backupFirst: false });
+    if (first && ctx.role === "artist") openQuickStart({ backupFirst: false, first: true });
     else toast(ctx.role === "all" ? "Every tool is showing." : `${ROLES[ctx.role].label} workspace. More, beside the tabs, shows the rest.`);
   }
   /**
@@ -88,7 +92,9 @@ export function createWelcome(ctx) {
    * than a sequence of steps, because four answers fit on one screen and a
    * wizard's Next button is three clicks nobody needs.
    */
-  function openQuickStart({ backupFirst = true } = {}) {
+  function openQuickStart({ backupFirst = true, first = false } = {}) {
+    // Redrawn from inside itself (a template forgotten), it stays the visit it was.
+    if (!document.querySelector("#dialog[open] #quick-start")) firstVisit = first;
     const d = /** @type {HTMLDialogElement} */ (document.querySelector("#dialog"));
     const templates = readTemplates();
     const starterLabel = (k) => FURNITURE[k].label;
@@ -123,15 +129,19 @@ export function createWelcome(ctx) {
     }
     if (/** @type {HTMLInputElement} */ (document.querySelector("#qs-backup"))?.checked) backup();
     d.close();
+    let guided = false;
     mutate(() => {
       ctx.p = next;
       ctx.selected = null;
       ctx.selectedPanel = null;
       ctx.selectedPedestal = null;
-      ctx.tab = "layout";
+      // In the Artist workspace the guided steps take over from here
+      // (src/ui/guided-panel.js); everywhere else, the Layout tab as always.
+      guided = !!ctx.actions["guided-from-quick-start"]?.({ firstVisit });
+      if (!guided) ctx.tab = "layout";
     });
     ctx.scene?.setView("perspective");
-    toast(`${ctx.p.name} is ready. Upload artwork to start hanging.`);
+    toast(guided ? `${ctx.p.name} is ready. Five short steps to a picture of it.` : `${ctx.p.name} is ready. Upload artwork to start hanging.`);
   }
   return { openWelcome, describeToAssistant, welcomeDismissed, chooseRole, openQuickStart, runQuickStart };
 }

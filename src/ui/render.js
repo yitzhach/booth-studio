@@ -20,9 +20,12 @@ import { createShowEditor } from "../show-editor.js";
 import { liveNumber } from "../linked.js";
 import { TIERS } from "../tier.js";
 import { ROLES, resolveRole } from "../roles.js";
+import { createGuidedPanel } from "./guided-panel.js";
 
 export function createRender(ctx) {
   const { aiSection, allowed, applyRole, artShowHTML, artSlider, artThumb, batchSection, btn, clearanceSection, colorField, draftSection, edgeColorFields, field, findableName, frameFields, frameNote, gated, groundFields, hallPanel, heroSection, icon, keepSafeHTML, libraryHTML, lightBarLevels, locationOptions, looksSection, modelsSection, multiSection, mutate, paintKeepSafe, panelFields, pedestalFields, peopleSection, powerSection, qualityOptions, range, refreshIcons, refreshScene, renderLibrary, rowSection, scaleControl, sentLinksHTML, setWalking, shadowSection, showSelected, signFields, surroundingsFields, syncSavedViews, syncTools, tagsSection, underlaySection, updateFrameGuide, videoSection, viewsSection } = ctx;
+  // The guided booth (src/ui/guided-panel.js): drawn here in place of a tab.
+  const guided = createGuidedPanel(ctx);
   /**
    * Sub-tabs. A panel of three or more sections gets a row of chips under
    * its heading, one per section by its own heading, and shows the chosen
@@ -122,14 +125,16 @@ export function createRender(ctx) {
     else if (b.right > s.right) strip.scrollLeft += b.right - s.right;
   }
   function renderInspector() {
+    // First, because it may leave the steps for Layout (src/ui/guided-panel.js).
+    const guidedOn = guided.applyGuided();
     document
       .querySelectorAll("[data-tab]")
       .forEach((/** @type {HTMLElement} */ b) => b.classList.toggle("active", b.dataset.tab === ctx.tab));
     applyRole();
     keepTabInSight();
     const root = document.querySelector("#inspector-content");
-    root.innerHTML = inspectorHTML();
-    applySectionTabs(root);
+    root.innerHTML = guidedOn ? guided.guidedHTML() : inspectorHTML();
+    if (!guidedOn) applySectionTabs(root);
     refreshIcons();
     updateFrameGuide();
     if (ctx.tab === "export") paintKeepSafe();
@@ -292,5 +297,5 @@ export function createRender(ctx) {
       });
     }
   }
-  return { render, renderStatus, inspectorHTML, renderInspector, showSection };
+  return { render, renderStatus, inspectorHTML, renderInspector, showSection, guidedActions: guided.actions };
 }

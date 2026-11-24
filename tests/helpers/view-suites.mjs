@@ -55,6 +55,7 @@ export const SECONDS = {
   "view-keep-safe": 51,
   "view-report": 12,
   "view-environment": 93, // CI run on 3c86005, 2026-10-26
+  "view-guided": 45, // measured here, 2026-11-23; CI's own time replaces it
 };
 
 export const SUITES = Object.keys(SECONDS);
